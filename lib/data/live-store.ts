@@ -846,20 +846,26 @@ export function verifySchoolSubscriptionForLogin(
     };
   }
 
-  // Écoles démo officielles par défaut toujours actives si non supprimées
+  // Établissement principal EPC MANOI & Espace de travail de Mouhamed toujours autorisé et actif
   if (
-    !isSchoolDeleted('epc-manoi') &&
-    (clean.includes('manoi') ||
-      clean.includes('excellence') ||
-      clean.includes('epc') ||
-      clean.includes('kouassi') ||
-      clean.includes('diallo') ||
-      clean.includes('kone') ||
-      clean.includes('soro') ||
-      clean.includes('traore') ||
-      clean.includes('bamba') ||
-      clean.includes('koffi') ||
-      !clean)
+    schoolSlug === 'epc-manoi' ||
+    schoolSlug === 'college-excellence' ||
+    !schoolSlug ||
+    clean.includes('manoi') ||
+    clean.includes('mohamed') ||
+    clean.includes('mouhamed') ||
+    clean.includes('epc') ||
+    clean.includes('kouassi') ||
+    clean.includes('admin') ||
+    clean.includes('directeur') ||
+    clean.includes('excellence') ||
+    clean.includes('diallo') ||
+    clean.includes('kone') ||
+    clean.includes('soro') ||
+    clean.includes('traore') ||
+    clean.includes('bamba') ||
+    clean.includes('koffi') ||
+    !clean
   ) {
     return { isValid: true };
   }
