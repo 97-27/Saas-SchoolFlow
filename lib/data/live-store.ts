@@ -1,6 +1,7 @@
 'use client';
 
 import { Student, Invoice, School } from '@/lib/data/types';
+import { mockSchools } from '@/lib/data/mock-data';
 import { saveSchoolToSupabase, saveStudentToSupabase } from '@/lib/supabase/services';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
