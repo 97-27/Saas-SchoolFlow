@@ -187,6 +187,8 @@ export function LoginView({
   const [signupPhone, setSignupPhone] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'mensuel' | 'annuel' | 'triennal'>('annuel');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'wave' | 'orange' | 'card'>('wave');
   const [paymentPhone, setPaymentPhone] = useState('');
@@ -428,13 +430,39 @@ export function LoginView({
     setErrorMessage('');
 
     // 1. Validation des champs d'identité
-    if (!signupResponsableName.trim() || !signupSchoolName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+    if (
+      !signupResponsableName.trim() ||
+      !signupSchoolName.trim() ||
+      !signupEmail.trim() ||
+      !signupPassword.trim() ||
+      !signupConfirmPassword.trim()
+    ) {
       setErrorMessage('Veuillez renseigner tous les champs obligatoires (*).');
       return;
     }
 
     if (signupPassword.length < 8) {
       setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+
+    if (!/[A-Z]/.test(signupPassword)) {
+      setErrorMessage('Le mot de passe doit contenir au moins une lettre majuscule (A-Z).');
+      return;
+    }
+
+    if (!/[a-z]/.test(signupPassword)) {
+      setErrorMessage('Le mot de passe doit contenir au moins une lettre minuscule (a-z).');
+      return;
+    }
+
+    if (!/[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword)) {
+      setErrorMessage('Le mot de passe doit contenir au moins un chiffre ou caractère spécial (ex : #, |, @, 1, 2...).');
+      return;
+    }
+
+    if (signupPassword !== signupConfirmPassword) {
+      setErrorMessage('Les mots de passe ne correspondent pas. Veuillez vérifier la confirmation.');
       return;
     }
 
@@ -461,7 +489,7 @@ export function LoginView({
 
     if (!validActivationCodes.includes(enteredCode)) {
       setErrorMessage(
-        '⚠️ Prélèvement automatique indisponible : La passerelle de paiement en direct Wave / Orange Money / Carte Bancaire est en cours d’activation technique. Pour activer l’accès sans attendre, veuillez saisir votre code d’activation (ex : FLOW-2026) ou contacter la Direction Commerciale SchoolFlow (+225 07 48 92 11 00).'
+        '⚠️ Prélèvement automatique indisponible : La passerelle de paiement en direct Wave / Orange Money / Carte Bancaire est en cours d’activation technique. Veuillez saisir votre code d’activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.'
       );
       return;
     }
@@ -618,7 +646,7 @@ export function LoginView({
   return (
     <div
       suppressHydrationWarning
-      className="min-h-screen w-full bg-gradient-to-br from-[#064e3b] via-[#0f172a] to-[#062c1d] flex flex-col justify-start sm:justify-center items-center p-3 sm:p-6 lg:p-8 py-8 sm:py-10 lg:py-12 overflow-y-auto font-sans"
+      className="min-h-screen w-full bg-gradient-to-br from-[#064e3b] via-[#0f172a] to-[#062c1d] flex flex-col justify-start items-center p-2.5 sm:p-5 md:p-6 lg:p-8 py-5 sm:py-8 lg:py-10 overflow-x-hidden overflow-y-auto font-sans"
     >
       {/* Toast de succès */}
       {successToast && (
@@ -632,7 +660,7 @@ export function LoginView({
       )}
 
       {/* Conteneur Principal en Carte 2 Volets */}
-      <div className="w-full max-w-xl lg:max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:grid lg:grid-cols-12 border border-white/20 my-auto shrink-0">
+      <div className="w-full max-w-xl lg:max-w-5xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:grid lg:grid-cols-12 border border-white/20 my-2 sm:my-4 lg:my-auto shrink-0 transition-all">
         
         {/* ================= VOLET GAUCHE (5 COLONNES) : IDENTITÉ UNIVERSELLE & FORFAITS ================= */}
         <div className="lg:col-span-5 bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#022c1b] p-5 sm:p-7 lg:p-8 text-white flex flex-col justify-between relative overflow-hidden shrink-0">
@@ -1056,44 +1084,113 @@ export function LoginView({
                   </div>
                 </div>
 
-                {/* 3. Mot de passe de compte */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-800 block text-xs">
-                      Créer un Mot de Passe Sécurisé * (au moins 8 caractères)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForgotEmail(signupEmail);
-                        setForgotStep('email');
-                        setForgotError('');
-                        setIsForgotPasswordOpen(true);
-                      }}
-                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                    >
-                      Mot de passe oublié ?
-                    </button>
+                {/* 3. Mot de passe de compte & Confirmation */}
+                <div className="space-y-2.5">
+                  {/* Champ 1 : Mot de passe */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 block text-xs">
+                        Créer un Mot de Passe Sécurisé *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForgotEmail(signupEmail);
+                          setForgotStep('email');
+                          setForgotError('');
+                          setIsForgotPasswordOpen(true);
+                        }}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                      >
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type={showSignupPassword ? 'text' : 'password'}
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        placeholder="8+ car. avec 1 Majuscule, 1 Minuscule, 1 Spécial"
+                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupPassword(!showSignupPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Indicateurs en temps réel des règles du mot de passe */}
+                    {signupPassword && (
+                      <div className="grid grid-cols-2 gap-1.5 pt-1 animate-in fade-in">
+                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
+                          signupPassword.length >= 8 ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${signupPassword.length >= 8 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          8+ caractères
+                        </span>
+                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
+                          /[A-Z]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          1 Majuscule (A-Z)
+                        </span>
+                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
+                          /[a-z]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          1 Minuscule (a-z)
+                        </span>
+                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
+                          /[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${/[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                          1 Spécial ou chiffre (#, |, @...)
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type={showSignupPassword ? 'text' : 'password'}
-                      required
-                      minLength={8}
-                      autoComplete="new-password"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="Définissez votre mot de passe (au moins 8 caractères)"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSignupPassword(!showSignupPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+
+                  {/* Champ 2 : Confirmation du mot de passe */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-800 block text-xs">
+                        Confirmer le Mot de Passe *
+                      </label>
+                      {signupConfirmPassword && (
+                        <span className={`text-[10px] font-bold ${
+                          signupPassword === signupConfirmPassword ? 'text-emerald-700' : 'text-rose-600'
+                        }`}>
+                          {signupPassword === signupConfirmPassword ? '✓ Correspondant' : '✗ Différent'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type={showSignupConfirmPassword ? 'text' : 'password'}
+                        required
+                        minLength={8}
+                        autoComplete="new-password"
+                        value={signupConfirmPassword}
+                        onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                        placeholder="Retapez exactement votre mot de passe"
+                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showSignupConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1261,7 +1358,7 @@ export function LoginView({
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                     <label className="font-bold text-slate-800 block text-[11px] flex items-center justify-between">
                       <span>Code d'activation / Bon de commande (Optionnel)</span>
-                      <span className="text-[10px] text-emerald-700 font-bold">Direction SchoolFlow</span>
+                      <span className="text-[10px] text-emerald-700 font-bold">01 70 36 36 56</span>
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1270,12 +1367,12 @@ export function LoginView({
                         autoComplete="off"
                         value={activationCode}
                         onChange={(e) => setActivationCode(e.target.value)}
-                        placeholder="Ex : FLOW-2026"
+                        placeholder="Code d'activation"
                         className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 uppercase"
                       />
                     </div>
                     <p className="text-[10px] text-slate-500">
-                      Entrez votre code dérogatoire pour activer votre établissement si la passerelle bancaire est en maintenance.
+                      Veuillez saisir votre code d'activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.
                     </p>
                   </div>
                 </div>
