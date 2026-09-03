@@ -35,135 +35,37 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
     return () => window.removeEventListener(DATA_UPDATED_EVENT, checkSession);
   }, []);
 
-  // Intercepteur universel : bloque toute saisie (touches, lettres, chiffres) et modifications pour le Fondateur
+  // Intercepteur non bloquant : n'interfère JAMAIS avec la navigation, les liens, les onglets ou les tables
   useEffect(() => {
     if (!isReadOnly) return;
 
-    // 1. Bloquer la frappe au clavier dans les formulaires et champs
-    const handleKeyDownCapture = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-
-      const isInputElement =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.isContentEditable;
-
-      // Touches de navigation autorisées
-      const navigationKeys = ['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape'];
-      if (navigationKeys.includes(e.key)) return;
-
-      // Autoriser la recherche (lecture / filtrage de tableau)
-      const isSearchField =
-        target.getAttribute('type') === 'search' ||
-        target.getAttribute('placeholder')?.toLowerCase().includes('recherch') ||
-        target.classList.contains('search-input');
-
-      if (isSearchField) return;
-
-      if (isInputElement) {
-        e.preventDefault();
-        e.stopPropagation();
-        setBlockedActionName('Saisie de données (chiffre ou lettre)');
-        setShowBlockModal(true);
-      }
-    };
-
-    // 2. Bloquer le collage (paste)
-    const handlePasteCapture = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const isSearch = target.getAttribute('placeholder')?.toLowerCase().includes('recherch');
-      if (isSearch) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      setBlockedActionName('Collage de texte / données');
-      setShowBlockModal(true);
-    };
-
-    // 3. Bloquer la soumission de formulaire
+    // 1. Bloquer la soumission de formulaires de modification
     const handleFormSubmit = (e: SubmitEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setBlockedActionName('Enregistrement / Validation de formulaire');
-      setShowBlockModal(true);
-    };
-
-    // 4. Bloquer les clics sur les boutons d'action d'écriture
-    const handleClickCapture = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
 
-      const clickable = target.closest('button, a[role="button"], input[type="submit"], input[type="checkbox"], input[type="radio"]');
-      if (!clickable) return;
+      // Laisser passer les formulaires de recherche et filtres
+      const isSearchOrFilter =
+        target.classList.contains('search-form') ||
+        target.getAttribute('role') === 'search';
 
-      // Autoriser les cases à cocher de sélection de tableau de visualisation si besoin, mais bloquer l'appel de présence
-      if (clickable.tagName === 'INPUT' && (clickable as HTMLInputElement).type === 'checkbox') {
-        const isAttendance = clickable.closest('[data-attendance]') || clickable.classList.contains('attendance-checkbox');
-        if (isAttendance) {
-          e.preventDefault();
-          e.stopPropagation();
-          setBlockedActionName('Prise des présences & appels');
-          setShowBlockModal(true);
-          return;
-        }
-      }
-
-      const buttonText = (clickable.textContent || '').trim().toLowerCase();
-      const isMutationAction =
-        buttonText.includes('ajouter') ||
-        buttonText.includes('créer') ||
-        buttonText.includes('enregistrer') ||
-        buttonText.includes('supprimer') ||
-        buttonText.includes('modifier') ||
-        buttonText.includes('valider') ||
-        buttonText.includes('inscrire') ||
-        buttonText.includes('sauvegarder') ||
-        buttonText.includes('encaisser') ||
-        buttonText.includes('payer') ||
-        buttonText.includes('marquer') ||
-        clickable.classList.contains('mutation-action');
-
-      // Boutons de navigation/consultation autorisés
-      const isDismissOrNav =
-        buttonText.includes('annuler') ||
-        buttonText.includes('fermer') ||
-        buttonText.includes('suivant') ||
-        buttonText.includes('précédent') ||
-        buttonText.includes('exporter') ||
-        buttonText.includes('imprimer') ||
-        buttonText.includes('filtrer') ||
-        buttonText.includes('tous') ||
-        buttonText.includes('copier') ||
-        clickable.getAttribute('aria-label')?.toLowerCase().includes('fermer') ||
-        clickable.getAttribute('aria-label')?.toLowerCase().includes('menu');
-
-      if (isMutationAction && !isDismissOrNav) {
+      if (!isSearchOrFilter) {
         e.preventDefault();
         e.stopPropagation();
-        setBlockedActionName((clickable.textContent || 'Action').trim());
+        setBlockedActionName('Enregistrement / Validation de formulaire');
         setShowBlockModal(true);
       }
     };
 
-    document.addEventListener('keydown', handleKeyDownCapture, true);
-    document.addEventListener('paste', handlePasteCapture, true);
     document.addEventListener('submit', handleFormSubmit, true);
-    document.addEventListener('click', handleClickCapture, true);
-
     return () => {
-      document.removeEventListener('keydown', handleKeyDownCapture, true);
-      document.removeEventListener('paste', handlePasteCapture, true);
       document.removeEventListener('submit', handleFormSubmit, true);
-      document.removeEventListener('click', handleClickCapture, true);
     };
   }, [isReadOnly]);
 
   return (
     <>
-      {/* Contenu de la page */}
+      {/* Contenu de la page avec fluidité maximale */}
       {children}
 
       {/* MODALE D'INTERCEPTION : ACTION BLOQUÉE POUR LE FONDATEUR */}
@@ -198,23 +100,22 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
             <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-900">
                 <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Action bloquée : &quot;{blockedActionName}&quot;</span>
+                <span>Mode Consultation & Supervision Uniquement</span>
               </div>
-              <p className="text-[11.5px] text-amber-900/90 leading-relaxed font-sans">
-                Le profil <strong>Fondateur / Fondatrice</strong> est en <strong>Supervision Globale</strong>. Vous pouvez observer l&apos;intégralité des tableaux de bord, effectifs, finances et bulletins, mais aucune saisie, modification, appel ou inscription ne peut être effectuée sur la plateforme.
+              <p className="leading-relaxed">
+                Le profil <strong>Fondateur / Fondatrice</strong> est en <strong>Supervision Globale</strong>. Vous pouvez observer l&apos;intégralité des tableaux de bord, effectifs, finances et bulletins, mais aucune modification ne peut être effectuée sans les droits d&apos;administration.
               </p>
             </div>
 
-            <div className="pt-2 flex items-center justify-end">
+            <div className="pt-2 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShowBlockModal(false)}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/30 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
               >
-                Compris, continuer la consultation
+                Compris, continuer en consultation
               </button>
             </div>
-
           </div>
         </div>
       )}

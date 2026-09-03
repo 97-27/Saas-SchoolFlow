@@ -682,7 +682,7 @@ export function Sidebar({
                 Fondateur
               </span>
               <p suppressHydrationWarning className="text-xs font-black text-slate-900 truncate font-heading group-hover:text-emerald-700 transition-colors">
-                {currentSchool.founderName || 'À renseigner (Paramètres)'}
+                {currentSchool.founderName || 'LAWANI MOUHAMED'}
               </p>
               <span suppressHydrationWarning className="text-[10px] font-bold text-slate-500 block truncate">
                 {currentSchool.shortName || currentSchool.name || 'Établissement'}

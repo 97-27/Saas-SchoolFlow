@@ -11,14 +11,12 @@ import {
   BedDouble,
   Building2,
   Phone,
-  Download,
   PlusCircle,
   Search,
   Filter,
   ChevronDown,
   RotateCcw,
   Printer,
-  Shield,
   Home,
   CheckCircle2,
   Calendar,
@@ -26,23 +24,17 @@ import {
   MessageCircle,
   ReceiptText,
   Save,
-  Send,
-  AlertCircle,
   ChevronLeft,
   ChevronRight,
   History,
   Sparkles,
   Coins,
-  Landmark,
-  Smartphone,
-  FileText,
   Edit3,
-  UserPlus,
   ShieldCheck,
-  Check,
   FolderOpen,
   User,
   Share2,
+  Lock,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -79,15 +71,13 @@ export function BoardingView({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Modales secondaires
-  const [selectedStudentForMonths, setSelectedStudentForMonths] = useState<any | null>(null);
-  const [selectedStudentForReceipt, setSelectedStudentForReceipt] = useState<any | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isNewAdmissionModalOpen, setIsNewAdmissionModalOpen] = useState(false);
 
   // Synchronized horizontal scroll references
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(1200);
+  const [tableScrollWidth, setTableScrollWidth] = useState(1000);
 
   // Formulaire nouvelle admission modal
   const [newSubStudentId, setNewSubStudentId] = useState('');
@@ -136,7 +126,7 @@ export function BoardingView({
   useEffect(() => {
     const updateWidth = () => {
       if (tableContainerRef.current) {
-        setTableScrollWidth(Math.max(1200, tableContainerRef.current.scrollWidth));
+        setTableScrollWidth(Math.max(900, tableContainerRef.current.scrollWidth));
       }
     };
     updateWidth();
@@ -156,7 +146,7 @@ export function BoardingView({
     }
   };
 
-  // Pensionnaires réels de l'internat (~30% de l'effectif)
+  // Pensionnaires réels de l'internat
   const boarders = useMemo(() => {
     return students
       .filter((stu, idx) => {
@@ -208,7 +198,6 @@ export function BoardingView({
   // ═══════════════════════════════════════════════════════════════
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
-  const [studentPickerSearch, setStudentPickerSearch] = useState('');
 
   // Formulaire d'encaissement et de coordonnées de l'élève actif
   const [formFullName, setFormFullName] = useState('');
@@ -218,7 +207,6 @@ export function BoardingView({
   const [formGender, setFormGender] = useState<'male' | 'female'>('male');
   const [formPavilion, setFormPavilion] = useState('Pavillon A (Garçons)');
   const [formRoom, setFormRoom] = useState('Chambre G-101');
-  const [formGuardianName, setFormGuardianName] = useState('');
   const [formPhone, setFormPhone] = useState('+225 07 48 92 11 00');
   const [formMonthlyRate, setFormMonthlyRate] = useState<number>(50000);
   const [formPaymentDate, setFormPaymentDate] = useState<string>(
@@ -258,7 +246,6 @@ export function BoardingView({
     setFormGender(boarder.gender === 'female' ? 'female' : 'male');
     setFormPavilion(boarder.pavilion || 'Pavillon A (Garçons)');
     setFormRoom(boarder.roomNumber || 'Chambre G-101');
-    setFormGuardianName(boarder.guardianName || 'M. & Mme ' + (boarder.lastName || 'Parent'));
     setFormPhone(boarder.whatsappPhone || boarder.guardianPhone || '+225 07 48 92 11 00');
     setFormMonthlyRate(boarder.monthlyRate || 50000);
     setFormMonthsState(
@@ -417,19 +404,6 @@ export function BoardingView({
     });
   }, [boarders, searchQuery, selectedClass, selectedPavilion]);
 
-  // Filtrage pour le sélecteur rapide
-  const filteredBoardersForPicker = useMemo(() => {
-    if (!studentPickerSearch.trim()) return boarders;
-    const q = studentPickerSearch.toLowerCase().trim();
-    return boarders.filter(
-      (b) =>
-        b.fullName.toLowerCase().includes(q) ||
-        b.matricule.toLowerCase().includes(q) ||
-        b.studentNumber.toLowerCase().includes(q) ||
-        b.grade.toLowerCase().includes(q)
-    );
-  }, [boarders, studentPickerSearch]);
-
   // Statistiques Internat (3 Cartes KPI du haut)
   const stats = useMemo(() => {
     const totalBoarders = boarders.length;
@@ -450,63 +424,7 @@ export function BoardingView({
     };
   }, [boarders]);
 
-  // Modification directe du tarif mensuel dans le tableau
-  const handleQuickUpdateRate = (stuId: string, newRateStr: string) => {
-    const newRate = parseInt(newRateStr, 10) || 0;
-    const current = boarders.find((b) => b.id === stuId);
-    if (!current) return;
-
-    const nextMap = {
-      ...customBoardingMap,
-      [stuId]: {
-        room: current.roomNumber,
-        pavilion: current.pavilion,
-        rate: newRate,
-      },
-    };
-
-    setCustomBoardingMap(nextMap);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
-      } catch (e) {}
-    }
-  };
-
-  // Enregistrer le suivi des mois depuis la modale 1
-  const handleSaveMonthlyPayments = () => {
-    if (!selectedStudentForMonths) return;
-    const stuId = selectedStudentForMonths.id;
-    const newPayments = {
-      ...monthlyPayments,
-      [stuId]: selectedStudentForMonths.monthsState,
-    };
-
-    const newBoardingMap = {
-      ...customBoardingMap,
-      [stuId]: {
-        room: selectedStudentForMonths.roomNumber,
-        pavilion: selectedStudentForMonths.pavilion,
-        rate: selectedStudentForMonths.monthlyRate,
-      },
-    };
-
-    setMonthlyPayments(newPayments);
-    setCustomBoardingMap(newBoardingMap);
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_PAYMENTS_KEY, JSON.stringify(newPayments));
-        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(newBoardingMap));
-      } catch (e) {}
-    }
-
-    setToastMessage(`✓ Cotisations d’internat et tarif mis à jour pour ${selectedStudentForMonths.fullName} !`);
-    setTimeout(() => setToastMessage(null), 5000);
-    setSelectedStudentForMonths(null);
-  };
-
-  // Enregistrer une nouvelle admission internat depuis la modale 4
+  // Enregistrer une nouvelle admission internat depuis la modale
   const handleCreateAdmission = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubStudentId) {
@@ -1335,7 +1253,7 @@ export function BoardingView({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* 4. TABLEAU DES PENSIONNAIRES & DÉTAILS DES 10 MOIS */}
+      {/* 4. TABLEAU DES PENSIONNAIRES (COLONNES ÉPURÉES & FRAIS FIXES) */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden print:hidden">
         {/* Toolbar */}
@@ -1405,13 +1323,13 @@ export function BoardingView({
           <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
         </div>
 
-        {/* Tableau */}
+        {/* Tableau épuré sans les colonnes superflues, frais bloqués en lecture seule */}
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
           className="overflow-x-auto"
         >
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-3.5 pl-5 pr-3 w-10">
@@ -1425,15 +1343,13 @@ export function BoardingView({
                 <th className="py-3.5 px-3 text-center whitespace-nowrap">Classe</th>
                 <th className="py-3.5 px-3 whitespace-nowrap">Pavillon & Chambre</th>
                 <th className="py-3.5 px-3 whitespace-nowrap text-right min-w-[140px]">Frais Mensuels (FCFA)</th>
-                <th className="py-3.5 px-3 whitespace-nowrap">Contact WhatsApp Parent</th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">Suivi des Mois</th>
-                <th className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap">Action Quittance</th>
+                <th className="py-3.5 pr-5 pl-3 whitespace-nowrap">Contact WhatsApp Parent</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {filteredBoarders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
                     Aucun pensionnaire d&apos;internat trouvé.
                   </td>
                 </tr>
@@ -1444,12 +1360,16 @@ export function BoardingView({
                   return (
                     <tr
                       key={sub.id}
-                      onClick={() => loadStudentIntoForm(sub)}
+                      onClick={() => {
+                        loadStudentIntoForm(sub);
+                        window.scrollTo({ top: 380, behavior: 'smooth' });
+                      }}
                       className={`cursor-pointer transition-colors ${
                         isSelected
-                          ? 'bg-purple-50/50 hover:bg-purple-50/70 ring-1 ring-purple-300'
+                          ? 'bg-purple-50/60 hover:bg-purple-50/80 ring-1 ring-purple-300'
                           : 'hover:bg-emerald-50/20'
                       }`}
+                      title="Cliquez pour charger ce pensionnaire dans le formulaire et le reçu"
                     >
                       <td className="py-3.5 pl-5 pr-3">
                         <input
@@ -1462,7 +1382,7 @@ export function BoardingView({
 
                       <td className="py-3.5 px-3 font-mono font-bold text-slate-900 text-[11px] whitespace-nowrap">
                         <span className={`px-2 py-0.5 rounded border ${
-                          isSelected ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 border-slate-200'
+                          isSelected ? 'bg-purple-100 text-purple-900 border-purple-300 font-black' : 'bg-slate-100 border-slate-200'
                         }`}>
                           {sub.studentNumber}
                         </span>
@@ -1495,21 +1415,15 @@ export function BoardingView({
                         </div>
                       </td>
 
-                      {/* FRAIS MENSUELS MODIFIABLES DIRECTEMENT */}
-                      <td className="py-3.5 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center gap-1 justify-end">
-                          <input
-                            type="number"
-                            defaultValue={sub.monthlyRate}
-                            onBlur={(e) => handleQuickUpdateRate(sub.id, e.target.value)}
-                            className="w-24 px-2 py-1 text-right font-mono font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-white"
-                            title="Cliquez pour modifier directement le tarif mensuel"
-                          />
-                          <span className="text-[10px] text-slate-400 font-bold">F</span>
-                        </div>
+                      {/* FRAIS MENSUELS BLOQUÉS EN LECTURE SEULE */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 text-xs">
+                          <Lock className="w-3 h-3 text-slate-400" />
+                          <span>{formatFCFA(sub.monthlyRate)}</span>
+                        </span>
                       </td>
 
-                      <td className="py-3.5 px-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 pr-5 pl-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <a
                           href={`https://wa.me/${(sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '')}`}
                           target="_blank"
@@ -1519,33 +1433,6 @@ export function BoardingView({
                           <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                           <span>{sub.whatsappPhone || sub.guardianPhone}</span>
                         </a>
-                      </td>
-
-                      {/* ACTION 1 : SUIVI DES MOIS INTERNAT */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStudentForMonths(sub)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white border border-slate-300 hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Mois ({sub.paidMonthsCount}/10)</span>
-                        </button>
-                      </td>
-
-                      {/* ACTION 2 : CHARGER DANS LE REÇU OFFICIEL DU HAUT */}
-                      <td className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            loadStudentIntoForm(sub);
-                            window.scrollTo({ top: 400, behavior: 'smooth' });
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-purple-900 bg-purple-50 border border-purple-300 hover:bg-purple-100 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <ReceiptText className="w-3.5 h-3.5 text-purple-700" />
-                          <span>Charger Reçu</span>
-                        </button>
                       </td>
                     </tr>
                   );
@@ -1561,164 +1448,12 @@ export function BoardingView({
             Total affiché : <strong className="text-slate-900 font-bold">{filteredBoarders.length}</strong> pensionnaires inscrits à l&apos;internat
           </span>
           <span className="text-[11px] text-slate-400">
-            Cliquez sur un pensionnaire pour charger immédiatement son reçu officiel
+            Cliquez sur une ligne pour charger immédiatement le reçu officiel en haut
           </span>
         </div>
       </div>
 
-      {/* ================= MODALE 1 : SUIVI DES MOIS & TARIF INTERNAT ================= */}
-      {selectedStudentForMonths && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-black text-base uppercase">
-                  {selectedStudentForMonths.firstName?.[0] || 'E'}{selectedStudentForMonths.lastName?.[0] || 'P'}
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading uppercase">
-                    {selectedStudentForMonths.fullName}
-                  </h3>
-                  <p className="text-xs text-slate-500 font-mono">
-                    {selectedStudentForMonths.studentNumber} • {selectedStudentForMonths.matricule} • {selectedStudentForMonths.grade}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedStudentForMonths(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Ajustement Frais Mensuels & Chambre */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Frais Mensuels en FCFA (Modifiable)</label>
-                <input
-                  type="number"
-                  value={selectedStudentForMonths.monthlyRate}
-                  onChange={(e) => {
-                    const newRate = parseInt(e.target.value, 10) || 0;
-                    setSelectedStudentForMonths((prev: any) => ({
-                      ...prev,
-                      monthlyRate: newRate,
-                      totalPaidAmount: prev.paidMonthsCount * newRate,
-                    }));
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold text-slate-900"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Chambre Affectée</label>
-                <input
-                  type="text"
-                  value={selectedStudentForMonths.roomNumber}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedStudentForMonths((prev: any) => ({
-                      ...prev,
-                      roomNumber: val,
-                    }));
-                  }}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-slate-900"
-                />
-              </div>
-            </div>
-
-            {/* Total réglé calculé */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Mois d&apos;Internat Validés</span>
-                <strong className="text-slate-900 font-heading text-sm">{selectedStudentForMonths.paidMonthsCount} sur 10 mois</strong>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Cotisations Internat</span>
-                <strong className="text-emerald-800 font-heading text-base">{formatFCFA(selectedStudentForMonths.totalPaidAmount)}</strong>
-              </div>
-            </div>
-
-            {/* Grille des Mois Scolaires */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Pointage des Mois d&apos;Hébergement :
-              </span>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {MONTHS_LIST.map((month) => {
-                  const isPaid = !!selectedStudentForMonths.monthsState?.[month];
-
-                  return (
-                    <button
-                      key={month}
-                      type="button"
-                      onClick={() => {
-                        setSelectedStudentForMonths((prev: any) => {
-                          if (!prev) return null;
-                          const currentMonths = prev.monthsState || {};
-                          const nextMonths = {
-                            ...currentMonths,
-                            [month]: !currentMonths[month],
-                          };
-                          const paidMonths = Object.keys(nextMonths).filter((m) => nextMonths[m]);
-                          return {
-                            ...prev,
-                            monthsState: nextMonths,
-                            paidMonths,
-                            paidMonthsCount: paidMonths.length,
-                            totalPaidAmount: paidMonths.length * prev.monthlyRate,
-                          };
-                        });
-                      }}
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                        isPaid
-                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300 shadow-2xs font-bold'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span className="text-xs">{month}</span>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                          isPaid
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-200 text-slate-600'
-                        }`}
-                      >
-                        {isPaid ? 'Payé ✓' : 'Non payé'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setSelectedStudentForMonths(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                Annuler
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveMonthlyPayments}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Enregistrer les Cotisations</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODALE 3 : REGISTRE OFFICIEL DE L'INTERNAT ================= */}
+      {/* ================= MODALE : REGISTRE OFFICIEL DE L'INTERNAT ================= */}
       {isRegisterModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 sm:p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
@@ -1813,7 +1548,7 @@ export function BoardingView({
         </div>
       )}
 
-      {/* ================= MODALE 4 : NOUVELLE ADMISSION INTERNAT ================= */}
+      {/* ================= MODALE : NOUVELLE ADMISSION INTERNAT ================= */}
       {isNewAdmissionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">

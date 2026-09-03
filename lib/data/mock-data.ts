@@ -44,7 +44,7 @@ export const mockSchools: Record<string, School> = {
 
     // Direction, Fondateur & Official Stamps
     founderName: 'LAWANI MOUHAMED',
-    directorName: 'LAWANI MOUHAMED',
+    directorName: 'M. Jean-Marc Kouassi',
     studiesDirectorName: 'M. Kouamé',
     stampUrl: '',
     receiptFooterNote: 'Tout versement en caisse donne droit à un reçu numéroté immédiat. Aucun remboursement après encaissement.',

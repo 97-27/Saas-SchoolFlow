@@ -329,7 +329,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={logoPreview}
                           alt="Logo de l'école"
-                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain border-2 border-white shadow-md bg-white p-1"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain border-2 border-emerald-500/40 shadow-md bg-white p-1"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                           <label
@@ -342,32 +342,33 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         </div>
                       </div>
                     ) : (
-                      <label
-                        htmlFor="logo-upload"
-                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50 flex flex-col items-center justify-center cursor-pointer transition-all group-hover:border-emerald-500 shadow-2xs"
-                      >
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-emerald-300 bg-gradient-to-br from-emerald-50 via-teal-50 to-white flex flex-col items-center justify-center shadow-xs p-2 text-center group-hover:border-emerald-500 transition-all">
                         <Building2 className="w-7 h-7 text-emerald-600 mb-1" />
-                        <span className="text-[9px] font-extrabold text-emerald-800 text-center uppercase leading-tight">
-                          Logo École
+                        <span className="text-[8px] font-black text-emerald-900 uppercase leading-tight font-heading">
+                          Exemple Logo
                         </span>
-                      </label>
+                        <span className="text-[7.5px] text-emerald-700 font-bold">
+                          (Gauche Reçu)
+                        </span>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex-1 text-center sm:text-left space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-xs font-bold text-slate-900">
-                        Logo officiel de l&apos;établissement
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 justify-center sm:justify-start">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Logo Officiel de l&apos;Établissement</span>
                       </h4>
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80">
-                        Gauche du reçu
+                        Gauche du Reçu
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      {logoPreview ? 'Logo personnalisé actif. Visible sur reçus et bulletins.' : 'Aucun logo téléversé pour le moment.'}
+                      {logoPreview ? '✓ Logo personnalisé actif sur reçus et bulletins.' : 'Exemple recommandé : blason ou logo carré (500x500 PNG transparent).'}
                     </p>
 
-                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
                       <label
                         htmlFor="logo-upload"
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-xs transition-all"
@@ -405,7 +406,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={emblemPreview}
                           alt="Emblème officiel du pays"
-                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-white shadow-md bg-white"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-amber-500/40 shadow-md bg-white"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                           <label
@@ -418,38 +419,39 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         </div>
                       </div>
                     ) : (
-                      <label
-                        htmlFor="emblem-upload"
-                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/50 hover:bg-amber-50 flex flex-col items-center justify-center cursor-pointer transition-all group-hover:border-amber-500 shadow-2xs"
-                      >
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-amber-300 bg-gradient-to-br from-amber-50 via-orange-50/40 to-white flex flex-col items-center justify-center shadow-xs p-2 text-center group-hover:border-amber-500 transition-all">
                         <Award className="w-7 h-7 text-amber-600 mb-1" />
-                        <span className="text-[9px] font-extrabold text-amber-800 text-center uppercase leading-tight">
-                          Armoiries Pays
+                        <span className="text-[8px] font-black text-amber-900 uppercase leading-tight font-heading">
+                          Exemple Armoiries
                         </span>
-                      </label>
+                        <span className="text-[7.5px] text-amber-700 font-bold">
+                          (Droite Reçu)
+                        </span>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex-1 text-center sm:text-left space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-xs font-bold text-slate-900">
-                        Armoiries / Emblème de votre pays
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 justify-center sm:justify-start">
+                        <Award className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Armoiries & Emblème National</span>
                       </h4>
                       <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80">
-                        Droite du reçu
+                        Droite du Reçu
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      {emblemPreview ? 'Armoiries officielles configurées.' : 'Armoiries ou sceau de la République.'}
+                      {emblemPreview ? '✓ Armoiries nationales configurées.' : 'Armoiries officielles de la République ou Sceau National.'}
                     </p>
 
-                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
                       <label
                         htmlFor="emblem-upload"
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer shadow-2xs transition-all"
                       >
                         <Upload className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{emblemPreview ? 'Changer l’emblème' : 'Télécharger les armoiries'}</span>
+                        <span>{emblemPreview ? 'Changer l’emblème' : 'Télécharger armoiries'}</span>
                       </label>
                       <input
                         id="emblem-upload"
@@ -470,6 +472,49 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Sélection Rapide d'Armoiries Nationales Africaines (1 Clic) */}
+              <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Sélectionner en 1 Clic les Armoiries de votre Pays :</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-semibold">
+                    Format vectoriel officiel haute définition
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { country: "Côte d'Ivoire", flag: '🇨🇮', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png' },
+                    { country: 'Sénégal', flag: '🇸🇳', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Coat_of_arms_of_Senegal.svg/300px-Coat_of_arms_of_Senegal.svg.png' },
+                    { country: 'Bénin', flag: '🇧🇯', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Coat_of_arms_of_Benin.svg/300px-Coat_of_arms_of_Benin.svg.png' },
+                    { country: 'Cameroun', flag: '🇨🇲', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Coat_of_arms_of_Cameroon.svg/300px-Coat_of_arms_of_Cameroon.svg.png' },
+                    { country: 'Mali', flag: '🇲🇱', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Coat_of_arms_of_Mali.svg/300px-Coat_of_arms_of_Mali.svg.png' },
+                    { country: 'Burkina Faso', flag: '🇧🇫', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Coat_of_arms_of_Burkina_Faso.svg/300px-Coat_of_arms_of_Burkina_Faso.svg.png' },
+                    { country: 'Togo', flag: '🇹🇬', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Coat_of_arms_of_Togo.svg/300px-Coat_of_arms_of_Togo.svg.png' },
+                    { country: 'Guinée', flag: '🇬🇳', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Coat_of_arms_of_Guinea.svg/300px-Coat_of_arms_of_Guinea.svg.png' },
+                  ].map((item) => (
+                    <button
+                      key={item.country}
+                      type="button"
+                      onClick={() => {
+                        setEmblemPreview(item.url);
+                        handleInputChange('countryEmblemUrl', item.url);
+                      }}
+                      className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        emblemPreview === item.url
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                          : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
+                      }`}
+                    >
+                      <span>{item.flag}</span>
+                      <span>{item.country}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -968,24 +1013,26 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">
-                    Nom du Fondateur de l&apos;Établissement *
+                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span>Nom du Fondateur / Promoteur de l&apos;Établissement *</span>
                   </label>
                   <input
                     type="text"
                     value={school.founderName || ''}
                     onChange={(e) => handleInputChange('founderName', e.target.value)}
-                    placeholder="Ex: Mr Lawani El Hadj"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="Ex: LAWANI MOUHAMED"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-bold"
                   />
-                  <p className="text-[10px] text-slate-400">
-                    Affiché au bas de la barre latérale et sur les documents officiels.
+                  <p className="text-[10px] text-slate-500">
+                    🏛️ <strong>Fondateur / Promoteur :</strong> Affiché au bas de la barre latérale et sur les registres officiels.
                   </p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">
-                    Nom du Directeur de l&apos;Établissement (Signataire des Bulletins) *
+                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Nom du Directeur de l&apos;Établissement (Signataire) *</span>
                   </label>
                   <input
                     type="text"
@@ -994,39 +1041,60 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       handleInputChange('directorName', e.target.value);
                       handleInputChange('studiesDirectorName', e.target.value);
                     }}
-                    placeholder="Ex: M. Jean-Marc Kouassi"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold"
+                    placeholder="Ex: M. Jean-Marc Kouassi (Direction Pédagogique)"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-bold"
                   />
-                  <p className="text-[10px] text-slate-400">
-                    Ce nom apparaît au bas de tous les bulletins scolaires officiels et certificats de scolarité.
+                  <p className="text-[10px] text-slate-500">
+                    👨‍🏫 <strong>Directeur / Direction des Études :</strong> Signataire des bulletins scolaires et certificats de scolarité.
                   </p>
                 </div>
 
-                {/* Digital Stamp Upload */}
+                {/* Digital Stamp Upload avec Visuel d'Exemple Réaliste */}
                 <div className="sm:col-span-2 p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200/60 flex flex-col sm:flex-row items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-2 shrink-0 shadow-2xs">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={stampPreview}
-                      alt="Cachet officiel"
-                      className="max-h-full max-w-full object-contain opacity-80"
-                    />
+                  <div className="shrink-0">
+                    {stampPreview ? (
+                      <div className="w-24 h-24 rounded-2xl bg-white border-2 border-emerald-500/40 flex items-center justify-center p-2 shadow-sm">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={stampPreview}
+                          alt="Cachet officiel"
+                          className="max-h-full max-w-full object-contain opacity-90"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-purple-300 bg-gradient-to-br from-purple-50 via-indigo-50/40 to-white flex flex-col items-center justify-center p-2 text-center shadow-xs">
+                        <div className="w-12 h-12 rounded-full border-2 border-purple-400 border-dashed flex items-center justify-center mb-1">
+                          <FileCheck className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <span className="text-[7.5px] font-black text-purple-900 uppercase leading-tight font-heading">
+                          Exemple Cachet
+                        </span>
+                      </div>
+                    )}
                   </div>
+
                   <div className="space-y-1.5 text-center sm:text-left flex-1">
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 justify-center sm:justify-start">
-                      <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Tampon & Cachet Officiel de l&apos;École</span>
-                    </h4>
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 justify-center sm:justify-start">
+                        <FileCheck className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Tampon & Cachet Officiel de l&apos;Établissement</span>
+                      </h4>
+                      <span className="text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                        {stampPreview ? '✓ Cachet Actif' : 'Modèle Recommandé'}
+                      </span>
+                    </div>
                     <p className="text-[11px] text-slate-500">
-                      Incrusté automatiquement au bas des reçus d&apos;encaissement en caisse physique et attestations.
+                      {stampPreview
+                        ? '✓ Tampon scanné actif, incrusté automatiquement au bas de vos reçus et certificats.'
+                        : 'Exemple recommandé : tampon circulaire scanné (encre bleue ou violette sur fond transparent PNG).'}
                     </p>
-                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                    <div className="flex items-center justify-center sm:justify-start gap-2 pt-1 flex-wrap">
                       <label
                         htmlFor="stamp-upload"
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer shadow-2xs transition-all"
                       >
                         <Upload className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Importer un cachet scanné</span>
+                        <span>{stampPreview ? 'Changer le cachet' : 'Importer un cachet scanné'}</span>
                       </label>
                       <input
                         id="stamp-upload"
