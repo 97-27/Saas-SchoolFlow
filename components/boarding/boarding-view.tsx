@@ -13,9 +13,7 @@ import {
   Phone,
   PlusCircle,
   Search,
-  Filter,
   ChevronDown,
-  RotateCcw,
   Printer,
   Home,
   CheckCircle2,
@@ -26,16 +24,15 @@ import {
   Save,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   Coins,
   Edit3,
   ShieldCheck,
   User,
   Share2,
   Check,
-  CreditCard,
-  BadgePercent,
-  CheckCheck,
+  RotateCcw,
+  Sparkles,
+  FileCheck,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -43,8 +40,9 @@ interface BoardingViewProps {
   schoolSlug: string;
 }
 
-// 9 Mois de l'année scolaire (Octobre à Juin)
+// 9 Mois scolaires officiels (Septembre à Mai)
 const MONTHS_LIST = [
+  'Septembre',
   'Octobre',
   'Novembre',
   'Décembre',
@@ -53,11 +51,11 @@ const MONTHS_LIST = [
   'Mars',
   'Avril',
   'Mai',
-  'Juin',
 ];
 
 const BOARDING_PAYMENTS_KEY = 'schoolflow_boarding_monthly_payments_v3';
 const BOARDING_SUBSCRIPTIONS_KEY = 'schoolflow_boarding_subscriptions_v3';
+const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 
 export function BoardingView({
   school,
@@ -69,14 +67,8 @@ export function BoardingView({
   const [selectedPavilionFilter, setSelectedPavilionFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Modale nouvelle admission
-  const [isNewAdmissionModalOpen, setIsNewAdmissionModalOpen] = useState(false);
-  const [newSubStudentId, setNewSubStudentId] = useState('');
-  const [newSubPavilion, setNewSubPavilion] = useState('Pavillon A (Garçons)');
-  const [newSubRoom, setNewSubRoom] = useState('');
-  const [newSubRate, setNewSubRate] = useState('50000');
-  const [newSubSearchQuery, setNewSubSearchQuery] = useState('');
-  const [newSubGradeFilter, setNewSubGradeFilter] = useState('Toutes les classes');
+  // Mode création d'une nouvelle souscription vierge
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
 
   // Suivi des mois payés : studentId -> { [monthName]: boolean }
   const [monthlyPayments, setMonthlyPayments] = useState<Record<string, Record<string, boolean>>>(() => {
@@ -93,6 +85,11 @@ export function BoardingView({
   const [customSubscriptions, setCustomSubscriptions] = useState<
     Array<{
       studentId: string;
+      studentName?: string;
+      matricule?: string;
+      className?: string;
+      gender?: 'M' | 'F';
+      parentContact?: string;
       pavilion: string;
       roomNumber: string;
       monthlyRate: number;
@@ -107,7 +104,7 @@ export function BoardingView({
     return [];
   });
 
-  // Synchronisation avec les données globales
+  // Synchronisation globale avec le live-store
   useEffect(() => {
     const liveSchool = getLiveSchool(schoolSlug, school);
     setCurrentSchool(liveSchool);
@@ -149,6 +146,11 @@ export function BoardingView({
   const saveSubscriptionsToStorage = (
     updatedSubs: Array<{
       studentId: string;
+      studentName?: string;
+      matricule?: string;
+      className?: string;
+      gender?: 'M' | 'F';
+      parentContact?: string;
       pavilion: string;
       roomNumber: string;
       monthlyRate: number;
@@ -163,39 +165,83 @@ export function BoardingView({
     }
   };
 
-  // Construction de la liste des pensionnaires
+  // Construction de la liste des pensionnaires inscrits
   const boarders = useMemo(() => {
     const customMap = new Map(customSubscriptions.map((cs) => [cs.studentId, cs]));
 
-    return students.map((student, idx) => {
-      const custom = customMap.get(student.id);
-      const isBoarder = !!custom || idx % 4 === 0; // Démo par défaut si non customisé
-      const pavilion = custom ? custom.pavilion : student.gender === 'F' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
-      const roomNumber = custom ? custom.roomNumber : `Chambre ${101 + (idx % 25)}`;
-      const monthlyRate = custom ? custom.monthlyRate : 50000;
+    // 1. Les pensionnaires issus des customSubscriptions
+    const customList = customSubscriptions.map((cs) => {
+      const foundStudent = students.find((s) => s.id === cs.studentId || s.studentNumber === cs.matricule);
+      const studentObj: Student = foundStudent || {
+        id: cs.studentId,
+        studentNumber: cs.matricule || `MAT-INT-${cs.studentId.slice(-4)}`,
+        firstName: cs.studentName?.split(' ')[0] || 'Élève',
+        lastName: cs.studentName?.split(' ').slice(1).join(' ') || 'Pensionnaire',
+        gender: cs.gender || 'M',
+        className: cs.className || '6ème',
+        birthDate: '2012-05-10',
+        enrollmentDate: '2026-09-01',
+        guardianName: 'Parent / Tuteur',
+        guardianContact: cs.parentContact || '+225 07 00 00 00 00',
+        status: 'active',
+        schoolSlug: schoolSlug,
+        tuitionFee: 0,
+        paidAmount: 0,
+      };
 
-      const studentMonths = monthlyPayments[student.id] || {};
+      const studentMonths = monthlyPayments[cs.studentId] || {};
       const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-      const totalPaid = paidMonthsCount * monthlyRate;
-      const totalDue = monthlyRate * 9; // Strictement 9 mois
+      const totalPaid = paidMonthsCount * cs.monthlyRate;
+      const totalDue = cs.monthlyRate * 9; // 9 mois stricts
       const remainingBalance = Math.max(0, totalDue - totalPaid);
 
       return {
-        student,
-        isBoarder,
-        pavilion,
-        roomNumber,
-        monthlyRate,
+        student: studentObj,
+        isBoarder: true,
+        pavilion: cs.pavilion,
+        roomNumber: cs.roomNumber,
+        monthlyRate: cs.monthlyRate,
         paidMonthsCount,
         totalPaid,
         totalDue,
         remainingBalance,
         isUpToDate: remainingBalance === 0,
       };
-    }).filter((b) => b.isBoarder);
-  }, [students, customSubscriptions, monthlyPayments]);
+    });
 
-  // Filtrage des pensionnaires pour la navigation
+    // 2. Pensionnaires démo initiaux (si aucune customisation pour cet élève)
+    const demoList = students
+      .filter((s) => !customMap.has(s.id))
+      .filter((_, idx) => idx % 4 === 0)
+      .map((student, idx) => {
+        const pavilion = student.gender === 'F' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
+        const roomNumber = `Chambre ${101 + (idx % 20)}`;
+        const monthlyRate = 50000;
+
+        const studentMonths = monthlyPayments[student.id] || {};
+        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
+        const totalPaid = paidMonthsCount * monthlyRate;
+        const totalDue = monthlyRate * 9;
+        const remainingBalance = Math.max(0, totalDue - totalPaid);
+
+        return {
+          student,
+          isBoarder: true,
+          pavilion,
+          roomNumber,
+          monthlyRate,
+          paidMonthsCount,
+          totalPaid,
+          totalDue,
+          remainingBalance,
+          isUpToDate: remainingBalance === 0,
+        };
+      });
+
+    return [...customList, ...demoList];
+  }, [students, customSubscriptions, monthlyPayments, schoolSlug]);
+
+  // Filtrage pour la recherche et la navigation
   const filteredBoarders = useMemo(() => {
     return boarders.filter((b) => {
       const matchSearch =
@@ -214,58 +260,86 @@ export function BoardingView({
     });
   }, [boarders, searchQuery, selectedPavilionFilter]);
 
-  // Index du pensionnaire actuellement actif dans le reçu
+  // Index du pensionnaire actif
   const [activeBoarderIndex, setActiveBoarderIndex] = useState(0);
 
   // Pensionnaire actif
   const activeBoarder = useMemo(() => {
+    if (isCreatingNew) return null;
     if (filteredBoarders.length === 0) return boarders[0] || null;
     const safeIndex = Math.min(Math.max(0, activeBoarderIndex), filteredBoarders.length - 1);
     return filteredBoarders[safeIndex] || filteredBoarders[0];
-  }, [filteredBoarders, activeBoarderIndex]);
+  }, [filteredBoarders, activeBoarderIndex, boarders, isCreatingNew]);
 
-  // États du formulaire interactif en direct
+  // États du formulaire interactif
   const [formStudentName, setFormStudentName] = useState('');
   const [formMatricule, setFormMatricule] = useState('');
-  const [formClassName, setFormClassName] = useState('');
+  const [formClassName, setFormClassName] = useState('6ème');
   const [formGender, setFormGender] = useState<'M' | 'F'>('M');
   const [formPavilion, setFormPavilion] = useState('Pavillon A (Garçons)');
   const [formRoom, setFormRoom] = useState('');
   const [formParentContact, setFormParentContact] = useState('');
-  const [formMonthlyRate, setFormMonthlyRate] = useState<number>(50000);
+  const [formMonthlyRate, setFormMonthlyRate] = useState<number>(0);
   const [formPaymentDate, setFormPaymentDate] = useState('03/09/2026');
   const [formPaymentMethod, setFormPaymentMethod] = useState('Espèces');
-  const [formNotes, setFormNotes] = useState('');
   const [activeMonthsChecked, setActiveMonthsChecked] = useState<Record<string, boolean>>({});
 
-  // Synchronisation du formulaire quand le pensionnaire actif change
+  // Synchronisation du formulaire avec le pensionnaire actif quand on n'est pas en création
   useEffect(() => {
-    if (activeBoarder) {
+    if (!isCreatingNew && activeBoarder) {
       setFormStudentName(`${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim());
       setFormMatricule(activeBoarder.student.studentNumber);
-      setFormClassName(activeBoarder.student.className);
-      setFormGender(activeBoarder.student.gender);
+      setFormClassName(activeBoarder.student.className || '6ème');
+      setFormGender(activeBoarder.student.gender || 'M');
       setFormPavilion(activeBoarder.pavilion);
       setFormRoom(activeBoarder.roomNumber);
       setFormParentContact(activeBoarder.student.guardianContact || '+225 07 00 00 00 00');
-      setFormMonthlyRate(activeBoarder.monthlyRate || 50000);
+      setFormMonthlyRate(activeBoarder.monthlyRate || 0);
 
       const months = monthlyPayments[activeBoarder.student.id] || {};
       setActiveMonthsChecked(months);
     }
-  }, [activeBoarder, monthlyPayments]);
+  }, [activeBoarder, isCreatingNew, monthlyPayments]);
 
-  // Calculs financiers réactifs (STRICTEMENT 9 MOIS)
+  // Réinitialisation complète à zéro pour « Nouvelle Souscription »
+  const handleStartNewSubscription = () => {
+    setIsCreatingNew(true);
+    setFormStudentName('');
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    setFormMatricule(`MAT-2026-${randomSuffix}`);
+    setFormClassName('6ème');
+    setFormGender('M');
+    setFormPavilion('Pavillon A (Garçons)');
+    setFormRoom('');
+    setFormParentContact('');
+    setFormMonthlyRate(0); // Coordonnées et montants à 0
+    setFormPaymentDate('03/09/2026');
+    setFormPaymentMethod('Espèces');
+    setActiveMonthsChecked({}); // Aucun mois coché
+
+    setToastMessage('📝 Formulaire réinitialisé à zéro. Saisissez les coordonnées de la nouvelle souscription.');
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Annuler la création et revenir aux pensionnaires existants
+  const handleCancelNewSubscription = () => {
+    setIsCreatingNew(false);
+    if (boarders.length > 0) {
+      setActiveBoarderIndex(0);
+    }
+  };
+
+  // Calculs financiers réactifs (SUR 9 MOIS : Septembre à Mai)
   const activePaidMonthsCount = useMemo(() => {
     return MONTHS_LIST.filter((m) => activeMonthsChecked[m]).length;
   }, [activeMonthsChecked]);
 
   const activeTotalCollected = useMemo(() => {
-    return activePaidMonthsCount * formMonthlyRate;
+    return activePaidMonthsCount * (Number(formMonthlyRate) || 0);
   }, [activePaidMonthsCount, formMonthlyRate]);
 
   const activeTotalAnnualExigible = useMemo(() => {
-    return formMonthlyRate * 9; // 9 mois
+    return (Number(formMonthlyRate) || 0) * 9; // 9 mois
   }, [formMonthlyRate]);
 
   const activeRemainingBalance = useMemo(() => {
@@ -294,49 +368,91 @@ export function BoardingView({
     setActiveMonthsChecked({});
   };
 
-  // Enregistrement des modifications du reçu
+  // Enregistrement & validation (Création ou Mise à jour)
   const handleSaveReceipt = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!activeBoarder) return;
 
-    // Sauvegarder les mois payés
+    if (!formStudentName.trim()) {
+      alert('Veuillez saisir le nom et prénom de l’élève.');
+      return;
+    }
+
+    const rate = Number(formMonthlyRate) || 0;
+    const targetStudentId = isCreatingNew
+      ? `stud-int-${Date.now()}`
+      : activeBoarder?.student.id || `stud-int-${Date.now()}`;
+
+    // 1. Sauvegarder les mois cochés
     const updatedPayments = {
       ...monthlyPayments,
-      [activeBoarder.student.id]: activeMonthsChecked,
+      [targetStudentId]: activeMonthsChecked,
     };
     savePaymentsToStorage(updatedPayments);
 
-    // Sauvegarder les modifications du pensionnaire (chambre, pavillon, tarif)
-    const existingIndex = customSubscriptions.findIndex((s) => s.studentId === activeBoarder.student.id);
+    // 2. Mettre à jour / ajouter dans customSubscriptions
+    const existingIndex = customSubscriptions.findIndex((s) => s.studentId === targetStudentId);
     let updatedSubs = [...customSubscriptions];
+    const subRecord = {
+      studentId: targetStudentId,
+      studentName: formStudentName.trim(),
+      matricule: formMatricule.trim(),
+      className: formClassName,
+      gender: formGender,
+      parentContact: formParentContact.trim(),
+      pavilion: formPavilion,
+      roomNumber: formRoom.trim() || 'Chambre 101',
+      monthlyRate: rate,
+    };
+
     if (existingIndex >= 0) {
-      updatedSubs[existingIndex] = {
-        studentId: activeBoarder.student.id,
-        pavilion: formPavilion,
-        roomNumber: formRoom,
-        monthlyRate: formMonthlyRate,
-      };
+      updatedSubs[existingIndex] = subRecord;
     } else {
-      updatedSubs.push({
-        studentId: activeBoarder.student.id,
-        pavilion: formPavilion,
-        roomNumber: formRoom,
-        monthlyRate: formMonthlyRate,
-      });
+      updatedSubs.unshift(subRecord);
     }
     saveSubscriptionsToStorage(updatedSubs);
 
-    setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount} / 9 mois réglés).`);
-    setTimeout(() => setToastMessage(null), 4000);
+    // 3. Si création d'un nouvel élève, l'ajouter aussi au registre global des élèves
+    if (isCreatingNew) {
+      try {
+        const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
+        const currentList: Student[] = raw ? JSON.parse(raw) : [];
+        const nameParts = formStudentName.trim().split(' ');
+        const newStudentObj: Student = {
+          id: targetStudentId,
+          studentNumber: formMatricule.trim(),
+          firstName: nameParts[0] || 'Élève',
+          lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
+          gender: formGender,
+          className: formClassName,
+          birthDate: '2012-05-10',
+          enrollmentDate: '2026-09-01',
+          guardianName: 'Parent / Tuteur',
+          guardianContact: formParentContact.trim(),
+          status: 'active',
+          schoolSlug: schoolSlug,
+          tuitionFee: rate * 9,
+          paidAmount: activeTotalCollected,
+        };
+        const updatedStudentList = [newStudentObj, ...currentList.filter((s) => s.id !== targetStudentId)];
+        localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudentList));
+      } catch (err) {}
+    }
+
+    setIsCreatingNew(false);
+    setActiveBoarderIndex(0);
+    setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount}/9 mois réglés pour ${formStudentName}).`);
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   // Navigation Reçu Précédent / Suivant
   const handlePrevReceipt = () => {
+    setIsCreatingNew(false);
     if (filteredBoarders.length === 0) return;
     setActiveBoarderIndex((prev) => (prev > 0 ? prev - 1 : filteredBoarders.length - 1));
   };
 
   const handleNextReceipt = () => {
+    setIsCreatingNew(false);
     if (filteredBoarders.length === 0) return;
     setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
   };
@@ -348,13 +464,12 @@ export function BoardingView({
 
   // Partage WhatsApp
   const handleShareWhatsApp = () => {
-    if (!activeBoarder) return;
     const paidMonthsNames = MONTHS_LIST.filter((m) => activeMonthsChecked[m]).join(', ') || 'Aucun';
     const message = `*QUITTANCE DE PENSIONNAT & INTERNAT — ${currentSchool.shortName || currentSchool.name}*\n` +
       `--------------------------------------\n` +
       `👤 *Élève* : ${formStudentName} (${formMatricule})\n` +
       `🏫 *Classe* : ${formClassName}\n` +
-      `🛏️ *Résidence* : ${formPavilion} — ${formRoom}\n` +
+      `🛏️ *Résidence* : ${formPavilion} — ${formRoom || 'Attribuée'}\n` +
       `📅 *Date* : ${formPaymentDate}\n` +
       `💳 *Règlement* : ${formPaymentMethod}\n` +
       `--------------------------------------\n` +
@@ -371,7 +486,7 @@ export function BoardingView({
     window.open(url, '_blank');
   };
 
-  // Statistiques Globales KPI (Sur 9 Mois)
+  // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai)
   const totalBoarders = boarders.length;
   const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
   const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
@@ -486,7 +601,7 @@ export function BoardingView({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          BANDEAU DE NAVIGATION & SÉLECTION RAPIDE DES REÇUS
+          BANDEAU DE NAVIGATION RAPIDE & BOUTON NOUVELLE SOUSCRIPTION
           ═══════════════════════════════════════════════════════════════ */}
       <div className="bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         {/* Recherche et Filtres */}
@@ -499,6 +614,7 @@ export function BoardingView({
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
+                setIsCreatingNew(false);
                 setActiveBoarderIndex(0);
               }}
               className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
@@ -510,6 +626,7 @@ export function BoardingView({
               value={selectedPavilionFilter}
               onChange={(e) => {
                 setSelectedPavilionFilter(e.target.value);
+                setIsCreatingNew(false);
                 setActiveBoarderIndex(0);
               }}
               className="w-full sm:w-auto appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
@@ -524,56 +641,79 @@ export function BoardingView({
           {/* Sélecteur direct de pensionnaire */}
           <div className="relative shrink-0 flex-1 sm:max-w-xs">
             <select
-              value={activeBoarder?.student.id || ''}
+              value={isCreatingNew ? 'new' : activeBoarder?.student.id || ''}
               onChange={(e) => {
                 const targetId = e.target.value;
+                if (targetId === 'new') {
+                  handleStartNewSubscription();
+                  return;
+                }
+                setIsCreatingNew(false);
                 const idx = filteredBoarders.findIndex((b) => b.student.id === targetId);
                 if (idx >= 0) setActiveBoarderIndex(idx);
               }}
-              className="w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer truncate"
+              className={`w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-xl border font-bold focus:outline-none focus:ring-2 cursor-pointer truncate ${
+                isCreatingNew
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 focus:ring-amber-500/20'
+                  : 'bg-emerald-50/80 border-emerald-200 text-emerald-950 focus:ring-emerald-500/20'
+              }`}
             >
+              {isCreatingNew && <option value="new">✨ + Nouvelle Souscription (En cours de saisie)</option>}
               {filteredBoarders.map((b, idx) => (
                 <option key={b.student.id} value={b.student.id}>
                   {idx + 1}. {b.student.firstName} {b.student.lastName} ({b.student.className} • {b.roomNumber})
                 </option>
               ))}
             </select>
-            <ChevronDown className="w-3.5 h-3.5 text-emerald-700 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
 
-        {/* Boutons de Navigation Reçu Précédent / Suivant & Nouveau */}
+        {/* Boutons de Navigation Reçu Précédent / Suivant & Bouton Nouvelle Souscription */}
         <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={handlePrevReceipt}
-              className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-              title="Quittance Précédente"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-[11px] font-extrabold text-slate-700 px-2 font-heading">
-              {filteredBoarders.length > 0 ? `${activeBoarderIndex + 1} / ${filteredBoarders.length}` : '0 / 0'}
-            </span>
-            <button
-              type="button"
-              onClick={handleNextReceipt}
-              className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-              title="Quittance Suivante"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {!isCreatingNew && (
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={handlePrevReceipt}
+                className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                title="Quittance Précédente"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[11px] font-extrabold text-slate-700 px-2 font-heading">
+                {filteredBoarders.length > 0 ? `${activeBoarderIndex + 1} / ${filteredBoarders.length}` : '0 / 0'}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextReceipt}
+                className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                title="Quittance Suivante"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setIsNewAdmissionModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Nouvelle Admission</span>
-          </button>
+          {isCreatingNew ? (
+            <button
+              type="button"
+              onClick={handleCancelNewSubscription}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Annuler la création</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartNewSubscription}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-xs shadow-emerald-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Nouvelle Souscription</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -585,15 +725,19 @@ export function BoardingView({
         <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-6 shadow-xs space-y-5">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-wrap gap-2">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                <Edit3 className="w-4 h-4" />
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                isCreatingNew ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                {isCreatingNew ? <Sparkles className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 font-heading">
-                  Coordonnées & Modalités d&apos;Internat
+                  {isCreatingNew ? '✨ Nouvelle Souscription à l’Internat' : 'Coordonnées & Modalités d’Internat'}
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Modifiez les données, cochez les mois et cliquez sur enregistrer
+                  {isCreatingNew
+                    ? 'Remplissez les informations vierges pour inscrire un élève'
+                    : 'Modifiez les données, cochez les mois et cliquez sur enregistrer'}
                 </p>
               </div>
             </div>
@@ -601,12 +745,18 @@ export function BoardingView({
             {/* Badge état paiement */}
             <span
               className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                activeRemainingBalance === 0
+                isCreatingNew
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : activeRemainingBalance === 0
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : 'bg-amber-50 text-amber-800 border-amber-200'
               }`}
             >
-              {activeRemainingBalance === 0 ? '✓ Soldé (9/9 mois)' : `${activePaidMonthsCount}/9 Mois Réglés`}
+              {isCreatingNew
+                ? 'Nouveau Dossier'
+                : activeRemainingBalance === 0
+                ? '✓ Soldé (9/9 mois)'
+                : `${activePaidMonthsCount}/9 Mois Réglés`}
             </span>
           </div>
 
@@ -614,9 +764,18 @@ export function BoardingView({
             {/* 1. Coordonnées de l'élève */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">Nom & Prénom de l&apos;Élève *</label>
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Nom & Prénom de l&apos;Élève *</span>
+                  {isCreatingNew && (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded">
+                      Champs vierges
+                    </span>
+                  )}
+                </label>
                 <input
                   type="text"
+                  required
+                  placeholder="Ex: KOUASSI Aya Marie"
                   value={formStudentName}
                   onChange={(e) => setFormStudentName(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
@@ -627,6 +786,7 @@ export function BoardingView({
                 <label className="text-xs font-bold text-slate-700">Matricule</label>
                 <input
                   type="text"
+                  placeholder="Ex: MAT-2026-001"
                   value={formMatricule}
                   onChange={(e) => setFormMatricule(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono text-[11px]"
@@ -634,27 +794,52 @@ export function BoardingView({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Classe</label>
-                <input
-                  type="text"
+                <label className="text-xs font-bold text-slate-700">Classe *</label>
+                <select
                   value={formClassName}
                   onChange={(e) => setFormClassName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold"
-                />
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold focus:outline-none"
+                >
+                  {availableClasses.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Pavillon d&apos;Hébergement</label>
-                <select
-                  value={formPavilion}
-                  onChange={(e) => setFormPavilion(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold focus:outline-none"
-                >
-                  <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
-                  <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
-                  <option value="Pavillon Junior">Pavillon Junior (Maternelle/Primaire)</option>
-                  <option value="Pavillon Honneur">Pavillon Honneur (Collège 3ème)</option>
-                </select>
+                <label className="text-xs font-bold text-slate-700">Genre</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormGender('M');
+                      if (formPavilion.includes('Filles')) setFormPavilion('Pavillon A (Garçons)');
+                    }}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      formGender === 'M'
+                        ? 'bg-blue-50 border-blue-300 text-blue-700 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-500'
+                    }`}
+                  >
+                    ♂ Garçon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormGender('F');
+                      if (formPavilion.includes('Garçons')) setFormPavilion('Pavillon B (Filles)');
+                    }}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      formGender === 'F'
+                        ? 'bg-pink-50 border-pink-300 text-pink-700 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-500'
+                    }`}
+                  >
+                    ♀ Fille
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -669,11 +854,26 @@ export function BoardingView({
               </div>
 
               <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-bold text-slate-700">Pavillon d&apos;Hébergement</label>
+                <select
+                  value={formPavilion}
+                  onChange={(e) => setFormPavilion(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold focus:outline-none"
+                >
+                  <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
+                  <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
+                  <option value="Pavillon Junior">Pavillon Junior (Maternelle/Primaire)</option>
+                  <option value="Pavillon Honneur">Pavillon Honneur (Collège 3ème)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700">Contact WhatsApp du Tuteur / Parent</label>
                 <div className="relative">
                   <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
+                    placeholder="Ex: +225 07 48 92 11 00"
                     value={formParentContact}
                     onChange={(e) => setFormParentContact(e.target.value)}
                     className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono"
@@ -694,8 +894,9 @@ export function BoardingView({
                   <label className="text-[11px] font-bold text-slate-600">Frais Mensuels (FCFA) *</label>
                   <input
                     type="number"
-                    value={formMonthlyRate}
+                    value={formMonthlyRate === 0 ? '' : formMonthlyRate}
                     onChange={(e) => setFormMonthlyRate(Number(e.target.value) || 0)}
+                    placeholder="0"
                     className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 text-slate-900 font-extrabold"
                   />
                 </div>
@@ -728,12 +929,12 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* 3. Grille des 9 Mois Scolaires (Octobre à Juin) */}
+            {/* 3. Grille des 9 Mois Scolaires (Septembre à Mai) */}
             <div className="space-y-2">
               <div className="flex items-center justify-between flex-wrap gap-1">
                 <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Suivi des 9 Mois Scolaires (Octobre à Juin) :</span>
+                  <span>Mois Scolaires Pris en Compte (Septembre à Mai — 9 mois) :</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <button
@@ -794,7 +995,9 @@ export function BoardingView({
                 className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
                 <Save className="w-4 h-4" />
-                <span>Enregistrer & Actualiser la Quittance</span>
+                <span>
+                  {isCreatingNew ? 'Valider la Nouvelle Souscription' : 'Enregistrer & Actualiser la Quittance'}
+                </span>
               </button>
             </div>
           </form>
@@ -930,11 +1133,11 @@ export function BoardingView({
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 block">Tuteur / Contact WhatsApp :</span>
-                <span className="font-mono text-slate-800">{formParentContact}</span>
+                <span className="font-mono text-slate-800">{formParentContact || 'Non renseigné'}</span>
               </div>
             </div>
 
-            {/* 4. Tableau du Décompte Financier (9 Mois) */}
+            {/* 4. Tableau du Décompte Financier (9 Mois : Septembre à Mai) */}
             <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
               <table className="w-full text-left">
                 <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
@@ -994,144 +1197,41 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* 6. Signatures et Cachet */}
-            <div className="pt-3 grid grid-cols-2 gap-4 text-center text-[10px] border-t border-slate-200">
-              <div className="space-y-8">
-                <span className="font-bold text-slate-600 block">Signature du Parent / Déposant</span>
-                <span className="text-slate-400 italic">« Lu et approuvé »</span>
-              </div>
-              <div className="space-y-8">
-                <span className="font-bold text-slate-900 block">
-                  L&apos;Intendance & Économe de l&apos;Établissement
-                </span>
-                <div className="text-slate-400 italic flex items-center justify-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Cachet & Signature Électronique</span>
+            {/* 6. Signature Unique : Intendance & Cachet Officiel de l'École (Sans signature parent) */}
+            <div className="pt-3 border-t border-slate-200 flex flex-col items-end">
+              <div className="text-right space-y-2 max-w-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-900 uppercase block tracking-wider font-heading">
+                    L&apos;Intendance & Économe de l&apos;Établissement
+                  </span>
+                  <span className="text-[9px] text-slate-400">Direction Générale & Pédagogique</span>
                 </div>
+
+                {/* Emplacement Cachet / Tampon */}
+                <div className="h-16 flex items-center justify-end">
+                  {currentSchool.stampUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={currentSchool.stampUrl}
+                      alt="Cachet officiel"
+                      className="max-h-full object-contain opacity-90"
+                    />
+                  ) : (
+                    <div className="p-2 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 flex items-center gap-1.5 text-[10px] font-bold text-emerald-800">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span>Cachet Électronique Certifié</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[8px] text-slate-400 italic">
+                  {currentSchool.receiptFooterNote || 'Reçu certifié et numéroté immédiat. Aucun remboursement après encaissement.'}
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          MODALE NOUVELLE ADMISSION D'INTERNAT
-          ═══════════════════════════════════════════════════════════════ */}
-      {isNewAdmissionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <BedDouble className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 font-heading">
-                    Nouvelle Admission à l&apos;Internat
-                  </h3>
-                  <p className="text-xs text-slate-400">Affectation d&apos;une chambre et ouverture de quittance</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsNewAdmissionModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Sélectionner l&apos;Élève *</label>
-                <select
-                  value={newSubStudentId}
-                  onChange={(e) => setNewSubStudentId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:outline-none"
-                >
-                  <option value="">-- Choisir un élève de l&apos;établissement --</option>
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.firstName} {s.lastName} ({s.studentNumber} • {s.className})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Pavillon *</label>
-                  <select
-                    value={newSubPavilion}
-                    onChange={(e) => setNewSubPavilion(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:outline-none"
-                  >
-                    <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
-                    <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
-                    <option value="Pavillon Junior">Pavillon Junior</option>
-                    <option value="Pavillon Honneur">Pavillon Honneur</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Numéro de Chambre *</label>
-                  <input
-                    type="text"
-                    value={newSubRoom}
-                    onChange={(e) => setNewSubRoom(e.target.value)}
-                    placeholder="Ex: Chambre 105"
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Frais Mensuels d&apos;Internat (FCFA) *</label>
-                <input
-                  type="number"
-                  value={newSubRate}
-                  onChange={(e) => setNewSubRate(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-extrabold"
-                />
-              </div>
-            </div>
-
-            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsNewAdmissionModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newSubStudentId) {
-                    alert('Veuillez sélectionner un élève.');
-                    return;
-                  }
-                  const updated = [
-                    ...customSubscriptions,
-                    {
-                      studentId: newSubStudentId,
-                      pavilion: newSubPavilion,
-                      roomNumber: newSubRoom || 'Chambre 101',
-                      monthlyRate: Number(newSubRate) || 50000,
-                    },
-                  ];
-                  saveSubscriptionsToStorage(updated);
-                  setIsNewAdmissionModalOpen(false);
-                  setToastMessage('✓ Nouvel élève admis à l’internat avec succès.');
-                }}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs cursor-pointer"
-              >
-                Valider l&apos;Admission
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

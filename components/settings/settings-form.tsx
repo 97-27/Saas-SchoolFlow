@@ -475,49 +475,6 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 </div>
               </div>
 
-              {/* Sélection Rapide d'Armoiries Nationales Africaines (1 Clic) */}
-              <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/70 space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Sélectionner en 1 Clic les Armoiries de votre Pays :</span>
-                  </span>
-                  <span className="text-[10px] text-amber-700 font-semibold">
-                    Format vectoriel officiel haute définition
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { country: "Côte d'Ivoire", flag: '🇨🇮', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png' },
-                    { country: 'Sénégal', flag: '🇸🇳', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Coat_of_arms_of_Senegal.svg/300px-Coat_of_arms_of_Senegal.svg.png' },
-                    { country: 'Bénin', flag: '🇧🇯', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Coat_of_arms_of_Benin.svg/300px-Coat_of_arms_of_Benin.svg.png' },
-                    { country: 'Cameroun', flag: '🇨🇲', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Coat_of_arms_of_Cameroon.svg/300px-Coat_of_arms_of_Cameroon.svg.png' },
-                    { country: 'Mali', flag: '🇲🇱', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Coat_of_arms_of_Mali.svg/300px-Coat_of_arms_of_Mali.svg.png' },
-                    { country: 'Burkina Faso', flag: '🇧🇫', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Coat_of_arms_of_Burkina_Faso.svg/300px-Coat_of_arms_of_Burkina_Faso.svg.png' },
-                    { country: 'Togo', flag: '🇹🇬', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Coat_of_arms_of_Togo.svg/300px-Coat_of_arms_of_Togo.svg.png' },
-                    { country: 'Guinée', flag: '🇬🇳', url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Coat_of_arms_of_Guinea.svg/300px-Coat_of_arms_of_Guinea.svg.png' },
-                  ].map((item) => (
-                    <button
-                      key={item.country}
-                      type="button"
-                      onClick={() => {
-                        setEmblemPreview(item.url);
-                        handleInputChange('countryEmblemUrl', item.url);
-                      }}
-                      className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        emblemPreview === item.url
-                          ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
-                          : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-100/60'
-                      }`}
-                    >
-                      <span>{item.flag}</span>
-                      <span>{item.country}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Form Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                 <div className="space-y-1.5 sm:col-span-2">
