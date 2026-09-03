@@ -37,6 +37,8 @@ import {
   Copy,
   Loader2,
   ImageIcon,
+  Eye,
+  ExternalLink,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -71,6 +73,10 @@ export function BoardingView({
   const [selectedPavilionFilter, setSelectedPavilionFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Modale d'Aperçu & Partage Image HD (WhatsApp)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [generatedImagePreviewUrl, setGeneratedImagePreviewUrl] = useState<string | null>(null);
 
   // Référence DOM du reçu pour la capture d'image et impression isolée
   const receiptRef = useRef<HTMLDivElement>(null);
@@ -217,7 +223,7 @@ export function BoardingView({
       };
     });
 
-    // 2. Pensionnaires démo initiaux (si aucune customisation pour cet élève)
+    // 2. Pensionnaires démo initiaux
     const demoList = students
       .filter((s) => !customMap.has(s.id))
       .filter((_, idx) => idx % 4 === 0)
@@ -465,7 +471,7 @@ export function BoardingView({
     setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
   };
 
-  // 1. Impression A4 Isolé (Uniquement le reçu)
+  // 1. Impression A4 Isolé (Uniquement le reçu cadré)
   const handlePrintReceipt = () => {
     document.body.classList.add('print-receipt-only');
     window.print();
@@ -480,7 +486,7 @@ export function BoardingView({
     const html2canvasModule = await import('html2canvas');
     const html2canvas = html2canvasModule.default;
     return await html2canvas(receiptRef.current, {
-      scale: 2, // Haute Définition Retina
+      scale: 2.5, // Ultra Haute Définition
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
@@ -539,13 +545,16 @@ export function BoardingView({
     }
   };
 
-  // 4. Partage WhatsApp sous forme d'IMAGE (Génère l'image, la copie & ouvre WhatsApp)
-  const handleShareWhatsApp = async () => {
+  // 4. Ouvrir la modale d'aperçu d'image pour WhatsApp
+  const handleOpenShareModal = async () => {
     try {
       setIsGeneratingImage(true);
       const canvas = await generateReceiptCanvas();
       if (canvas) {
-        // Copier l'image dans le presse-papier
+        const url = canvas.toDataURL('image/png');
+        setGeneratedImagePreviewUrl(url);
+
+        // Copie automatique dans le presse-papier
         canvas.toBlob(async (blob) => {
           if (blob && navigator.clipboard && navigator.clipboard.write) {
             try {
@@ -556,23 +565,8 @@ export function BoardingView({
           }
         }, 'image/png');
 
-        // Télécharger également le fichier image PNG pour pièce jointe
-        const url = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
-        link.download = `Quittance_Internat_${cleanName}.png`;
-        link.href = url;
-        link.click();
+        setIsShareModalOpen(true);
       }
-
-      const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-      const captionText = `Quittance officielle d'internat — ${formStudentName} (${currentSchool.shortName || currentSchool.name})`;
-      const waUrl = cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(captionText)}`
-        : `https://api.whatsapp.com/send?text=${encodeURIComponent(captionText)}`;
-
-      setToastMessage('📸 Image du reçu générée & copiée ! Ouverture de WhatsApp pour coller (Ctrl+V) ou joindre l’image.');
-      window.open(waUrl, '_blank');
     } catch (e) {
       console.error(e);
     } finally {
@@ -580,7 +574,17 @@ export function BoardingView({
     }
   };
 
-  // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai)
+  // 5. Action directe : Ouvrir la discussion WhatsApp
+  const handleDirectWhatsAppChat = () => {
+    const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
+    const captionText = `Quittance officielle de pensionnat — ${formStudentName} (${currentSchool.shortName || currentSchool.name})`;
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(captionText)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(captionText)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai - 100 Places Max)
   const totalBoarders = boarders.length;
   const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
   const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
@@ -602,6 +606,87 @@ export function BoardingView({
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODALE D'APERÇU & PARTAGE IMAGE WHATSAPP
+          ═══════════════════════════════════════════════════════════════ */}
+      {isShareModalOpen && generatedImagePreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-5 sm:p-6 space-y-4 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-xs">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading">
+                    Image Haute Définition du Reçu
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Prête à envoyer aux parents sur WhatsApp
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Aperçu Visuel de l'Image Générée */}
+            <div className="flex-1 overflow-y-auto border border-slate-200 rounded-2xl p-3 bg-slate-50 flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImagePreviewUrl}
+                alt="Aperçu Reçu Officiel"
+                className="max-h-[50vh] w-auto object-contain rounded-xl shadow-md border border-slate-300"
+              />
+            </div>
+
+            {/* Guide & Boutons d'Action WhatsApp */}
+            <div className="space-y-3 pt-2 shrink-0">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs text-emerald-950 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  L&apos;image est déjà <strong>copiée dans votre presse-papier</strong> ! Vous pouvez la coller directement (Ctrl+V) dans votre discussion.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={handleDirectWhatsAppChat}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Ouvrir WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyReceiptImage}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copier Image</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadReceiptImage}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Télécharger PNG</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -666,7 +751,7 @@ export function BoardingView({
           </div>
         </div>
 
-        {/* KPI 3: Capacité & Occupation */}
+        {/* KPI 3: Capacité & Occupation (Fixée à 100 Places) */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all sm:col-span-2 lg:col-span-1">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 shadow-2xs">
@@ -681,7 +766,7 @@ export function BoardingView({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
-              {totalBoarders} / 200
+              {totalBoarders} / 100
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
               Places
@@ -689,7 +774,7 @@ export function BoardingView({
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
             <span>Disponibles :</span>
-            <span className="font-bold text-slate-900">{Math.max(0, 200 - totalBoarders)} lits</span>
+            <span className="font-bold text-slate-900">{Math.max(0, 100 - totalBoarders)} lits</span>
           </div>
         </div>
       </div>
@@ -816,8 +901,8 @@ export function BoardingView({
           ═══════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* COLONNE GAUCHE : FORMULAIRE DE SAISIE ET ENREGISTREMENT */}
-        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-6 shadow-xs space-y-5 print:hidden">
-          <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-wrap gap-2">
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs space-y-4 print:hidden">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div className="flex items-center gap-2.5">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                 isCreatingNew ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
@@ -826,19 +911,19 @@ export function BoardingView({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 font-heading">
-                  {isCreatingNew ? '✨ Nouvelle Souscription à l’Internat' : 'Coordonnées & Modalités d’Internat'}
+                  {isCreatingNew ? '✨ Nouvelle Souscription' : 'Coordonnées d’Internat'}
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   {isCreatingNew
-                    ? 'Remplissez les informations vierges pour inscrire un élève'
-                    : 'Modifiez les données, cochez les mois et cliquez sur enregistrer'}
+                    ? 'Remplissez les informations pour inscrire un élève'
+                    : 'Modifiez les données et cliquez sur enregistrer'}
                 </p>
               </div>
             </div>
 
             {/* Badge état paiement */}
             <span
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+              className={`px-2 py-0.5 rounded-lg text-xs font-bold border ${
                 isCreatingNew
                   ? 'bg-amber-50 text-amber-800 border-amber-200'
                   : activeRemainingBalance === 0
@@ -850,13 +935,13 @@ export function BoardingView({
                 ? 'Nouveau Dossier'
                 : activeRemainingBalance === 0
                 ? '✓ Soldé (9/9 mois)'
-                : `${activePaidMonthsCount}/9 Mois Réglés`}
+                : `${activePaidMonthsCount}/9 Mois`}
             </span>
           </div>
 
           <form onSubmit={handleSaveReceipt} className="space-y-4">
             {/* 1. Coordonnées de l'élève */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                   <span>Nom & Prénom de l&apos;Élève *</span>
@@ -1049,7 +1134,7 @@ export function BoardingView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {MONTHS_LIST.map((month, idx) => {
                   const isChecked = !!activeMonthsChecked[month];
                   return (
@@ -1097,14 +1182,14 @@ export function BoardingView({
           </form>
         </div>
 
-        {/* COLONNE DROITE : REÇU OFFICIEL D'INTERNAT EN DIRECT */}
-        <div className="lg:col-span-6 bg-white rounded-2xl border-2 border-emerald-600/30 p-5 sm:p-6 shadow-md space-y-4 relative print:border-none print:shadow-none print:p-0">
-          {/* Boutons Actions Rapides Reçu (Impression Isolé / Image WhatsApp / Télécharger PNG / Copier) */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden flex-wrap gap-2">
+        {/* COLONNE DROITE : REÇU OFFICIEL D'INTERNAT EN DIRECT (Cadré et Rétréci pour éviter les espaces vides) */}
+        <div className="lg:col-span-7 flex flex-col items-center justify-start space-y-4">
+          {/* Barre d'Actions Rapides du Reçu */}
+          <div className="w-full max-w-[620px] bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 shadow-xs flex items-center justify-between flex-wrap gap-2 print:hidden">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider font-heading">
-                Aperçu Direct du Reçu Officiel
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider font-heading">
+                Quittance Officielle
               </span>
             </div>
 
@@ -1120,18 +1205,6 @@ export function BoardingView({
                 <span>Imprimer A4</span>
               </button>
 
-              {/* Bouton Copier l'Image */}
-              <button
-                type="button"
-                onClick={handleCopyReceiptImage}
-                disabled={isGeneratingImage}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Copier l'image HD dans le presse-papier pour la coller direct (Ctrl+V)"
-              >
-                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5 text-slate-600" />}
-                <span>Copier Image</span>
-              </button>
-
               {/* Bouton Télécharger Image PNG */}
               <button
                 type="button"
@@ -1144,13 +1217,13 @@ export function BoardingView({
                 <span>Image PNG</span>
               </button>
 
-              {/* Bouton Partager WhatsApp */}
+              {/* Bouton Partager WhatsApp avec Modale d'Aperçu */}
               <button
                 type="button"
-                onClick={handleShareWhatsApp}
+                onClick={handleOpenShareModal}
                 disabled={isGeneratingImage}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Générer l'image du reçu, la copier et ouvrir WhatsApp"
+                title="Afficher l'image HD du reçu et partager sur WhatsApp"
               >
                 {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
                 <span>WhatsApp</span>
@@ -1158,16 +1231,16 @@ export function BoardingView({
             </div>
           </div>
 
-          {/* DOCUMENT OFFICIEL DU REÇU IMPRIMABLE & CAPTURABLE EN IMAGE */}
+          {/* DOCUMENT OFFICIEL DU REÇU IMPRIMABLE & CAPTURABLE EN IMAGE (Largeur compacte et textes agrandis) */}
           <div
             id="official-receipt-printable"
             ref={receiptRef}
-            className="bg-white border border-slate-300 rounded-xl p-5 sm:p-6 space-y-4 shadow-xs print:border-none print:shadow-none print:p-0"
+            className="w-full max-w-[620px] mx-auto bg-white border-2 border-slate-900 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md print:border-none print:shadow-none print:p-0 print:max-w-none"
           >
-            {/* 1. En-tête Officiel et Strict */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b-2 border-slate-800">
+            {/* 1. En-tête de l'Établissement DANS UN CADRE ÉLÉGANT */}
+            <div className="border-2 border-slate-900 rounded-2xl p-3.5 sm:p-4 bg-slate-50/70 shadow-2xs flex items-center justify-between gap-3">
               {/* Logo Gauche */}
-              <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <div className="w-18 h-18 sm:w-20 sm:h-20 shrink-0 flex items-center justify-center">
                 {currentSchool.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1177,36 +1250,36 @@ export function BoardingView({
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-xl border border-emerald-300 bg-emerald-50 flex flex-col items-center justify-center text-center p-1">
-                    <Building2 className="w-5 h-5 text-emerald-600 mb-0.5" />
-                    <span className="text-[7px] font-black text-emerald-800 uppercase leading-none">
+                  <div className="w-16 h-16 rounded-xl border border-emerald-300 bg-emerald-50 flex flex-col items-center justify-center text-center p-1">
+                    <Building2 className="w-6 h-6 text-emerald-600 mb-0.5" />
+                    <span className="text-[8px] font-black text-emerald-800 uppercase leading-none">
                       {currentSchool.shortName || 'LOGO'}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Centre : Hiérarchie stricte demandée */}
+              {/* Centre : Hiérarchie stricte avec textes agrandis et lisibles */}
               <div className="text-center flex-1 space-y-0.5 min-w-0">
-                <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading truncate">
-                  {currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE EPC MANOI'}
+                <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight truncate">
+                  {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
                 </h1>
-                <p className="text-[11px] font-extrabold text-emerald-700">
+                <p className="text-xs font-extrabold text-emerald-800 tracking-wide font-heading">
                   {currentSchool.shortName || 'EPC MANOI'}
                 </p>
-                <p className="text-[9.5px] italic text-slate-600">
+                <p className="text-[10px] sm:text-[11px] italic text-slate-700 font-semibold">
                   « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                 </p>
-                <p className="text-[9px] font-semibold text-slate-500">
+                <p className="text-[9.5px] sm:text-[10px] font-medium text-slate-600">
                   {currentSchool.slogan || 'L’Excellence au service de l’Éducation'}
                 </p>
-                <p className="text-[8.5px] text-slate-400 font-mono">
+                <p className="text-[9px] sm:text-[9.5px] text-slate-500 font-mono font-bold">
                   Code Établissement : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
                 </p>
               </div>
 
               {/* Emblème Droit */}
-              <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+              <div className="w-18 h-18 sm:w-20 sm:h-20 shrink-0 flex items-center justify-center">
                 {currentSchool.countryEmblemUrl && currentSchool.countryEmblemUrl.startsWith('data:image') ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1216,9 +1289,9 @@ export function BoardingView({
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-xl border border-amber-300 bg-amber-50 flex flex-col items-center justify-center text-center p-1">
-                    <Building2 className="w-5 h-5 text-amber-600 mb-0.5" />
-                    <span className="text-[7px] font-black text-amber-900 uppercase leading-none">
+                  <div className="w-16 h-16 rounded-xl border border-amber-300 bg-amber-50 flex flex-col items-center justify-center text-center p-1">
+                    <Building2 className="w-6 h-6 text-amber-600 mb-0.5" />
+                    <span className="text-[8px] font-black text-amber-900 uppercase leading-none">
                       ARMOIRIES
                     </span>
                   </div>
@@ -1227,9 +1300,9 @@ export function BoardingView({
             </div>
 
             {/* 2. Titre & Référence de Quittance */}
-            <div className="bg-slate-900 text-white p-2.5 rounded-lg flex items-center justify-between text-xs">
+            <div className="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between text-xs sm:text-sm">
               <div>
-                <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-bold block">
+                <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-extrabold block">
                   Document Officiel d&apos;Encaissement
                 </span>
                 <span className="font-extrabold font-heading text-xs sm:text-sm">
@@ -1237,69 +1310,69 @@ export function BoardingView({
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[9px] text-slate-400 block font-mono">
+                <span className="text-[10px] text-slate-300 block font-mono font-bold">
                   RÉF : QUI-INT-2026-{(activeBoarderIndex + 1).toString().padStart(4, '0')}
                 </span>
-                <span className="font-bold text-amber-400 text-xs">
+                <span className="font-extrabold text-amber-400 text-xs sm:text-sm">
                   {formPaymentDate}
                 </span>
               </div>
             </div>
 
-            {/* 3. Détails du Pensionnaire */}
-            <div className="grid grid-cols-2 gap-2 text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-50/50">
+            {/* 3. Détails du Pensionnaire (Textes agrandis) */}
+            <div className="grid grid-cols-2 gap-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl p-3 bg-slate-50/70">
               <div>
-                <span className="text-[10px] text-slate-400 block">Nom & Prénom de l&apos;Élève :</span>
-                <span className="font-bold text-slate-900">{formStudentName || 'Non renseigné'}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Nom & Prénom de l&apos;Élève :</span>
+                <span className="font-extrabold text-slate-950">{formStudentName || 'Non renseigné'}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block">Matricule & Classe :</span>
-                <span className="font-bold text-slate-900">{formMatricule} • {formClassName}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Matricule & Classe :</span>
+                <span className="font-extrabold text-slate-950">{formMatricule} • {formClassName}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block">Pavillon & Chambre :</span>
-                <span className="font-bold text-emerald-800">{formPavilion} — {formRoom || 'N/A'}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Pavillon & Chambre :</span>
+                <span className="font-extrabold text-emerald-900">{formPavilion} — {formRoom || 'N/A'}</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 block">Tuteur / Contact WhatsApp :</span>
-                <span className="font-mono text-slate-800">{formParentContact || 'Non renseigné'}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Tuteur / Contact WhatsApp :</span>
+                <span className="font-mono font-bold text-slate-900">{formParentContact || 'Non renseigné'}</span>
               </div>
             </div>
 
             {/* 4. Tableau du Décompte Financier (9 Mois : Septembre à Mai) */}
-            <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
+            <div className="border border-slate-300 rounded-xl overflow-hidden text-xs sm:text-sm">
               <table className="w-full text-left">
-                <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                <thead className="bg-slate-100 text-slate-700 font-extrabold border-b border-slate-300 text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="py-1.5 px-3">Désignation</th>
-                    <th className="py-1.5 px-3 text-center">Mois Réglés (sur 9)</th>
-                    <th className="py-1.5 px-3 text-right">Montant Encaissé</th>
+                    <th className="py-2 px-3.5">Désignation</th>
+                    <th className="py-2 px-3.5 text-center">Mois Réglés (sur 9)</th>
+                    <th className="py-2 px-3.5 text-right">Montant Encaissé</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800">
+                <tbody className="divide-y divide-slate-200 text-slate-900">
                   <tr>
-                    <td className="py-2 px-3">
-                      <div className="font-bold text-slate-900">Pension d&apos;Internat Annuelle</div>
-                      <div className="text-[10px] text-slate-400">
+                    <td className="py-2.5 px-3.5">
+                      <div className="font-extrabold text-slate-950">Pension d&apos;Internat Annuelle</div>
+                      <div className="text-[11px] text-slate-500 font-semibold">
                         Tarif : {formatFCFA(formMonthlyRate)} / mois • Mode : {formPaymentMethod}
                       </div>
                     </td>
-                    <td className="py-2 px-3 text-center">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                    <td className="py-2.5 px-3.5 text-center">
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-extrabold border border-emerald-300 text-xs">
                         {activePaidMonthsCount} / 9 mois
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right font-extrabold text-slate-900 font-heading text-sm">
+                    <td className="py-2.5 px-3.5 text-right font-black text-slate-950 font-heading text-sm sm:text-base">
                       {formatFCFA(activeTotalCollected)}
                     </td>
                   </tr>
                 </tbody>
-                <tfoot className="bg-slate-50 font-bold border-t border-slate-200 text-xs">
+                <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs sm:text-sm">
                   <tr>
-                    <td colSpan={2} className="py-2 px-3 text-slate-600">
+                    <td colSpan={2} className="py-2.5 px-3.5 text-slate-700 font-extrabold">
                       Reste Annuel à Solder (sur les 9 mois) :
                     </td>
-                    <td className="py-2 px-3 text-right text-rose-600 font-extrabold font-heading">
+                    <td className="py-2.5 px-3.5 text-right text-rose-600 font-black font-heading text-sm sm:text-base">
                       {formatFCFA(activeRemainingBalance)}
                     </td>
                   </tr>
@@ -1308,15 +1381,15 @@ export function BoardingView({
             </div>
 
             {/* 5. Liste des mois réglés */}
-            <div className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-200 text-[11px] text-emerald-950">
-              <span className="font-bold block mb-1">Mois d&apos;internat validés par cette quittance :</span>
-              <div className="flex flex-wrap gap-1">
+            <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs text-emerald-950">
+              <span className="font-extrabold block mb-1.5">Mois d&apos;internat validés par cette quittance :</span>
+              <div className="flex flex-wrap gap-1.5">
                 {MONTHS_LIST.map((m) => (
                   <span
                     key={m}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
                       activeMonthsChecked[m]
-                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                         : 'bg-white text-slate-400 border-slate-200 line-through'
                     }`}
                   >
@@ -1327,13 +1400,13 @@ export function BoardingView({
             </div>
 
             {/* 6. Signature Unique : Intendance & Cachet Officiel de l'École (Sans signature parent) */}
-            <div className="pt-3 border-t border-slate-200 flex flex-col items-end">
+            <div className="pt-3 border-t border-slate-300 flex flex-col items-end">
               <div className="text-right space-y-2 max-w-xs">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-900 uppercase block tracking-wider font-heading">
+                  <span className="text-xs font-black text-slate-950 uppercase block tracking-wider font-heading">
                     L&apos;Intendance & Économe de l&apos;Établissement
                   </span>
-                  <span className="text-[9px] text-slate-400">Direction Générale & Pédagogique</span>
+                  <span className="text-[10px] text-slate-500 font-bold">Direction Générale & Pédagogique</span>
                 </div>
 
                 {/* Emplacement Cachet / Tampon */}
@@ -1344,17 +1417,17 @@ export function BoardingView({
                       src={currentSchool.stampUrl}
                       alt="Cachet officiel"
                       crossOrigin="anonymous"
-                      className="max-h-full object-contain opacity-90"
+                      className="max-h-full object-contain opacity-95"
                     />
                   ) : (
-                    <div className="p-2 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 flex items-center gap-1.5 text-[10px] font-bold text-emerald-800">
+                    <div className="p-2.5 rounded-xl border border-dashed border-emerald-400 bg-emerald-50/80 flex items-center gap-1.5 text-xs font-extrabold text-emerald-900 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
                       <span>Cachet Électronique Certifié</span>
                     </div>
                   )}
                 </div>
 
-                <p className="text-[8px] text-slate-400 italic">
+                <p className="text-[9px] text-slate-400 italic">
                   {currentSchool.receiptFooterNote || 'Reçu certifié et numéroté immédiat. Aucun remboursement après encaissement.'}
                 </p>
               </div>
