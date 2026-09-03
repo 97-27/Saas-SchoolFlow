@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -33,6 +33,10 @@ import {
   RotateCcw,
   Sparkles,
   FileCheck,
+  Download,
+  Copy,
+  Loader2,
+  ImageIcon,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -66,6 +70,10 @@ export function BoardingView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPavilionFilter, setSelectedPavilionFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Référence DOM du reçu pour la capture d'image et impression isolée
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   // Mode création d'une nouvelle souscription vierge
   const [isCreatingNew, setIsCreatingNew] = useState(false);
@@ -457,33 +465,119 @@ export function BoardingView({
     setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
   };
 
-  // Impression A4
+  // 1. Impression A4 Isolé (Uniquement le reçu)
   const handlePrintReceipt = () => {
+    document.body.classList.add('print-receipt-only');
     window.print();
+    setTimeout(() => {
+      document.body.classList.remove('print-receipt-only');
+    }, 1200);
   };
 
-  // Partage WhatsApp
-  const handleShareWhatsApp = () => {
-    const paidMonthsNames = MONTHS_LIST.filter((m) => activeMonthsChecked[m]).join(', ') || 'Aucun';
-    const message = `*QUITTANCE DE PENSIONNAT & INTERNAT — ${currentSchool.shortName || currentSchool.name}*\n` +
-      `--------------------------------------\n` +
-      `👤 *Élève* : ${formStudentName} (${formMatricule})\n` +
-      `🏫 *Classe* : ${formClassName}\n` +
-      `🛏️ *Résidence* : ${formPavilion} — ${formRoom || 'Attribuée'}\n` +
-      `📅 *Date* : ${formPaymentDate}\n` +
-      `💳 *Règlement* : ${formPaymentMethod}\n` +
-      `--------------------------------------\n` +
-      `✅ *Mois Réglés (sur 9)* : ${paidMonthsNames}\n` +
-      `💰 *Total Versé* : ${formatFCFA(activeTotalCollected)}\n` +
-      `⏳ *Solde Restant Annuel* : ${formatFCFA(activeRemainingBalance)}\n` +
-      `--------------------------------------\n` +
-      `_Document officiel certifié par l'Économe & l'Intendance de l'établissement._`;
+  // Fonction génératrice de Canvas HD pour le reçu
+  const generateReceiptCanvas = async () => {
+    if (!receiptRef.current) return null;
+    const html2canvasModule = await import('html2canvas');
+    const html2canvas = html2canvasModule.default;
+    return await html2canvas(receiptRef.current, {
+      scale: 2, // Haute Définition Retina
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+  };
 
-    const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-    const url = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
-      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+  // 2. Téléchargement direct en Image PNG HD
+  const handleDownloadReceiptImage = async () => {
+    try {
+      setIsGeneratingImage(true);
+      const canvas = await generateReceiptCanvas();
+      if (!canvas) return;
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
+      link.download = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
+      link.href = url;
+      link.click();
+      setToastMessage('📥 Image HD de la quittance téléchargée avec succès !');
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (e) {
+      console.error(e);
+      alert('Erreur lors de la génération de l’image du reçu.');
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  // 3. Copier l'Image dans le Presse-Papier (pour coller direct dans WhatsApp avec Ctrl+V)
+  const handleCopyReceiptImage = async () => {
+    try {
+      setIsGeneratingImage(true);
+      const canvas = await generateReceiptCanvas();
+      if (!canvas) return;
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+          if (navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob }),
+            ]);
+            setToastMessage('📋 Image de la quittance copiée ! Collez-la directement dans WhatsApp (Ctrl+V).');
+            setTimeout(() => setToastMessage(null), 5000);
+          } else {
+            handleDownloadReceiptImage();
+          }
+        } catch (err) {
+          handleDownloadReceiptImage();
+        }
+      }, 'image/png');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  // 4. Partage WhatsApp sous forme d'IMAGE (Génère l'image, la copie & ouvre WhatsApp)
+  const handleShareWhatsApp = async () => {
+    try {
+      setIsGeneratingImage(true);
+      const canvas = await generateReceiptCanvas();
+      if (canvas) {
+        // Copier l'image dans le presse-papier
+        canvas.toBlob(async (blob) => {
+          if (blob && navigator.clipboard && navigator.clipboard.write) {
+            try {
+              await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob }),
+              ]);
+            } catch (e) {}
+          }
+        }, 'image/png');
+
+        // Télécharger également le fichier image PNG pour pièce jointe
+        const url = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
+        link.download = `Quittance_Internat_${cleanName}.png`;
+        link.href = url;
+        link.click();
+      }
+
+      const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
+      const captionText = `Quittance officielle d'internat — ${formStudentName} (${currentSchool.shortName || currentSchool.name})`;
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(captionText)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(captionText)}`;
+
+      setToastMessage('📸 Image du reçu générée & copiée ! Ouverture de WhatsApp pour coller (Ctrl+V) ou joindre l’image.');
+      window.open(waUrl, '_blank');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGeneratingImage(false);
+    }
   };
 
   // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai)
@@ -514,7 +608,7 @@ export function BoardingView({
       {/* ═══════════════════════════════════════════════════════════════
           SECTION 1 : LES 3 CARTES STATISTIQUES KPI PANDHOWAN
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 print:hidden">
         {/* KPI 1: Effectif Pensionnaires */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex items-center gap-3 mb-3">
@@ -603,7 +697,7 @@ export function BoardingView({
       {/* ═══════════════════════════════════════════════════════════════
           BANDEAU DE NAVIGATION RAPIDE & BOUTON NOUVELLE SOUSCRIPTION
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 print:hidden">
         {/* Recherche et Filtres */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           <div className="relative flex-1">
@@ -722,7 +816,7 @@ export function BoardingView({
           ═══════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* COLONNE GAUCHE : FORMULAIRE DE SAISIE ET ENREGISTREMENT */}
-        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-6 shadow-xs space-y-5">
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-6 shadow-xs space-y-5 print:hidden">
           <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-wrap gap-2">
             <div className="flex items-center gap-2.5">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
@@ -1005,7 +1099,7 @@ export function BoardingView({
 
         {/* COLONNE DROITE : REÇU OFFICIEL D'INTERNAT EN DIRECT */}
         <div className="lg:col-span-6 bg-white rounded-2xl border-2 border-emerald-600/30 p-5 sm:p-6 shadow-md space-y-4 relative print:border-none print:shadow-none print:p-0">
-          {/* Boutons Actions Rapides Reçu (Impression / WhatsApp) */}
+          {/* Boutons Actions Rapides Reçu (Impression Isolé / Image WhatsApp / Télécharger PNG / Copier) */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1014,29 +1108,62 @@ export function BoardingView({
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Bouton Impression A4 Isolé */}
               <button
                 type="button"
                 onClick={handlePrintReceipt}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs"
+                title="Imprimer uniquement ce reçu sur feuille A4"
               >
-                <Printer className="w-3.5 h-3.5" />
+                <Printer className="w-3.5 h-3.5 text-slate-600" />
                 <span>Imprimer A4</span>
               </button>
 
+              {/* Bouton Copier l'Image */}
+              <button
+                type="button"
+                onClick={handleCopyReceiptImage}
+                disabled={isGeneratingImage}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Copier l'image HD dans le presse-papier pour la coller direct (Ctrl+V)"
+              >
+                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5 text-slate-600" />}
+                <span>Copier Image</span>
+              </button>
+
+              {/* Bouton Télécharger Image PNG */}
+              <button
+                type="button"
+                onClick={handleDownloadReceiptImage}
+                disabled={isGeneratingImage}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Télécharger la quittance au format Image PNG"
+              >
+                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-slate-600" />}
+                <span>Image PNG</span>
+              </button>
+
+              {/* Bouton Partager WhatsApp */}
               <button
                 type="button"
                 onClick={handleShareWhatsApp}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
+                disabled={isGeneratingImage}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
+                title="Générer l'image du reçu, la copier et ouvrir WhatsApp"
               >
-                <Share2 className="w-3.5 h-3.5" />
+                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
                 <span>WhatsApp</span>
               </button>
             </div>
           </div>
 
-          {/* DOCUMENT OFFICIEL DU REÇU IMPRIMABLE */}
-          <div className="bg-white border border-slate-300 rounded-xl p-4 sm:p-5 space-y-4 print:border-none print:p-0">
+          {/* DOCUMENT OFFICIEL DU REÇU IMPRIMABLE & CAPTURABLE EN IMAGE */}
+          <div
+            id="official-receipt-printable"
+            ref={receiptRef}
+            className="bg-white border border-slate-300 rounded-xl p-5 sm:p-6 space-y-4 shadow-xs print:border-none print:shadow-none print:p-0"
+          >
             {/* 1. En-tête Officiel et Strict */}
             <div className="flex items-center justify-between gap-3 pb-3 border-b-2 border-slate-800">
               {/* Logo Gauche */}
@@ -1046,6 +1173,7 @@ export function BoardingView({
                   <img
                     src={currentSchool.logoUrl}
                     alt={currentSchool.name}
+                    crossOrigin="anonymous"
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : (
@@ -1084,6 +1212,7 @@ export function BoardingView({
                   <img
                     src={currentSchool.countryEmblemUrl}
                     alt="Armoiries Nationales"
+                    crossOrigin="anonymous"
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : (
@@ -1214,6 +1343,7 @@ export function BoardingView({
                     <img
                       src={currentSchool.stampUrl}
                       alt="Cachet officiel"
+                      crossOrigin="anonymous"
                       className="max-h-full object-contain opacity-90"
                     />
                   ) : (
