@@ -6,6 +6,7 @@ import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   BedDouble,
   Building2,
@@ -17,7 +18,6 @@ import {
   ChevronDown,
   RotateCcw,
   Printer,
-  HeartPulse,
   Shield,
   Home,
   CheckCircle2,
@@ -28,6 +28,21 @@ import {
   Save,
   Send,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  History,
+  Sparkles,
+  Coins,
+  Landmark,
+  Smartphone,
+  FileText,
+  Edit3,
+  UserPlus,
+  ShieldCheck,
+  Check,
+  FolderOpen,
+  User,
+  Share2,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -63,7 +78,7 @@ export function BoardingView({
   const [selectedPavilion, setSelectedPavilion] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Modales
+  // Modales secondaires
   const [selectedStudentForMonths, setSelectedStudentForMonths] = useState<any | null>(null);
   const [selectedStudentForReceipt, setSelectedStudentForReceipt] = useState<any | null>(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -74,7 +89,7 @@ export function BoardingView({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(1200);
 
-  // Formulaire nouvelle admission (démarre complètement vide)
+  // Formulaire nouvelle admission modal
   const [newSubStudentId, setNewSubStudentId] = useState('');
   const [newSubPavilion, setNewSubPavilion] = useState('Pavillon A (Garçons)');
   const [newSubRoom, setNewSubRoom] = useState('');
@@ -104,7 +119,7 @@ export function BoardingView({
     return {};
   });
 
-  // Synchronisation des élèves
+  // Synchronisation des élèves et école
   useEffect(() => {
     setStudents(getLiveStudents(mockStudents));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
@@ -117,21 +132,7 @@ export function BoardingView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school]);
 
-  // Filtrage des élèves pour la modale d'internat
-  const filteredStudentsForNewSub = useMemo(() => {
-    return students.filter((s) => {
-      const matchSearch =
-        !newSubSearchQuery ||
-        s.fullName?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.studentNumber?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.matricule?.toLowerCase().includes(newSubSearchQuery.toLowerCase());
-      const matchGrade =
-        newSubGradeFilter === 'Toutes les classes' || s.grade === newSubGradeFilter;
-      return matchSearch && matchGrade;
-    });
-  }, [students, newSubSearchQuery, newSubGradeFilter]);
-
-  // Synchronisation de la barre de défilement horizontal en haut
+  // Synchronisation de la barre de défilement horizontal
   useEffect(() => {
     const updateWidth = () => {
       if (tableContainerRef.current) {
@@ -154,11 +155,6 @@ export function BoardingView({
       topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
     }
   };
-
-  // Déterminer l'élève sélectionné dans la modale nouvelle admission
-  const selectedStudentInNewSub = useMemo(() => {
-    return students.find((s) => s.id === newSubStudentId) || null;
-  }, [students, newSubStudentId]);
 
   // Pensionnaires réels de l'internat (~30% de l'effectif)
   const boarders = useMemo(() => {
@@ -207,7 +203,198 @@ export function BoardingView({
       });
   }, [students, customBoardingMap, monthlyPayments]);
 
-  // Filtrage
+  // ═══════════════════════════════════════════════════════════════
+  // ÉTAT DU FORMULAIRE ET REÇU INTERACTIF EN DIRECT
+  // ═══════════════════════════════════════════════════════════════
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
+  const [studentPickerSearch, setStudentPickerSearch] = useState('');
+
+  // Formulaire d'encaissement et de coordonnées de l'élève actif
+  const [formFullName, setFormFullName] = useState('');
+  const [formMatricule, setFormMatricule] = useState('');
+  const [formStudentNumber, setFormStudentNumber] = useState('ID-001');
+  const [formGrade, setFormGrade] = useState('6ème');
+  const [formGender, setFormGender] = useState<'male' | 'female'>('male');
+  const [formPavilion, setFormPavilion] = useState('Pavillon A (Garçons)');
+  const [formRoom, setFormRoom] = useState('Chambre G-101');
+  const [formGuardianName, setFormGuardianName] = useState('');
+  const [formPhone, setFormPhone] = useState('+225 07 48 92 11 00');
+  const [formMonthlyRate, setFormMonthlyRate] = useState<number>(50000);
+  const [formPaymentDate, setFormPaymentDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+  const [formPaymentMethod, setFormPaymentMethod] = useState<
+    'Espèces' | 'Wave' | 'Orange Money' | 'MTN Money' | 'Moov Money' | 'Virement' | 'Chèque'
+  >('Espèces');
+  const [formMonthsState, setFormMonthsState] = useState<Record<string, boolean>>({
+    Septembre: true,
+    Octobre: true,
+    Novembre: false,
+    Décembre: false,
+    Janvier: false,
+    Février: false,
+    Mars: false,
+    Avril: false,
+    Mai: false,
+    Juin: false,
+  });
+
+  // Initialiser le premier élève au chargement
+  useEffect(() => {
+    if (boarders.length > 0 && !selectedStudentId) {
+      loadStudentIntoForm(boarders[0]);
+    }
+  }, [boarders, selectedStudentId]);
+
+  // Fonction pour charger un élève dans le formulaire et le reçu
+  const loadStudentIntoForm = (boarder: any) => {
+    if (!boarder) return;
+    setSelectedStudentId(boarder.id);
+    setFormFullName(boarder.fullName || '');
+    setFormMatricule(boarder.matricule || 'MAT-2026-001');
+    setFormStudentNumber(boarder.studentNumber || 'ID-001');
+    setFormGrade(boarder.grade || '6ème');
+    setFormGender(boarder.gender === 'female' ? 'female' : 'male');
+    setFormPavilion(boarder.pavilion || 'Pavillon A (Garçons)');
+    setFormRoom(boarder.roomNumber || 'Chambre G-101');
+    setFormGuardianName(boarder.guardianName || 'M. & Mme ' + (boarder.lastName || 'Parent'));
+    setFormPhone(boarder.whatsappPhone || boarder.guardianPhone || '+225 07 48 92 11 00');
+    setFormMonthlyRate(boarder.monthlyRate || 50000);
+    setFormMonthsState(
+      boarder.monthsState || {
+        Septembre: true,
+        Octobre: true,
+        Novembre: false,
+        Décembre: false,
+        Janvier: false,
+        Février: false,
+        Mars: false,
+        Avril: false,
+        Mai: false,
+        Juin: false,
+      }
+    );
+  };
+
+  // Navigation Suivant / Précédent
+  const handleNavigateId = (direction: 'prev' | 'next') => {
+    if (boarders.length === 0) return;
+    const currentIndex = boarders.findIndex((b) => b.id === selectedStudentId);
+    if (currentIndex === -1) {
+      loadStudentIntoForm(boarders[0]);
+      return;
+    }
+
+    let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex < 0) nextIndex = boarders.length - 1;
+    if (nextIndex >= boarders.length) nextIndex = 0;
+
+    loadStudentIntoForm(boarders[nextIndex]);
+  };
+
+  // Basculer un mois dans le formulaire interactif
+  const handleToggleFormMonth = (month: string) => {
+    setFormMonthsState((prev) => ({
+      ...prev,
+      [month]: !prev[month],
+    }));
+  };
+
+  // Calculs en temps réel pour l'élève actif
+  const activePaidMonths = useMemo(() => {
+    return Object.keys(formMonthsState).filter((m) => formMonthsState[m]);
+  }, [formMonthsState]);
+
+  const activeUnpaidMonths = useMemo(() => {
+    return MONTHS_LIST.filter((m) => !formMonthsState[m]);
+  }, [formMonthsState]);
+
+  const activeTotalPaidAmount = useMemo(() => {
+    return activePaidMonths.length * formMonthlyRate;
+  }, [activePaidMonths, formMonthlyRate]);
+
+  const activeTotalAnnualExigible = useMemo(() => {
+    return formMonthlyRate * 10;
+  }, [formMonthlyRate]);
+
+  const activeAnnualRemaining = useMemo(() => {
+    return Math.max(0, activeTotalAnnualExigible - activeTotalPaidAmount);
+  }, [activeTotalAnnualExigible, activeTotalPaidAmount]);
+
+  // Enregistrement des coordonnées & quittance
+  const handleSaveActiveReceipt = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedStudentId) {
+      alert('Veuillez sélectionner un élève ou créer une nouvelle admission.');
+      return;
+    }
+
+    const newPayments = {
+      ...monthlyPayments,
+      [selectedStudentId]: formMonthsState,
+    };
+
+    const newBoardingMap = {
+      ...customBoardingMap,
+      [selectedStudentId]: {
+        room: formRoom,
+        pavilion: formPavilion,
+        rate: formMonthlyRate,
+      },
+    };
+
+    setMonthlyPayments(newPayments);
+    setCustomBoardingMap(newBoardingMap);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(BOARDING_PAYMENTS_KEY, JSON.stringify(newPayments));
+        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(newBoardingMap));
+      } catch (err) {}
+    }
+
+    setToastMessage(
+      `✓ Reçu officiel et cotisations d’internat actualisés avec succès pour ${formFullName} (${formStudentNumber}) !`
+    );
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  // Impression ciblée du Reçu Officiel A4
+  const handlePrintReceipt = () => {
+    window.print();
+  };
+
+  // Partage WhatsApp du Reçu d'Internat
+  const handleShareWhatsApp = () => {
+    const cleanPhone = formPhone.replace(/[^0-9]/g, '');
+    const receiptRef = `REC-INTERN-2026-${formMatricule || '001'}`;
+    const paidMonthsStr = activePaidMonths.length > 0 ? activePaidMonths.join(', ') : 'Aucun mois validé';
+    const unpaidMonthsStr = activeUnpaidMonths.length > 0 ? activeUnpaidMonths.join(', ') : 'Année entièrement soldée ✓';
+
+    const message =
+      `*REÇU OFFICIEL DE PAIEMENT D'INTERNAT & PENSIONNAT — ${currentSchool.name.toUpperCase()}*\n\n` +
+      `Bonjour Chers Parents de *${formFullName}* (${formGrade}),\n\n` +
+      `Nous vous délivrons la confirmation officielle du règlement des cotisations d'internat et d'hébergement scolaire :\n\n` +
+      `📄 *Réf Quittance :* ${receiptRef}\n` +
+      `👤 *Élève :* ${formFullName} (Matricule : ${formMatricule} • ${formStudentNumber})\n` +
+      `🏫 *Classe :* ${formGrade}\n` +
+      `🛏️ *Hébergement :* ${formPavilion} — ${formRoom}\n` +
+      `📅 *Mois d'Internat Réglés :* ${paidMonthsStr} (${activePaidMonths.length}/10 mois)\n` +
+      `⏳ *Mois Restants :* ${unpaidMonthsStr}\n` +
+      `💰 *Tarif Mensuel :* ${formatFCFA(formMonthlyRate)} / mois\n` +
+      `💵 *TOTAL ENCAISSÉ :* ${formatFCFA(activeTotalPaidAmount)}\n` +
+      `💳 *Mode de Règlement :* ${formPaymentMethod}\n` +
+      `🗓️ *Date d'émission :* ${formatDate(formPaymentDate)}\n\n` +
+      `_« ${currentSchool.motto || 'Discipline • Rigueur • Réussite'} »_\n` +
+      `Merci pour votre confiance. — *Intendance & Direction ${currentSchool.shortName || 'EPC MANOI'}*`;
+
+    const encoded = encodeURIComponent(message);
+    const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
+    window.open(url, '_blank');
+  };
+
+  // Filtrage du tableau des pensionnaires
   const filteredBoarders = useMemo(() => {
     return boarders.filter((b) => {
       const q = searchQuery.toLowerCase().trim();
@@ -230,7 +417,20 @@ export function BoardingView({
     });
   }, [boarders, searchQuery, selectedClass, selectedPavilion]);
 
-  // Statistiques Internat (3 Blocs KPI Strictement)
+  // Filtrage pour le sélecteur rapide
+  const filteredBoardersForPicker = useMemo(() => {
+    if (!studentPickerSearch.trim()) return boarders;
+    const q = studentPickerSearch.toLowerCase().trim();
+    return boarders.filter(
+      (b) =>
+        b.fullName.toLowerCase().includes(q) ||
+        b.matricule.toLowerCase().includes(q) ||
+        b.studentNumber.toLowerCase().includes(q) ||
+        b.grade.toLowerCase().includes(q)
+    );
+  }, [boarders, studentPickerSearch]);
+
+  // Statistiques Internat (3 Cartes KPI du haut)
   const stats = useMemo(() => {
     const totalBoarders = boarders.length;
     const girls = boarders.filter((b) => b.gender === 'female').length;
@@ -250,7 +450,7 @@ export function BoardingView({
     };
   }, [boarders]);
 
-  // Modification directe et immédiate du tarif mensuel
+  // Modification directe du tarif mensuel dans le tableau
   const handleQuickUpdateRate = (stuId: string, newRateStr: string) => {
     const newRate = parseInt(newRateStr, 10) || 0;
     const current = boarders.find((b) => b.id === stuId);
@@ -273,29 +473,7 @@ export function BoardingView({
     }
   };
 
-  // Basculer le statut d'un mois
-  const toggleMonthStatus = (month: string) => {
-    if (!selectedStudentForMonths) return;
-
-    setSelectedStudentForMonths((prev: any) => {
-      if (!prev) return null;
-      const currentMonths = prev.monthsState || {};
-      const nextMonths = {
-        ...currentMonths,
-        [month]: !currentMonths[month],
-      };
-      const paidMonths = Object.keys(nextMonths).filter((m) => nextMonths[m]);
-      return {
-        ...prev,
-        monthsState: nextMonths,
-        paidMonths,
-        paidMonthsCount: paidMonths.length,
-        totalPaidAmount: paidMonths.length * prev.monthlyRate,
-      };
-    });
-  };
-
-  // Enregistrer le suivi des mois et tarif internat
+  // Enregistrer le suivi des mois depuis la modale 1
   const handleSaveMonthlyPayments = () => {
     if (!selectedStudentForMonths) return;
     const stuId = selectedStudentForMonths.id;
@@ -328,7 +506,7 @@ export function BoardingView({
     setSelectedStudentForMonths(null);
   };
 
-  // Enregistrer une nouvelle admission internat
+  // Enregistrer une nouvelle admission internat depuis la modale 4
   const handleCreateAdmission = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubStudentId) {
@@ -354,6 +532,15 @@ export function BoardingView({
     }
 
     const stu = students.find((s) => s.id === newSubStudentId);
+    if (stu) {
+      loadStudentIntoForm({
+        ...stu,
+        pavilion: newSubPavilion,
+        roomNumber: newSubRoom || 'Chambre G-105',
+        monthlyRate: rate,
+      });
+    }
+
     setToastMessage(`✓ Nouvelle admission à l’internat validée pour ${stu ? stu.fullName : 'l’élève'} !`);
     setTimeout(() => setToastMessage(null), 5000);
     setIsNewAdmissionModalOpen(false);
@@ -361,28 +548,262 @@ export function BoardingView({
     setNewSubRoom('');
   };
 
-  // Envoi WhatsApp direct du reçu internat
-  const handleSendReceiptWhatsApp = (sub: any) => {
-    const parentPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '');
-    const receiptNum = `QUITTANCE-INTERN-${sub.matricule || '001'}-${Date.now().toString().slice(-4)}`;
-    const monthsText = sub.paidMonths && sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun mois pour le moment';
+  // ═══════════════════════════════════════════════════════════════
+  // RENDU DU REÇU OFFICIEL STRICT (EN-TÊTE HIÉRARCHIQUE SOIGNÉ)
+  // ═══════════════════════════════════════════════════════════════
+  const renderReceiptSlip = (copyLabel?: string) => {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-slate-900 shadow-sm relative overflow-hidden p-4 sm:p-5 space-y-3.5">
+        {/* CADRE EN-TÊTE OFFICIEL : Respect strict de l'ordre d'affichage demandé par Mouhamed */}
+        <div className="relative z-10 border-2 border-slate-900 rounded-xl bg-white shadow-2xs p-3">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            {/* 1. Logo de l'École (À gauche) */}
+            <div className="shrink-0 text-center flex items-center justify-center">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    currentSchool.logoUrl ||
+                    'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200&auto=format&fit=crop&q=80'
+                  }
+                  alt={currentSchool.name}
+                  className="max-w-full max-h-full object-contain rounded-lg"
+                />
+              </div>
+            </div>
 
-    const message = `*REÇU OFFICIEL D'INTERNAT & PENSIONNAT — ${currentSchool.name.toUpperCase()}*\n\n` +
-      `Bonjour Chers Parents de *${sub.fullName}* (${sub.grade}),\n\n` +
-      `Nous vous confirmons la bonne réception du règlement des frais de pensionnat et hébergement scolaire :\n\n` +
-      `📄 *Réf Quittance :* ${receiptNum}\n` +
-      `👤 *Élève :* ${sub.fullName} (Matricule : ${sub.matricule || sub.studentNumber})\n` +
-      `🏫 *Classe :* ${sub.grade}\n` +
-      `🛏️ *Hébergement :* ${sub.pavilion} — ${sub.roomNumber}\n` +
-      `📅 *Mois Réglés :* ${monthsText} (${sub.paidMonthsCount}/10 mois)\n` +
-      `💰 *Frais Mensuels :* ${formatFCFA(sub.monthlyRate)}\n` +
-      `💵 *Total Encaissé :* ${formatFCFA(sub.totalPaidAmount)}\n` +
-      `🗓️ *Date d'émission :* ${formatDate(new Date().toISOString())}\n\n` +
-      `Merci pour votre confiance. — _La Direction & Intendance Internat ${currentSchool.shortName || 'EPC'}_`;
+            {/* 2. Centre : Nom école -> Sigle -> Devise -> Slogan -> Code & Numéro */}
+            <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
+              {/* Ligne 1 : Nom de l'école */}
+              <h2
+                className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm md:text-base block w-full leading-tight break-words"
+                title={currentSchool.name}
+              >
+                {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+              </h2>
 
-    const encoded = encodeURIComponent(message);
-    const url = `https://wa.me/${parentPhone}?text=${encoded}`;
-    window.open(url, '_blank');
+              {/* Ligne 2 : Sigle de l'école */}
+              <p className="font-extrabold text-emerald-800 text-[11px] sm:text-xs tracking-wide">
+                ({currentSchool.shortName || 'EPC MANOI'})
+              </p>
+
+              {/* Ligne 3 : Devise de la discipline */}
+              <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
+                « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
+              </p>
+
+              {/* Ligne 4 : Slogan de l'école */}
+              {currentSchool.slogan && (
+                <p className="font-medium text-amber-700 italic text-[9px] sm:text-[10px] truncate">
+                  ✦ {currentSchool.slogan}
+                </p>
+              )}
+
+              {/* Ligne 5 : Code Établissement & Numéro de Téléphone */}
+              <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px] truncate">
+                Code Établissement : {currentSchool.ministryCode || '321119'} • Tél :{' '}
+                {currentSchool.phone || currentSchool.whatsappPhone || '+225 01 02 03 04 05'}
+              </p>
+              <p className="text-slate-500 font-medium leading-tight text-[9px] truncate">
+                {currentSchool.city || 'Abidjan'} — {currentSchool.country || 'Côte d’Ivoire'}
+              </p>
+            </div>
+
+            {/* 3. Emblème National / Sceau Officiel (À droite) */}
+            <div className="shrink-0 text-center flex items-center justify-center">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    currentSchool.countryEmblemUrl ||
+                    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'
+                  }
+                  alt="Emblème National"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* BANDEAU OFFICIEL : QUITTANCE DE PAIEMENT D'INTERNAT */}
+        <div className="relative z-10 bg-slate-950 text-white rounded-xl flex items-center justify-between shadow-xs px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <ReceiptText className="text-emerald-400 shrink-0 w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="font-extrabold tracking-wider uppercase font-heading text-xs sm:text-sm md:text-base">
+              QUITTANCE OFFICIELLE D&apos;INTERNAT
+            </span>
+            {copyLabel && (
+              <span className="px-2 py-0.5 rounded font-mono font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-500/40 text-[9.5px] sm:text-xs">
+                {copyLabel}
+              </span>
+            )}
+          </div>
+          <span className="font-mono font-extrabold text-emerald-300 text-xs sm:text-sm">
+            REC-INTERN-2026-{formMatricule || '001'}
+          </span>
+        </div>
+
+        {/* Détails Pensionnaire */}
+        <div className="relative z-10 grid grid-cols-2 rounded-xl bg-slate-50/90 border border-slate-200 gap-2.5 sm:gap-3 p-3.5 text-xs sm:text-sm">
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase font-bold">
+              Identifiant & Matricule :
+            </span>
+            <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
+              {formStudentNumber} • {formMatricule}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase font-bold">
+              Année Scolaire & Date :
+            </span>
+            <span className="font-extrabold text-slate-950 text-xs sm:text-sm">
+              {currentSchool.academicYear} • {formatDate(formPaymentDate)}
+            </span>
+          </div>
+
+          <div className="col-span-2 pt-1 border-t border-slate-200/80 flex items-center justify-between flex-wrap gap-1">
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                Pensionnaire Résident :
+              </span>
+              <span className="font-black text-slate-950 uppercase font-heading text-sm sm:text-base">
+                {formFullName || 'NOM PRÉNOM'}
+              </span>{' '}
+              <span className="ml-1 text-[11px] font-bold text-slate-700">
+                ({formGender === 'female' ? '♀ Fille' : '♂ Garçon'})
+              </span>
+            </div>
+
+            <div className="text-right">
+              <span className="text-[10px] text-slate-500 block uppercase font-bold">
+                Classe & Hébergement :
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-black bg-purple-50 text-purple-950 border border-purple-300 shadow-2xs">
+                {formGrade} • {formRoom}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase font-bold">
+              Pavillon Résidentiel :
+            </span>
+            <span className="font-bold text-slate-900 text-xs">
+              {formPavilion}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase font-bold">
+              Parent / WhatsApp :
+            </span>
+            <span className="font-mono font-bold text-emerald-800 text-xs">
+              {formPhone}
+            </span>
+          </div>
+        </div>
+
+        {/* Grille du Décompte & Mois Réglés */}
+        <div className="relative z-10 border border-slate-300 rounded-xl overflow-hidden shadow-2xs bg-white text-xs">
+          <div className="bg-slate-100/90 p-2.5 border-b border-slate-300 flex items-center justify-between font-bold text-[11px] uppercase tracking-wider text-slate-700">
+            <span>Désignation des Prestations</span>
+            <span>Montant en FCFA</span>
+          </div>
+
+          <div className="p-3 space-y-2">
+            <div className="flex items-center justify-between font-semibold text-slate-800">
+              <span>Frais d&apos;Hébergement, Dortoir & Restauration ({activePaidMonths.length} mois réglés) :</span>
+              <span className="font-mono font-bold text-slate-950">{formatFCFA(activeTotalPaidAmount)}</span>
+            </div>
+
+            {/* Badges des mois réglés */}
+            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                Détail des Mois Couverts (Septembre → Juin) :
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {MONTHS_LIST.map((m) => {
+                  const isPaid = !!formMonthsState[m];
+                  return (
+                    <span
+                      key={m}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                        isPaid
+                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                          : 'bg-slate-100 text-slate-400 border-slate-200 line-through'
+                      }`}
+                    >
+                      {m} {isPaid ? '✓' : ''}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 text-[11px] text-slate-600">
+              <span>Tarif Mensuel d&apos;Internat :</span>
+              <span className="font-mono font-bold text-slate-800">{formatFCFA(formMonthlyRate)} / mois</span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-600">
+              <span>Mode de Règlement Retenu :</span>
+              <span className="font-bold text-slate-900">{formPaymentMethod}</span>
+            </div>
+          </div>
+
+          {/* Grand Total Encaissé & Reste Annuel */}
+          <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50/60 to-slate-50 border-t border-slate-300 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-emerald-900 block">
+                Montant Total Encaissé
+              </span>
+              <span className="text-xl sm:text-2xl font-extrabold font-heading text-emerald-950 tracking-tight">
+                {formatFCFA(activeTotalPaidAmount)}
+              </span>
+            </div>
+
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                Reste Annuel pour Solder
+              </span>
+              <span className={`font-mono font-bold text-xs sm:text-sm ${activeAnnualRemaining > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                {activeAnnualRemaining > 0 ? formatFCFA(activeAnnualRemaining) : '0 FCFA (Soldé ✓)'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pied de Quittance : Mention légale & Double signature */}
+        <div className="relative z-10 pt-2 border-t border-slate-200 text-[10px] space-y-3">
+          <p className="text-center italic text-slate-500 font-medium">
+            « Tout versement en caisse donne droit à un reçu numéroté immédiat. Aucun remboursement après encaissement. »
+          </p>
+
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <div className="text-center p-2 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="font-bold text-slate-700 block text-[10px] uppercase">
+                Signature du Parent / Déposant
+              </span>
+              <div className="h-10 sm:h-12 flex items-center justify-center text-slate-400 italic text-[9px]">
+                (Lu et approuvé)
+              </div>
+            </div>
+
+            <div className="text-center p-2 rounded-xl bg-slate-50 border border-slate-200/80">
+              <span className="font-bold text-emerald-900 block text-[10px] uppercase">
+                L&apos;Économe / Intendant Internat
+              </span>
+              <div className="h-10 sm:h-12 flex items-center justify-center font-bold text-emerald-800 font-mono text-[9.5px]">
+                [ Cachet Officiel {currentSchool.shortName || 'EPC'} ]
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -399,28 +820,39 @@ export function BoardingView({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Gestion des dortoirs, registre des pensionnaires, reçus WhatsApp et cotisations mensuelles — {currentSchool.name}
+            Gestion des dortoirs, coordonnées pensionnaires, quittance automatique et cotisations mensuelles — {currentSchool.name}
           </p>
         </div>
 
-        {/* Actions */}
+        {/* Actions rapides */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handlePrintReceipt}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+            title="Imprimer le reçu officiel sur une page A4"
+          >
+            <Printer className="w-4 h-4 text-emerald-600" />
+            <span>Imprimer Reçu</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleShareWhatsApp}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer"
+            title="Envoyer la quittance au parent sur WhatsApp"
+          >
+            <Share2 className="w-4 h-4 text-emerald-600" />
+            <span>WhatsApp</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsRegisterModalOpen(true)}
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
           >
-            <Printer className="w-4 h-4 text-emerald-600" />
-            <span>Registre d&apos;Internat</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Exporter PDF</span>
+            <FolderOpen className="w-4 h-4 text-purple-600" />
+            <span>Registre Dortoirs</span>
           </button>
 
           <button
@@ -435,25 +867,25 @@ export function BoardingView({
             className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Nouvelle admission internat</span>
+            <span>Nouvelle admission</span>
           </button>
         </div>
       </div>
 
-      {/* Toast */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{toastMessage}</span>
           </div>
-          <button type="button" onClick={() => setToastMessage(null)} className="text-emerald-700 font-bold ml-4">
+          <button type="button" onClick={() => setToastMessage(null)} className="text-emerald-700 font-bold ml-4 cursor-pointer">
             ✕
           </button>
         </div>
       )}
 
-      {/* 2. LES 3 CARTES KPI INTERNAT (Suppression de l'infirmerie, effectifs et montants réels) */}
+      {/* 2. LES 3 CARTES KPI INTERNAT DU HAUT */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 print:hidden">
         {/* Card 1 : Total Pensionnaires */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
@@ -548,8 +980,364 @@ export function BoardingView({
         </div>
       </div>
 
-      {/* 3. Table des Pensionnaires */}
-      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden">
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* 3. SECTION PRINCIPALE 2 COLONNES (FORMULAIRE & REÇU EN DIRECT) */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* ================= COLONNE GAUCHE : FORMULAIRE DE SAISIE (6 COLS) ================= */}
+        <div className="lg:col-span-6 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-5 sm:p-7 space-y-5 print:hidden">
+          {/* EN-TÊTE DU FORMULAIRE AVEC SÉLECTEUR RAPIDE D'ID */}
+          <div className="border-b border-slate-100 pb-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 font-heading">
+                    Coordonnées & Quittance Internat
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Saisissez les coordonnées ci-dessous, le reçu se met à jour en direct
+                  </p>
+                </div>
+              </div>
+
+              {/* BOUTONS NAVIGATION RAPIDE */}
+              <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleNavigateId('prev')}
+                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all inline-flex items-center gap-1 cursor-pointer"
+                  title="Voir le pensionnaire précédent"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Précédent</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavigateId('next')}
+                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all inline-flex items-center gap-1 cursor-pointer"
+                  title="Voir le pensionnaire suivant"
+                >
+                  <span className="hidden sm:inline">Suivant</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsStudentPickerOpen(!isStudentPickerOpen)}
+                  className="px-3 py-1.5 rounded-xl font-mono font-extrabold text-xs transition-all border shadow-2xs inline-flex items-center gap-1.5 cursor-pointer bg-purple-50 text-purple-900 border-purple-300 ring-2 ring-purple-500/20"
+                  title="Rechercher parmi les pensionnaires"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>{formStudentNumber}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isStudentPickerOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* SÉLECTEUR DÉROULANT RAPIDE DIRECTEMENT CLIQUABLE */}
+            <div className="p-3 bg-gradient-to-r from-purple-50/90 via-slate-50 to-emerald-50/80 rounded-2xl border-2 border-purple-300 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="direct-boarding-select" className="text-xs font-extrabold text-slate-900 font-heading flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span>Sélectionner le Pensionnaire Actif :</span>
+                </label>
+                <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
+                  {boarders.length} pensionnaires
+                </span>
+              </div>
+
+              <select
+                id="direct-boarding-select"
+                value={selectedStudentId}
+                onChange={(e) => {
+                  const found = boarders.find((b) => b.id === e.target.value);
+                  if (found) loadStudentIntoForm(found);
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-white border border-purple-300 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
+              >
+                {boarders.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.studentNumber} • {b.matricule} — {b.fullName} ({b.grade} • {b.roomNumber})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* FORMULAIRE DE SAISIE DES COORDONNÉES */}
+          <form onSubmit={handleSaveActiveReceipt} className="space-y-4 text-xs">
+            {/* 1. Nom, Prénom & Matricule */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">
+                  Nom & Prénom de l&apos;Élève *
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={formFullName}
+                    onChange={(e) => setFormFullName(e.target.value)}
+                    placeholder="Ex : KOUADIO Emmanuel"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white text-xs font-bold text-slate-900 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">
+                  Matricule National / Dossier *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formMatricule}
+                  onChange={(e) => setFormMatricule(e.target.value)}
+                  placeholder="Ex : MAT-2026-0042"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* 2. Classe, Genre, Pavillon & Chambre */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Classe *</label>
+                <select
+                  value={formGrade}
+                  onChange={(e) => setFormGrade(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 cursor-pointer"
+                >
+                  {availableClasses.map((cls) => (
+                    <option key={cls} value={cls}>{cls}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Genre *</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormGender('male');
+                      setFormPavilion('Pavillon A (Garçons)');
+                    }}
+                    className={`py-2 text-center rounded-xl font-bold border transition-all cursor-pointer ${
+                      formGender === 'male'
+                        ? 'bg-blue-50 text-blue-900 border-blue-300 ring-1 ring-blue-500 shadow-2xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    ♂ Garçon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormGender('female');
+                      setFormPavilion('Pavillon B (Filles)');
+                    }}
+                    className={`py-2 text-center rounded-xl font-bold border transition-all cursor-pointer ${
+                      formGender === 'female'
+                        ? 'bg-pink-50 text-pink-900 border-pink-300 ring-1 ring-pink-500 shadow-2xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    ♀ Fille
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Chambre / Dortoir *</label>
+                <input
+                  type="text"
+                  required
+                  value={formRoom}
+                  onChange={(e) => setFormRoom(e.target.value)}
+                  placeholder="Ex : Chambre G-102"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            {/* 3. Pavillon & Coordonnées Parent */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Pavillon Résidentiel *</label>
+                <select
+                  value={formPavilion}
+                  onChange={(e) => setFormPavilion(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800 cursor-pointer"
+                >
+                  <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
+                  <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Téléphone WhatsApp Parent *</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    required
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="+225 07 48 92 11 00"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. PARAMÈTRES FINANCIERS DE LA COTISATION */}
+            <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-emerald-600" />
+                  <span>Paramètres Financiers & Encaissement</span>
+                </span>
+                <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded">
+                  Tarif Modifiable
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block text-[10px]">
+                    Frais Mensuels en FCFA *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={formMonthlyRate}
+                    onChange={(e) => setFormMonthlyRate(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block text-[10px]">
+                    Date du Versement *
+                  </label>
+                  <FrenchDateInput
+                    value={formPaymentDate}
+                    onChange={setFormPaymentDate}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block text-[10px]">
+                    Mode de Règlement *
+                  </label>
+                  <select
+                    value={formPaymentMethod}
+                    onChange={(e) => setFormPaymentMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-semibold text-slate-800 cursor-pointer"
+                  >
+                    <option value="Espèces">Espèces</option>
+                    <option value="Wave">Wave</option>
+                    <option value="Orange Money">Orange Money</option>
+                    <option value="MTN Money">MTN Money</option>
+                    <option value="Moov Money">Moov Money</option>
+                    <option value="Virement">Virement bancaire</option>
+                    <option value="Chèque">Chèque</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* GRILLE DES 10 MOIS SCOLAIRES (Septembre à Juin) */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-[11px] block">
+                    Cocher les Mois d&apos;Hébergement Réglés :
+                  </span>
+                  <span className="text-[10px] font-extrabold text-emerald-800">
+                    {activePaidMonths.length} / 10 mois validés
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {MONTHS_LIST.map((month) => {
+                    const isPaid = !!formMonthsState[month];
+                    return (
+                      <button
+                        key={month}
+                        type="button"
+                        onClick={() => handleToggleFormMonth(month)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          isPaid
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 font-medium'
+                        }`}
+                      >
+                        <span className="text-[11px] truncate w-full">{month}</span>
+                        <span className={`text-[9px] mt-0.5 ${isPaid ? 'text-emerald-100 font-bold' : 'text-slate-400'}`}>
+                          {isPaid ? 'Payé ✓' : 'En attente'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Récapitulatif Total & Reste de l'année */}
+              <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                    Total Encaissé ({activePaidMonths.length} mois)
+                  </span>
+                  <strong className="text-emerald-800 font-heading text-base font-extrabold">
+                    {formatFCFA(activeTotalPaidAmount)}
+                  </strong>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
+                    Reste Annuel à Payer
+                  </span>
+                  <strong className={`font-mono text-xs sm:text-sm font-bold ${activeAnnualRemaining > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                    {activeAnnualRemaining > 0 ? formatFCFA(activeAnnualRemaining) : '0 FCFA (Soldé ✓)'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Bouton Principal de Validation */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="w-full py-3 px-6 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Enregistrer & Actualiser la Quittance</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* ================= COLONNE DROITE : LE REÇU OFFICIEL EN DIRECT (6 COLS) ================= */}
+        <div className="lg:col-span-6 print:hidden">
+          {renderReceiptSlip()}
+        </div>
+      </div>
+
+      {/* ================= ZONE D'IMPRESSION OFFICIELLE A4 ================= */}
+      <div id="official-boarding-receipt-print" className="hidden print:block print:w-full">
+        {renderReceiptSlip('EXEMPLAIRE OFFICIEL DE CAISSE')}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* 4. TABLEAU DES PENSIONNAIRES & DÉTAILS DES 10 MOIS */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden print:hidden">
         {/* Toolbar */}
         <div className="p-3.5 sm:p-4 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center gap-2.5 sm:gap-3">
           <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
@@ -639,7 +1427,7 @@ export function BoardingView({
                 <th className="py-3.5 px-3 whitespace-nowrap text-right min-w-[140px]">Frais Mensuels (FCFA)</th>
                 <th className="py-3.5 px-3 whitespace-nowrap">Contact WhatsApp Parent</th>
                 <th className="py-3.5 px-3 text-center whitespace-nowrap">Suivi des Mois</th>
-                <th className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap">Reçu WhatsApp</th>
+                <th className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap">Action Quittance</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
@@ -650,99 +1438,118 @@ export function BoardingView({
                   </td>
                 </tr>
               ) : (
-                filteredBoarders.map((sub) => (
-                  <tr key={sub.id} className="hover:bg-emerald-50/20 transition-colors">
-                    <td className="py-3.5 pl-5 pr-3">
-                      <input
-                        type="checkbox"
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                      />
-                    </td>
+                filteredBoarders.map((sub) => {
+                  const isSelected = sub.id === selectedStudentId;
 
-                    <td className="py-3.5 px-3 font-mono font-bold text-slate-900 text-[11px] whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                        {sub.studentNumber}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div>
-                          <span className="font-extrabold text-slate-950 uppercase block font-heading">
-                            {sub.fullName}
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400">
-                            {sub.matricule}
-                          </span>
-                        </div>
-                        <GenderBadge gender={sub.gender} />
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <span className="inline-flex items-center justify-center font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap shadow-2xs">
-                        {sub.grade}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-3 whitespace-nowrap">
-                      <div className="space-y-0.5">
-                        <span className="font-bold text-slate-900 block">{sub.roomNumber}</span>
-                        <span className="text-[10px] text-purple-700 font-semibold">{sub.pavilion}</span>
-                      </div>
-                    </td>
-
-                    {/* FRAIS MENSUELS DIRECTEMENT MODIFIABLES DANS LE TABLEAU */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1 justify-end">
+                  return (
+                    <tr
+                      key={sub.id}
+                      onClick={() => loadStudentIntoForm(sub)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-purple-50/50 hover:bg-purple-50/70 ring-1 ring-purple-300'
+                          : 'hover:bg-emerald-50/20'
+                      }`}
+                    >
+                      <td className="py-3.5 pl-5 pr-3">
                         <input
-                          type="number"
-                          defaultValue={sub.monthlyRate}
-                          onBlur={(e) => handleQuickUpdateRate(sub.id, e.target.value)}
-                          className="w-24 px-2 py-1 text-right font-mono font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-white"
-                          title="Cliquez pour modifier directement le tarif mensuel"
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => loadStudentIntoForm(sub)}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4 cursor-pointer"
                         />
-                        <span className="text-[10px] text-slate-400 font-bold">F</span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3.5 px-3 whitespace-nowrap">
-                      <a
-                        href={`https://wa.me/${(sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono text-[11px] font-semibold transition-colors"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{sub.whatsappPhone || sub.guardianPhone}</span>
-                      </a>
-                    </td>
+                      <td className="py-3.5 px-3 font-mono font-bold text-slate-900 text-[11px] whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded border ${
+                          isSelected ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 border-slate-200'
+                        }`}>
+                          {sub.studentNumber}
+                        </span>
+                      </td>
 
-                    {/* ACTION 1 : SUIVI DES MOIS INTERNAT */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStudentForMonths(sub)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white border border-slate-300 hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Mois ({sub.paidMonthsCount}/10)</span>
-                      </button>
-                    </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <span className="font-extrabold text-slate-950 uppercase block font-heading">
+                              {sub.fullName}
+                            </span>
+                            <span className="font-mono text-[10px] text-slate-400">
+                              {sub.matricule}
+                            </span>
+                          </div>
+                          <GenderBadge gender={sub.gender} />
+                        </div>
+                      </td>
 
-                    {/* ACTION 2 : REÇU WHATSAPP INTERNAT */}
-                    <td className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStudentForReceipt(sub)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 transition-all cursor-pointer shadow-2xs"
-                      >
-                        <ReceiptText className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Reçu Internat</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center justify-center font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap shadow-2xs">
+                          {sub.grade}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <div className="space-y-0.5">
+                          <span className="font-bold text-slate-900 block">{sub.roomNumber}</span>
+                          <span className="text-[10px] text-purple-700 font-semibold">{sub.pavilion}</span>
+                        </div>
+                      </td>
+
+                      {/* FRAIS MENSUELS MODIFIABLES DIRECTEMENT */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          <input
+                            type="number"
+                            defaultValue={sub.monthlyRate}
+                            onBlur={(e) => handleQuickUpdateRate(sub.id, e.target.value)}
+                            className="w-24 px-2 py-1 text-right font-mono font-bold text-slate-900 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-white"
+                            title="Cliquez pour modifier directement le tarif mensuel"
+                          />
+                          <span className="text-[10px] text-slate-400 font-bold">F</span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <a
+                          href={`https://wa.me/${(sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono text-[11px] font-semibold transition-colors"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>{sub.whatsappPhone || sub.guardianPhone}</span>
+                        </a>
+                      </td>
+
+                      {/* ACTION 1 : SUIVI DES MOIS INTERNAT */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentForMonths(sub)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white border border-slate-300 hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Mois ({sub.paidMonthsCount}/10)</span>
+                        </button>
+                      </td>
+
+                      {/* ACTION 2 : CHARGER DANS LE REÇU OFFICIEL DU HAUT */}
+                      <td className="py-3.5 pr-5 pl-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loadStudentIntoForm(sub);
+                            window.scrollTo({ top: 400, behavior: 'smooth' });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-purple-900 bg-purple-50 border border-purple-300 hover:bg-purple-100 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <ReceiptText className="w-3.5 h-3.5 text-purple-700" />
+                          <span>Charger Reçu</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -754,7 +1561,7 @@ export function BoardingView({
             Total affiché : <strong className="text-slate-900 font-bold">{filteredBoarders.length}</strong> pensionnaires inscrits à l&apos;internat
           </span>
           <span className="text-[11px] text-slate-400">
-            Frais mensuels modifiables directement dans les cellules
+            Cliquez sur un pensionnaire pour charger immédiatement son reçu officiel
           </span>
         </div>
       </div>
@@ -766,7 +1573,7 @@ export function BoardingView({
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-black text-base uppercase">
-                  {selectedStudentForMonths.firstName[0]}{selectedStudentForMonths.lastName[0]}
+                  {selectedStudentForMonths.firstName?.[0] || 'E'}{selectedStudentForMonths.lastName?.[0] || 'P'}
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading uppercase">
@@ -834,10 +1641,10 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* Grille des Mois Scolaires (Septembre à Juin) */}
+            {/* Grille des Mois Scolaires */}
             <div className="space-y-2">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                Pointage des Mois d&apos;Hébergement (Cliquer pour basculer) :
+                Pointage des Mois d&apos;Hébergement :
               </span>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -848,7 +1655,24 @@ export function BoardingView({
                     <button
                       key={month}
                       type="button"
-                      onClick={() => toggleMonthStatus(month)}
+                      onClick={() => {
+                        setSelectedStudentForMonths((prev: any) => {
+                          if (!prev) return null;
+                          const currentMonths = prev.monthsState || {};
+                          const nextMonths = {
+                            ...currentMonths,
+                            [month]: !currentMonths[month],
+                          };
+                          const paidMonths = Object.keys(nextMonths).filter((m) => nextMonths[m]);
+                          return {
+                            ...prev,
+                            monthsState: nextMonths,
+                            paidMonths,
+                            paidMonthsCount: paidMonths.length,
+                            totalPaidAmount: paidMonths.length * prev.monthlyRate,
+                          };
+                        });
+                      }}
                       className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                         isPaid
                           ? 'bg-emerald-50 text-emerald-900 border-emerald-300 shadow-2xs font-bold'
@@ -888,103 +1712,6 @@ export function BoardingView({
               >
                 <Save className="w-4 h-4" />
                 <span>Enregistrer les Cotisations</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODALE 2 : REÇU OFFICIEL D'INTERNAT & ENVOI WHATSAPP ================= */}
-      {selectedStudentForReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold">
-                  <ReceiptText className="w-6 h-6 text-purple-700" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading">
-                    Reçu d&apos;Internat & Hébergement
-                  </h3>
-                  <p className="text-xs text-slate-500 font-mono">
-                    Quittance Officielle de Pensionnat • {currentSchool.name}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedStudentForReceipt(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Corps du Reçu */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">Pensionnaire Bénéficiaire</span>
-                <strong className="text-slate-900 uppercase font-heading">{selectedStudentForReceipt.fullName}</strong>
-              </div>
-
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">Matricule & Classe</span>
-                <span className="font-mono font-bold text-slate-800">
-                  {selectedStudentForReceipt.matricule || selectedStudentForReceipt.studentNumber} • {selectedStudentForReceipt.grade}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">Pavillon & Chambre</span>
-                <span className="font-bold text-slate-900">
-                  {selectedStudentForReceipt.pavilion} — {selectedStudentForReceipt.roomNumber}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">Mois d&apos;Internat Réglés</span>
-                <span className="font-bold text-emerald-900 text-right max-w-[240px]">
-                  {selectedStudentForReceipt.paidMonths && selectedStudentForReceipt.paidMonths.length > 0
-                    ? selectedStudentForReceipt.paidMonths.join(', ')
-                    : 'Aucun mois validé'}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-                <span className="text-slate-500 font-medium">Frais Mensuels Pensionnat</span>
-                <span className="font-mono font-bold text-slate-800">{formatFCFA(selectedStudentForReceipt.monthlyRate)} / mois</span>
-              </div>
-
-              <div className="flex justify-between items-center pt-1 text-sm font-extrabold text-slate-950">
-                <span>TOTAL COTISATIONS PERÇUES</span>
-                <span className="text-emerald-800 font-mono text-base">{formatFCFA(selectedStudentForReceipt.totalPaidAmount)}</span>
-              </div>
-
-              <div className="pt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-200">
-                <span>Contact WhatsApp Parent :</span>
-                <strong className="text-emerald-800 font-mono">{selectedStudentForReceipt.whatsappPhone || selectedStudentForReceipt.guardianPhone}</strong>
-              </div>
-            </div>
-
-            {/* Actions Reçu */}
-            <div className="pt-2 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer shadow-2xs"
-              >
-                <Printer className="w-4 h-4 text-slate-600" />
-                <span>Imprimer</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSendReceiptWhatsApp(selectedStudentForReceipt)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-                <span>Envoyer le Reçu par WhatsApp</span>
               </button>
             </div>
           </div>
@@ -1086,7 +1813,7 @@ export function BoardingView({
         </div>
       )}
 
-      {/* ================= MODALE 4 : NOUVELLE ADMISSION INTERNAT (DÉMARRE ENTIÈREMENT VIDE) ================= */}
+      {/* ================= MODALE 4 : NOUVELLE ADMISSION INTERNAT ================= */}
       {isNewAdmissionModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
@@ -1114,15 +1841,11 @@ export function BoardingView({
             </div>
 
             <form onSubmit={handleCreateAdmission} className="space-y-4 text-xs">
-              {/* Recherche rapide et filtre de classe parmi TOUS les élèves de l'école */}
               <div className="space-y-2 p-3 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
-                    Sélectionner l&apos;élève ({filteredStudentsForNewSub.length}/{students.length}) :
+                    Sélectionner l&apos;élève ({students.length} disponibles) :
                   </label>
-                  <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded">
-                    Tous les élèves
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1132,7 +1855,7 @@ export function BoardingView({
                       type="text"
                       value={newSubSearchQuery}
                       onChange={(e) => setNewSubSearchQuery(e.target.value)}
-                      placeholder="Nom, prénom, matricule..."
+                      placeholder="Nom, matricule..."
                       className="w-full pl-8 pr-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs focus:ring-1 focus:ring-purple-500"
                     />
                   </div>
@@ -1154,34 +1877,24 @@ export function BoardingView({
                   onChange={(e) => setNewSubStudentId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-900 cursor-pointer"
                 >
-                  <option value="">-- Choisir parmi les {filteredStudentsForNewSub.length} élèves --</option>
-                  {filteredStudentsForNewSub.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.studentNumber} • {s.fullName} ({s.grade})
-                    </option>
-                  ))}
+                  <option value="">-- Choisir un élève --</option>
+                  {students
+                    .filter((s) => {
+                      const matchSearch =
+                        !newSubSearchQuery ||
+                        s.fullName?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
+                        s.matricule?.toLowerCase().includes(newSubSearchQuery.toLowerCase());
+                      const matchGrade =
+                        newSubGradeFilter === 'Toutes les classes' || s.grade === newSubGradeFilter;
+                      return matchSearch && matchGrade;
+                    })
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.studentNumber} • {s.fullName} ({s.grade})
+                      </option>
+                    ))}
                 </select>
               </div>
-
-              {/* Remplissage automatique dès la sélection de l'élève */}
-              {selectedStudentInNewSub && (
-                <div className="p-3 rounded-2xl bg-purple-50/60 border border-purple-200 space-y-2 animate-in fade-in">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-purple-950">Matricule & Classe</span>
-                    <strong className="text-purple-950 font-mono">{selectedStudentInNewSub.matricule} • {selectedStudentInNewSub.grade}</strong>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-purple-950">Genre de l&apos;Élève</span>
-                    <GenderBadge gender={selectedStudentInNewSub.gender} />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] uppercase font-bold text-purple-950">Contact WhatsApp Parent</span>
-                    <span className="font-mono font-bold text-purple-800">
-                      {selectedStudentInNewSub.whatsappPhone || selectedStudentInNewSub.guardianPhone}
-                    </span>
-                  </div>
-                </div>
-              )}
 
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block">Pavillon Résidentiel *</label>
