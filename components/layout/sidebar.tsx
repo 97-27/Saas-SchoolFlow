@@ -545,18 +545,31 @@ export function Sidebar({
               {/* Active School Badge */}
           <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
             <Link
-              href={`/${schoolSlug}/admin/dashboard`}
+              href={`/${schoolSlug}/admin/parametres`}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/70 shadow-2xs hover:border-emerald-300 transition-colors group cursor-pointer"
-              title="Retour au Tableau de Bord"
+              title="Configurer l'établissement dans les Paramètres"
             >
               <Building2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-              <div className="truncate">
-                <p suppressHydrationWarning className="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors uppercase tracking-wide">
-                  {currentSchool.shortName || currentSchool.name}
-                </p>
-                <p suppressHydrationWarning className="text-[10px] text-slate-500 font-medium">
-                  {currentSchool.city} • {currentSchool.academicYear}
-                </p>
+              <div className="truncate flex-1">
+                {currentSchool.shortName ? (
+                  <>
+                    <p suppressHydrationWarning className="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors uppercase tracking-wide">
+                      {currentSchool.shortName}
+                    </p>
+                    <p suppressHydrationWarning className="text-[10px] text-slate-500 font-medium">
+                      {currentSchool.city || 'Ville à renseigner'} • {currentSchool.academicYear || '2026-2027'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p suppressHydrationWarning className="text-xs font-bold text-slate-900 truncate group-hover:text-emerald-700 transition-colors uppercase">
+                      {currentSchool.name || 'Établissement'}
+                    </p>
+                    <span suppressHydrationWarning className="inline-block text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      ⚙️ Sigle en attente
+                    </span>
+                  </>
+                )}
               </div>
             </Link>
           </div>
@@ -602,10 +615,10 @@ export function Sidebar({
                           href={sub.href}
                           prefetch={true}
                           onClick={onMobileClose}
-                          className={`block px-3 py-1.5 rounded-lg text-xs transition-all ${
+                          className={`block px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                             sub.active
-                              ? 'bg-emerald-600 text-white font-bold shadow-2xs'
-                              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60 font-medium'
+                              ? 'text-emerald-800 bg-white font-bold shadow-2xs border border-emerald-200/70'
+                              : 'text-slate-500 hover:text-slate-900 hover:bg-white/80'
                           }`}
                         >
                           {sub.title}
@@ -642,7 +655,11 @@ export function Sidebar({
 
         {/* Bottom Profile: School Logo + Role Poster */}
         <div className="p-3 border-t border-slate-100 shrink-0 bg-white">
-          <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3 shadow-2xs">
+          <Link
+            href={`/${schoolSlug}/admin/parametres`}
+            className="p-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center gap-3 shadow-2xs transition-all group block"
+            title="Modifier le profil et le logo dans les Paramètres"
+          >
             {/* Logo officiel de l'école */}
             <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 p-0.5 shrink-0 flex items-center justify-center overflow-hidden shadow-xs">
               {currentSchool.logoUrl ? (
@@ -653,25 +670,25 @@ export function Sidebar({
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <div className="w-full h-full rounded-lg bg-emerald-600 text-white font-extrabold flex items-center justify-center text-xs shadow-2xs font-heading">
-                  {currentSchool.shortName?.slice(0, 3) || 'EPC'}
+                <div className="w-full h-full rounded-lg bg-slate-200 text-slate-600 font-extrabold flex items-center justify-center text-[10px] shadow-2xs font-heading group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                  {currentSchool.shortName?.slice(0, 3) || 'LOGO'}
                 </div>
               )}
             </div>
 
-            {/* Affiche le Fondateur de l'établissement (Configurable dans les paramètres) */}
+            {/* Affiche le Fondateur de l'établissement */}
             <div className="flex-1 min-w-0">
               <span className="text-[9px] uppercase font-extrabold text-amber-600 block tracking-wider">
                 Fondateur
               </span>
-              <p suppressHydrationWarning className="text-xs font-black text-slate-900 truncate font-heading">
-                {currentSchool.founderName || currentSchool.directorName || 'Fondateur'}
+              <p suppressHydrationWarning className="text-xs font-black text-slate-900 truncate font-heading group-hover:text-emerald-700 transition-colors">
+                {currentSchool.founderName || 'À renseigner (Paramètres)'}
               </p>
-              <span suppressHydrationWarning className="text-[10px] font-bold text-emerald-700 block truncate">
+              <span suppressHydrationWarning className="text-[10px] font-bold text-slate-500 block truncate">
                 {currentSchool.shortName || currentSchool.name || 'Établissement'}
               </span>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
     </>

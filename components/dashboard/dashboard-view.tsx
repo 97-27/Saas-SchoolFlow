@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   PlusCircle,
   FileSpreadsheet,
+  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -169,6 +170,32 @@ export function DashboardView({
           </Link>
         </div>
       </div>
+
+      {/* Bannière d'invitation à la configuration initiale (si sigles ou logo non encore configurés) */}
+      {(!schoolState.shortName || !schoolState.logoUrl || !schoolState.city) && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-amber-50 border border-emerald-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 font-heading">
+                ⚙️ Configuration initiale de l'établissement requise
+              </h3>
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                Vos sigles officiels, logo, armoiries nationales, ville et fondateurs sont en attente de personnalisation. Configurez-les pour qu'ils s'affichent automatiquement sur vos reçus et bulletins officiels.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/${schoolSlug}/admin/parametres`}
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 shadow-sm transition-all"
+          >
+            <span>Configurer dans Paramètres</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* 5 Cartes KPI Pandhowan avec répartition Filles / Garçons et Effectifs Réels */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">

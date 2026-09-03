@@ -63,27 +63,18 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  const [logoPreview, setLogoPreview] = useState<string>(
-    school.logoUrl ||
-      'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=200&auto=format&fit=crop&q=80'
-  );
-  const [stampPreview, setStampPreview] = useState<string>(
-    school.stampUrl ||
-      'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=150&auto=format&fit=crop&q=80'
-  );
-  const [emblemPreview, setEmblemPreview] = useState<string>(
-    school.countryEmblemUrl ||
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'
-  );
+  const [logoPreview, setLogoPreview] = useState<string>(school.logoUrl || '');
+  const [stampPreview, setStampPreview] = useState<string>(school.stampUrl || '');
+  const [emblemPreview, setEmblemPreview] = useState<string>(school.countryEmblemUrl || '');
 
   useEffect(() => {
     const syncWithLive = () => {
       const live = getLiveSchool(initialSchool.slug, initialSchool);
       setSchool(live);
       setSubscriptionStatus(getSchoolSubscription(initialSchool.slug || 'epc-manoi'));
-      if (live.logoUrl) setLogoPreview(live.logoUrl);
-      if (live.countryEmblemUrl) setEmblemPreview(live.countryEmblemUrl);
-      if (live.stampUrl) setStampPreview(live.stampUrl);
+      setLogoPreview(live.logoUrl || '');
+      setEmblemPreview(live.countryEmblemUrl || '');
+      setStampPreview(live.stampUrl || '');
     };
 
     syncWithLive();
@@ -332,34 +323,48 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 {/* 1. Logo de l'école (Affiché à gauche) */}
                 <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200/60 flex flex-col sm:flex-row items-center gap-4">
                   <div className="relative group shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={logoPreview}
-                      alt="Logo de l'école"
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-white shadow-md bg-white"
-                    />
-                    <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    {logoPreview ? (
+                      <div className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={logoPreview}
+                          alt="Logo de l'école"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain border-2 border-white shadow-md bg-white p-1"
+                        />
+                        <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                          <label
+                            htmlFor="logo-upload"
+                            className="cursor-pointer p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-xs transition-colors"
+                            title="Modifier le logo"
+                          >
+                            <Upload className="w-5 h-5 text-white" />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
                       <label
                         htmlFor="logo-upload"
-                        className="cursor-pointer p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-xs transition-colors"
-                        title="Modifier le logo"
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50 flex flex-col items-center justify-center cursor-pointer transition-all group-hover:border-emerald-500 shadow-2xs"
                       >
-                        <Upload className="w-5 h-5 text-white" />
+                        <Building2 className="w-7 h-7 text-emerald-600 mb-1" />
+                        <span className="text-[9px] font-extrabold text-emerald-800 text-center uppercase leading-tight">
+                          Logo École
+                        </span>
                       </label>
-                    </div>
+                    )}
                   </div>
 
                   <div className="flex-1 text-center sm:text-left space-y-1.5">
                     <div className="flex items-center justify-between gap-1">
                       <h4 className="text-xs font-bold text-slate-900">
-                        Logo de l&apos;établissement
+                        Logo officiel de l&apos;établissement
                       </h4>
                       <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80">
                         Gauche du reçu
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Format recommandé : PNG transparent carré. Poids max : 2 Mo.
+                      {logoPreview ? 'Logo personnalisé actif. Visible sur reçus et bulletins.' : 'Aucun logo téléversé pour le moment.'}
                     </p>
 
                     <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
@@ -368,7 +373,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer shadow-xs transition-all"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        <span>Changer le logo</span>
+                        <span>{logoPreview ? 'Changer le logo' : 'Télécharger votre logo'}</span>
                       </label>
                       <input
                         id="logo-upload"
@@ -377,14 +382,16 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         onChange={handleLogoUpload}
                         className="hidden"
                       />
-                      <button
-                        type="button"
-                        onClick={handleLogoErase}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Effacer</span>
-                      </button>
+                      {logoPreview && (
+                        <button
+                          type="button"
+                          onClick={handleLogoErase}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Effacer</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -392,34 +399,48 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 {/* 2. Emblème du pays (Affiché à droite) */}
                 <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200/60 flex flex-col sm:flex-row items-center gap-4">
                   <div className="relative group shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={emblemPreview}
-                      alt="Emblème officiel du pays"
-                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-white shadow-md bg-white"
-                    />
-                    <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    {emblemPreview ? (
+                      <div className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={emblemPreview}
+                          alt="Emblème officiel du pays"
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-white shadow-md bg-white"
+                        />
+                        <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                          <label
+                            htmlFor="emblem-upload"
+                            className="cursor-pointer p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-xs transition-colors"
+                            title="Modifier l'emblème"
+                          >
+                            <Upload className="w-5 h-5 text-white" />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
                       <label
                         htmlFor="emblem-upload"
-                        className="cursor-pointer p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-xs transition-colors"
-                        title="Modifier l'emblème"
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/50 hover:bg-amber-50 flex flex-col items-center justify-center cursor-pointer transition-all group-hover:border-amber-500 shadow-2xs"
                       >
-                        <Upload className="w-5 h-5 text-white" />
+                        <Award className="w-7 h-7 text-amber-600 mb-1" />
+                        <span className="text-[9px] font-extrabold text-amber-800 text-center uppercase leading-tight">
+                          Armoiries Pays
+                        </span>
                       </label>
-                    </div>
+                    )}
                   </div>
 
                   <div className="flex-1 text-center sm:text-left space-y-1.5">
                     <div className="flex items-center justify-between gap-1">
                       <h4 className="text-xs font-bold text-slate-900">
-                        Téléchargez emblème de votre pays
+                        Armoiries / Emblème de votre pays
                       </h4>
                       <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80">
                         Droite du reçu
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Armoiries nationales officielles de la République.
+                      {emblemPreview ? 'Armoiries officielles configurées.' : 'Armoiries ou sceau de la République.'}
                     </p>
 
                     <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
@@ -428,7 +449,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer shadow-2xs transition-all"
                       >
                         <Upload className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Télécharger emblème</span>
+                        <span>{emblemPreview ? 'Changer l’emblème' : 'Télécharger les armoiries'}</span>
                       </label>
                       <input
                         id="emblem-upload"
@@ -437,14 +458,16 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         onChange={handleEmblemUpload}
                         className="hidden"
                       />
-                      <button
-                        type="button"
-                        onClick={handleEmblemErase}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Défaut</span>
-                      </button>
+                      {emblemPreview && (
+                        <button
+                          type="button"
+                          onClick={handleEmblemErase}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Effacer</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

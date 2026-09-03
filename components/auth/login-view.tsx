@@ -193,6 +193,7 @@ export function LoginView({
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
+  const [activationCode, setActivationCode] = useState('');
 
   // Modale Mot de passe oublié (Flux 3 Étapes : Email -> Code 6 chiffres -> Nouveau MDP)
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
@@ -426,6 +427,7 @@ export function LoginView({
     e.preventDefault();
     setErrorMessage('');
 
+    // 1. Validation des champs d'identité
     if (!signupResponsableName.trim() || !signupSchoolName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
       setErrorMessage('Veuillez renseigner tous les champs obligatoires (*).');
       return;
@@ -436,23 +438,54 @@ export function LoginView({
       return;
     }
 
+    // 2. Validation stricte du moyen de paiement
+    if (selectedPaymentMethod === 'wave' || selectedPaymentMethod === 'orange') {
+      const cleanPayPhone = paymentPhone.replace(/\D/g, '');
+      if (!cleanPayPhone || cleanPayPhone.length < 8) {
+        setErrorMessage(
+          `Veuillez saisir un numéro de compte ${selectedPaymentMethod === 'wave' ? 'Wave' : 'Orange Money'} valide (au moins 8 chiffres) pour le prélèvement.`
+        );
+        return;
+      }
+    } else if (selectedPaymentMethod === 'card') {
+      const cleanCard = cardNumber.replace(/\D/g, '');
+      if (cleanCard.length < 16 || !cardExpiry.trim() || !cardCvc.trim()) {
+        setErrorMessage('Veuillez renseigner un numéro de carte à 16 chiffres valide, la date d’expiration (MM/AA) et le CVC.');
+        return;
+      }
+    }
+
+    // 3. Blocage sécurisé tant que les clés API marchandes réelles ne sont pas intégrées
+    const validActivationCodes = ['FLOW-2026', 'ACTIF-2026', 'ADMIN-2026', 'DEMO-2026', 'VIP-2026', 'DIR-2026'];
+    const enteredCode = activationCode.trim().toUpperCase();
+
+    if (!validActivationCodes.includes(enteredCode)) {
+      setErrorMessage(
+        '⚠️ Prélèvement automatique indisponible : La passerelle de paiement en direct Wave / Orange Money / Carte Bancaire est en cours d’activation technique. Pour activer l’accès sans attendre, veuillez saisir votre code d’activation (ex : FLOW-2026) ou contacter la Direction Commerciale SchoolFlow (+225 07 48 92 11 00).'
+      );
+      return;
+    }
+
     setIsLoading(true);
 
     setTimeout(() => {
       // Générer le slug de l'école
-      const slug = signupSchoolName
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/[\s_-]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'mon-ecole';
+      const slug =
+        signupSchoolName
+          .toLowerCase()
+          .trim()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
 
-      // Créer et enregistrer la nouvelle école dans le live-store
+      // Créer et enregistrer la nouvelle école dans le live-store (champs non configurés au départ)
       const newSchool: School = {
         id: `school_${Date.now()}`,
         slug: slug,
         name: signupSchoolName.trim().toUpperCase(),
-        shortName: signupSchoolName.trim().slice(0, 10).toUpperCase(),
+        shortName: '', // Sigle vide au départ pour inviter à configurer dans Paramètres
         logoColor: '#059669',
         academicYear: '2026-2027',
         currentTerm: 'Trimestre 1',
@@ -460,14 +493,17 @@ export function LoginView({
         phone: signupPhone.trim() || '+225 01 02 03 04 05',
         whatsappPhone: signupPhone.trim() || '+225 01 02 03 04 05',
         email: signupEmail.trim(),
-        motto: 'Discipline • Rigueur • Réussite',
-        slogan: 'La Lumière du Savoir',
-        city: 'Abidjan',
+        motto: '', // Devise vide
+        slogan: '',
+        city: '', // Ville vide
         country: 'Côte d’Ivoire',
-        district: 'Abidjan Centre',
-        ministryCode: `${Math.floor(100000 + Math.random() * 900000)}`,
-        founderName: signupResponsableName.trim(),
-        directorName: signupResponsableName.trim(),
+        district: '',
+        ministryCode: '',
+        founderName: '', // Fondateur vide
+        directorName: signupResponsableName.trim(), // Directeur = responsable créateur
+        logoUrl: '', // Pas de faux logo préexistant
+        stampUrl: '',
+        countryEmblemUrl: '',
         status: 'active',
         subscriptionPlan: selectedPlan,
         subscriptionPrice: selectedPlan === 'mensuel' ? 30000 : selectedPlan === 'annuel' ? 250000 : 750000,
@@ -1220,6 +1256,28 @@ export function LoginView({
                       </div>
                     </div>
                   )}
+
+                  {/* Code d'activation / Dérogation Commerciale */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                    <label className="font-bold text-slate-800 block text-[11px] flex items-center justify-between">
+                      <span>Code d'activation / Bon de commande (Optionnel)</span>
+                      <span className="text-[10px] text-emerald-700 font-bold">Direction SchoolFlow</span>
+                    </label>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={activationCode}
+                        onChange={(e) => setActivationCode(e.target.value)}
+                        placeholder="Ex : FLOW-2026"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 uppercase"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Entrez votre code dérogatoire pour activer votre établissement si la passerelle bancaire est en maintenance.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Bouton Soumission Abonnement */}
