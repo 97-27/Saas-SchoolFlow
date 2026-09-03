@@ -1,0 +1,319 @@
+@import "tailwindcss";
+
+:root {
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* SchoolFlow Emerald Palette */
+  --green-50: #ecfdf5;
+  --green-100: #d1fae5;
+  --green-200: #a7f3d0;
+  --green-400: #34d399;
+  --green-500: #10b981;
+  --green-600: #059669;
+  --green-700: #047857;
+  --green-800: #065f46;
+  --green-900: #064e3b;
+
+  /* Gold / Yellow Accent */
+  --gold-50: #fffbeb;
+  --gold-100: #fef3c7;
+  --gold-300: #fcd34d;
+  --gold-400: #fbbf24;
+  --gold-500: #f59e0b;
+  --gold-600: #d97706;
+
+  /* Orange Accent */
+  --orange-400: #fb923c;
+  --orange-500: #f97316;
+  --orange-600: #ea580c;
+
+  /* Ink / Dark */
+  --ink-900: #090d16;
+  --ink-800: #111827;
+  --ink-700: #1e293b;
+  --ink-600: #334155;
+  --ink-500: #64748b;
+  --ink-400: #94a3b8;
+  --ink-300: #cbd5e1;
+  --ink-200: #e2e8f0;
+  --ink-100: #f1f5f9;
+  --ink-50: #f8fafc;
+
+  /* Backgrounds */
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+}
+
+@theme {
+  --font-outfit: var(--font-display);
+  --font-inter: var(--font-body);
+
+  --color-school-green-50: #ecfdf5;
+  --color-school-green-100: #d1fae5;
+  --color-school-green-200: #a7f3d0;
+  --color-school-green-500: #10b981;
+  --color-school-green-600: #059669;
+  --color-school-green-700: #047857;
+  --color-school-green-800: #065f46;
+  --color-school-green-900: #064e3b;
+
+  --color-school-gold-50: #fffbeb;
+  --color-school-gold-100: #fef3c7;
+  --color-school-gold-400: #fbbf24;
+  --color-school-gold-500: #f59e0b;
+  --color-school-gold-600: #d97706;
+
+  --color-school-orange-500: #f97316;
+  --color-school-orange-600: #ea580c;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: var(--font-body);
+  background-color: var(--bg-app);
+  color: var(--ink-800);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  background-color: var(--bg-app);
+  color: var(--ink-800);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* Custom scrollbar for sleek dashboard feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s infinite ease-in-out;
+}
+
+/* Print optimization for 1 single official receipt on A4 sheet */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  html, body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, sidebar, topbar, form, modals, fixed overlays and buttons */
+  header,
+  aside,
+  nav,
+  button,
+  .fixed,
+  .no-print,
+  .print-hide,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Target receipt area to take full clean page */
+  #official-receipt-print,
+  .printable-receipt-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+  }
+}
+
+/* Marquee and Hero Floating Animations */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes float-reverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(8px) rotate(-1deg);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 5s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 6s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.08);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 7s ease-in-out infinite;
+}
+
+/* ================= SCROLL REVEAL ANIMATIONS (Mobile, Tablet, Desktop) ================= */
+.reveal-hidden {
+  opacity: 0;
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-hidden[data-reveal="left"] {
+  transform: translateX(-40px);
+}
+
+.reveal-hidden[data-reveal="right"] {
+  transform: translateX(40px);
+}
+
+.reveal-hidden[data-reveal="bottom"],
+.reveal-hidden[data-reveal="up"] {
+  transform: translateY(35px);
+}
+
+.reveal-hidden[data-reveal="top"] {
+  transform: translateY(-35px);
+}
+
+.reveal-hidden[data-reveal="zoom"] {
+  transform: scale(0.92);
+}
+
+.reveal-visible {
+  opacity: 1 !important;
+  transform: translate(0, 0) scale(1) !important;
+}
+
+/* Typing cursor blink */
+@keyframes blink-cursor {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-blink {
+  animation: blink-cursor 0.9s infinite;
+}
+
+/* Masquer totalement le badge/toast de dev Next.js ('1 issue', etc.) */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay],
+[data-nextjs-dev-overlay],
+[data-nextjs-toast-wrapper],
+div[class*="nextjs-toast"],
+div[class*="dev-tools-indicator"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 6mm;
+  }
+  @page landscape-print {
+    size: A4 landscape;
+    margin: 8mm 8mm;
+  }
+  .print-landscape {
+    page: landscape-print !important;
+  }
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+  .print\:hidden, header, nav, aside, footer {
+    display: none !important;
+  }
+}
+
+

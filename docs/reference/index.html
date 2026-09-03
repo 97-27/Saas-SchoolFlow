@@ -1,0 +1,2493 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SchoolFlow — Gestion scolaire simplifiée | Abonnements</title>
+  <meta name="description"
+    content="SchoolFlow : la plateforme de gestion scolaire tout-en-un pour les établissements. Abonnements adaptés au calendrier scolaire, de 5 000 à 70 000 FCFA.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════
+       DESIGN SYSTEM — SchoolFlow
+       Palette: Vert, Jaune, Noir, Orange
+    ═══════════════════════════════════════════ */
+    :root {
+      /* Primary — Vert */
+      --green-50: #ecfdf5;
+      --green-100: #d1fae5;
+      --green-200: #a7f3d0;
+      --green-400: #34d399;
+      --green-500: #10b981;
+      --green-600: #059669;
+      --green-700: #047857;
+      --green-800: #065f46;
+      --green-900: #064e3b;
+
+      /* Accent — Jaune/Or */
+      --yellow-50: #fffbeb;
+      --yellow-100: #fef3c7;
+      --yellow-300: #fcd34d;
+      --yellow-400: #fbbf24;
+      --yellow-500: #f59e0b;
+      --yellow-600: #d97706;
+
+      /* Accent 2 — Orange */
+      --orange-400: #fb923c;
+      --orange-500: #f97316;
+      --orange-600: #ea580c;
+
+      /* Neutrals — Noir */
+      --black: #0a0a0a;
+      --gray-900: #111111;
+      --gray-800: #1a1a2e;
+      --gray-700: #2d2d44;
+      --gray-600: #4a4a68;
+      --gray-500: #6b7280;
+      --gray-400: #9ca3af;
+      --gray-300: #d1d5db;
+      --gray-200: #e5e7eb;
+      --gray-100: #f3f4f6;
+      --gray-50: #f9fafb;
+      --white: #ffffff;
+
+      /* Gradients */
+      --gradient-hero: linear-gradient(135deg, #064e3b 0%, #1a1a2e 50%, #0a0a0a 100%);
+      --gradient-card: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+      --gradient-green: linear-gradient(135deg, #059669 0%, #10b981 100%);
+      --gradient-gold: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f97316 100%);
+      --gradient-glow: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
+
+      /* Shadows */
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.15);
+      --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.2);
+      --shadow-green: 0 10px 40px rgba(5, 150, 105, 0.3);
+      --shadow-gold: 0 10px 40px rgba(245, 158, 11, 0.25);
+
+      /* Typography */
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+
+      /* Spacing */
+      --section-padding: 100px 0;
+      --container-max: 1200px;
+
+      /* Borders */
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      --radius-full: 9999px;
+
+      /* Transitions */
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-fast: 0.2s var(--ease-out);
+      --transition-med: 0.4s var(--ease-out);
+      --transition-slow: 0.6s var(--ease-out);
+    }
+
+    /* ═══════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════ */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--gray-800);
+      background: var(--white);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5 {
+      font-family: var(--font-display);
+      line-height: 1.15;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    img {
+      max-width: 100%;
+      display: block;
+    }
+
+    .container {
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ═══════════════════════════════════════════
+       NAVIGATION
+    ═══════════════════════════════════════════ */
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      padding: 16px 0;
+      transition: all var(--transition-med);
+      background: transparent;
+    }
+
+    .navbar.scrolled {
+      background: rgba(10, 10, 10, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .navbar .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.5rem;
+      color: var(--white);
+    }
+
+    .logo-icon-svg {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+    }
+
+    .logo-text-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logo-main-text {
+      display: flex;
+      align-items: center;
+      line-height: 1;
+      font-size: 1.45rem;
+    }
+
+    .logo-school {
+      color: #22c55e;
+    }
+
+    .logo-flow {
+      color: #facc15;
+    }
+
+    .logo-tagline {
+      font-size: 0.52rem;
+      letter-spacing: 0.14em;
+      color: #4ade80;
+      font-weight: 700;
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color var(--transition-fast);
+      position: relative;
+    }
+
+    .nav-links a:hover {
+      color: var(--white);
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--green-400);
+      transition: width var(--transition-med);
+      border-radius: 2px;
+    }
+
+    .nav-links a:hover::after {
+      width: 100%;
+    }
+
+    .nav-cta {
+      padding: 10px 24px;
+      background: var(--gradient-green);
+      color: var(--white) !important;
+      border-radius: var(--radius-full);
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: all var(--transition-fast);
+      box-shadow: var(--shadow-green);
+    }
+
+    .nav-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 40px rgba(5, 150, 105, 0.4);
+    }
+
+    .nav-cta::after {
+      display: none !important;
+    }
+
+    .mobile-toggle {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      padding: 5px;
+    }
+
+    .mobile-toggle span {
+      width: 24px;
+      height: 2px;
+      background: var(--white);
+      border-radius: 2px;
+      transition: all var(--transition-fast);
+    }
+
+    /* ═══════════════════════════════════════════
+       HERO SECTION (Optimized according to reference images)
+    ═══════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(140deg, #0b3d18 0%, #135326 50%, #07270f 100%);
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 120px 0 80px;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: 10%;
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba(34, 197, 94, 0.18) 0%, transparent 65%);
+      animation: float-glow 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -20%;
+      left: -10%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(250, 204, 21, 0.12) 0%, transparent 65%);
+      animation: float-glow 10s ease-in-out infinite reverse;
+      pointer-events: none;
+    }
+
+    @keyframes float-glow {
+      0%, 100% {
+        transform: translate(0, 0) scale(1);
+      }
+      50% {
+        transform: translate(30px, -30px) scale(1.1);
+      }
+    }
+
+    .hero-grid-layout {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .hero-content-left {
+      text-align: left;
+    }
+
+    .hero-badge-v2 {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: var(--radius-full);
+      color: #ffffff;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 24px;
+      backdrop-filter: blur(10px);
+    }
+
+    .hero-badge-v2 .dot {
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #4ade80;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.4rem, 4.5vw, 3.8rem);
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 20px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .hero h1 .highlight-yellow {
+      color: #facc15;
+    }
+
+    .hero-subtitle {
+      font-size: 1.08rem;
+      color: rgba(255, 255, 255, 0.85);
+      max-width: 520px;
+      margin: 0 0 32px 0;
+      line-height: 1.65;
+    }
+
+    .hero-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 44px;
+      flex-wrap: wrap;
+    }
+
+    .btn-hero-primary {
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #134e23 0%, #15803d 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-hero-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+      background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+    }
+
+    .btn-hero-secondary {
+      padding: 14px 32px;
+      background: rgba(19, 78, 35, 0.6);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn-hero-secondary:hover {
+      background: rgba(19, 78, 35, 0.9);
+      border-color: rgba(255, 255, 255, 0.4);
+      transform: translateY(-2px);
+    }
+
+    .hero-stats-row {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+
+    .hero-stat-item .number {
+      font-family: var(--font-display);
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #facc15;
+      line-height: 1;
+    }
+
+    .hero-stat-item .label {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.75);
+      margin-top: 4px;
+    }
+
+    /* Interactive Dashboard Mockup Card */
+    .hero-mockup-card {
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.45);
+      color: #1f2937;
+      text-align: left;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+    }
+
+    .mockup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .mockup-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #111827;
+    }
+
+    .mockup-year {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+
+    .mockup-widgets {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .widget-box {
+      background: #f9fafb;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .widget-box .value {
+      font-size: 1.4rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .widget-box .value.green { color: #16a34a; }
+    .widget-box .value.orange { color: #ea580c; }
+    .widget-box .value.blue { color: #2563eb; }
+
+    .widget-box .tag {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+
+    .mockup-body-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .mockup-subcard {
+      background: #f9fafb;
+      padding: 14px;
+      border-radius: 12px;
+    }
+
+    .mockup-subcard-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #4b5563;
+      margin-bottom: 10px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: #6b7280;
+      margin-bottom: 6px;
+    }
+
+    .bar-row .month { width: 26px; }
+
+    .bar-track {
+      flex: 1;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+    }
+
+    .bar-fill.green { background: #22c55e; }
+    .bar-fill.yellow { background: #eab308; }
+    .bar-fill.orange { background: #f97316; }
+
+    .payment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .payment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+    }
+
+    .payment-row .student {
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .status-pill {
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.68rem;
+      font-weight: 600;
+    }
+
+    .status-pill.paye { background: #dcfce7; color: #15803d; }
+    .status-pill.partiel { background: #ffedd5; color: #c2410c; }
+    .status-pill.impaye { background: #ffe4e6; color: #be123c; }
+
+    .mockup-alert {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      color: #92400e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @media (max-width: 1024px) {
+      .hero-grid-layout {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+      .hero-content-left {
+        text-align: center;
+      }
+      .hero-subtitle {
+        margin: 0 auto 32px;
+      }
+      .hero-actions-row {
+        justify-content: center;
+      }
+      .hero-stats-row {
+        justify-content: center;
+      }
+    }
+
+    .hero-scroll {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 0.75rem;
+      animation: bounce-scroll 2s ease-in-out infinite;
+    }
+
+    .hero-scroll .scroll-line {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.3), transparent);
+    }
+
+    @keyframes bounce-scroll {
+
+      0%,
+      100% {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      50% {
+        transform: translateX(-50%) translateY(8px);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ═══════════════════════════════════════════
+       FEATURES SECTION
+    ═══════════════════════════════════════════ */
+    .features {
+      padding: var(--section-padding);
+      background: var(--gray-50);
+      position: relative;
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 64px;
+    }
+
+    .section-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--green-50);
+      color: var(--green-700);
+      border-radius: var(--radius-full);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      color: var(--gray-900);
+      margin-bottom: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-desc {
+      font-size: 1.1rem;
+      color: var(--gray-500);
+      line-height: 1.7;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 36px 32px;
+      border: 1px solid var(--gray-200);
+      transition: all var(--transition-med);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gradient-green);
+      transform: scaleX(0);
+      transition: transform var(--transition-med);
+      transform-origin: left;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-6px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--green-200);
+    }
+
+    .feature-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      background: var(--green-50);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      transition: all var(--transition-fast);
+    }
+
+    .feature-card:hover .feature-icon {
+      background: var(--gradient-green);
+      transform: scale(1.1);
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 10px;
+    }
+
+    .feature-card p {
+      color: var(--gray-500);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* ═══════════════════════════════════════════
+       SCHOOL YEAR BANNER
+    ═══════════════════════════════════════════ */
+    .school-year-banner {
+      padding: 80px 0;
+      background: var(--gray-900);
+      position: relative;
+      overflow: hidden;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .school-year-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--gradient-glow);
+      opacity: 0.5;
+    }
+
+    /* ═══════════════════════════════════════════
+       PHOTOREALISTIC SHOWCASE CARDS (3 Images)
+    ═══════════════════════════════════════════ */
+    .showcase-section-card {
+      margin-top: 48px;
+      background: linear-gradient(145deg, #111827 0%, #0f172a 100%);
+      border-radius: var(--radius-xl);
+      padding: 44px;
+      color: #ffffff;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 40px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .showcase-section-card.reverse-layout {
+      grid-template-columns: 1.15fr 1fr;
+    }
+
+    .showcase-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+      border-radius: var(--radius-full);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 16px;
+    }
+
+    .showcase-tag.gold {
+      background: rgba(250, 204, 21, 0.15);
+      border-color: rgba(250, 204, 21, 0.3);
+      color: #facc15;
+    }
+
+    .showcase-tag.blue {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+    }
+
+    .showcase-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 14px;
+      line-height: 1.25;
+    }
+
+    .showcase-desc {
+      font-size: 0.98rem;
+      color: rgba(255, 255, 255, 0.85);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .showcase-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .showcase-list li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .showcase-list .icon-check {
+      width: 22px;
+      height: 22px;
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .showcase-img-box {
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      position: relative;
+      width: 100%;
+      max-height: 380px;
+    }
+
+    .showcase-img-box img {
+      width: 100%;
+      height: 100%;
+      max-height: 380px;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.5s var(--ease-out);
+    }
+
+    .showcase-img-box:hover img {
+      transform: scale(1.03);
+    }
+
+    .banner-content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .banner-content h2 {
+      font-size: 1.5rem;
+      color: var(--white);
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .banner-content p {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .calendar-visual {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .cal-month {
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all var(--transition-fast);
+    }
+
+    .cal-month.active {
+      background: var(--gradient-green);
+      color: var(--white);
+      box-shadow: var(--shadow-green);
+    }
+
+    .cal-month.inactive {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.25);
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    /* ═══════════════════════════════════════════
+       PRICING SECTION
+    ═══════════════════════════════════════════ */
+    .pricing {
+      padding: 120px 0;
+      background: var(--white);
+      position: relative;
+    }
+
+    .pricing::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      height: 400px;
+      background: radial-gradient(ellipse at center top, rgba(16, 185, 129, 0.04) 0%, transparent 60%);
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 64px;
+      align-items: start;
+    }
+
+    .pricing-card {
+      background: var(--white);
+      border-radius: var(--radius-xl);
+      padding: 40px 32px;
+      border: 1px solid var(--gray-200);
+      position: relative;
+      transition: all var(--transition-med);
+    }
+
+    .pricing-card:hover {
+      transform: translateY(-8px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Popular card */
+    .pricing-card.popular {
+      background: var(--gray-900);
+      border-color: var(--green-600);
+      border-width: 2px;
+      transform: scale(1.05);
+      z-index: 2;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .pricing-card.popular:hover {
+      transform: scale(1.05) translateY(-8px);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
+    }
+
+    .pricing-card.popular .card-name,
+    .pricing-card.popular .card-price,
+    .pricing-card.popular .card-period,
+    .pricing-card.popular .card-desc,
+    .pricing-card.popular .feature-list li {
+      color: var(--white);
+    }
+
+    .pricing-card.popular .feature-list li {
+      color: rgba(255, 255, 255, 0.7);
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .pricing-card.popular .feature-list .check {
+      color: var(--green-400);
+    }
+
+    /* Best value card */
+    .pricing-card.best-value {
+      border-color: var(--yellow-400);
+      border-width: 2px;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .badge-popular {
+      background: var(--gradient-green);
+      color: var(--white);
+    }
+
+    .badge-save {
+      background: var(--green-50);
+      color: var(--green-700);
+    }
+
+    .pricing-card.popular .badge-save {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green-400);
+    }
+
+    .badge-best {
+      background: var(--gradient-gold);
+      color: var(--black);
+    }
+
+    .badge-best-save {
+      background: var(--yellow-50);
+      color: var(--yellow-600);
+    }
+
+    .card-name {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .card-price {
+      font-family: var(--font-display);
+      font-size: 3rem;
+      font-weight: 900;
+      color: var(--gray-900);
+      line-height: 1;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .card-price .currency {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gray-500);
+    }
+
+    .pricing-card.popular .card-price .currency {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .card-period {
+      font-size: 0.85rem;
+      color: var(--gray-500);
+      margin-bottom: 8px;
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: var(--gray-400);
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--gray-100);
+      margin-bottom: 24px;
+    }
+
+    .pricing-card.popular .card-desc {
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .per-month-equiv {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      background: var(--green-50);
+      border-radius: var(--radius-full);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--green-700);
+      margin-bottom: 24px;
+    }
+
+    .pricing-card.popular .per-month-equiv {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green-400);
+    }
+
+    .pricing-card.best-value .per-month-equiv {
+      background: var(--yellow-50);
+      color: var(--yellow-600);
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 32px;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      font-size: 0.9rem;
+      color: var(--gray-600);
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-list .check {
+      color: var(--green-500);
+      font-size: 1rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .btn-pricing {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--radius-full);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-align: center;
+    }
+
+    .btn-pricing-default {
+      background: var(--gray-100);
+      color: var(--gray-800);
+      border: 1px solid var(--gray-200);
+    }
+
+    .btn-pricing-default:hover {
+      background: var(--gray-200);
+      transform: translateY(-2px);
+    }
+
+    .btn-pricing-popular {
+      background: var(--gradient-green);
+      color: var(--white);
+      box-shadow: var(--shadow-green);
+    }
+
+    .btn-pricing-popular:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(5, 150, 105, 0.45);
+    }
+
+    .btn-pricing-best {
+      background: var(--gradient-gold);
+      color: var(--black);
+      box-shadow: var(--shadow-gold);
+    }
+
+    .btn-pricing-best:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 48px rgba(245, 158, 11, 0.4);
+    }
+
+    /* ═══════════════════════════════════════════
+       COMPARISON TABLE
+    ═══════════════════════════════════════════ */
+    .comparison {
+      background: var(--gray-50);
+      border-radius: var(--radius-xl);
+      padding: 48px;
+      margin-top: 24px;
+    }
+
+    .comparison h3 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--gray-900);
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .comparison-table thead {
+      background: var(--gray-900);
+    }
+
+    .comparison-table th {
+      padding: 16px 24px;
+      text-align: left;
+      color: var(--white);
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .comparison-table th:last-child {
+      text-align: right;
+    }
+
+    .comparison-table td {
+      padding: 18px 24px;
+      font-size: 0.95rem;
+      color: var(--gray-700);
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    .comparison-table td:last-child {
+      text-align: right;
+    }
+
+    .comparison-table tbody tr {
+      transition: all var(--transition-fast);
+    }
+
+    .comparison-table tbody tr:hover {
+      background: var(--green-50);
+    }
+
+    .comparison-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .comparison-table tbody tr.highlight-row {
+      background: rgba(16, 185, 129, 0.04);
+    }
+
+    .comparison-table tbody tr.highlight-row td {
+      font-weight: 600;
+    }
+
+    .table-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+
+    .table-badge-green {
+      background: var(--green-50);
+      color: var(--green-700);
+    }
+
+    .table-badge-gold {
+      background: var(--yellow-50);
+      color: var(--yellow-600);
+    }
+
+    .economy-value {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--green-600);
+      font-weight: 700;
+    }
+
+    /* ═══════════════════════════════════════════
+       PAYMENT METHODS SECTION
+    ═══════════════════════════════════════════ */
+    .payment-methods {
+      padding: 80px 0;
+      background: var(--white);
+    }
+
+    .payment-grid {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .payment-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 28px 36px;
+      background: var(--gray-50);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--gray-200);
+      transition: all var(--transition-fast);
+      min-width: 140px;
+    }
+
+    .payment-item:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--green-200);
+    }
+
+    .payment-item .icon {
+      font-size: 2rem;
+    }
+
+    .payment-item .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--gray-700);
+    }
+
+    /* ═══════════════════════════════════════════
+       FAQ SECTION
+    ═══════════════════════════════════════════ */
+    .faq {
+      padding: var(--section-padding);
+      background: var(--gray-50);
+    }
+
+    .faq-grid {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .faq-item {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--gray-200);
+      overflow: hidden;
+      transition: all var(--transition-fast);
+    }
+
+    .faq-item:hover {
+      border-color: var(--green-200);
+    }
+
+    .faq-question {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--gray-800);
+      font-size: 0.95rem;
+      transition: all var(--transition-fast);
+      user-select: none;
+    }
+
+    .faq-question:hover {
+      color: var(--green-600);
+    }
+
+    .faq-question .arrow {
+      transition: transform var(--transition-fast);
+      font-size: 1.2rem;
+      color: var(--gray-400);
+    }
+
+    .faq-item.open .faq-question .arrow {
+      transform: rotate(180deg);
+      color: var(--green-500);
+    }
+
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height var(--transition-med);
+    }
+
+    .faq-answer-inner {
+      padding: 0 24px 20px;
+      color: var(--gray-500);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+
+    .faq-item.open .faq-answer {
+      max-height: 300px;
+    }
+
+    /* ═══════════════════════════════════════════
+       CTA SECTION
+    ═══════════════════════════════════════════ */
+    .cta {
+      padding: 100px 0;
+      background: linear-gradient(135deg, #0b3d18 0%, #135326 100%);
+      position: relative;
+      overflow: hidden;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .cta::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 60%);
+    }
+
+    .cta .container {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+
+    .cta h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 1.1rem;
+      max-width: 550px;
+      margin: 0 auto 36px;
+    }
+
+    /* ═══════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════ */
+    .footer {
+      padding: 64px 0 32px;
+      background: var(--black);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px;
+      margin-bottom: 48px;
+    }
+
+    .footer-brand p {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      margin-top: 16px;
+    }
+
+    .footer-col h4 {
+      color: var(--white);
+      font-family: var(--font-display);
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .footer-col a {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.85rem;
+      transition: color var(--transition-fast);
+    }
+
+    .footer-col a:hover {
+      color: var(--green-400);
+    }
+
+    .footer-bottom {
+      padding-top: 32px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-bottom p {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 0.8rem;
+    }
+
+    /* ═══════════════════════════════════════════
+       ANIMATIONS — Scroll Reveal
+    ═══════════════════════════════════════════ */
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: all 0.8s var(--ease-out);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 {
+      transition-delay: 0.1s;
+    }
+
+    .reveal-delay-2 {
+      transition-delay: 0.2s;
+    }
+
+    .reveal-delay-3 {
+      transition-delay: 0.3s;
+    }
+
+    /* ═══════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      .pricing-cards {
+        grid-template-columns: 1fr;
+        max-width: 480px;
+        margin: 0 auto 64px;
+      }
+
+      .pricing-card.popular {
+        transform: scale(1);
+      }
+
+      .pricing-card.popular:hover {
+        transform: translateY(-8px);
+      }
+
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .footer-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .showcase-section-card,
+      .showcase-section-card.reverse-layout {
+        grid-template-columns: 1fr;
+        padding: 32px 24px;
+        gap: 28px;
+      }
+
+      .showcase-section-card.reverse-layout .showcase-img-box {
+        order: -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --section-padding: 72px 0;
+      }
+
+      .showcase-section-card {
+        padding: 24px 18px;
+        border-radius: var(--radius-lg);
+        margin-top: 32px;
+      }
+
+      .showcase-title {
+        font-size: 1.4rem;
+      }
+
+      .showcase-desc {
+        font-size: 0.9rem;
+      }
+
+      .showcase-img-box {
+        max-height: 260px;
+      }
+
+      .nav-links {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 10, 10, 0.98);
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 24px;
+        z-index: 999;
+      }
+
+      .nav-links.open {
+        display: flex;
+      }
+
+      .nav-links a {
+        font-size: 1.2rem;
+        color: var(--white);
+      }
+
+      .mobile-toggle {
+        display: flex;
+        z-index: 1001;
+      }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats {
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+
+      .comparison {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+      }
+
+      .comparison-table th,
+      .comparison-table td {
+        padding: 12px 14px;
+        font-size: 0.8rem;
+      }
+
+      .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+
+      .footer-bottom {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+      }
+
+      .payment-grid {
+        gap: 16px;
+      }
+
+      .payment-item {
+        min-width: 110px;
+        padding: 20px 24px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 {
+        font-size: 2rem;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .hero-actions .btn-primary,
+      .hero-actions .btn-secondary {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .calendar-visual {
+        gap: 4px;
+      }
+
+      .cal-month {
+        padding: 6px 8px;
+        font-size: 0.65rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════ NAVIGATION ═══════════════ -->
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <a href="#" class="logo">
+      <div class="logo-icon-svg">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 4L3 9L12 14L21 9L12 4Z" fill="white"/>
+          <path d="M6 11.5V15.5C6 15.5 8.5 17.5 12 17.5C15.5 17.5 18 15.5 18 15.5V11.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="18" cy="17.5" r="3.5" fill="#facc15"/>
+          <path d="M16.5 17.5L17.5 18.5L19.5 16.5" stroke="#15803d" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="logo-text-group">
+        <div class="logo-main-text">
+          <span class="logo-school">School</span><span class="logo-flow">Flow</span>
+        </div>
+        <div class="logo-tagline">GÉRER · RÉUSSIR · GRANDIR</div>
+      </div>
+    </a>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#features">Fonctionnalités</a></li>
+      <li><a href="#pricing">Tarifs</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#contact">Contact</a></li>
+      <li><a href="#pricing" class="nav-cta">Commencer</a></li>
+    </ul>
+    <div class="mobile-toggle" id="mobileToggle" onclick="toggleMenu()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<section class="hero" id="hero">
+  <div class="container">
+    <div class="hero-grid-layout">
+      <!-- Left Column Content -->
+      <div class="hero-content-left reveal">
+        <div class="hero-badge-v2">
+          <span class="dot"></span>
+          Plateforme N°1 de gestion scolaire africaine
+        </div>
+        <h1>
+          Gérez votre école<br>
+          en toute <span class="highlight-yellow">simplicité</span>
+        </h1>
+        <p class="hero-subtitle">
+          Bulletins automatiques, paiements Mobile Money, notes en temps réel. Conçu pour les établissements d'Afrique francophone.
+        </p>
+        <div class="hero-actions-row">
+          <a href="#pricing" class="btn-hero-primary">
+            Démarrer maintenant
+          </a>
+          <button class="btn-hero-secondary" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">
+            Voir une démo
+          </button>
+        </div>
+        <div class="hero-stats-row">
+          <div class="hero-stat-item">
+            <div class="number">500+</div>
+            <div class="label">Écoles actives</div>
+          </div>
+          <div class="hero-stat-item">
+            <div class="number">50k+</div>
+            <div class="label">Élèves gérés</div>
+          </div>
+          <div class="hero-stat-item">
+            <div class="number">9</div>
+            <div class="label">Pays d'Afrique</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column Dashboard Mockup Card -->
+      <div class="hero-content-right reveal reveal-delay-2">
+        <div class="hero-mockup-card">
+          <div class="mockup-header">
+            <div class="mockup-title">Tableau de bord — Lundi 26 Jan 2025</div>
+            <div class="mockup-year">Année 2024–2025</div>
+          </div>
+          
+          <div class="mockup-widgets">
+            <div class="widget-box">
+              <div class="value green">1 243</div>
+              <div class="tag">Élèves</div>
+            </div>
+            <div class="widget-box">
+              <div class="value orange">87%</div>
+              <div class="tag">Recouvrement</div>
+            </div>
+            <div class="widget-box">
+              <div class="value blue">24</div>
+              <div class="tag">Absences/jour</div>
+            </div>
+          </div>
+
+          <div class="mockup-body-grid">
+            <div class="mockup-subcard">
+              <div class="mockup-subcard-title">Recettes par mois (FCFA)</div>
+              <div class="bar-row">
+                <span class="month">Sep</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 90%;"></div></div>
+              </div>
+              <div class="bar-row">
+                <span class="month">Oct</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 75%;"></div></div>
+              </div>
+              <div class="bar-row">
+                <span class="month">Nov</span>
+                <div class="bar-track"><div class="bar-fill green" style="width: 80%;"></div></div>
+              </div>
+              <div class="bar-row">
+                <span class="month">Déc</span>
+                <div class="bar-track"><div class="bar-fill yellow" style="width: 55%;"></div></div>
+              </div>
+              <div class="bar-row">
+                <span class="month">Jan</span>
+                <div class="bar-track"><div class="bar-fill orange" style="width: 45%;"></div></div>
+              </div>
+            </div>
+
+            <div class="mockup-subcard">
+              <div class="mockup-subcard-title">Paiements récents</div>
+              <div class="payment-list">
+                <div class="payment-row">
+                  <span class="student">K. Aya</span>
+                  <span class="status-pill paye">Payé</span>
+                </div>
+                <div class="payment-row">
+                  <span class="student">B. Kofi</span>
+                  <span class="status-pill partiel">Partiel</span>
+                </div>
+                <div class="payment-row">
+                  <span class="student">D. Fatou</span>
+                  <span class="status-pill paye">Payé</span>
+                </div>
+                <div class="payment-row">
+                  <span class="student">M. Soro</span>
+                  <span class="status-pill impaye">Impayé</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mockup-alert">
+            <span style="font-size: 1.1rem;">📄</span>
+            <span>3 bulletins PDF générés — Classe 3ème B · il y a 2 min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ FEATURES ═══════════════ -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">✨ Fonctionnalités</span>
+      <h2 class="section-title">Tout ce dont votre établissement a besoin</h2>
+      <p class="section-desc">
+        Une plateforme complète pour piloter votre établissement scolaire du 1er septembre au 31 mai.
+      </p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">📊</div>
+        <h3>Gestion des notes</h3>
+        <p>Saisie, calcul automatique des moyennes, bulletins PDF et suivi de progression des élèves en temps réel.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">📅</div>
+        <h3>Emplois du temps</h3>
+        <p>Création intelligente des emplois du temps avec gestion des salles, conflits et remplacements automatiques.
+        </p>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">👨‍👩‍👧</div>
+        <h3>Portail parents</h3>
+        <p>Accès sécurisé pour les parents : notes, absences, messages et paiements de scolarité en ligne.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">💰</div>
+        <h3>Comptabilité</h3>
+        <p>Suivi des paiements, gestion des frais de scolarité, rappels automatiques et rapports financiers.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">📱</div>
+        <h3>SMS & Notifications</h3>
+        <p>Communication instantanée : alertes SMS, notifications push et emails automatiques aux parents.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">📈</div>
+        <h3>Tableaux de bord</h3>
+        <p>Statistiques en temps réel, indicateurs de performance et rapports personnalisables pour les directeurs.</p>
+      </div>
+    </div>
+
+    <!-- Showcase Card 1 — Direction & Pilotage (Max_a_Photorealistic_image.jpeg) -->
+    <div class="showcase-section-card reveal">
+      <div class="showcase-info">
+        <div class="showcase-tag gold">👔 Espace Direction & Pilotage</div>
+        <h3 class="showcase-title">Un contrôle total sur la vie de votre établissement</h3>
+        <p class="showcase-desc">
+          Pilotez votre école en toute sérénité depuis votre ordinateur ou mobile. Recevez des notifications SMS directes lors de chaque versement de scolarité par Mobile Money.
+        </p>
+        <ul class="showcase-list">
+          <li><span class="icon-check">✓</span> Validation et signature des bulletins en un clic</li>
+          <li><span class="icon-check">✓</span> Suivi du chiffre d'affaires et relances automatiques</li>
+          <li><span class="icon-check">✓</span> Consultation des effectifs et présence des enseignants</li>
+        </ul>
+      </div>
+      <div class="showcase-img-box">
+        <img src="Max_a_Photorealistic_image.jpeg" alt="Directeur d'établissement pilotant son école avec le portail SchoolFlow" loading="lazy">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ SCHOOL YEAR BANNER ═══════════════ -->
+<section class="school-year-banner">
+  <div class="container">
+    <div class="banner-content reveal">
+      <h2>📆 Année scolaire : Septembre → Mai</h2>
+      <p>Nos abonnements suivent le calendrier scolaire. Pas de frais pendant les vacances d'été (juillet-août).</p>
+      <div class="calendar-visual">
+        <div class="cal-month active">Sept</div>
+        <div class="cal-month active">Oct</div>
+        <div class="cal-month active">Nov</div>
+        <div class="cal-month active">Déc</div>
+        <div class="cal-month active">Jan</div>
+        <div class="cal-month active">Fév</div>
+        <div class="cal-month active">Mar</div>
+        <div class="cal-month active">Avr</div>
+        <div class="cal-month active">Mai</div>
+        <div class="cal-month inactive">Juin</div>
+        <div class="cal-month inactive">Juil</div>
+        <div class="cal-month inactive">Août</div>
+      </div>
+    </div>
+
+    <!-- Showcase Card 2 — Secrétariat & Inscriptions (Max_a_Photorealistic_image (1).jpeg) -->
+    <div class="showcase-section-card reverse-layout reveal">
+      <div class="showcase-img-box">
+        <img src="Max_a_Photorealistic_image (1).jpeg" alt="Accueil des parents et secrétariat à l'École Internationale d'Abidjan" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <div class="showcase-tag">🤝 Secrétariat & Inscriptions</div>
+        <h3 class="showcase-title">Une relation fluide et transparente avec les parents</h3>
+        <p class="showcase-desc">
+          Simplifiez l'inscription des élèves, la délivrance des reçus de scolarité et l'information des familles dès le secrétariat sur tablette ou ordinateur portable.
+        </p>
+        <ul class="showcase-list">
+          <li><span class="icon-check">✓</span> Inscriptions rapides et attribution automatique des classes</li>
+          <li><span class="icon-check">✓</span> Encaissement instantané des frais de scolarité</li>
+          <li><span class="icon-check">✓</span> Reçus électroniques et alertes SMS d'accusé de réception</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ PRICING ═══════════════ -->
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">💎 Tarifs</span>
+      <h2 class="section-title">Choisissez votre plan</h2>
+      <p class="section-desc">
+        Des tarifs transparents, adaptés au calendrier scolaire. Aucun frais caché, aucune surprise.
+      </p>
+    </div>
+
+    <div class="pricing-cards">
+
+      <!-- PLAN MENSUEL -->
+      <div class="pricing-card reveal reveal-delay-1" id="plan-mensuel">
+        <div class="badge-row">
+          <span class="badge" style="background:var(--gray-100);color:var(--gray-600);">Flexible</span>
+        </div>
+        <div class="card-name">Plan Mensuel</div>
+        <div class="card-price">
+          5 000 <span class="currency">FCFA</span>
+        </div>
+        <div class="card-period">par mois scolaire</div>
+        <p class="card-desc">Facturation mensuelle — Septembre à Mai</p>
+        <div class="per-month-equiv">💡 Total/an : 45 000 FCFA</div>
+        <ul class="feature-list">
+          <li><span class="check">✓</span> Accès immédiat dès le paiement</li>
+          <li><span class="check">✓</span> Facturation le 1er du mois</li>
+          <li><span class="check">✓</span> Résiliation en fin de mois</li>
+          <li><span class="check">✓</span> Rappel SMS/email J-5</li>
+          <li><span class="check">✓</span> Toutes les fonctionnalités</li>
+          <li><span class="check">✓</span> Support par email</li>
+        </ul>
+        <button class="btn-pricing btn-pricing-default" id="btn-plan-mensuel">
+          Choisir le mensuel
+        </button>
+      </div>
+
+      <!-- PLAN ANNUEL — POPULAIRE -->
+      <div class="pricing-card popular reveal reveal-delay-2" id="plan-annuel">
+        <div class="badge-row">
+          <span class="badge badge-popular">⭐ Meilleure offre</span>
+          <span class="badge badge-save">Économisez 33%</span>
+        </div>
+        <div class="card-name">Plan 1 An Scolaire</div>
+        <div class="card-price">
+          30 000 <span class="currency">FCFA</span>
+        </div>
+        <div class="card-period">pour 1 année scolaire complète</div>
+        <p class="card-desc">Paiement unique — Valable du 1er sept. au 31 mai</p>
+        <div class="per-month-equiv">💰 Soit 3 333 FCFA/mois</div>
+        <ul class="feature-list">
+          <li><span class="check">✓</span> Paiement unique en septembre</li>
+          <li><span class="check">✓</span> 9 mois d'accès complet</li>
+          <li><span class="check">✓</span> Économie de 15 000 FCFA</li>
+          <li><span class="check">✓</span> Renouvellement auto ou manuel</li>
+          <li><span class="check">✓</span> Toutes les fonctionnalités</li>
+          <li><span class="check">✓</span> Support prioritaire</li>
+        </ul>
+        <button class="btn-pricing btn-pricing-popular" id="btn-plan-annuel">
+          Choisir l'annuel — Recommandé
+        </button>
+      </div>
+
+      <!-- PLAN 3 ANS — MEILLEURE VALEUR -->
+      <div class="pricing-card best-value reveal reveal-delay-3" id="plan-3ans">
+        <div class="badge-row">
+          <span class="badge badge-best">🏆 Meilleure valeur</span>
+          <span class="badge badge-best-save">Économisez 48%</span>
+        </div>
+        <div class="card-name">Plan 3 Ans Scolaires</div>
+        <div class="card-price">
+          70 000 <span class="currency">FCFA</span>
+        </div>
+        <div class="card-period">pour 3 années scolaires</div>
+        <p class="card-desc">Paiement unique — 27 mois scolaires consécutifs</p>
+        <div class="per-month-equiv">🔥 Soit 2 593 FCFA/mois</div>
+        <ul class="feature-list">
+          <li><span class="check">✓</span> Paiement unique pour 3 ans</li>
+          <li><span class="check">✓</span> 27 mois scolaires d'accès</li>
+          <li><span class="check">✓</span> Économie de 65 000 FCFA</li>
+          <li><span class="check">✓</span> Engagement ferme 3 ans</li>
+          <li><span class="check">✓</span> Toutes les fonctionnalités</li>
+          <li><span class="check">✓</span> Support VIP dédié</li>
+        </ul>
+        <button class="btn-pricing btn-pricing-best" id="btn-plan-3ans">
+          Choisir le plan 3 ans
+        </button>
+      </div>
+    </div>
+
+    <!-- TABLEAU COMPARATIF -->
+    <div class="comparison reveal">
+      <h3>📊 Tableau comparatif des plans</h3>
+      <table class="comparison-table" id="comparison-table">
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Prix total</th>
+            <th>Durée</th>
+            <th>Économie</th>
+            <th>Coût / mois</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mensuel</td>
+            <td>5 000 FCFA</td>
+            <td>1 mois</td>
+            <td>—</td>
+            <td>5 000 FCFA</td>
+          </tr>
+          <tr class="highlight-row">
+            <td>
+              1 An Scolaire
+              <span class="table-badge table-badge-green">-33%</span>
+            </td>
+            <td>30 000 FCFA</td>
+            <td>9 mois</td>
+            <td><span class="economy-value">↓ 15 000 FCFA</span></td>
+            <td><strong>3 333 FCFA</strong></td>
+          </tr>
+          <tr>
+            <td>
+              3 Ans Scolaires
+              <span class="table-badge table-badge-gold">-48%</span>
+            </td>
+            <td>70 000 FCFA</td>
+            <td>27 mois</td>
+            <td><span class="economy-value">↓ 65 000 FCFA</span></td>
+            <td><strong>2 593 FCFA</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ PAYMENT METHODS ═══════════════ -->
+<section class="payment-methods" id="payment">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">💳 Paiements</span>
+      <h2 class="section-title">5 modes de paiement acceptés</h2>
+      <p class="section-desc">Payez comme vous voulez, en toute sécurité.</p>
+    </div>
+    <div class="payment-grid reveal">
+      <div class="payment-item">
+        <div class="icon">📲</div>
+        <div class="name">Mobile Money</div>
+      </div>
+      <div class="payment-item">
+        <div class="icon">🟠</div>
+        <div class="name">Orange Money</div>
+      </div>
+      <div class="payment-item">
+        <div class="icon">🟡</div>
+        <div class="name">MTN MoMo</div>
+      </div>
+      <div class="payment-item">
+        <div class="icon">💳</div>
+        <div class="name">Carte Visa/MC</div>
+      </div>
+      <div class="payment-item">
+        <div class="icon">🏦</div>
+        <div class="name">Virement</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ FAQ ═══════════════ -->
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="section-header reveal">
+      <span class="section-label">❓ FAQ</span>
+      <h2 class="section-title">Questions fréquentes</h2>
+      <p class="section-desc">Tout ce que vous devez savoir sur nos abonnements.</p>
+    </div>
+    <div class="faq-grid">
+      <div class="faq-item reveal" id="faq-1">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          Qu'est-ce qu'une « année scolaire » chez SchoolFlow ?
+          <span class="arrow">▾</span>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            Une année scolaire correspond à 9 mois d'activité, du 1er septembre au 31 mai. Les mois de juin, juillet et
+            août ne sont pas facturés. Tous nos abonnements suivent ce calendrier scolaire, pas le calendrier civil.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item reveal" id="faq-2">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          Puis-je résilier mon abonnement mensuel ?
+          <span class="arrow">▾</span>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            Oui ! Avec le plan mensuel, vous pouvez résilier à la fin de chaque mois scolaire. Vous recevrez un rappel
+            SMS et email 5 jours avant le renouvellement. Aucun engagement au-delà du mois en cours.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item reveal" id="faq-3">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          Le plan 3 ans est-il résiliable ?
+          <span class="arrow">▾</span>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            Non. Le plan 3 ans scolaires est un engagement ferme avec un paiement unique de 70 000 FCFA. En échange,
+            vous bénéficiez d'une économie de 48% par rapport au plan mensuel, soit 65 000 FCFA d'économie sur la
+            période.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item reveal" id="faq-4">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          Que se passe-t-il pendant les vacances d'été ?
+          <span class="arrow">▾</span>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            Aucune facturation pendant les vacances scolaires (juin, juillet, août). Votre accès est suspendu
+            automatiquement et reprend à la rentrée de septembre. Vos données sont conservées en toute sécurité.
+          </div>
+        </div>
+      </div>
+      <div class="faq-item reveal" id="faq-5">
+        <div class="faq-question" onclick="toggleFaq(this)">
+          Comment fonctionne le renouvellement du plan annuel ?
+          <span class="arrow">▾</span>
+        </div>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">
+            Vous pouvez choisir le renouvellement automatique ou manuel. Si vous optez pour l'automatique, le montant
+            sera prélevé début septembre. Sinon, vous recevrez un rappel pour renouveler avant la rentrée.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ MOBILE TEACHERS SHOWCASE ═══════════════ -->
+<section class="section-teachers" id="enseignants" style="padding: 60px 0; background: var(--gray-50);">
+  <div class="container">
+    <!-- Showcase Card 3 — Enseignants en classe (Max_a_Photorealistic_image (2).jpeg) -->
+    <div class="showcase-section-card reveal">
+      <div class="showcase-info">
+        <div class="showcase-tag blue">📱 Application Mobile Enseignants</div>
+        <h3 class="showcase-title">Saisie des notes et appel des absences en salle de classe</h3>
+        <p class="showcase-desc">
+          Vos professeurs gagnent un temps précieux : appel de présence en 30 secondes chrono, saisie des évaluations et calcul automatique des moyennes directement sur smartphone.
+        </p>
+        <ul class="showcase-list">
+          <li><span class="icon-check">✓</span> Saisie rapide accessible sur tout type de téléphone</li>
+          <li><span class="icon-check">✓</span> Alertes immédiates en cas d'absence non justifiée</li>
+          <li><span class="icon-check">✓</span> Calcul en temps réel du classement et de la moyenne générale</li>
+        </ul>
+      </div>
+      <div class="showcase-img-box">
+        <img src="Max_a_Photorealistic_image (2).jpeg" alt="Enseignant saisissant les notes sur son smartphone en salle de classe" loading="lazy">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ CTA ═══════════════ -->
+<section class="cta" id="contact">
+  <div class="container">
+    <h2 class="reveal">Prêt à transformer votre établissement ?</h2>
+    <p class="reveal">Rejoignez les 150+ établissements qui font confiance à SchoolFlow pour leur gestion quotidienne.
+    </p>
+    <div class="reveal">
+      <a href="#pricing" class="btn-primary" style="font-size:1.1rem;padding:18px 40px;">
+        Commencer maintenant
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M4 10h12m0 0l-4-4m4 4l-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#" class="logo">
+          <div class="logo-icon">📚</div>
+          SchoolFlow
+        </a>
+        <p>La plateforme de gestion scolaire tout-en-un, conçue pour les établissements d'Afrique de l'Ouest.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Produit</h4>
+        <ul>
+          <li><a href="#features">Fonctionnalités</a></li>
+          <li><a href="#pricing">Tarifs</a></li>
+          <li><a href="#">Démo</a></li>
+          <li><a href="#">API</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Ressources</h4>
+        <ul>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#">Documentation</a></li>
+          <li><a href="#">Blog</a></li>
+          <li><a href="#">Tutoriels</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Contact</h4>
+        <ul>
+          <li><a href="#">contact@schoolflow.com</a></li>
+          <li><a href="#">+225 07 00 00 00</a></li>
+          <li><a href="#">WhatsApp</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2026 SchoolFlow. Tous droits réservés.</p>
+      <p>Fait avec 💚 pour l'éducation en Afrique</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════ SCRIPTS ═══════════════ -->
+<script>
+  // ─── Navbar Scroll Effect ───
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 50);
+  });
+
+  // ─── Mobile Menu Toggle ───
+  function toggleMenu() {
+    const navLinks = document.getElementById('navLinks');
+    navLinks.classList.toggle('open');
+  }
+
+  // Close mobile menu on link click
+  document.querySelectorAll('.nav-links a').forEach(link => {
+    link.addEventListener('click', () => {
+      document.getElementById('navLinks').classList.remove('open');
+    });
+  });
+
+  // ─── FAQ Accordion ───
+  function toggleFaq(el) {
+    const item = el.parentElement;
+    // Close all others
+    document.querySelectorAll('.faq-item').forEach(i => {
+      if (i !== item) i.classList.remove('open');
+    });
+    item.classList.toggle('open');
+  }
+
+  // ─── Scroll Reveal Animation ───
+  const revealElements = document.querySelectorAll('.reveal');
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -60px 0px'
+  });
+
+  revealElements.forEach(el => revealObserver.observe(el));
+
+  // ─── Pricing Card Hover Particles ───
+  document.querySelectorAll('.pricing-card').forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      card.style.background = card.classList.contains('popular')
+        ? `radial-gradient(circle at ${x}% ${y}%, rgba(16,185,129,0.08) 0%, var(--gray-900) 60%)`
+        : `radial-gradient(circle at ${x}% ${y}%, rgba(16,185,129,0.04) 0%, var(--white) 60%)`;
+    });
+
+    card.addEventListener('mouseleave', () => {
+      card.style.background = card.classList.contains('popular')
+        ? 'var(--gray-900)'
+        : 'var(--white)';
+    });
+  });
+
+  // ─── Calendar Month Animation ───
+  const calMonths = document.querySelectorAll('.cal-month.active');
+  calMonths.forEach((month, i) => {
+    month.style.animationDelay = `${i * 0.1}s`;
+    month.style.opacity = '0';
+    month.style.animation = `fadeInUp 0.5s var(--ease-out) ${i * 0.08}s forwards`;
+  });
+
+  // ─── Counter Animation ───
+  function animateCounters() {
+    document.querySelectorAll('.hero-stat-item .number, .hero-stat .number').forEach(counter => {
+      const target = counter.innerText;
+      const numMatch = target.match(/[\d\s]+/);
+      if (!numMatch) return;
+
+      const num = parseInt(numMatch[0].replace(/\s/g, ''));
+      const suffix = target.replace(numMatch[0], '');
+      const prefix = target.split(numMatch[0])[0] || '';
+      const hasSpace = target.includes(' ');
+      let current = 0;
+      const step = Math.ceil(num / 60);
+      const interval = setInterval(() => {
+        current += step;
+        if (current >= num) {
+          current = num;
+          clearInterval(interval);
+        }
+        const formatted = hasSpace
+          ? current.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+          : current.toString();
+        counter.innerText = prefix + formatted + suffix;
+      }, 20);
+    });
+  }
+
+  // Trigger counter animation when hero is visible
+  const heroObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        animateCounters();
+        heroObserver.disconnect();
+      }
+    });
+  }, { threshold: 0.3 });
+
+  const heroStatsElem = document.querySelector('.hero-stats-row') || document.querySelector('.hero-stats');
+  if (heroStatsElem) heroObserver.observe(heroStatsElem);
+
+  // ─── Smooth Scroll for anchor links ───
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+</script>
+
+</body>
+
+</html>
