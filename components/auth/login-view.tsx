@@ -189,15 +189,26 @@ export function LoginView({
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'mensuel' | 'annuel' | 'triennal'>('annuel');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'wave' | 'orange' | 'card'>('wave');
+  const [paymentPhone, setPaymentPhone] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
 
-  // Modale Mot de passe oublié
+  // Modale Mot de passe oublié (Flux 3 Étapes : Email -> Code 6 chiffres -> Nouveau MDP)
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'email' | 'code' | 'new_password' | 'success'>('email');
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [forgotError, setForgotError] = useState('');
 
   // Feedback UI
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'done'>('form');
   const [successToast, setSuccessToast] = useState<{ title: string; subtitle: string } | null>(null);
 
   // Texte animé volet gauche
@@ -498,12 +509,63 @@ export function LoginView({
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // 3. GESTION DU MOT DE PASSE OUBLIÉ
+  // 3. GESTION DU MOT DE PASSE OUBLIÉ (FLUX COMPLET 4 ÉTAPES)
   // ═══════════════════════════════════════════════════════════════
-  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+  const handleSendForgotCode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail.trim()) return;
-    setForgotSubmitted(true);
+    setForgotError('');
+    if (!forgotEmail.trim()) {
+      setForgotError('Veuillez saisir votre adresse email.');
+      return;
+    }
+
+    // Générer un code OTP aléatoire à 6 chiffres
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(code);
+    setIsLoading(true);
+
+    setTimeout(() => {
+      setIsLoading(false);
+      setForgotStep('code');
+    }, 600);
+  };
+
+  const handleVerifyForgotCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    if (forgotOtpCode.trim() !== generatedOtp.trim()) {
+      setForgotError('Code de sécurité incorrect. Veuillez vérifier les 6 chiffres.');
+      return;
+    }
+    setForgotStep('new_password');
+  };
+
+  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+
+    if (newPassword.length < 8) {
+      setForgotError('Le nouveau mot de passe doit comporter au moins 8 caractères.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setForgotError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    setTimeout(() => {
+      // Mettre à jour le mot de passe dans les personnels locaux si existant
+      const liveStaff = getLiveStaffUsers();
+      const targetUser = liveStaff.find((u) => u.email?.toLowerCase() === forgotEmail.trim().toLowerCase());
+      if (targetUser) {
+        targetUser.authCode = newPassword;
+      }
+      setIsLoading(false);
+      setForgotStep('success');
+    }, 700);
   };
 
   const getPlanDetails = (planId: 'mensuel' | 'annuel' | 'triennal') => {
@@ -604,7 +666,7 @@ export function LoginView({
               </div>
             </div>
 
-            {/* 4 Blocs Fonctionnalités / Modules */}
+            {/* 3 Blocs Fonctionnalités */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2 pt-1">
               <div className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/30 text-emerald-300 flex items-center justify-center shrink-0">
@@ -651,21 +713,20 @@ export function LoginView({
         </div>
 
         {/* ================= VOLET DROIT (7 COLONNES) : FORMULAIRE PRINCIPAL ================= */}
-        <div className="lg:col-span-7 p-5 sm:p-7 lg:p-9 flex flex-col justify-between bg-white space-y-4 shrink-0">
-          
+        <div className="lg:col-span-7 p-5 sm:p-7 lg:p-8 bg-white flex flex-col justify-between shrink-0">
           <div className="space-y-4">
             
-            {/* SÉLECTEUR D'ONGLETS : SE CONNECTER / NOUVEL ABONNEMENT */}
-            <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200/80">
+            {/* Onglets Bascule : Se Connecter vs Nouveau Compte & Abonnement */}
+            <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
               <button
                 type="button"
                 onClick={() => {
                   setAuthMode('login');
                   setErrorMessage('');
                 }}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   authMode === 'login'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/80 font-heading'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200/60'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -679,10 +740,10 @@ export function LoginView({
                   setAuthMode('signup');
                   setErrorMessage('');
                 }}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   authMode === 'signup'
-                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-sm font-heading'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-md shadow-emerald-600/30'
+                    : 'text-emerald-700 hover:text-emerald-800'
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -714,7 +775,7 @@ export function LoginView({
             )}
 
             {/* ═══════════════════════════════════════════════════════════════ */}
-            {/* MODE 1 : FORMULAIRE DE CONNEXION (COMPTES EXISTANTS / TOUS LES PERSONNELS) */}
+            {/* MODE 1 : FORMULAIRE DE CONNEXION (COMPTES EXISTANTS) */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {authMode === 'login' && (
               <form onSubmit={handleLoginSubmit} className="space-y-3.5 animate-in fade-in">
@@ -823,8 +884,9 @@ export function LoginView({
                         type="button"
                         onClick={() => {
                           setForgotEmail(loginEmail);
+                          setForgotStep('email');
+                          setForgotError('');
                           setIsForgotPasswordOpen(true);
-                          setForgotSubmitted(false);
                         }}
                         className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
                       >
@@ -960,8 +1022,9 @@ export function LoginView({
                       type="button"
                       onClick={() => {
                         setForgotEmail(signupEmail);
+                        setForgotStep('email');
+                        setForgotError('');
                         setIsForgotPasswordOpen(true);
-                        setForgotSubmitted(false);
                       }}
                       className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
                     >
@@ -976,7 +1039,7 @@ export function LoginView({
                       minLength={8}
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
-                      placeholder="Définissez le mot de passe (au moins 8 caractères)"
+                      placeholder="Définissez votre mot de passe (au moins 8 caractères)"
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
                     />
                     <button
@@ -1039,9 +1102,9 @@ export function LoginView({
                 </div>
 
                 {/* 5. Choix Moyen de Paiement */}
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-2 pt-1">
                   <label className="font-bold text-slate-800 block text-xs">
-                    Moyen de Paiement Sécurisé (Mobile Money / Carte)
+                    Moyen de Paiement Sécurisé (Mobile Money / Carte Bancaire) *
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
@@ -1063,6 +1126,91 @@ export function LoginView({
                       </button>
                     ))}
                   </div>
+
+                  {/* Champs dynamiques selon le moyen de paiement sélectionné */}
+                  {selectedPaymentMethod === 'wave' && (
+                    <div className="p-3 bg-cyan-50/60 border border-cyan-200 rounded-2xl space-y-1.5 animate-in fade-in">
+                      <label className="font-bold text-cyan-950 block text-[11px] flex items-center justify-between">
+                        <span>Numéro de Compte Wave *</span>
+                        <span className="text-[10px] text-cyan-800 font-normal">Prélèvement instantané</span>
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-cyan-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="tel"
+                          value={paymentPhone}
+                          onChange={(e) => setPaymentPhone(e.target.value)}
+                          placeholder="Ex : +225 07 12 34 56 78"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-cyan-300 text-xs font-mono font-bold text-cyan-950 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedPaymentMethod === 'orange' && (
+                    <div className="p-3 bg-orange-50/60 border border-orange-200 rounded-2xl space-y-1.5 animate-in fade-in">
+                      <label className="font-bold text-orange-950 block text-[11px] flex items-center justify-between">
+                        <span>Numéro Orange Money *</span>
+                        <span className="text-[10px] text-orange-800 font-normal">Validation par code #144#</span>
+                      </label>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-orange-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="tel"
+                          value={paymentPhone}
+                          onChange={(e) => setPaymentPhone(e.target.value)}
+                          placeholder="Ex : +225 07 98 76 54 32"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-orange-300 text-xs font-mono font-bold text-orange-950 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedPaymentMethod === 'card' && (
+                    <div className="p-3 bg-slate-50 border border-slate-300 rounded-2xl space-y-2 animate-in fade-in">
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-800 block text-[11px]">
+                          Numéro de Carte Bancaire (16 chiffres) *
+                        </label>
+                        <div className="relative">
+                          <CreditCard className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            maxLength={19}
+                            value={cardNumber}
+                            onChange={(e) => setCardNumber(e.target.value)}
+                            placeholder="4000 1234 5678 9010"
+                            className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:text-slate-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="font-bold text-slate-700 block text-[10px] mb-0.5">Expiration (MM/AA) *</label>
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={cardExpiry}
+                            onChange={(e) => setCardExpiry(e.target.value)}
+                            placeholder="12/28"
+                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-mono text-center font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-slate-700 block text-[10px] mb-0.5">CVC / Cryptogramme *</label>
+                          <input
+                            type="password"
+                            maxLength={4}
+                            value={cardCvc}
+                            onChange={(e) => setCardCvc(e.target.value)}
+                            placeholder="•••"
+                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-mono text-center font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bouton Soumission Abonnement */}
@@ -1072,11 +1220,11 @@ export function LoginView({
                   className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-lg shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
                 >
                   {isLoading ? (
-                    <span>Création du compte établissement en cours...</span>
+                    <span>Validation du paiement sécurisé & initialisation...</span>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Valider l'Abonnement ({formatFCFA(getPlanDetails(selectedPlan).price)}) & Commencer</span>
+                      <span>Régler l'Abonnement ({formatFCFA(getPlanDetails(selectedPlan).price)}) & Ouvrir l'Accès</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -1092,7 +1240,7 @@ export function LoginView({
         </div>
       </div>
 
-      {/* ================= MODALE : MOT DE PASSE OUBLIÉ ================= */}
+      {/* ================= MODALE : MOT DE PASSE OUBLIÉ (WIZARD 4 ÉTAPES) ================= */}
       {isForgotPasswordOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
@@ -1107,36 +1255,33 @@ export function LoginView({
               </div>
               <button
                 type="button"
-                onClick={() => setIsForgotPasswordOpen(false)}
+                onClick={() => {
+                  setIsForgotPasswordOpen(false);
+                  setForgotStep('email');
+                  setForgotError('');
+                }}
                 className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {forgotSubmitted ? (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-                <h4 className="font-bold text-xs text-emerald-950">Lien de réinitialisation envoyé !</h4>
-                <p className="text-[11px] text-emerald-800 leading-relaxed">
-                  Un email contenant votre lien de récupération sécurisé a été expédié à l'adresse <strong>{forgotEmail}</strong>. Veuillez vérifier votre boîte de réception.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsForgotPasswordOpen(false)}
-                  className="mt-3 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer"
-                >
-                  Fermer
-                </button>
+            {forgotError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{forgotError}</span>
               </div>
-            ) : (
-              <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Saisissez l'adresse email associée à votre compte pour recevoir les instructions de réinitialisation.
+            )}
+
+            {/* ÉTAPE 1 : Saisie de l'Email */}
+            {forgotStep === 'email' && (
+              <form onSubmit={handleSendForgotCode} className="space-y-3">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Saisissez l'adresse email associée à votre compte d'établissement pour recevoir votre code de sécurité à 6 chiffres.
                 </p>
                 <div className="space-y-1">
                   <label className="font-bold text-slate-800 block text-xs">
-                    Adresse Email *
+                    Adresse Email du Compte *
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1161,13 +1306,148 @@ export function LoginView({
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    disabled={isLoading}
+                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     <Mail className="w-3.5 h-3.5" />
-                    <span>Envoyer le lien</span>
+                    <span>Envoyer le code</span>
                   </button>
                 </div>
               </form>
+            )}
+
+            {/* ÉTAPE 2 : Saisie du Code à 6 Chiffres */}
+            {forgotStep === 'code' && (
+              <form onSubmit={handleVerifyForgotCode} className="space-y-3.5">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Code expédié à {forgotEmail}</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800">
+                    Votre code de sécurité à 6 chiffres est : <strong className="font-mono text-xs px-1.5 py-0.5 bg-emerald-200/80 rounded-md font-extrabold">{generatedOtp}</strong>
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Saisir le Code à 6 Chiffres *
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={forgotOtpCode}
+                      onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ex : 123456"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-base font-mono font-bold text-center tracking-widest text-slate-900 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep('email')}
+                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
+                  >
+                    Retour
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Valider le code</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ÉTAPE 3 : Définition du Nouveau Mot de Passe */}
+            {forgotStep === 'new_password' && (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
+                <p className="text-xs text-slate-600">
+                  Définissez votre nouveau mot de passe sécurisé (au moins 8 caractères).
+                </p>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Nouveau Mot de Passe *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 8 caractères"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Confirmer le Nouveau Mot de Passe *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="Retapez le même mot de passe"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-2 disabled:opacity-50"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Enregistrer le nouveau mot de passe</span>
+                </button>
+              </form>
+            )}
+
+            {/* ÉTAPE 4 : Succès */}
+            {forgotStep === 'success' && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2.5">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h4 className="font-bold text-sm text-emerald-950 font-heading">Mot de passe réinitialisé !</h4>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  Votre mot de passe a été mis à jour avec succès. Vous pouvez désormais vous connecter avec vos nouveaux identifiants.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPasswordOpen(false);
+                    setAuthMode('login');
+                    setLoginPassword('');
+                    setLoginEmail(forgotEmail);
+                  }}
+                  className="mt-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-md shadow-emerald-600/30"
+                >
+                  Se connecter maintenant
+                </button>
+              </div>
             )}
           </div>
         </div>
