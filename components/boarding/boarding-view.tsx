@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -26,25 +26,25 @@ import {
   Save,
   ChevronLeft,
   ChevronRight,
-  History,
   Sparkles,
   Coins,
   Edit3,
   ShieldCheck,
-  FolderOpen,
   User,
   Share2,
-  Lock,
+  Check,
+  CreditCard,
+  BadgePercent,
+  CheckCheck,
 } from 'lucide-react';
 
 interface BoardingViewProps {
-  initialBoarders?: any[];
   school: School;
   schoolSlug: string;
 }
 
+// 9 Mois de l'année scolaire (Octobre à Juin)
 const MONTHS_LIST = [
-  'Septembre',
   'Octobre',
   'Novembre',
   'Décembre',
@@ -56,8 +56,8 @@ const MONTHS_LIST = [
   'Juin',
 ];
 
-const BOARDING_PAYMENTS_KEY = 'schoolflow_boarding_monthly_payments_v2';
-const BOARDING_SUBSCRIPTIONS_KEY = 'schoolflow_boarding_subscriptions_v2';
+const BOARDING_PAYMENTS_KEY = 'schoolflow_boarding_monthly_payments_v3';
+const BOARDING_SUBSCRIPTIONS_KEY = 'schoolflow_boarding_subscriptions_v3';
 
 export function BoardingView({
   school,
@@ -66,20 +66,11 @@ export function BoardingView({
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedClass, setSelectedClass] = useState('Toutes les classes');
-  const [selectedPavilion, setSelectedPavilion] = useState('all');
+  const [selectedPavilionFilter, setSelectedPavilionFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Modales secondaires
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  // Modale nouvelle admission
   const [isNewAdmissionModalOpen, setIsNewAdmissionModalOpen] = useState(false);
-
-  // Synchronized horizontal scroll references
-  const topScrollRef = useRef<HTMLDivElement>(null);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState(1000);
-
-  // Formulaire nouvelle admission modal
   const [newSubStudentId, setNewSubStudentId] = useState('');
   const [newSubPavilion, setNewSubPavilion] = useState('Pavillon A (Garçons)');
   const [newSubRoom, setNewSubRoom] = useState('');
@@ -98,1472 +89,947 @@ export function BoardingView({
     return {};
   });
 
-  // Souscriptions personnalisées et chambres par élève
-  const [customBoardingMap, setCustomBoardingMap] = useState<Record<string, { room: string; pavilion: string; rate: number }>>(() => {
+  // Souscriptions personnalisées
+  const [customSubscriptions, setCustomSubscriptions] = useState<
+    Array<{
+      studentId: string;
+      pavilion: string;
+      roomNumber: string;
+      monthlyRate: number;
+    }>
+  >(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
-    return {};
+    return [];
   });
 
-  // Synchronisation des élèves et école
+  // Synchronisation avec les données globales
   useEffect(() => {
-    setStudents(getLiveStudents(mockStudents));
-    setCurrentSchool(getLiveSchool(schoolSlug, school));
+    const liveSchool = getLiveSchool(schoolSlug, school);
+    setCurrentSchool(liveSchool);
+    const liveStudents = getLiveStudents(mockStudents, schoolSlug);
+    setStudents(liveStudents);
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(mockStudents));
-      setCurrentSchool(getLiveSchool(schoolSlug, school));
+      const updatedSchool = getLiveSchool(schoolSlug, school);
+      setCurrentSchool(updatedSchool);
+      const updatedStudents = getLiveStudents(mockStudents, schoolSlug);
+      setStudents(updatedStudents);
+
+      if (typeof window !== 'undefined') {
+        try {
+          const savedPayments = localStorage.getItem(BOARDING_PAYMENTS_KEY);
+          if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
+          const savedSubs = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
+          if (savedSubs) setCustomSubscriptions(JSON.parse(savedSubs));
+        } catch (e) {}
+      }
     };
+
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school]);
 
-  // Synchronisation de la barre de défilement horizontal
-  useEffect(() => {
-    const updateWidth = () => {
-      if (tableContainerRef.current) {
-        setTableScrollWidth(Math.max(900, tableContainerRef.current.scrollWidth));
-      }
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, [students]);
-
-  const handleTopScroll = () => {
-    if (topScrollRef.current && tableContainerRef.current) {
-      tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+  // Sauvegarde persistante des paiements
+  const savePaymentsToStorage = (updatedPayments: Record<string, Record<string, boolean>>) => {
+    setMonthlyPayments(updatedPayments);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(BOARDING_PAYMENTS_KEY, JSON.stringify(updatedPayments));
+        window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'boarding_payment_updated' } }));
+      } catch (e) {}
     }
   };
 
-  const handleTableScroll = () => {
-    if (topScrollRef.current && tableContainerRef.current) {
-      topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+  // Sauvegarde persistante des souscriptions
+  const saveSubscriptionsToStorage = (
+    updatedSubs: Array<{
+      studentId: string;
+      pavilion: string;
+      roomNumber: string;
+      monthlyRate: number;
+    }>
+  ) => {
+    setCustomSubscriptions(updatedSubs);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(updatedSubs));
+        window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'boarding_subscription_updated' } }));
+      } catch (e) {}
     }
   };
 
-  // Pensionnaires réels de l'internat
+  // Construction de la liste des pensionnaires
   const boarders = useMemo(() => {
-    return students
-      .filter((stu, idx) => {
-        return customBoardingMap[stu.id] || idx % 3 === 0;
-      })
-      .map((stu, idx) => {
-        const custom = customBoardingMap[stu.id];
-        const isBoy = stu.gender === 'male';
-        const defaultPavilion = isBoy ? 'Pavillon A (Garçons)' : 'Pavillon B (Filles)';
-        const defaultRoom = isBoy ? `Chambre G-${101 + (idx % 8)}` : `Chambre F-${201 + (idx % 8)}`;
+    const customMap = new Map(customSubscriptions.map((cs) => [cs.studentId, cs]));
 
-        const pavilion = custom?.pavilion || defaultPavilion;
-        const room = custom?.room || defaultRoom;
-        const monthlyRate = custom?.rate || 50000;
+    return students.map((student, idx) => {
+      const custom = customMap.get(student.id);
+      const isBoarder = !!custom || idx % 4 === 0; // Démo par défaut si non customisé
+      const pavilion = custom ? custom.pavilion : student.gender === 'F' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
+      const roomNumber = custom ? custom.roomNumber : `Chambre ${101 + (idx % 25)}`;
+      const monthlyRate = custom ? custom.monthlyRate : 50000;
 
-        // Mois payés par défaut si non enregistrés
-        const monthsState = monthlyPayments[stu.id] || {
-          Septembre: true,
-          Octobre: true,
-          Novembre: idx % 2 === 0,
-          Décembre: idx % 3 === 0,
-          Janvier: false,
-          Février: false,
-          Mars: false,
-          Avril: false,
-          Mai: false,
-          Juin: false,
-        };
+      const studentMonths = monthlyPayments[student.id] || {};
+      const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
+      const totalPaid = paidMonthsCount * monthlyRate;
+      const totalDue = monthlyRate * 9; // Strictement 9 mois
+      const remainingBalance = Math.max(0, totalDue - totalPaid);
 
-        const paidMonths = Object.keys(monthsState).filter((m) => monthsState[m]);
-        const paidMonthsCount = paidMonths.length;
-        const totalPaidAmount = paidMonthsCount * monthlyRate;
+      return {
+        student,
+        isBoarder,
+        pavilion,
+        roomNumber,
+        monthlyRate,
+        paidMonthsCount,
+        totalPaid,
+        totalDue,
+        remainingBalance,
+        isUpToDate: remainingBalance === 0,
+      };
+    }).filter((b) => b.isBoarder);
+  }, [students, customSubscriptions, monthlyPayments]);
 
-        return {
-          ...stu,
-          pavilion,
-          roomNumber: room,
-          monthlyRate,
-          monthsState,
-          paidMonths,
-          paidMonthsCount,
-          totalPaidAmount,
-        };
-      });
-  }, [students, customBoardingMap, monthlyPayments]);
+  // Filtrage des pensionnaires pour la navigation
+  const filteredBoarders = useMemo(() => {
+    return boarders.filter((b) => {
+      const matchSearch =
+        searchQuery === '' ||
+        `${b.student.firstName} ${b.student.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.student.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        b.student.className.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // ═══════════════════════════════════════════════════════════════
-  // ÉTAT DU FORMULAIRE ET REÇU INTERACTIF EN DIRECT
-  // ═══════════════════════════════════════════════════════════════
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
+      const matchPavilion =
+        selectedPavilionFilter === 'all' ||
+        (selectedPavilionFilter === 'garcons' && b.pavilion.includes('Garçons')) ||
+        (selectedPavilionFilter === 'filles' && b.pavilion.includes('Filles'));
 
-  // Formulaire d'encaissement et de coordonnées de l'élève actif
-  const [formFullName, setFormFullName] = useState('');
+      return matchSearch && matchPavilion;
+    });
+  }, [boarders, searchQuery, selectedPavilionFilter]);
+
+  // Index du pensionnaire actuellement actif dans le reçu
+  const [activeBoarderIndex, setActiveBoarderIndex] = useState(0);
+
+  // Pensionnaire actif
+  const activeBoarder = useMemo(() => {
+    if (filteredBoarders.length === 0) return boarders[0] || null;
+    const safeIndex = Math.min(Math.max(0, activeBoarderIndex), filteredBoarders.length - 1);
+    return filteredBoarders[safeIndex] || filteredBoarders[0];
+  }, [filteredBoarders, activeBoarderIndex]);
+
+  // États du formulaire interactif en direct
+  const [formStudentName, setFormStudentName] = useState('');
   const [formMatricule, setFormMatricule] = useState('');
-  const [formStudentNumber, setFormStudentNumber] = useState('ID-001');
-  const [formGrade, setFormGrade] = useState('6ème');
-  const [formGender, setFormGender] = useState<'male' | 'female'>('male');
+  const [formClassName, setFormClassName] = useState('');
+  const [formGender, setFormGender] = useState<'M' | 'F'>('M');
   const [formPavilion, setFormPavilion] = useState('Pavillon A (Garçons)');
-  const [formRoom, setFormRoom] = useState('Chambre G-101');
-  const [formPhone, setFormPhone] = useState('+225 07 48 92 11 00');
+  const [formRoom, setFormRoom] = useState('');
+  const [formParentContact, setFormParentContact] = useState('');
   const [formMonthlyRate, setFormMonthlyRate] = useState<number>(50000);
-  const [formPaymentDate, setFormPaymentDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-  const [formPaymentMethod, setFormPaymentMethod] = useState<
-    'Espèces' | 'Wave' | 'Orange Money' | 'MTN Money' | 'Moov Money' | 'Virement' | 'Chèque'
-  >('Espèces');
-  const [formMonthsState, setFormMonthsState] = useState<Record<string, boolean>>({
-    Septembre: true,
-    Octobre: true,
-    Novembre: false,
-    Décembre: false,
-    Janvier: false,
-    Février: false,
-    Mars: false,
-    Avril: false,
-    Mai: false,
-    Juin: false,
-  });
+  const [formPaymentDate, setFormPaymentDate] = useState('03/09/2026');
+  const [formPaymentMethod, setFormPaymentMethod] = useState('Espèces');
+  const [formNotes, setFormNotes] = useState('');
+  const [activeMonthsChecked, setActiveMonthsChecked] = useState<Record<string, boolean>>({});
 
-  // Initialiser le premier élève au chargement
+  // Synchronisation du formulaire quand le pensionnaire actif change
   useEffect(() => {
-    if (boarders.length > 0 && !selectedStudentId) {
-      loadStudentIntoForm(boarders[0]);
+    if (activeBoarder) {
+      setFormStudentName(`${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim());
+      setFormMatricule(activeBoarder.student.studentNumber);
+      setFormClassName(activeBoarder.student.className);
+      setFormGender(activeBoarder.student.gender);
+      setFormPavilion(activeBoarder.pavilion);
+      setFormRoom(activeBoarder.roomNumber);
+      setFormParentContact(activeBoarder.student.guardianContact || '+225 07 00 00 00 00');
+      setFormMonthlyRate(activeBoarder.monthlyRate || 50000);
+
+      const months = monthlyPayments[activeBoarder.student.id] || {};
+      setActiveMonthsChecked(months);
     }
-  }, [boarders, selectedStudentId]);
+  }, [activeBoarder, monthlyPayments]);
 
-  // Fonction pour charger un élève dans le formulaire et le reçu
-  const loadStudentIntoForm = (boarder: any) => {
-    if (!boarder) return;
-    setSelectedStudentId(boarder.id);
-    setFormFullName(boarder.fullName || '');
-    setFormMatricule(boarder.matricule || 'MAT-2026-001');
-    setFormStudentNumber(boarder.studentNumber || 'ID-001');
-    setFormGrade(boarder.grade || '6ème');
-    setFormGender(boarder.gender === 'female' ? 'female' : 'male');
-    setFormPavilion(boarder.pavilion || 'Pavillon A (Garçons)');
-    setFormRoom(boarder.roomNumber || 'Chambre G-101');
-    setFormPhone(boarder.whatsappPhone || boarder.guardianPhone || '+225 07 48 92 11 00');
-    setFormMonthlyRate(boarder.monthlyRate || 50000);
-    setFormMonthsState(
-      boarder.monthsState || {
-        Septembre: true,
-        Octobre: true,
-        Novembre: false,
-        Décembre: false,
-        Janvier: false,
-        Février: false,
-        Mars: false,
-        Avril: false,
-        Mai: false,
-        Juin: false,
-      }
-    );
-  };
+  // Calculs financiers réactifs (STRICTEMENT 9 MOIS)
+  const activePaidMonthsCount = useMemo(() => {
+    return MONTHS_LIST.filter((m) => activeMonthsChecked[m]).length;
+  }, [activeMonthsChecked]);
 
-  // Navigation Suivant / Précédent
-  const handleNavigateId = (direction: 'prev' | 'next') => {
-    if (boarders.length === 0) return;
-    const currentIndex = boarders.findIndex((b) => b.id === selectedStudentId);
-    if (currentIndex === -1) {
-      loadStudentIntoForm(boarders[0]);
-      return;
-    }
+  const activeTotalCollected = useMemo(() => {
+    return activePaidMonthsCount * formMonthlyRate;
+  }, [activePaidMonthsCount, formMonthlyRate]);
 
-    let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    if (nextIndex < 0) nextIndex = boarders.length - 1;
-    if (nextIndex >= boarders.length) nextIndex = 0;
+  const activeTotalAnnualExigible = useMemo(() => {
+    return formMonthlyRate * 9; // 9 mois
+  }, [formMonthlyRate]);
 
-    loadStudentIntoForm(boarders[nextIndex]);
-  };
+  const activeRemainingBalance = useMemo(() => {
+    return Math.max(0, activeTotalAnnualExigible - activeTotalCollected);
+  }, [activeTotalAnnualExigible, activeTotalCollected]);
 
-  // Basculer un mois dans le formulaire interactif
-  const handleToggleFormMonth = (month: string) => {
-    setFormMonthsState((prev) => ({
+  // Basculer un mois (cocher/décocher)
+  const handleToggleMonth = (month: string) => {
+    setActiveMonthsChecked((prev) => ({
       ...prev,
       [month]: !prev[month],
     }));
   };
 
-  // Calculs en temps réel pour l'élève actif
-  const activePaidMonths = useMemo(() => {
-    return Object.keys(formMonthsState).filter((m) => formMonthsState[m]);
-  }, [formMonthsState]);
-
-  const activeUnpaidMonths = useMemo(() => {
-    return MONTHS_LIST.filter((m) => !formMonthsState[m]);
-  }, [formMonthsState]);
-
-  const activeTotalPaidAmount = useMemo(() => {
-    return activePaidMonths.length * formMonthlyRate;
-  }, [activePaidMonths, formMonthlyRate]);
-
-  const activeTotalAnnualExigible = useMemo(() => {
-    return formMonthlyRate * 10;
-  }, [formMonthlyRate]);
-
-  const activeAnnualRemaining = useMemo(() => {
-    return Math.max(0, activeTotalAnnualExigible - activeTotalPaidAmount);
-  }, [activeTotalAnnualExigible, activeTotalPaidAmount]);
-
-  // Enregistrement des coordonnées & quittance
-  const handleSaveActiveReceipt = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!selectedStudentId) {
-      alert('Veuillez sélectionner un élève ou créer une nouvelle admission.');
-      return;
-    }
-
-    const newPayments = {
-      ...monthlyPayments,
-      [selectedStudentId]: formMonthsState,
-    };
-
-    const newBoardingMap = {
-      ...customBoardingMap,
-      [selectedStudentId]: {
-        room: formRoom,
-        pavilion: formPavilion,
-        rate: formMonthlyRate,
-      },
-    };
-
-    setMonthlyPayments(newPayments);
-    setCustomBoardingMap(newBoardingMap);
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_PAYMENTS_KEY, JSON.stringify(newPayments));
-        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(newBoardingMap));
-      } catch (err) {}
-    }
-
-    setToastMessage(
-      `✓ Reçu officiel et cotisations d’internat actualisés avec succès pour ${formFullName} (${formStudentNumber}) !`
-    );
-    setTimeout(() => setToastMessage(null), 5000);
+  // Cocher tous les 9 mois
+  const handleCheckAllMonths = () => {
+    const allChecked: Record<string, boolean> = {};
+    MONTHS_LIST.forEach((m) => {
+      allChecked[m] = true;
+    });
+    setActiveMonthsChecked(allChecked);
   };
 
-  // Impression ciblée du Reçu Officiel A4
+  // Décocher tous les mois
+  const handleUncheckAllMonths = () => {
+    setActiveMonthsChecked({});
+  };
+
+  // Enregistrement des modifications du reçu
+  const handleSaveReceipt = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!activeBoarder) return;
+
+    // Sauvegarder les mois payés
+    const updatedPayments = {
+      ...monthlyPayments,
+      [activeBoarder.student.id]: activeMonthsChecked,
+    };
+    savePaymentsToStorage(updatedPayments);
+
+    // Sauvegarder les modifications du pensionnaire (chambre, pavillon, tarif)
+    const existingIndex = customSubscriptions.findIndex((s) => s.studentId === activeBoarder.student.id);
+    let updatedSubs = [...customSubscriptions];
+    if (existingIndex >= 0) {
+      updatedSubs[existingIndex] = {
+        studentId: activeBoarder.student.id,
+        pavilion: formPavilion,
+        roomNumber: formRoom,
+        monthlyRate: formMonthlyRate,
+      };
+    } else {
+      updatedSubs.push({
+        studentId: activeBoarder.student.id,
+        pavilion: formPavilion,
+        roomNumber: formRoom,
+        monthlyRate: formMonthlyRate,
+      });
+    }
+    saveSubscriptionsToStorage(updatedSubs);
+
+    setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount} / 9 mois réglés).`);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  // Navigation Reçu Précédent / Suivant
+  const handlePrevReceipt = () => {
+    if (filteredBoarders.length === 0) return;
+    setActiveBoarderIndex((prev) => (prev > 0 ? prev - 1 : filteredBoarders.length - 1));
+  };
+
+  const handleNextReceipt = () => {
+    if (filteredBoarders.length === 0) return;
+    setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
+  };
+
+  // Impression A4
   const handlePrintReceipt = () => {
     window.print();
   };
 
-  // Partage WhatsApp du Reçu d'Internat
+  // Partage WhatsApp
   const handleShareWhatsApp = () => {
-    const cleanPhone = formPhone.replace(/[^0-9]/g, '');
-    const receiptRef = `REC-INTERN-2026-${formMatricule || '001'}`;
-    const paidMonthsStr = activePaidMonths.length > 0 ? activePaidMonths.join(', ') : 'Aucun mois validé';
-    const unpaidMonthsStr = activeUnpaidMonths.length > 0 ? activeUnpaidMonths.join(', ') : 'Année entièrement soldée ✓';
+    if (!activeBoarder) return;
+    const paidMonthsNames = MONTHS_LIST.filter((m) => activeMonthsChecked[m]).join(', ') || 'Aucun';
+    const message = `*QUITTANCE DE PENSIONNAT & INTERNAT — ${currentSchool.shortName || currentSchool.name}*\n` +
+      `--------------------------------------\n` +
+      `👤 *Élève* : ${formStudentName} (${formMatricule})\n` +
+      `🏫 *Classe* : ${formClassName}\n` +
+      `🛏️ *Résidence* : ${formPavilion} — ${formRoom}\n` +
+      `📅 *Date* : ${formPaymentDate}\n` +
+      `💳 *Règlement* : ${formPaymentMethod}\n` +
+      `--------------------------------------\n` +
+      `✅ *Mois Réglés (sur 9)* : ${paidMonthsNames}\n` +
+      `💰 *Total Versé* : ${formatFCFA(activeTotalCollected)}\n` +
+      `⏳ *Solde Restant Annuel* : ${formatFCFA(activeRemainingBalance)}\n` +
+      `--------------------------------------\n` +
+      `_Document officiel certifié par l'Économe & l'Intendance de l'établissement._`;
 
-    const message =
-      `*REÇU OFFICIEL DE PAIEMENT D'INTERNAT & PENSIONNAT — ${currentSchool.name.toUpperCase()}*\n\n` +
-      `Bonjour Chers Parents de *${formFullName}* (${formGrade}),\n\n` +
-      `Nous vous délivrons la confirmation officielle du règlement des cotisations d'internat et d'hébergement scolaire :\n\n` +
-      `📄 *Réf Quittance :* ${receiptRef}\n` +
-      `👤 *Élève :* ${formFullName} (Matricule : ${formMatricule} • ${formStudentNumber})\n` +
-      `🏫 *Classe :* ${formGrade}\n` +
-      `🛏️ *Hébergement :* ${formPavilion} — ${formRoom}\n` +
-      `📅 *Mois d'Internat Réglés :* ${paidMonthsStr} (${activePaidMonths.length}/10 mois)\n` +
-      `⏳ *Mois Restants :* ${unpaidMonthsStr}\n` +
-      `💰 *Tarif Mensuel :* ${formatFCFA(formMonthlyRate)} / mois\n` +
-      `💵 *TOTAL ENCAISSÉ :* ${formatFCFA(activeTotalPaidAmount)}\n` +
-      `💳 *Mode de Règlement :* ${formPaymentMethod}\n` +
-      `🗓️ *Date d'émission :* ${formatDate(formPaymentDate)}\n\n` +
-      `_« ${currentSchool.motto || 'Discipline • Rigueur • Réussite'} »_\n` +
-      `Merci pour votre confiance. — *Intendance & Direction ${currentSchool.shortName || 'EPC MANOI'}*`;
-
-    const encoded = encodeURIComponent(message);
-    const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
+    const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
 
-  // Filtrage du tableau des pensionnaires
-  const filteredBoarders = useMemo(() => {
-    return boarders.filter((b) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        q === '' ||
-        b.fullName.toLowerCase().includes(q) ||
-        b.matricule.toLowerCase().includes(q) ||
-        b.studentNumber.toLowerCase().includes(q) ||
-        b.roomNumber.toLowerCase().includes(q);
-
-      const matchesClass =
-        selectedClass === 'Toutes les classes' ||
-        b.grade.toLowerCase() === selectedClass.toLowerCase();
-
-      const matchesPavilion =
-        selectedPavilion === 'all' ||
-        b.pavilion.toLowerCase().includes(selectedPavilion.toLowerCase());
-
-      return matchesSearch && matchesClass && matchesPavilion;
-    });
-  }, [boarders, searchQuery, selectedClass, selectedPavilion]);
-
-  // Statistiques Internat (3 Cartes KPI du haut)
-  const stats = useMemo(() => {
-    const totalBoarders = boarders.length;
-    const girls = boarders.filter((b) => b.gender === 'female').length;
-    const boys = boarders.filter((b) => b.gender === 'male').length;
-
-    const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaidAmount, 0);
-    const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 10, 0);
-    const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
-
-    return {
-      totalBoarders,
-      girls,
-      boys,
-      totalCollected,
-      totalExigible,
-      recoveryRate,
-    };
-  }, [boarders]);
-
-  // Enregistrer une nouvelle admission internat depuis la modale
-  const handleCreateAdmission = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubStudentId) {
-      alert('Veuillez sélectionner un élève.');
-      return;
-    }
-
-    const rate = parseInt(newSubRate, 10) || 50000;
-    const nextBoardingMap = {
-      ...customBoardingMap,
-      [newSubStudentId]: {
-        room: newSubRoom || 'Chambre G-105',
-        pavilion: newSubPavilion,
-        rate,
-      },
-    };
-
-    setCustomBoardingMap(nextBoardingMap);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(nextBoardingMap));
-      } catch (e) {}
-    }
-
-    const stu = students.find((s) => s.id === newSubStudentId);
-    if (stu) {
-      loadStudentIntoForm({
-        ...stu,
-        pavilion: newSubPavilion,
-        roomNumber: newSubRoom || 'Chambre G-105',
-        monthlyRate: rate,
-      });
-    }
-
-    setToastMessage(`✓ Nouvelle admission à l’internat validée pour ${stu ? stu.fullName : 'l’élève'} !`);
-    setTimeout(() => setToastMessage(null), 5000);
-    setIsNewAdmissionModalOpen(false);
-    setNewSubStudentId('');
-    setNewSubRoom('');
-  };
-
-  // ═══════════════════════════════════════════════════════════════
-  // RENDU DU REÇU OFFICIEL STRICT (EN-TÊTE HIÉRARCHIQUE SOIGNÉ)
-  // ═══════════════════════════════════════════════════════════════
-  const renderReceiptSlip = (copyLabel?: string) => {
-    return (
-      <div className="bg-white rounded-2xl border-2 border-slate-900 shadow-sm relative overflow-hidden p-4 sm:p-5 space-y-3.5">
-        {/* CADRE EN-TÊTE OFFICIEL : Respect strict de l'ordre d'affichage demandé par Mouhamed */}
-        <div className="relative z-10 border-2 border-slate-900 rounded-xl bg-white shadow-2xs p-3">
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            {/* 1. Logo de l'École (À gauche) */}
-            <div className="shrink-0 text-center flex items-center justify-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    currentSchool.logoUrl ||
-                    'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200&auto=format&fit=crop&q=80'
-                  }
-                  alt={currentSchool.name}
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
-              </div>
-            </div>
-
-            {/* 2. Centre : Nom école -> Sigle -> Devise -> Slogan -> Code & Numéro */}
-            <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
-              {/* Ligne 1 : Nom de l'école */}
-              <h2
-                className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm md:text-base block w-full leading-tight break-words"
-                title={currentSchool.name}
-              >
-                {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
-              </h2>
-
-              {/* Ligne 2 : Sigle de l'école */}
-              <p className="font-extrabold text-emerald-800 text-[11px] sm:text-xs tracking-wide">
-                ({currentSchool.shortName || 'EPC MANOI'})
-              </p>
-
-              {/* Ligne 3 : Devise de la discipline */}
-              <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
-                « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
-              </p>
-
-              {/* Ligne 4 : Slogan de l'école */}
-              {currentSchool.slogan && (
-                <p className="font-medium text-amber-700 italic text-[9px] sm:text-[10px] truncate">
-                  ✦ {currentSchool.slogan}
-                </p>
-              )}
-
-              {/* Ligne 5 : Code Établissement & Numéro de Téléphone */}
-              <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px] truncate">
-                Code Établissement : {currentSchool.ministryCode || '321119'} • Tél :{' '}
-                {currentSchool.phone || currentSchool.whatsappPhone || '+225 01 02 03 04 05'}
-              </p>
-              <p className="text-slate-500 font-medium leading-tight text-[9px] truncate">
-                {currentSchool.city || 'Abidjan'} — {currentSchool.country || 'Côte d’Ivoire'}
-              </p>
-            </div>
-
-            {/* 3. Emblème National / Sceau Officiel (À droite) */}
-            <div className="shrink-0 text-center flex items-center justify-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    currentSchool.countryEmblemUrl ||
-                    'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'
-                  }
-                  alt="Emblème National"
-                  className="max-w-full max-h-full object-contain"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* BANDEAU OFFICIEL : QUITTANCE DE PAIEMENT D'INTERNAT */}
-        <div className="relative z-10 bg-slate-950 text-white rounded-xl flex items-center justify-between shadow-xs px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <ReceiptText className="text-emerald-400 shrink-0 w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="font-extrabold tracking-wider uppercase font-heading text-xs sm:text-sm md:text-base">
-              QUITTANCE OFFICIELLE D&apos;INTERNAT
-            </span>
-            {copyLabel && (
-              <span className="px-2 py-0.5 rounded font-mono font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-500/40 text-[9.5px] sm:text-xs">
-                {copyLabel}
-              </span>
-            )}
-          </div>
-          <span className="font-mono font-extrabold text-emerald-300 text-xs sm:text-sm">
-            REC-INTERN-2026-{formMatricule || '001'}
-          </span>
-        </div>
-
-        {/* Détails Pensionnaire */}
-        <div className="relative z-10 grid grid-cols-2 rounded-xl bg-slate-50/90 border border-slate-200 gap-2.5 sm:gap-3 p-3.5 text-xs sm:text-sm">
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-bold">
-              Identifiant & Matricule :
-            </span>
-            <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
-              {formStudentNumber} • {formMatricule}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-bold">
-              Année Scolaire & Date :
-            </span>
-            <span className="font-extrabold text-slate-950 text-xs sm:text-sm">
-              {currentSchool.academicYear} • {formatDate(formPaymentDate)}
-            </span>
-          </div>
-
-          <div className="col-span-2 pt-1 border-t border-slate-200/80 flex items-center justify-between flex-wrap gap-1">
-            <div>
-              <span className="text-[10px] text-slate-500 block uppercase font-bold">
-                Pensionnaire Résident :
-              </span>
-              <span className="font-black text-slate-950 uppercase font-heading text-sm sm:text-base">
-                {formFullName || 'NOM PRÉNOM'}
-              </span>{' '}
-              <span className="ml-1 text-[11px] font-bold text-slate-700">
-                ({formGender === 'female' ? '♀ Fille' : '♂ Garçon'})
-              </span>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[10px] text-slate-500 block uppercase font-bold">
-                Classe & Hébergement :
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-black bg-purple-50 text-purple-950 border border-purple-300 shadow-2xs">
-                {formGrade} • {formRoom}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-bold">
-              Pavillon Résidentiel :
-            </span>
-            <span className="font-bold text-slate-900 text-xs">
-              {formPavilion}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-bold">
-              Parent / WhatsApp :
-            </span>
-            <span className="font-mono font-bold text-emerald-800 text-xs">
-              {formPhone}
-            </span>
-          </div>
-        </div>
-
-        {/* Grille du Décompte & Mois Réglés */}
-        <div className="relative z-10 border border-slate-300 rounded-xl overflow-hidden shadow-2xs bg-white text-xs">
-          <div className="bg-slate-100/90 p-2.5 border-b border-slate-300 flex items-center justify-between font-bold text-[11px] uppercase tracking-wider text-slate-700">
-            <span>Désignation des Prestations</span>
-            <span>Montant en FCFA</span>
-          </div>
-
-          <div className="p-3 space-y-2">
-            <div className="flex items-center justify-between font-semibold text-slate-800">
-              <span>Frais d&apos;Hébergement, Dortoir & Restauration ({activePaidMonths.length} mois réglés) :</span>
-              <span className="font-mono font-bold text-slate-950">{formatFCFA(activeTotalPaidAmount)}</span>
-            </div>
-
-            {/* Badges des mois réglés */}
-            <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 space-y-1.5">
-              <span className="text-[10px] font-bold uppercase text-slate-500 block">
-                Détail des Mois Couverts (Septembre → Juin) :
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {MONTHS_LIST.map((m) => {
-                  const isPaid = !!formMonthsState[m];
-                  return (
-                    <span
-                      key={m}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                        isPaid
-                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                          : 'bg-slate-100 text-slate-400 border-slate-200 line-through'
-                      }`}
-                    >
-                      {m} {isPaid ? '✓' : ''}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 text-[11px] text-slate-600">
-              <span>Tarif Mensuel d&apos;Internat :</span>
-              <span className="font-mono font-bold text-slate-800">{formatFCFA(formMonthlyRate)} / mois</span>
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] text-slate-600">
-              <span>Mode de Règlement Retenu :</span>
-              <span className="font-bold text-slate-900">{formPaymentMethod}</span>
-            </div>
-          </div>
-
-          {/* Grand Total Encaissé & Reste Annuel */}
-          <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-teal-50/60 to-slate-50 border-t border-slate-300 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-emerald-900 block">
-                Montant Total Encaissé
-              </span>
-              <span className="text-xl sm:text-2xl font-extrabold font-heading text-emerald-950 tracking-tight">
-                {formatFCFA(activeTotalPaidAmount)}
-              </span>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                Reste Annuel pour Solder
-              </span>
-              <span className={`font-mono font-bold text-xs sm:text-sm ${activeAnnualRemaining > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
-                {activeAnnualRemaining > 0 ? formatFCFA(activeAnnualRemaining) : '0 FCFA (Soldé ✓)'}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pied de Quittance : Mention légale & Double signature */}
-        <div className="relative z-10 pt-2 border-t border-slate-200 text-[10px] space-y-3">
-          <p className="text-center italic text-slate-500 font-medium">
-            « Tout versement en caisse donne droit à un reçu numéroté immédiat. Aucun remboursement après encaissement. »
-          </p>
-
-          <div className="grid grid-cols-2 gap-4 pt-1">
-            <div className="text-center p-2 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="font-bold text-slate-700 block text-[10px] uppercase">
-                Signature du Parent / Déposant
-              </span>
-              <div className="h-10 sm:h-12 flex items-center justify-center text-slate-400 italic text-[9px]">
-                (Lu et approuvé)
-              </div>
-            </div>
-
-            <div className="text-center p-2 rounded-xl bg-slate-50 border border-slate-200/80">
-              <span className="font-bold text-emerald-900 block text-[10px] uppercase">
-                L&apos;Économe / Intendant Internat
-              </span>
-              <div className="h-10 sm:h-12 flex items-center justify-center font-bold text-emerald-800 font-mono text-[9.5px]">
-                [ Cachet Officiel {currentSchool.shortName || 'EPC'} ]
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Statistiques Globales KPI (Sur 9 Mois)
+  const totalBoarders = boarders.length;
+  const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
+  const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
+  const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
+  const girlsCount = boarders.filter((b) => b.student.gender === 'F').length;
+  const boysCount = boarders.filter((b) => b.student.gender === 'M').length;
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. Header principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
-              Internat & Pensionnat Scolaire
-            </h1>
-            <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
-              {currentSchool.academicYear}
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Gestion des dortoirs, coordonnées pensionnaires, quittance automatique et cotisations mensuelles — {currentSchool.name}
-          </p>
-        </div>
-
-        {/* Actions rapides */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handlePrintReceipt}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-            title="Imprimer le reçu officiel sur une page A4"
-          >
-            <Printer className="w-4 h-4 text-emerald-600" />
-            <span>Imprimer Reçu</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleShareWhatsApp}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer"
-            title="Envoyer la quittance au parent sur WhatsApp"
-          >
-            <Share2 className="w-4 h-4 text-emerald-600" />
-            <span>WhatsApp</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsRegisterModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-          >
-            <FolderOpen className="w-4 h-4 text-purple-600" />
-            <span>Registre Dortoirs</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setNewSubStudentId('');
-              setNewSubRoom('');
-              setNewSubPavilion('Pavillon A (Garçons)');
-              setNewSubRate('50000');
-              setIsNewAdmissionModalOpen(true);
-            }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Nouvelle admission</span>
-          </button>
-        </div>
-      </div>
-
+    <div className="space-y-6 sm:space-y-7 animate-fadeIn">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-          <button type="button" onClick={() => setToastMessage(null)} className="text-emerald-700 font-bold ml-4 cursor-pointer">
-            ✕
+        <div className="fixed bottom-5 right-5 z-50 bg-emerald-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-emerald-500 animate-in slide-in-from-bottom-5">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-white/70 hover:text-white ml-2 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* 2. LES 3 CARTES KPI INTERNAT DU HAUT */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 print:hidden">
-        {/* Card 1 : Total Pensionnaires */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 shadow-xs">
-                <BedDouble className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 font-sans truncate">
-                Total Pensionnaires
+      {/* ═══════════════════════════════════════════════════════════════
+          SECTION 1 : LES 3 CARTES STATISTIQUES KPI PANDHOWAN
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        {/* KPI 1: Effectif Pensionnaires */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <BedDouble className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
+                Pensionnaires Inscrits
               </h3>
-            </div>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {stats.totalBoarders} élèves
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                sur {students.length}
-              </span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              <span className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 border border-pink-200 font-semibold text-[11px]">
-                ♀ {stats.girls} Filles
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold text-[11px]">
-                ♂ {stats.boys} Garçons
-              </span>
+              <p className="text-[11px] text-slate-400">Année scolaire 2026-2027 (9 mois)</p>
             </div>
           </div>
-          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>Régime</span>
-            <span className="font-semibold text-slate-800">Pension complète 7j/7</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+              {totalBoarders}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Actifs
+            </span>
           </div>
-        </div>
-
-        {/* Card 2 : Recouvrement Internat */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0 shadow-xs">
-                <Home className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 font-sans truncate">
-                Recouvrement Pensionnat
-              </h3>
-            </div>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-teal-900">
-                {formatFCFA(stats.totalCollected)}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Cotisations mensuelles perçues à ce jour
-            </p>
-          </div>
-          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-teal-700 font-medium flex items-center justify-between">
-            <span>Taux de recouvrement</span>
-            <span className="font-bold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-              {stats.recoveryRate}% perçu
+          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 border border-pink-200/70 font-semibold text-[11px]">
+              ♀ {girlsCount} Filles
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200/70 font-semibold text-[11px]">
+              ♂ {boysCount} Garçons
             </span>
           </div>
         </div>
 
-        {/* Card 3 : Occupation des Pavillons */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-xs">
-                <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-500 font-sans truncate">
+        {/* KPI 2: Recouvrement Total (Sur 9 Mois) */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
+                Recouvrement Pensionnat
+              </h3>
+              <p className="text-[11px] text-slate-400">Cumul réel encaissé sur 9 mois</p>
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading">
+              {formatFCFA(totalCollected)}
+            </span>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span>Taux de recouvrement :</span>
+            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
+              {recoveryRate}%
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 3: Capacité & Occupation */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all sm:col-span-2 lg:col-span-1">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 shadow-2xs">
+              <Home className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
                 Occupation des Dortoirs
               </h3>
+              <p className="text-[11px] text-slate-400">Pavillons A (Garçons) & B (Filles)</p>
             </div>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-emerald-950">
-                {stats.totalBoarders} / 30 lits
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                Pavillon A & B
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              {Math.max(0, 30 - stats.totalBoarders)} lits disponibles pour nouvelles admissions
-            </p>
           </div>
-          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-            <span>Encadrement</span>
-            <span className="font-semibold text-emerald-700">Surveillance 24h/24</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+              {totalBoarders} / 200
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+              Places
+            </span>
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span>Disponibles :</span>
+            <span className="font-bold text-slate-900">{Math.max(0, 200 - totalBoarders)} lits</span>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* 3. SECTION PRINCIPALE 2 COLONNES (FORMULAIRE & REÇU EN DIRECT) */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ================= COLONNE GAUCHE : FORMULAIRE DE SAISIE (6 COLS) ================= */}
-        <div className="lg:col-span-6 bg-white rounded-3xl border border-slate-200/80 shadow-sm p-5 sm:p-7 space-y-5 print:hidden">
-          {/* EN-TÊTE DU FORMULAIRE AVEC SÉLECTEUR RAPIDE D'ID */}
-          <div className="border-b border-slate-100 pb-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-                  <Edit3 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 font-heading">
-                    Coordonnées & Quittance Internat
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Saisissez les coordonnées ci-dessous, le reçu se met à jour en direct
-                  </p>
-                </div>
-              </div>
-
-              {/* BOUTONS NAVIGATION RAPIDE */}
-              <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleNavigateId('prev')}
-                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all inline-flex items-center gap-1 cursor-pointer"
-                  title="Voir le pensionnaire précédent"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span className="hidden sm:inline">Précédent</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleNavigateId('next')}
-                  className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all inline-flex items-center gap-1 cursor-pointer"
-                  title="Voir le pensionnaire suivant"
-                >
-                  <span className="hidden sm:inline">Suivant</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsStudentPickerOpen(!isStudentPickerOpen)}
-                  className="px-3 py-1.5 rounded-xl font-mono font-extrabold text-xs transition-all border shadow-2xs inline-flex items-center gap-1.5 cursor-pointer bg-purple-50 text-purple-900 border-purple-300 ring-2 ring-purple-500/20"
-                  title="Rechercher parmi les pensionnaires"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>{formStudentNumber}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isStudentPickerOpen ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-            </div>
-
-            {/* SÉLECTEUR DÉROULANT RAPIDE DIRECTEMENT CLIQUABLE */}
-            <div className="p-3 bg-gradient-to-r from-purple-50/90 via-slate-50 to-emerald-50/80 rounded-2xl border-2 border-purple-300 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="direct-boarding-select" className="text-xs font-extrabold text-slate-900 font-heading flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span>Sélectionner le Pensionnaire Actif :</span>
-                </label>
-                <span className="text-[10px] font-bold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
-                  {boarders.length} pensionnaires
-                </span>
-              </div>
-
-              <select
-                id="direct-boarding-select"
-                value={selectedStudentId}
-                onChange={(e) => {
-                  const found = boarders.find((b) => b.id === e.target.value);
-                  if (found) loadStudentIntoForm(found);
-                }}
-                className="w-full px-3 py-2 rounded-xl bg-white border border-purple-300 text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs"
-              >
-                {boarders.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.studentNumber} • {b.matricule} — {b.fullName} ({b.grade} • {b.roomNumber})
-                  </option>
-                ))}
-              </select>
-            </div>
+      {/* ═══════════════════════════════════════════════════════════════
+          BANDEAU DE NAVIGATION & SÉLECTION RAPIDE DES REÇUS
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        {/* Recherche et Filtres */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Rechercher un pensionnaire (Nom, Matricule, Chambre)..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setActiveBoarderIndex(0);
+              }}
+              className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
+            />
           </div>
 
-          {/* FORMULAIRE DE SAISIE DES COORDONNÉES */}
-          <form onSubmit={handleSaveActiveReceipt} className="space-y-4 text-xs">
-            {/* 1. Nom, Prénom & Matricule */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  Nom & Prénom de l&apos;Élève *
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    required
-                    value={formFullName}
-                    onChange={(e) => setFormFullName(e.target.value)}
-                    placeholder="Ex : KOUADIO Emmanuel"
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white text-xs font-bold text-slate-900 transition-all"
-                  />
-                </div>
+          <div className="relative shrink-0">
+            <select
+              value={selectedPavilionFilter}
+              onChange={(e) => {
+                setSelectedPavilionFilter(e.target.value);
+                setActiveBoarderIndex(0);
+              }}
+              className="w-full sm:w-auto appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+            >
+              <option value="all">Tous les Pavillons</option>
+              <option value="garcons">Pavillon A (Garçons)</option>
+              <option value="filles">Pavillon B (Filles)</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+
+          {/* Sélecteur direct de pensionnaire */}
+          <div className="relative shrink-0 flex-1 sm:max-w-xs">
+            <select
+              value={activeBoarder?.student.id || ''}
+              onChange={(e) => {
+                const targetId = e.target.value;
+                const idx = filteredBoarders.findIndex((b) => b.student.id === targetId);
+                if (idx >= 0) setActiveBoarderIndex(idx);
+              }}
+              className="w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer truncate"
+            >
+              {filteredBoarders.map((b, idx) => (
+                <option key={b.student.id} value={b.student.id}>
+                  {idx + 1}. {b.student.firstName} {b.student.lastName} ({b.student.className} • {b.roomNumber})
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-emerald-700 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Boutons de Navigation Reçu Précédent / Suivant & Nouveau */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={handlePrevReceipt}
+              className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              title="Quittance Précédente"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-[11px] font-extrabold text-slate-700 px-2 font-heading">
+              {filteredBoarders.length > 0 ? `${activeBoarderIndex + 1} / ${filteredBoarders.length}` : '0 / 0'}
+            </span>
+            <button
+              type="button"
+              onClick={handleNextReceipt}
+              className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              title="Quittance Suivante"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsNewAdmissionModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-all cursor-pointer"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Nouvelle Admission</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          SECTION 2 : LE FORMULAIRE INTERACTIF & LE REÇU OFFICIEL (2 COLS)
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* COLONNE GAUCHE : FORMULAIRE DE SAISIE ET ENREGISTREMENT */}
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-6 shadow-xs space-y-5">
+          <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <Edit3 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading">
+                  Coordonnées & Modalités d&apos;Internat
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Modifiez les données, cochez les mois et cliquez sur enregistrer
+                </p>
+              </div>
+            </div>
+
+            {/* Badge état paiement */}
+            <span
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                activeRemainingBalance === 0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+            >
+              {activeRemainingBalance === 0 ? '✓ Soldé (9/9 mois)' : `${activePaidMonthsCount}/9 Mois Réglés`}
+            </span>
+          </div>
+
+          <form onSubmit={handleSaveReceipt} className="space-y-4">
+            {/* 1. Coordonnées de l'élève */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-bold text-slate-700">Nom & Prénom de l&apos;Élève *</label>
+                <input
+                  type="text"
+                  value={formStudentName}
+                  onChange={(e) => setFormStudentName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  Matricule National / Dossier *
-                </label>
+                <label className="text-xs font-bold text-slate-700">Matricule</label>
                 <input
                   type="text"
-                  required
                   value={formMatricule}
                   onChange={(e) => setFormMatricule(e.target.value)}
-                  placeholder="Ex : MAT-2026-0042"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono text-[11px]"
                 />
               </div>
-            </div>
-
-            {/* 2. Classe, Genre, Pavillon & Chambre */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Classe *</label>
-                <select
-                  value={formGrade}
-                  onChange={(e) => setFormGrade(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-900 cursor-pointer"
-                >
-                  {availableClasses.map((cls) => (
-                    <option key={cls} value={cls}>{cls}</option>
-                  ))}
-                </select>
-              </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Genre *</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormGender('male');
-                      setFormPavilion('Pavillon A (Garçons)');
-                    }}
-                    className={`py-2 text-center rounded-xl font-bold border transition-all cursor-pointer ${
-                      formGender === 'male'
-                        ? 'bg-blue-50 text-blue-900 border-blue-300 ring-1 ring-blue-500 shadow-2xs'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    ♂ Garçon
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormGender('female');
-                      setFormPavilion('Pavillon B (Filles)');
-                    }}
-                    className={`py-2 text-center rounded-xl font-bold border transition-all cursor-pointer ${
-                      formGender === 'female'
-                        ? 'bg-pink-50 text-pink-900 border-pink-300 ring-1 ring-pink-500 shadow-2xs'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
-                    }`}
-                  >
-                    ♀ Fille
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Chambre / Dortoir *</label>
+                <label className="text-xs font-bold text-slate-700">Classe</label>
                 <input
                   type="text"
-                  required
-                  value={formRoom}
-                  onChange={(e) => setFormRoom(e.target.value)}
-                  placeholder="Ex : Chambre G-102"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900 focus:bg-white"
+                  value={formClassName}
+                  onChange={(e) => setFormClassName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold"
                 />
               </div>
-            </div>
 
-            {/* 3. Pavillon & Coordonnées Parent */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Pavillon Résidentiel *</label>
+                <label className="text-xs font-bold text-slate-700">Pavillon d&apos;Hébergement</label>
                 <select
                   value={formPavilion}
                   onChange={(e) => setFormPavilion(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold text-slate-800 cursor-pointer"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold focus:outline-none"
                 >
                   <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
                   <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
+                  <option value="Pavillon Junior">Pavillon Junior (Maternelle/Primaire)</option>
+                  <option value="Pavillon Honneur">Pavillon Honneur (Collège 3ème)</option>
                 </select>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Téléphone WhatsApp Parent *</label>
+                <label className="text-xs font-bold text-slate-700">N° de Chambre / Lit</label>
+                <input
+                  type="text"
+                  value={formRoom}
+                  onChange={(e) => setFormRoom(e.target.value)}
+                  placeholder="Ex: Chambre 104"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-bold text-slate-700">Contact WhatsApp du Tuteur / Parent</label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    type="tel"
-                    required
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    placeholder="+225 07 48 92 11 00"
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 focus:bg-white"
+                    type="text"
+                    value={formParentContact}
+                    onChange={(e) => setFormParentContact(e.target.value)}
+                    className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono"
                   />
                 </div>
               </div>
             </div>
 
-            {/* 4. PARAMÈTRES FINANCIERS DE LA COTISATION */}
-            <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-emerald-600" />
-                  <span>Paramètres Financiers & Encaissement</span>
-                </span>
-                <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded">
-                  Tarif Modifiable
-                </span>
-              </div>
+            {/* 2. Paramètres Financiers & Modalités */}
+            <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/70 space-y-3">
+              <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Modalités de Règlement (FCFA)</span>
+              </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block text-[10px]">
-                    Frais Mensuels en FCFA *
-                  </label>
+                  <label className="text-[11px] font-bold text-slate-600">Frais Mensuels (FCFA) *</label>
                   <input
                     type="number"
-                    min="0"
-                    step="1000"
                     value={formMonthlyRate}
-                    onChange={(e) => setFormMonthlyRate(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500"
+                    onChange={(e) => setFormMonthlyRate(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 text-slate-900 font-extrabold"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block text-[10px]">
-                    Date du Versement *
-                  </label>
+                  <label className="text-[11px] font-bold text-slate-600">Date du Versement *</label>
                   <FrenchDateInput
                     value={formPaymentDate}
                     onChange={setFormPaymentDate}
+                    className="w-full text-xs"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block text-[10px]">
-                    Mode de Règlement *
-                  </label>
+                  <label className="text-[11px] font-bold text-slate-600">Mode de Règlement</label>
                   <select
                     value={formPaymentMethod}
-                    onChange={(e) => setFormPaymentMethod(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-semibold text-slate-800 cursor-pointer"
+                    onChange={(e) => setFormPaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 text-slate-800 font-semibold focus:outline-none"
                   >
                     <option value="Espèces">Espèces</option>
                     <option value="Wave">Wave</option>
                     <option value="Orange Money">Orange Money</option>
                     <option value="MTN Money">MTN Money</option>
                     <option value="Moov Money">Moov Money</option>
-                    <option value="Virement">Virement bancaire</option>
+                    <option value="Virement Bancaire">Virement Bancaire</option>
                     <option value="Chèque">Chèque</option>
                   </select>
                 </div>
               </div>
+            </div>
 
-              {/* GRILLE DES 10 MOIS SCOLAIRES (Septembre à Juin) */}
-              <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 text-[11px] block">
-                    Cocher les Mois d&apos;Hébergement Réglés :
-                  </span>
-                  <span className="text-[10px] font-extrabold text-emerald-800">
-                    {activePaidMonths.length} / 10 mois validés
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                  {MONTHS_LIST.map((month) => {
-                    const isPaid = !!formMonthsState[month];
-                    return (
-                      <button
-                        key={month}
-                        type="button"
-                        onClick={() => handleToggleFormMonth(month)}
-                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
-                          isPaid
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 font-medium'
-                        }`}
-                      >
-                        <span className="text-[11px] truncate w-full">{month}</span>
-                        <span className={`text-[9px] mt-0.5 ${isPaid ? 'text-emerald-100 font-bold' : 'text-slate-400'}`}>
-                          {isPaid ? 'Payé ✓' : 'En attente'}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {/* 3. Grille des 9 Mois Scolaires (Octobre à Juin) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-1">
+                <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Suivi des 9 Mois Scolaires (Octobre à Juin) :</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCheckAllMonths}
+                    className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                  >
+                    Tout Cocher
+                  </button>
+                  <span className="text-slate-300">•</span>
+                  <button
+                    type="button"
+                    onClick={handleUncheckAllMonths}
+                    className="text-[10px] font-bold text-slate-500 hover:underline cursor-pointer"
+                  >
+                    Décocher
+                  </button>
                 </div>
               </div>
 
-              {/* Récapitulatif Total & Reste de l'année */}
-              <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                    Total Encaissé ({activePaidMonths.length} mois)
-                  </span>
-                  <strong className="text-emerald-800 font-heading text-base font-extrabold">
-                    {formatFCFA(activeTotalPaidAmount)}
-                  </strong>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                    Reste Annuel à Payer
-                  </span>
-                  <strong className={`font-mono text-xs sm:text-sm font-bold ${activeAnnualRemaining > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
-                    {activeAnnualRemaining > 0 ? formatFCFA(activeAnnualRemaining) : '0 FCFA (Soldé ✓)'}
-                  </strong>
-                </div>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+                {MONTHS_LIST.map((month, idx) => {
+                  const isChecked = !!activeMonthsChecked[month];
+                  return (
+                    <button
+                      key={month}
+                      type="button"
+                      onClick={() => handleToggleMonth(month)}
+                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                        isChecked
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-2xs'
+                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <span className="text-xs truncate">{month}</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                          isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300'
+                        }`}
+                      >
+                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Bouton Principal de Validation */}
-            <div className="pt-2">
+            {/* Boutons d'Action & Sauvegarde */}
+            <div className="pt-2 flex items-center gap-3">
               <button
                 type="submit"
-                className="w-full py-3 px-6 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
-                <ShieldCheck className="w-4 h-4" />
+                <Save className="w-4 h-4" />
                 <span>Enregistrer & Actualiser la Quittance</span>
               </button>
             </div>
           </form>
         </div>
 
-        {/* ================= COLONNE DROITE : LE REÇU OFFICIEL EN DIRECT (6 COLS) ================= */}
-        <div className="lg:col-span-6 print:hidden">
-          {renderReceiptSlip()}
-        </div>
-      </div>
-
-      {/* ================= ZONE D'IMPRESSION OFFICIELLE A4 ================= */}
-      <div id="official-boarding-receipt-print" className="hidden print:block print:w-full">
-        {renderReceiptSlip('EXEMPLAIRE OFFICIEL DE CAISSE')}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* 4. TABLEAU DES PENSIONNAIRES (COLONNES ÉPURÉES & FRAIS FIXES) */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden print:hidden">
-        {/* Toolbar */}
-        <div className="p-3.5 sm:p-4 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center gap-2.5 sm:gap-3">
-          <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher pensionnaire, chambre, matricule..."
-              className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            />
-          </div>
-
-          <div className="relative flex-1 sm:flex-none min-w-[150px]">
-            <select
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 cursor-pointer"
-            >
-              <option value="Toutes les classes">Toutes les classes</option>
-              {availableClasses.map((cls) => (
-                <option key={cls} value={cls}>
-                  {cls}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          <div className="relative flex-1 sm:flex-none min-w-[170px]">
-            <select
-              value={selectedPavilion}
-              onChange={(e) => setSelectedPavilion(e.target.value)}
-              className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 cursor-pointer"
-            >
-              <option value="all">Tous les pavillons</option>
-              <option value="Garçons">Pavillon A (Garçons)</option>
-              <option value="Filles">Pavillon B (Filles)</option>
-            </select>
-            <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-
-          {(searchQuery || selectedClass !== 'Toutes les classes' || selectedPavilion !== 'all') && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedClass('Toutes les classes');
-                setSelectedPavilion('all');
-              }}
-              className="p-2 text-xs text-slate-500 hover:text-slate-800 rounded-xl inline-flex items-center gap-1 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Effacer</span>
-            </button>
-          )}
-        </div>
-
-        {/* BARRE DE DÉFILEMENT HORIZONTAL SYNCHRONISÉE EN HAUT */}
-        <div
-          ref={topScrollRef}
-          onScroll={handleTopScroll}
-          className="overflow-x-auto bg-slate-100/80 border-b border-slate-200 h-3"
-        >
-          <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
-        </div>
-
-        {/* Tableau épuré sans les colonnes superflues, frais bloqués en lecture seule */}
-        <div
-          ref={tableContainerRef}
-          onScroll={handleTableScroll}
-          className="overflow-x-auto"
-        >
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                <th className="py-3.5 pl-5 pr-3 w-10">
-                  <input
-                    type="checkbox"
-                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                  />
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">ID Élève</th>
-                <th className="py-3.5 px-3 whitespace-nowrap min-w-[180px]">Matricule & Élève</th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">Classe</th>
-                <th className="py-3.5 px-3 whitespace-nowrap">Pavillon & Chambre</th>
-                <th className="py-3.5 px-3 whitespace-nowrap text-right min-w-[140px]">Frais Mensuels (FCFA)</th>
-                <th className="py-3.5 pr-5 pl-3 whitespace-nowrap">Contact WhatsApp Parent</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredBoarders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    Aucun pensionnaire d&apos;internat trouvé.
-                  </td>
-                </tr>
-              ) : (
-                filteredBoarders.map((sub) => {
-                  const isSelected = sub.id === selectedStudentId;
-
-                  return (
-                    <tr
-                      key={sub.id}
-                      onClick={() => {
-                        loadStudentIntoForm(sub);
-                        window.scrollTo({ top: 380, behavior: 'smooth' });
-                      }}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected
-                          ? 'bg-purple-50/60 hover:bg-purple-50/80 ring-1 ring-purple-300'
-                          : 'hover:bg-emerald-50/20'
-                      }`}
-                      title="Cliquez pour charger ce pensionnaire dans le formulaire et le reçu"
-                    >
-                      <td className="py-3.5 pl-5 pr-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => loadStudentIntoForm(sub)}
-                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 h-4 w-4 cursor-pointer"
-                        />
-                      </td>
-
-                      <td className="py-3.5 px-3 font-mono font-bold text-slate-900 text-[11px] whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded border ${
-                          isSelected ? 'bg-purple-100 text-purple-900 border-purple-300 font-black' : 'bg-slate-100 border-slate-200'
-                        }`}>
-                          {sub.studentNumber}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <span className="font-extrabold text-slate-950 uppercase block font-heading">
-                              {sub.fullName}
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400">
-                              {sub.matricule}
-                            </span>
-                          </div>
-                          <GenderBadge gender={sub.gender} />
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center justify-center font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap shadow-2xs">
-                          {sub.grade}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="space-y-0.5">
-                          <span className="font-bold text-slate-900 block">{sub.roomNumber}</span>
-                          <span className="text-[10px] text-purple-700 font-semibold">{sub.pavilion}</span>
-                        </div>
-                      </td>
-
-                      {/* FRAIS MENSUELS BLOQUÉS EN LECTURE SEULE */}
-                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900 text-xs">
-                          <Lock className="w-3 h-3 text-slate-400" />
-                          <span>{formatFCFA(sub.monthlyRate)}</span>
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 pr-5 pl-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <a
-                          href={`https://wa.me/${(sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono text-[11px] font-semibold transition-colors"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>{sub.whatsappPhone || sub.guardianPhone}</span>
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 px-6 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>
-            Total affiché : <strong className="text-slate-900 font-bold">{filteredBoarders.length}</strong> pensionnaires inscrits à l&apos;internat
-          </span>
-          <span className="text-[11px] text-slate-400">
-            Cliquez sur une ligne pour charger immédiatement le reçu officiel en haut
-          </span>
-        </div>
-      </div>
-
-      {/* ================= MODALE : REGISTRE OFFICIEL DE L'INTERNAT ================= */}
-      {isRegisterModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-3xl w-full p-6 sm:p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold shrink-0">
-                  <BedDouble className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-950 font-heading">
-                    Registre Officiel des Pensionnaires & Dortoirs
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Année Scolaire {currentSchool.academicYear} • {currentSchool.name}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsRegisterModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+        {/* COLONNE DROITE : REÇU OFFICIEL D'INTERNAT EN DIRECT */}
+        <div className="lg:col-span-6 bg-white rounded-2xl border-2 border-emerald-600/30 p-5 sm:p-6 shadow-md space-y-4 relative print:border-none print:shadow-none print:p-0">
+          {/* Boutons Actions Rapides Reçu (Impression / WhatsApp) */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 print:hidden flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider font-heading">
+                Aperçu Direct du Reçu Officiel
+              </span>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3 rounded-xl bg-purple-50 border border-purple-200">
-                  <span className="text-[10px] uppercase font-bold text-purple-700 block">Total Résidents</span>
-                  <span className="text-xl font-black text-purple-950 font-heading">{stats.totalBoarders} élèves</span>
-                </div>
-                <div className="p-3 rounded-xl bg-pink-50 border border-pink-200">
-                  <span className="text-[10px] uppercase font-bold text-pink-700 block">Filles (Pavillon B)</span>
-                  <span className="text-xl font-black text-pink-950 font-heading">♀ {stats.girls}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                  <span className="text-[10px] uppercase font-bold text-blue-700 block">Garçons (Pavillon A)</span>
-                  <span className="text-xl font-black text-blue-950 font-heading">♂ {stats.boys}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-[10px] uppercase font-bold text-emerald-800 block">Lits Libres</span>
-                  <span className="text-xl font-black text-emerald-950 font-heading">{Math.max(0, 30 - stats.totalBoarders)} lits</span>
-                </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrintReceipt}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimer A4</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>WhatsApp</span>
+              </button>
+            </div>
+          </div>
+
+          {/* DOCUMENT OFFICIEL DU REÇU IMPRIMABLE */}
+          <div className="bg-white border border-slate-300 rounded-xl p-4 sm:p-5 space-y-4 print:border-none print:p-0">
+            {/* 1. En-tête Officiel et Strict */}
+            <div className="flex items-center justify-between gap-3 pb-3 border-b-2 border-slate-800">
+              {/* Logo Gauche */}
+              <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                {currentSchool.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentSchool.logoUrl}
+                    alt={currentSchool.name}
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl border border-emerald-300 bg-emerald-50 flex flex-col items-center justify-center text-center p-1">
+                    <Building2 className="w-5 h-5 text-emerald-600 mb-0.5" />
+                    <span className="text-[7px] font-black text-emerald-800 uppercase leading-none">
+                      {currentSchool.shortName || 'LOGO'}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              <table className="w-full text-left border-collapse border border-slate-200 text-xs">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-600">
-                    <th className="p-2">N°</th>
-                    <th className="p-2">Matricule</th>
-                    <th className="p-2">Pensionnaire</th>
-                    <th className="p-2 text-center">Classe</th>
-                    <th className="p-2">Chambre</th>
-                    <th className="p-2">Contact Parent</th>
+              {/* Centre : Hiérarchie stricte demandée */}
+              <div className="text-center flex-1 space-y-0.5 min-w-0">
+                <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading truncate">
+                  {currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE EPC MANOI'}
+                </h1>
+                <p className="text-[11px] font-extrabold text-emerald-700">
+                  {currentSchool.shortName || 'EPC MANOI'}
+                </p>
+                <p className="text-[9.5px] italic text-slate-600">
+                  « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
+                </p>
+                <p className="text-[9px] font-semibold text-slate-500">
+                  {currentSchool.slogan || 'L’Excellence au service de l’Éducation'}
+                </p>
+                <p className="text-[8.5px] text-slate-400 font-mono">
+                  Code Établissement : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
+                </p>
+              </div>
+
+              {/* Emblème Droit */}
+              <div className="w-16 h-16 shrink-0 flex items-center justify-center">
+                {currentSchool.countryEmblemUrl && currentSchool.countryEmblemUrl.startsWith('data:image') ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={currentSchool.countryEmblemUrl}
+                    alt="Armoiries Nationales"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl border border-amber-300 bg-amber-50 flex flex-col items-center justify-center text-center p-1">
+                    <Building2 className="w-5 h-5 text-amber-600 mb-0.5" />
+                    <span className="text-[7px] font-black text-amber-900 uppercase leading-none">
+                      ARMOIRIES
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Titre & Référence de Quittance */}
+            <div className="bg-slate-900 text-white p-2.5 rounded-lg flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-bold block">
+                  Document Officiel d&apos;Encaissement
+                </span>
+                <span className="font-extrabold font-heading text-xs sm:text-sm">
+                  QUITTANCE DE PAIEMENT D&apos;INTERNAT & PENSIONNAT
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] text-slate-400 block font-mono">
+                  RÉF : QUI-INT-2026-{(activeBoarderIndex + 1).toString().padStart(4, '0')}
+                </span>
+                <span className="font-bold text-amber-400 text-xs">
+                  {formPaymentDate}
+                </span>
+              </div>
+            </div>
+
+            {/* 3. Détails du Pensionnaire */}
+            <div className="grid grid-cols-2 gap-2 text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-50/50">
+              <div>
+                <span className="text-[10px] text-slate-400 block">Nom & Prénom de l&apos;Élève :</span>
+                <span className="font-bold text-slate-900">{formStudentName || 'Non renseigné'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Matricule & Classe :</span>
+                <span className="font-bold text-slate-900">{formMatricule} • {formClassName}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Pavillon & Chambre :</span>
+                <span className="font-bold text-emerald-800">{formPavilion} — {formRoom || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block">Tuteur / Contact WhatsApp :</span>
+                <span className="font-mono text-slate-800">{formParentContact}</span>
+              </div>
+            </div>
+
+            {/* 4. Tableau du Décompte Financier (9 Mois) */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
+              <table className="w-full text-left">
+                <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                  <tr>
+                    <th className="py-1.5 px-3">Désignation</th>
+                    <th className="py-1.5 px-3 text-center">Mois Réglés (sur 9)</th>
+                    <th className="py-1.5 px-3 text-right">Montant Encaissé</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-[11px]">
-                  {boarders.map((b, idx) => (
-                    <tr key={b.id}>
-                      <td className="p-2 font-bold text-slate-400">{idx + 1}</td>
-                      <td className="p-2 font-mono font-bold text-slate-800">{b.matricule}</td>
-                      <td className="p-2 font-extrabold uppercase text-slate-950">{b.fullName}</td>
-                      <td className="p-2 text-center font-bold">{b.grade}</td>
-                      <td className="p-2 font-semibold text-purple-900">{b.roomNumber} ({b.pavilion.includes('Garçons') ? 'Pavillon A' : 'Pavillon B'})</td>
-                      <td className="p-2 font-mono text-emerald-800">{b.whatsappPhone || b.guardianPhone}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  <tr>
+                    <td className="py-2 px-3">
+                      <div className="font-bold text-slate-900">Pension d&apos;Internat Annuelle</div>
+                      <div className="text-[10px] text-slate-400">
+                        Tarif : {formatFCFA(formMonthlyRate)} / mois • Mode : {formPaymentMethod}
+                      </div>
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                        {activePaidMonthsCount} / 9 mois
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right font-extrabold text-slate-900 font-heading text-sm">
+                      {formatFCFA(activeTotalCollected)}
+                    </td>
+                  </tr>
                 </tbody>
+                <tfoot className="bg-slate-50 font-bold border-t border-slate-200 text-xs">
+                  <tr>
+                    <td colSpan={2} className="py-2 px-3 text-slate-600">
+                      Reste Annuel à Solder (sur les 9 mois) :
+                    </td>
+                    <td className="py-2 px-3 text-right text-rose-600 font-extrabold font-heading">
+                      {formatFCFA(activeRemainingBalance)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all cursor-pointer"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Imprimer le Registre Officiel</span>
-              </button>
+            {/* 5. Liste des mois réglés */}
+            <div className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-200 text-[11px] text-emerald-950">
+              <span className="font-bold block mb-1">Mois d&apos;internat validés par cette quittance :</span>
+              <div className="flex flex-wrap gap-1">
+                {MONTHS_LIST.map((m) => (
+                  <span
+                    key={m}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                      activeMonthsChecked[m]
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-400 border-slate-200 line-through'
+                    }`}
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => setIsRegisterModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
-              >
-                Fermer
-              </button>
+            {/* 6. Signatures et Cachet */}
+            <div className="pt-3 grid grid-cols-2 gap-4 text-center text-[10px] border-t border-slate-200">
+              <div className="space-y-8">
+                <span className="font-bold text-slate-600 block">Signature du Parent / Déposant</span>
+                <span className="text-slate-400 italic">« Lu et approuvé »</span>
+              </div>
+              <div className="space-y-8">
+                <span className="font-bold text-slate-900 block">
+                  L&apos;Intendance & Économe de l&apos;Établissement
+                </span>
+                <div className="text-slate-400 italic flex items-center justify-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Cachet & Signature Électronique</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ================= MODALE : NOUVELLE ADMISSION INTERNAT ================= */}
+      {/* ═══════════════════════════════════════════════════════════════
+          MODALE NOUVELLE ADMISSION D'INTERNAT
+          ═══════════════════════════════════════════════════════════════ */}
       {isNewAdmissionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <BedDouble className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-950 font-heading">
-                    Nouvelle Admission Internat
+                  <h3 className="text-base font-bold text-slate-900 font-heading">
+                    Nouvelle Admission à l&apos;Internat
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Affectation en pensionnat scolaire 2026-2027
-                  </p>
+                  <p className="text-xs text-slate-400">Affectation d&apos;une chambre et ouverture de quittance</p>
                 </div>
               </div>
               <button
@@ -1575,120 +1041,94 @@ export function BoardingView({
               </button>
             </div>
 
-            <form onSubmit={handleCreateAdmission} className="space-y-4 text-xs">
-              <div className="space-y-2 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 block text-[11px] uppercase tracking-wider">
-                    Sélectionner l&apos;élève ({students.length} disponibles) :
-                  </label>
-                </div>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Sélectionner l&apos;Élève *</label>
+                <select
+                  value={newSubStudentId}
+                  onChange={(e) => setNewSubStudentId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:outline-none"
+                >
+                  <option value="">-- Choisir un élève de l&apos;établissement --</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.firstName} {s.lastName} ({s.studentNumber} • {s.className})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={newSubSearchQuery}
-                      onChange={(e) => setNewSubSearchQuery(e.target.value)}
-                      placeholder="Nom, matricule..."
-                      className="w-full pl-8 pr-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs focus:ring-1 focus:ring-purple-500"
-                    />
-                  </div>
-
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Pavillon *</label>
                   <select
-                    value={newSubGradeFilter}
-                    onChange={(e) => setNewSubGradeFilter(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-medium"
+                    value={newSubPavilion}
+                    onChange={(e) => setNewSubPavilion(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold focus:outline-none"
                   >
-                    {availableClasses.map((cls) => (
-                      <option key={cls} value={cls}>{cls}</option>
-                    ))}
+                    <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
+                    <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
+                    <option value="Pavillon Junior">Pavillon Junior</option>
+                    <option value="Pavillon Honneur">Pavillon Honneur</option>
                   </select>
                 </div>
 
-                <select
-                  required
-                  value={newSubStudentId}
-                  onChange={(e) => setNewSubStudentId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 font-semibold text-slate-900 cursor-pointer"
-                >
-                  <option value="">-- Choisir un élève --</option>
-                  {students
-                    .filter((s) => {
-                      const matchSearch =
-                        !newSubSearchQuery ||
-                        s.fullName?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-                        s.matricule?.toLowerCase().includes(newSubSearchQuery.toLowerCase());
-                      const matchGrade =
-                        newSubGradeFilter === 'Toutes les classes' || s.grade === newSubGradeFilter;
-                      return matchSearch && matchGrade;
-                    })
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.studentNumber} • {s.fullName} ({s.grade})
-                      </option>
-                    ))}
-                </select>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Numéro de Chambre *</label>
+                  <input
+                    type="text"
+                    value={newSubRoom}
+                    onChange={(e) => setNewSubRoom(e.target.value)}
+                    placeholder="Ex: Chambre 105"
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Pavillon Résidentiel *</label>
-                <select
-                  value={newSubPavilion}
-                  onChange={(e) => setNewSubPavilion(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold text-slate-800 cursor-pointer"
-                >
-                  <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
-                  <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Numéro de Chambre *</label>
-                <input
-                  type="text"
-                  required
-                  value={newSubRoom}
-                  onChange={(e) => setNewSubRoom(e.target.value)}
-                  placeholder="Ex : Chambre G-104, Chambre F-203..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Frais Mensuels en FCFA *</label>
+                <label className="text-xs font-bold text-slate-700">Frais Mensuels d&apos;Internat (FCFA) *</label>
                 <input
                   type="number"
-                  required
                   value={newSubRate}
                   onChange={(e) => setNewSubRate(e.target.value)}
-                  placeholder="50000"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold"
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-extrabold"
                 />
               </div>
+            </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewAdmissionModalOpen(false)}
-                  className="px-4 py-2 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-                >
-                  Annuler
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={!newSubStudentId}
-                  className={`px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer ${
-                    newSubStudentId
-                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30'
-                      : 'bg-slate-300 cursor-not-allowed'
-                  }`}
-                >
-                  Valider l&apos;Admission
-                </button>
-              </div>
-            </form>
+            <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsNewAdmissionModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newSubStudentId) {
+                    alert('Veuillez sélectionner un élève.');
+                    return;
+                  }
+                  const updated = [
+                    ...customSubscriptions,
+                    {
+                      studentId: newSubStudentId,
+                      pavilion: newSubPavilion,
+                      roomNumber: newSubRoom || 'Chambre 101',
+                      monthlyRate: Number(newSubRate) || 50000,
+                    },
+                  ];
+                  saveSubscriptionsToStorage(updated);
+                  setIsNewAdmissionModalOpen(false);
+                  setToastMessage('✓ Nouvel élève admis à l’internat avec succès.');
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs cursor-pointer"
+              >
+                Valider l&apos;Admission
+              </button>
+            </div>
           </div>
         </div>
       )}

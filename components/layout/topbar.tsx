@@ -109,7 +109,7 @@ export function Topbar({
       } catch (e) {}
 
       setActiveSession({
-        fullName: live.directorName || live.founderName || 'LAWANI MOUHAMED',
+        fullName: live.directorName || 'M. Jean-Marc Kouassi',
         email: live.email || 'direction@epc-manoi.ci',
         phone: live.whatsappPhone || '+225 07 48 92 11 00',
         role: 'DR',

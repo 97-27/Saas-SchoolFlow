@@ -126,12 +126,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   };
 
   const handleLogoErase = () => {
-    const defaultLogo = 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=200&auto=format&fit=crop&q=80';
-    setLogoPreview(defaultLogo);
-    const updated = { ...school, logoUrl: defaultLogo };
+    setLogoPreview('');
+    const updated = { ...school, logoUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Logo réinitialisé et synchronisé instantanément.');
+    setActionFeedback('✓ Logo réinitialisé (visuel d’exemple actif).');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
@@ -154,12 +153,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   };
 
   const handleEmblemErase = () => {
-    const defaultEmblem = 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png';
-    setEmblemPreview(defaultEmblem);
-    const updated = { ...school, countryEmblemUrl: defaultEmblem };
+    setEmblemPreview('');
+    const updated = { ...school, countryEmblemUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Emblème réinitialisé et synchronisé instantanément.');
+    setActionFeedback('✓ Emblème réinitialisé (visuel d’exemple actif).');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
@@ -174,7 +172,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         const updated = { ...school, stampUrl: result };
         setSchool(updated);
         saveLiveSchool(updated);
-        setActionFeedback('✓ Cachet officiel enregistré et appliqué instantanément sur les reçus.');
+        setActionFeedback('✓ Cachet officiel scanné enregistré avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
       };
       reader.readAsDataURL(file);
@@ -186,7 +184,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     const updated = { ...school, stampUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Cachet officiel retiré avec succès.');
+    setActionFeedback('✓ Cachet officiel réinitialisé (visuel d’exemple actif).');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
@@ -329,6 +327,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={logoPreview}
                           alt="Logo de l'école"
+                          onError={() => setLogoPreview('')}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain border-2 border-emerald-500/40 shadow-md bg-white p-1"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -406,6 +405,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={emblemPreview}
                           alt="Emblème officiel du pays"
+                          onError={() => setEmblemPreview('')}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-amber-500/40 shadow-md bg-white"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
