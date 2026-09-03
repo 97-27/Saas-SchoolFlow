@@ -73,44 +73,101 @@ export function deleteLiveStudents(idsToDelete: string[]): void {
 /**
  * Récupère la configuration personnalisée de l'école (nom, slogan, devise, logos, ville, fondateur, etc.)
  */
-export function getLiveSchool(slug: string, defaultSchool: School): School {
-  if (typeof window === 'undefined') return defaultSchool;
+export function getLiveSchool(slug: string, defaultSchool?: School): School {
+  if (typeof window === 'undefined') {
+    return defaultSchool || mockSchools['epc-manoi'] || {
+      id: slug,
+      slug: slug,
+      name: slug.toUpperCase().replace(/-/g, ' '),
+      shortName: slug.slice(0, 10).toUpperCase(),
+      logoColor: '#059669',
+      academicYear: '2026-2027',
+      currentTerm: 'Trimestre 1',
+      termType: 'trimestriel',
+      phone: '+225 01 02 03 04 05',
+      whatsappPhone: '+225 01 02 03 04 05',
+      email: `direction@${slug}.ci`,
+      motto: 'Discipline • Rigueur • Réussite',
+      slogan: 'L’Excellence au service de l’Éducation',
+      city: 'Abidjan',
+      country: 'Côte d’Ivoire',
+      district: 'Abidjan',
+      ministryCode: '321119',
+      founderName: 'DIRECTION GÉNÉRALE',
+      directorName: 'DIRECTION GÉNÉRALE',
+      studiesDirectorName: 'Direction des Études',
+      status: 'active',
+      subscriptionPlan: 'annuel',
+      createdAt: '2026-09-01',
+    };
+  }
 
   try {
     // 1. Chercher d'abord avec le slug spécifique
     let raw = localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
-    
-    // 2. Si non trouvé, chercher le stockage global epc-manoi, college-excellence ou active
+
+    // 2. Chercher dans les écoles souscrites enregistrées
     if (!raw) {
+      const registered = getRegisteredSchools();
+      const found = registered.find((s) => s.slug === slug || s.id === slug);
+      if (found) {
+        return found;
+      }
+    }
+
+    // 3. Si c'est l'école officielle par défaut (epc-manoi / college-excellence)
+    if (!raw && (slug === 'epc-manoi' || slug === 'college-excellence')) {
       raw =
         localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`) ||
         localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`) ||
         localStorage.getItem('schoolflow_active_school_settings_v1');
     }
 
-    if (!raw) return defaultSchool;
-    const local = JSON.parse(raw);
+    if (raw) {
+      const local = JSON.parse(raw);
+      const fallback = defaultSchool || mockSchools['epc-manoi'] || mockSchools['college-excellence'];
+      return {
+        ...fallback,
+        ...local,
+        name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
+        shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
+        founderName: local.founderName || fallback?.founderName || 'DIRECTION GÉNÉRALE',
+        directorName: local.directorName || fallback?.directorName || 'DIRECTION GÉNÉRALE',
+        slug: slug,
+      };
+    }
 
-    // Fusion intelligente : si une valeur locale est vide/undefined, conserver la valeur par défaut
+    if (defaultSchool) return defaultSchool;
+
+    // Nouvelle école non encore enregistrée
     return {
-      ...defaultSchool,
-      ...local,
-      name: local.name || defaultSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL',
-      shortName: local.shortName || defaultSchool.shortName || 'EPC MANOI',
-      motto: local.motto || defaultSchool.motto || 'Discipline • Rigueur • Réussite',
-      district: local.district || defaultSchool.district || 'Abobo Biabou 2',
-      ministryCode: local.ministryCode || defaultSchool.ministryCode || '321119',
-      founderName: local.founderName || defaultSchool.founderName || 'LAWANI MOUHAMED',
-      directorName: local.directorName || defaultSchool.directorName || 'LAWANI MOUHAMED',
-      studiesDirectorName: local.studiesDirectorName || defaultSchool.studiesDirectorName || 'M. Kouamé',
-      logoUrl: typeof local.logoUrl === 'string' ? local.logoUrl : (defaultSchool.logoUrl || ''),
-      countryEmblemUrl: local.countryEmblemUrl || defaultSchool.countryEmblemUrl || 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png',
-      stampUrl: local.stampUrl || defaultSchool.stampUrl || '',
-      academicYear: local.academicYear || defaultSchool.academicYear || '2026-2027',
+      id: slug,
+      slug: slug,
+      name: slug.toUpperCase().replace(/-/g, ' '),
+      shortName: slug.slice(0, 10).toUpperCase(),
+      logoColor: '#059669',
+      academicYear: '2026-2027',
+      currentTerm: 'Trimestre 1',
+      termType: 'trimestriel',
+      phone: '+225 01 02 03 04 05',
+      whatsappPhone: '+225 01 02 03 04 05',
+      email: `direction@${slug}.ci`,
+      motto: 'Discipline • Rigueur • Réussite',
+      slogan: 'L’Excellence au service de l’Éducation',
+      city: 'Abidjan',
+      country: 'Côte d’Ivoire',
+      district: 'Abidjan',
+      ministryCode: '321119',
+      founderName: 'DIRECTION GÉNÉRALE',
+      directorName: 'DIRECTION GÉNÉRALE',
+      studiesDirectorName: 'Direction des Études',
+      status: 'active',
+      subscriptionPlan: 'annuel',
+      createdAt: '2026-09-01',
     };
   } catch (error) {
     console.error('Erreur lecture localStorage school settings:', error);
-    return defaultSchool;
+    return defaultSchool || mockSchools['epc-manoi'];
   }
 }
 
@@ -174,10 +231,12 @@ export function saveLiveSchool(school: School): void {
     const json = JSON.stringify(school);
     // Sauvegarder sur le slug spécifique
     localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${school.slug}`, json);
-    // Sauvegarder aussi sur epc-manoi et college-excellence pour synchronisation totale
-    localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, json);
-    localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, json);
-    localStorage.setItem('schoolflow_active_school_settings_v1', json);
+
+    if (school.slug === 'epc-manoi' || school.slug === 'college-excellence') {
+      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, json);
+      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, json);
+      localStorage.setItem('schoolflow_active_school_settings_v1', json);
+    }
 
     // Synchronisation en arrière-plan avec Supabase Cloud
     saveSchoolToSupabase(school).catch(() => {});
@@ -197,10 +256,22 @@ export function saveLiveSchool(school: School): void {
  * Récupère les élèves enregistrés en local + fusionne avec les élèves initiaux.
  * Exclut automatiquement tous les élèves supprimés.
  */
-export function getLiveStudents(initialStudents: Student[]): Student[] {
+export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: string): Student[] {
   if (typeof window === 'undefined') return initialStudents;
 
   try {
+    const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+
+    // Si c'est une NOUVELLE école souscrite (pas la démo MANOI), charger ses données isolées
+    if (!isManoiOrDemo) {
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      if (rawSchool) {
+        return JSON.parse(rawSchool);
+      }
+      return []; // Zéro élève par défaut pour toute nouvelle école
+    }
+
     const status = getSchoolSubscription('epc-manoi');
     const deletedIds = getDeletedStudentIds();
     const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
@@ -255,10 +326,22 @@ export function getLiveStudents(initialStudents: Student[]): Student[] {
  * Récupère les factures / quittances enregistrées en local + fusionne avec les factures initiales.
  * Exclut automatiquement les factures des élèves supprimés.
  */
-export function getLiveInvoices(initialInvoices: Invoice[]): Invoice[] {
+export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: string): Invoice[] {
   if (typeof window === 'undefined') return initialInvoices;
 
   try {
+    const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+
+    // Si c'est une NOUVELLE école souscrite (pas la démo MANOI), charger ses factures isolées
+    if (!isManoiOrDemo) {
+      const schoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      if (rawSchool) {
+        return JSON.parse(rawSchool);
+      }
+      return []; // Zéro facture / 0 FCFA pour toute nouvelle école
+    }
+
     const status = getSchoolSubscription('epc-manoi');
     const deletedIds = getDeletedStudentIds();
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);

@@ -14,13 +14,6 @@ export default async function SchoolLayout({
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
 
-  // Verify school exists or default fallback
-  const school = mockSchools[ecoleSlug] || (ecoleSlug === 'college-excellence' ? mockSchools['college-excellence'] : null);
-
-  // If unknown tenant and not a valid test slug, return 404
-  if (!school && ecoleSlug !== 'college-excellence' && ecoleSlug !== 'saint-joseph') {
-    notFound();
-  }
-
   return <>{children}</>;
 }
+

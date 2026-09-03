@@ -25,20 +25,21 @@ import { getLiveInvoices, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 
 interface InvoiceTableProps {
   initialInvoices: Invoice[];
+  schoolSlug?: string;
 }
 
-export function InvoiceTable({ initialInvoices }: InvoiceTableProps) {
+export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
 
   useEffect(() => {
-    setInvoices(getLiveInvoices(initialInvoices));
+    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
 
     const handleUpdate = () => {
-      setInvoices(getLiveInvoices(initialInvoices));
+      setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
-  }, [initialInvoices]);
+  }, [initialInvoices, schoolSlug]);
 
   // Date active du journal (par défaut 2026-08-27)
   const [selectedJournalDate, setSelectedJournalDate] = useState<string>('2026-08-27');

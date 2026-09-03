@@ -44,13 +44,13 @@ export function DashboardView({
 
   // Synchronisation en direct avec le stockage local & événements
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
-    setInvoices(getLiveInvoices(initialInvoices));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
+    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
     setSchoolState(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
-      setInvoices(getLiveInvoices(initialInvoices));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
+      setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
       setSchoolState(getLiveSchool(schoolSlug, school));
     };
 
@@ -258,7 +258,7 @@ export function DashboardView({
       />
 
       {/* Tableau des factures & encaissements avec colonne Statut Nouveau / Ancien */}
-      <InvoiceTable initialInvoices={invoices} />
+      <InvoiceTable initialInvoices={invoices} schoolSlug={schoolSlug} />
     </div>
   );
 }

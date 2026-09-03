@@ -59,13 +59,13 @@ export function StudentTable({
   );
 
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
     setCurrentSchool(
       getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
     );
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(
         getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
       );
