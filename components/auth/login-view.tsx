@@ -830,6 +830,7 @@ export function LoginView({
                       <input
                         type="text"
                         required
+                        autoComplete="off"
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
                         placeholder="Ex : Kouassi Jean-Marc"
@@ -848,6 +849,7 @@ export function LoginView({
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="email"
+                      autoComplete="off"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="Ex : direction@ecole.ci"
@@ -867,6 +869,7 @@ export function LoginView({
                       <input
                         type="tel"
                         required
+                        autoComplete="off"
                         value={parentPhone}
                         onChange={(e) => setParentPhone(e.target.value)}
                         placeholder="Ex : +225 07 48 92 11 00"
@@ -898,6 +901,7 @@ export function LoginView({
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
+                        autoComplete="new-password"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                         placeholder="Entrez votre mot de passe ou code d'accès"
@@ -937,7 +941,7 @@ export function LoginView({
             {/* MODE 2 : FORMULAIRE NOUVEAU COMPTE & ABONNEMENT ÉTABLISSEMENT */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {authMode === 'signup' && (
-              <form onSubmit={handleSignupSubmit} className="space-y-3.5 animate-in fade-in">
+              <form onSubmit={handleSignupSubmit} autoComplete="off" className="space-y-3.5 animate-in fade-in">
                 {/* 1. Nom du Responsable & Nom de l'École */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
@@ -949,6 +953,7 @@ export function LoginView({
                       <input
                         type="text"
                         required
+                        autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
                         placeholder="Ex : Kouamé Jean-Marc"
@@ -966,6 +971,7 @@ export function LoginView({
                       <input
                         type="text"
                         required
+                        autoComplete="off"
                         value={signupSchoolName}
                         onChange={(e) => setSignupSchoolName(e.target.value)}
                         placeholder="Ex : Groupe Scolaire Excellence"
@@ -986,6 +992,7 @@ export function LoginView({
                       <input
                         type="email"
                         required
+                        autoComplete="off"
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
                         placeholder="Ex : direction@excellence.ci"
@@ -1003,6 +1010,7 @@ export function LoginView({
                       <input
                         type="tel"
                         required
+                        autoComplete="off"
                         value={signupPhone}
                         onChange={(e) => setSignupPhone(e.target.value)}
                         placeholder="Ex : +225 01 02 03 04 05"
@@ -1037,6 +1045,7 @@ export function LoginView({
                       type={showSignupPassword ? 'text' : 'password'}
                       required
                       minLength={8}
+                      autoComplete="new-password"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
                       placeholder="Définissez votre mot de passe (au moins 8 caractères)"
