@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 
 interface BoardingViewProps {
+  initialBoarders?: any;
   school: School;
   schoolSlug: string;
 }
@@ -189,17 +190,18 @@ export function BoardingView({
       const studentObj: Student = foundStudent || {
         id: cs.studentId,
         studentNumber: cs.matricule || `MAT-INT-${cs.studentId.slice(-4)}`,
+        matricule: cs.matricule || `MAT-INT-${cs.studentId.slice(-4)}`,
         firstName: cs.studentName?.split(' ')[0] || 'Élève',
         lastName: cs.studentName?.split(' ').slice(1).join(' ') || 'Pensionnaire',
-        gender: cs.gender || 'M',
-        className: cs.className || '6ème',
-        birthDate: '2012-05-10',
-        enrollmentDate: '2026-09-01',
+        fullName: cs.studentName || 'Élève Pensionnaire',
+        avatar: '',
+        gender: (cs.gender === 'F' || (cs.gender as any) === 'female') ? 'female' : 'male',
+        grade: cs.className || '6ème',
+        address: 'Abidjan, Côte d\'Ivoire',
         guardianName: 'Parent / Tuteur',
-        guardianContact: cs.parentContact || '+225 07 00 00 00 00',
-        status: 'active',
-        schoolSlug: schoolSlug,
-        tuitionFee: 0,
+        guardianPhone: cs.parentContact || '+225 07 00 00 00 00',
+        whatsappPhone: cs.parentContact || '+225 07 00 00 00 00',
+        tuitionAmount: 0,
         paidAmount: 0,
       };
 
@@ -228,7 +230,8 @@ export function BoardingView({
       .filter((s) => !customMap.has(s.id))
       .filter((_, idx) => idx % 4 === 0)
       .map((student, idx) => {
-        const pavilion = student.gender === 'F' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
+        const isFemale = student.gender === 'female' || (student.gender as any) === 'F';
+        const pavilion = isFemale ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
         const roomNumber = `Chambre ${101 + (idx % 20)}`;
         const monthlyRate = 50000;
 
@@ -263,7 +266,7 @@ export function BoardingView({
         `${b.student.firstName} ${b.student.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.student.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.student.className.toLowerCase().includes(searchQuery.toLowerCase());
+        (b.student.grade || (b.student as any).className || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchPavilion =
         selectedPavilionFilter === 'all' ||
@@ -302,12 +305,12 @@ export function BoardingView({
   useEffect(() => {
     if (!isCreatingNew && activeBoarder) {
       setFormStudentName(`${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim());
-      setFormMatricule(activeBoarder.student.studentNumber);
-      setFormClassName(activeBoarder.student.className || '6ème');
-      setFormGender(activeBoarder.student.gender || 'M');
+      setFormMatricule(activeBoarder.student.studentNumber || activeBoarder.student.matricule);
+      setFormClassName(activeBoarder.student.grade || (activeBoarder.student as any).className || '6ème');
+      setFormGender(activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M');
       setFormPavilion(activeBoarder.pavilion);
       setFormRoom(activeBoarder.roomNumber);
-      setFormParentContact(activeBoarder.student.guardianContact || '+225 07 00 00 00 00');
+      setFormParentContact(activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00');
       setFormMonthlyRate(activeBoarder.monthlyRate || 0);
 
       const months = monthlyPayments[activeBoarder.student.id] || {};
@@ -434,17 +437,18 @@ export function BoardingView({
         const newStudentObj: Student = {
           id: targetStudentId,
           studentNumber: formMatricule.trim(),
+          matricule: formMatricule.trim(),
           firstName: nameParts[0] || 'Élève',
           lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
-          gender: formGender,
-          className: formClassName,
-          birthDate: '2012-05-10',
-          enrollmentDate: '2026-09-01',
+          fullName: formStudentName.trim(),
+          avatar: '',
+          gender: formGender === 'F' ? 'female' : 'male',
+          grade: formClassName,
+          address: 'Abidjan, Côte d\'Ivoire',
           guardianName: 'Parent / Tuteur',
-          guardianContact: formParentContact.trim(),
-          status: 'active',
-          schoolSlug: schoolSlug,
-          tuitionFee: rate * 9,
+          guardianPhone: formParentContact.trim(),
+          whatsappPhone: formParentContact.trim(),
+          tuitionAmount: rate * 9,
           paidAmount: activeTotalCollected,
         };
         const updatedStudentList = [newStudentObj, ...currentList.filter((s) => s.id !== targetStudentId)];
@@ -649,8 +653,8 @@ export function BoardingView({
   const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
   const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
   const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
-  const girlsCount = boarders.filter((b) => b.student.gender === 'F').length;
-  const boysCount = boarders.filter((b) => b.student.gender === 'M').length;
+  const girlsCount = boarders.filter((b) => b.student.gender === 'female' || (b.student.gender as any) === 'F').length;
+  const boysCount = boarders.filter((b) => b.student.gender === 'male' || (b.student.gender as any) === 'M').length;
 
   return (
     <div className="space-y-6 sm:space-y-7 animate-fadeIn">
@@ -907,7 +911,7 @@ export function BoardingView({
               {isCreatingNew && <option value="new">✨ + Nouvelle Souscription (En cours de saisie)</option>}
               {filteredBoarders.map((b, idx) => (
                 <option key={b.student.id} value={b.student.id}>
-                  {idx + 1}. {b.student.firstName} {b.student.lastName} ({b.student.className} • {b.roomNumber})
+                  {idx + 1}. {b.student.firstName} {b.student.lastName} ({b.student.grade || (b.student as any).className || '6ème'} • {b.roomNumber})
                 </option>
               ))}
             </select>
