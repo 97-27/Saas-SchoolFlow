@@ -482,7 +482,7 @@ export function SpecialDiscountsView({
     }
   };
 
-  // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp
+  // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp (Sans redirection automatique)
   const handleShareWhatsappWithImageCopy = async () => {
     const element = document.getElementById('printable-receipt-card');
     if (!element) return;
@@ -495,7 +495,7 @@ export function SpecialDiscountsView({
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
       });
@@ -503,6 +503,8 @@ export function SpecialDiscountsView({
       canvas.toBlob(async (blob) => {
         if (!blob) {
           setIsGeneratingImage(false);
+          setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+          setShowToast(true);
           return;
         }
 
@@ -519,7 +521,7 @@ export function SpecialDiscountsView({
           }
         }
 
-        // 2. Afficher la modale de prévisualisation et partage WhatsApp
+        // 2. Afficher la modale de prévisualisation et partage WhatsApp (sans redirection automatique)
         const imageUrl = URL.createObjectURL(blob);
         const cleanPhone = (parentPhone || '').replace(/\D/g, '');
         const fileName = `Recu_Reduction_${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
@@ -533,20 +535,17 @@ export function SpecialDiscountsView({
           name: parentName || 'Parent d\'élève',
         });
 
-        setToastMessage('✓ Image du reçu copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+        setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
         setShowToast(true);
+        setTimeout(() => setShowToast(false), 7000);
         setIsGeneratingImage(false);
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsGeneratingImage(false);
-      const cleanPhone = (parentPhone || '').replace(/\D/g, '');
-      const schoolDisplayName = currentSchool.shortName || currentSchool.name || 'EPC MANOI';
-      const message = `*Reçu Officiel de Scolarité — ${schoolDisplayName}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_Reçu officiel certifié par le Service Comptabilité de ${schoolDisplayName}._`;
-      const waUrl = cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
+      setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
     }
   };
 
@@ -1499,10 +1498,10 @@ export function SpecialDiscountsView({
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-emerald-900">
-                  Image du reçu déjà copiée dans votre presse-papier !
+                  Le reçu automatique a été déjà copié dans votre presse-papiers !
                 </p>
                 <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
-                  Cliquez sur <strong>« Ouvrir le WhatsApp du parent »</strong> puis faites <strong>Ctrl + V</strong> (ou Coller) dans la discussion pour envoyer la photo officielle.
+                  Vous pouvez maintenant aller directement sur WhatsApp et faire <strong>Coller (Ctrl + V)</strong> dans la discussion pour envoyer le reçu officiel.
                 </p>
               </div>
             </div>

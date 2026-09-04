@@ -77,6 +77,14 @@ export function BoardingView({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   // Modale d'Aperçu & Partage Image HD (WhatsApp)
+  const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
+    imageUrl: string;
+    blob: Blob;
+    fileName: string;
+    phone: string;
+    cleanPhone: string;
+    name: string;
+  } | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [generatedImagePreviewUrl, setGeneratedImagePreviewUrl] = useState<string | null>(null);
 
@@ -526,6 +534,7 @@ export function BoardingView({
     return await html2canvas(receiptRef.current, {
       scale: 2.5, // Ultra Haute Définition
       useCORS: true,
+      allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
     });
@@ -612,19 +621,22 @@ export function BoardingView({
     }
   };
 
-  // 5. Action directe : Partage WhatsApp Direct avec Copie Image dans le Presse-Papier
+  // 5. Action directe : Partage WhatsApp Direct avec Copie Image dans le Presse-Papier (Sans redirection automatique)
   const handleDirectWhatsAppShare = async () => {
     try {
       setIsGeneratingImage(true);
+      setToastMessage('📸 Capture HD du reçu d\'internat en cours...');
       const canvas = await generateReceiptCanvas();
       if (!canvas) {
         setIsGeneratingImage(false);
+        setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+        setTimeout(() => setToastMessage(null), 3500);
         return;
       }
 
       const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
       const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-      const messageText = `📄 *Quittance d'internat officielle — ${formStudentName} (${formMatricule})*\n🏫 Établissement : ${currentSchool.shortName || currentSchool.name}\n💰 Tarif mensuel : ${formatFCFA(formMonthlyRate)}\n📅 Date : ${formPaymentDate}\n_(L'image du reçu est copiée : faites Coller / Ctrl+V pour l'envoyer)._`;
+      const fileName = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
 
       canvas.toBlob(async (blob) => {
         if (!blob) {
@@ -634,27 +646,34 @@ export function BoardingView({
 
         // Copier l'image dans le presse-papier pour WhatsApp (Ctrl+V)
         try {
-          if (navigator.clipboard && navigator.clipboard.write) {
+          if (navigator.clipboard && (window as any).ClipboardItem) {
             await navigator.clipboard.write([
-              new ClipboardItem({ 'image/png': blob }),
+              new (window as any).ClipboardItem({ 'image/png': blob }),
             ]);
           }
         } catch (e) {
           console.warn('Clipboard write fallback', e);
         }
 
-        setToastMessage('📸 Image de la quittance copiée dans le presse-papier ! Collez-la (Ctrl+V) dans WhatsApp.');
-        setTimeout(() => setToastMessage(null), 4500);
+        const imageUrl = URL.createObjectURL(blob);
+        setWhatsAppPreviewData({
+          imageUrl,
+          blob,
+          fileName,
+          phone: formParentContact || '+225 --',
+          cleanPhone,
+          name: formStudentName || 'Élève Interne',
+        });
 
-        const waUrl = cleanPhone
-          ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
-          : `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
-        window.open(waUrl, '_blank');
+        setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+        setTimeout(() => setToastMessage(null), 7000);
         setIsGeneratingImage(false);
       }, 'image/png');
     } catch (e) {
       console.error(e);
       setIsGeneratingImage(false);
+      setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+      setTimeout(() => setToastMessage(null), 3500);
     }
   };
 
@@ -1576,7 +1595,110 @@ export function BoardingView({
             </div>
           </div>
         </div>
-      </div>
+      {/* ================= MODAL PRÉVISUALISATION & PARTAGE PHOTO REÇU WHATSAPP ================= */}
+      {whatsAppPreviewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-heading">
+                    Photo HD de la Quittance d&apos;Internat
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Parent / Élève : <strong className="text-slate-900 font-mono whitespace-nowrap">{whatsAppPreviewData.phone}</strong> ({whatsAppPreviewData.name})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsAppPreviewData(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Aperçu fidèle de l'image capturée */}
+            <div className="rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 max-h-72 overflow-y-auto p-1.5 shadow-inner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={whatsAppPreviewData.imageUrl}
+                alt="Photo officielle du reçu d'internat"
+                className="w-full object-contain rounded-xl shadow-xs"
+              />
+            </div>
+
+            {/* Instruction claire */}
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-emerald-900">
+                  Le reçu automatique a été déjà copié dans votre presse-papiers !
+                </p>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
+                  Vous pouvez maintenant aller directement sur WhatsApp et faire <strong>Coller (Ctrl + V)</strong> dans la discussion pour envoyer la quittance officielle.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions principales */}
+            <div className="space-y-2 pt-1">
+              <a
+                href={
+                  whatsAppPreviewData.cleanPhone
+                    ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
+                        `📄 *QUITTANCE D'INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — Ch. ${formRoomNumber}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD de la quittance est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance certifiée par l'Intendance & Gestion de l'Internat._`
+                      )}`
+                    : `https://wa.me/?text=${encodeURIComponent(
+                        `📄 *QUITTANCE D'INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — Ch. ${formRoomNumber}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD de la quittance est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance certifiée par l'Intendance & Gestion de l'Internat._`
+                      )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Ouvrir WhatsApp ({whatsAppPreviewData.phone})</span>
+              </a>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      if (navigator.clipboard && (window as any).ClipboardItem) {
+                        await navigator.clipboard.write([
+                          new (window as any).ClipboardItem({ 'image/png': whatsAppPreviewData.blob }),
+                        ]);
+                        setToastMessage('✓ Image de la quittance recopiée dans le presse-papier !');
+                        setTimeout(() => setToastMessage(null), 3000);
+                      }
+                    } catch (e) {}
+                  }}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Recopier l&apos;image</span>
+                </button>
+
+                <a
+                  href={whatsAppPreviewData.imageUrl}
+                  download={whatsAppPreviewData.fileName}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Télécharger PNG</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -348,7 +348,7 @@ export function SalariesView({
       const canvas = await html2canvas(receiptElement, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
       });
@@ -384,19 +384,13 @@ export function SalariesView({
           name: `${selectedSalary.civility} ${selectedSalary.staffName}`,
         });
 
-        showToast('✓ Image du bulletin copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+        showToast('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
         setIsCapturingWhatsApp(false);
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsCapturingWhatsApp(false);
-      const cleanPhone = (selectedSalary.phone || '').replace(/[^0-9]/g, '');
-      const message = `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`;
-      const waUrl = cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
-      showToast('✓ Redirection vers WhatsApp effectuée.');
+      showToast('⚠️ Erreur lors de la capture du reçu.');
     }
   };
 
@@ -1238,10 +1232,10 @@ export function SalariesView({
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold text-emerald-900">
-                  Image du reçu déjà copiée dans votre presse-papier !
+                  Le reçu automatique a été déjà copié dans votre presse-papiers !
                 </p>
                 <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
-                  Cliquez sur <strong>« Ouvrir WhatsApp du salarié »</strong> puis faites <strong>Ctrl + V</strong> (ou Coller) dans la discussion pour envoyer le bulletin officiel.
+                  Vous pouvez maintenant aller directement sur WhatsApp et faire <strong>Coller (Ctrl + V)</strong> dans la discussion pour envoyer le bulletin officiel.
                 </p>
               </div>
             </div>

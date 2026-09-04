@@ -462,6 +462,7 @@ export function TransportView({
           const canvas = await html2canvas(receiptCardRef.current, {
             scale: 2,
             useCORS: true,
+            allowTaint: false,
             backgroundColor: '#ffffff',
             logging: false,
           });
@@ -477,27 +478,8 @@ export function TransportView({
         } catch (e) {}
       }
 
-      const cleanPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '');
-      const paidList = sub.paidMonths && sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun';
-      const msg = `*REÇU OFFICIEL DE TRANSPORT SCOLAIRE — ${currentSchool.shortName || currentSchool.name}*\n` +
-        `--------------------------------------\n` +
-        `👤 *Élève* : ${sub.fullName} (${sub.matricule || sub.studentNumber})\n` +
-        `🏫 *Classe* : ${sub.grade}\n` +
-        `🚏 *Arrêt de Ramassage* : ${sub.pickupStop}\n` +
-        `📅 *Mois Réglés* : ${paidList}\n` +
-        `💰 *Tarif Mensuel Navette* : ${formatFCFA(sub.monthlyRate)} / mois\n` +
-        (sub.discountAmount > 0 ? `🎁 *Réduction Spéciale* : -${formatFCFA(sub.discountAmount)}\n` : '') +
-        `✅ *TOTAL NET ENCAISSÉ* : ${formatFCFA(sub.totalPaidAmount)}\n` +
-        `--------------------------------------\n` +
-        `_(L'image du reçu est copiée : faites Coller / Ctrl+V pour l'envoyer)._\n` +
-        `_Quittance certifiée par le Service Transport & Logistique Scolaire._`;
-
-      const waUrl = cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
-        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
-      window.open(waUrl, '_blank');
-      setToastMessage('📸 Image du reçu copiée dans le presse-papier ! Collez-la (Ctrl+V) dans WhatsApp.');
-      setTimeout(() => setToastMessage(null), 4500);
+      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setTimeout(() => setToastMessage(null), 7000);
     } catch (e) {
       console.error(e);
     } finally {
