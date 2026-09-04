@@ -8,6 +8,11 @@ const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
 const SCHOOL_SETTINGS_PREFIX = 'schoolflow_school_settings_v1_';
 const DELETED_STUDENTS_STORAGE_KEY = 'schoolflow_deleted_student_ids_v1';
+const DELETED_SCHOOLS_KEY = 'schoolflow_deleted_schools_v1';
+const SCHOOL_STATUS_PREFIX = 'schoolflow_school_status_v1_';
+const STAFF_USERS_STORAGE_KEY = 'schoolflow_staff_users_v1';
+const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_bulletins_v1';
+const DOCS_STATUS_KEY = 'schoolflow_documents_status_v1';
 export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
 export const REALTIME_SYNC_CHANNEL_NAME = 'schoolflow_realtime_sync_v2';
 
@@ -639,13 +644,32 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
   try {
     const slug = schoolSlug || 'epc-manoi';
 
+    // 0. Débloquer l'ID s'il était précédemment dans la liste des supprimés
+    try {
+      const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
+      if (rawDeleted) {
+        const deletedArr: string[] = JSON.parse(rawDeleted);
+        const cleaned = deletedArr.filter(
+          (id) =>
+            id !== student.id &&
+            id !== student.studentNumber &&
+            id !== invoice.id &&
+            id !== invoice.invoiceNumber &&
+            id !== `stu-${student.studentNumber.replace(/\D/g, '').padStart(3, '0')}`
+        );
+        localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(cleaned));
+      }
+    } catch (e) {}
+
     // 1. Sauvegarder dans la clé globale
     const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
-    const filteredStudents = prevStudents.filter(
-      (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
-    );
-    const studentWithSlug = { ...student, schoolSlug: slug, schoolId: slug };
+    const studentWithSlug = {
+      ...student,
+      schoolSlug: slug,
+      schoolId: slug,
+      enrollmentType: student.enrollmentType || 'nouveau',
+    };
     const updatedStudents = [studentWithSlug, ...filteredStudents];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
 
