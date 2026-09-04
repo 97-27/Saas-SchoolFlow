@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import { School } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
@@ -9,30 +10,20 @@ import {
   BadgePercent,
   PlusCircle,
   Printer,
-  Sparkles,
   Users,
-  Clock,
   CheckCircle2,
   Building2,
-  Calendar,
   Trash2,
   RotateCcw,
-  Share2,
   FileCheck,
   Zap,
   Receipt,
-  FileSpreadsheet,
-  ChevronLeft,
-  ChevronRight,
   Download,
   X,
   Copy,
   Smartphone,
-  Phone,
-  Search,
   ChevronDown,
   FolderOpen,
-  Check,
   Loader2,
 } from 'lucide-react';
 
@@ -71,7 +62,7 @@ export interface FamilyDiscountReceipt {
   installments: PaymentInstallment[];
 }
 
-// Niveaux scolaires officiels de la Maternelle jusqu'à la Terminale
+// Niveaux scolaires officiels de la Maternelle jusqu'à la 3ème (et secondaires si configuré)
 const DEFAULT_CHILDREN_CLASSES = [
   'Maternelle (P.S.)',
   'Maternelle (M.S.)',
@@ -86,18 +77,7 @@ const DEFAULT_CHILDREN_CLASSES = [
   '5ème',
   '4ème',
   '3ème',
-  '2nde A',
-  '2nde C',
-  '1ère A',
-  '1ère C',
-  '1ère D',
-  'Terminale A',
-  'Terminale C',
-  'Terminale D',
 ];
-
-// Reçus Officiels Pré-Enregistrés (vide par défaut)
-const INITIAL_FIVE_RECEIPTS: FamilyDiscountReceipt[] = [];
 
 const DISCOUNTS_STORAGE_KEY = 'schoolflow_special_discounts_v1';
 
@@ -153,7 +133,7 @@ export function SpecialDiscountsView({
   const [secondaryPhones, setSecondaryPhones] = useState<string[]>(firstRec?.secondaryPhones || []);
   const [parentAddress, setParentAddress] = useState<string>(firstRec?.parentAddress || '');
   const [receiptNumber, setReceiptNumber] = useState<string>(firstRec?.receiptNumber || 'REC-FAM-2026-001');
-  const [issueDate, setIssueDate] = useState<string>(firstRec?.issueDate || '2026-09-01');
+  const [issueDate, setIssueDate] = useState<string>(firstRec?.issueDate || '01/09/2026');
 
   // Saisie financière directe et 100% modifiable pour TOUS les champs (Total, Réduction, Net à payer, Somme versée)
   const [manualTotalAmountFCFA, setManualTotalAmountFCFA] = useState<number | null>(firstRec?.customTotalAmountFCFA || null);
@@ -162,7 +142,7 @@ export function SpecialDiscountsView({
   const [manualNetToPayFCFA, setManualNetToPayFCFA] = useState<number | null>(firstRec?.customNetToPayFCFA || null);
   const [manualPaidAmountFCFA, setManualPaidAmountFCFA] = useState<number | null>(firstRec?.customPaidAmountFCFA || null);
 
-  // Liste des enfants (jusqu'à 10 enfants !)
+  // Liste des enfants (jusqu'à 10 enfants)
   const [children, setChildren] = useState<ChildItem[]>(firstRec?.children || []);
 
   // Liste des versements (jusqu'à 5 versements)
@@ -172,6 +152,16 @@ export function SpecialDiscountsView({
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Modal WhatsApp Preview Data
+  const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
+    imageUrl: string;
+    blob: Blob;
+    fileName: string;
+    phone: string;
+    cleanPhone: string;
+    name: string;
+  } | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -283,7 +273,7 @@ export function SpecialDiscountsView({
     return Math.max(0, netToPayFCFA - totalPaidFCFA);
   }, [netToPayFCFA, totalPaidFCFA]);
 
-  // Statistiques globales calculées sur les 5 reçus enregistrés
+  // Statistiques globales calculées sur les reçus enregistrés
   const globalKpis = useMemo(() => {
     let totalKids = 0;
     let girls = 0;
@@ -417,7 +407,7 @@ export function SpecialDiscountsView({
     setParentPhone('');
     setSecondaryPhones([]);
     setParentAddress('');
-    setIssueDate(new Date().toISOString().split('T')[0]);
+    setIssueDate('01/09/2026');
     setDiscountType('Réduction 2 enfants');
     setDiscountAmountFCFA(50000);
     setManualTotalAmountFCFA(null);
@@ -452,141 +442,374 @@ export function SpecialDiscountsView({
     };
 
     const exists = savedReceipts.findIndex((r) => r.receiptNumber === receiptNumber);
+    let updatedList: FamilyDiscountReceipt[];
     if (exists >= 0) {
-      const copy = [...savedReceipts];
-      copy[exists] = updatedReceipt;
-      setSavedReceipts(copy);
+      updatedList = [...savedReceipts];
+      updatedList[exists] = updatedReceipt;
     } else {
-      setSavedReceipts([...savedReceipts, updatedReceipt]);
+      updatedList = [...savedReceipts, updatedReceipt];
       setSelectedReceiptIndex(savedReceipts.length);
     }
+
+    setSavedReceipts(updatedList);
+    try {
+      localStorage.setItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(updatedList));
+      localStorage.setItem(DISCOUNTS_STORAGE_KEY, JSON.stringify(updatedList));
+      window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+    } catch (e) {}
 
     setToastMessage(`💾 Reçu N° ${receiptNumber} sauvegardé dans les archives !`);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
 
-  // Fonction de capture et copie d'image directe dans le Presse-Papier (Clipboard) + Envoi WhatsApp
-  const handleShareWhatsappWithImageCopy = async () => {
-    setIsGeneratingImage(true);
-    const schoolDisplayName = currentSchool.shortName || currentSchool.name || 'EPC MANOI';
-
-    // 1. Tenter la capture d'image réelle et la copie dans le Presse-Papier
+  const handleCopyReceiptImageToClipboard = async (blob: Blob) => {
     try {
-      const element = document.getElementById('printable-receipt-card');
-      if (element) {
-        let html2canvasLib = (window as any).html2canvas;
-        if (!html2canvasLib) {
-          try {
-            const mod = await import('html2canvas');
-            html2canvasLib = mod.default || mod;
-          } catch (e) {
-            await new Promise((resolve, reject) => {
-              const s = document.createElement('script');
-              s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-              s.onload = resolve;
-              s.onerror = reject;
-              document.head.appendChild(s);
-            });
-            html2canvasLib = (window as any).html2canvas;
-          }
-        }
-
-        if (html2canvasLib) {
-          const canvas = await html2canvasLib(element, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-          });
-
-          canvas.toBlob(async (blob: Blob | null) => {
-            if (blob) {
-              try {
-                await navigator.clipboard.write([
-                  new ClipboardItem({
-                    'image/png': blob,
-                  }),
-                ]);
-                setToastMessage('📸 Image certifiée du Reçu copiée dans le presse-papier ! Collez-la (Ctrl+V) dans WhatsApp.');
-                setShowToast(true);
-              } catch (clipErr) {
-                console.warn('Clipboard write fallback:', clipErr);
-              }
-            }
-          }, 'image/png');
-        }
+      if (navigator.clipboard && (window as any).ClipboardItem) {
+        await navigator.clipboard.write([
+          new (window as any).ClipboardItem({
+            'image/png': blob,
+          }),
+        ]);
+        setToastMessage('✓ Image du reçu copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+        setShowToast(true);
+      } else {
+        setToastMessage('ℹ️ Image HD du reçu prête pour WhatsApp.');
+        setShowToast(true);
       }
     } catch (err) {
-      console.warn('Capture image note:', err);
-    } finally {
-      setIsGeneratingImage(false);
+      console.warn('Copie presse-papier:', err);
     }
-
-    // 2. Ouvrir WhatsApp avec message personnalisé avec le nom de l'école et le numéro du parent
-    const cleanPhone = parentPhone.replace(/\D/g, '');
-    const text = `*Reçu Officiel de Scolarité — ${schoolDisplayName}*%0A*N° Reçu :* ${receiptNumber}%0A*Date :* ${formatDate(issueDate)}%0A*Responsable Légal :* ${parentName}%0A*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}%0A-------------------------------%0A*Somme Totale :* ${formatFCFA(totalBrutFCFA)}%0A*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}%0A*Net À Payer :* ${formatFCFA(netToPayFCFA)}%0A*Somme Versée :* ${formatFCFA(totalPaidFCFA)}%0A*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}%0A-------------------------------%0A_Reçu officiel certifié par le Service Comptabilité de ${schoolDisplayName}._%0A_(L'image du reçu est copiée : faites Coller / Ctrl+V pour l'envoyer)_.`;
-
-    const waUrl = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${text}`
-      : `https://wa.me/?text=${text}`;
-
-    window.open(waUrl, '_blank');
   };
 
-  // Téléchargement direct du reçu sous forme d'image PNG certifiée
-  const handleDownloadReceiptImage = async () => {
+  // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp
+  const handleShareWhatsappWithImageCopy = async () => {
+    const element = document.getElementById('printable-receipt-card');
+    if (!element) return;
+
     setIsGeneratingImage(true);
+    setToastMessage('📸 Capture HD du Reçu Officiel en cours...');
+    setShowToast(true);
+
     try {
-      const element = document.getElementById('printable-receipt-card');
-      if (element) {
-        let html2canvasLib = (window as any).html2canvas;
-        if (!html2canvasLib) {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsGeneratingImage(false);
+          return;
+        }
+
+        // 1. Copier automatiquement dans le presse-papier
+        if (navigator.clipboard && (window as any).ClipboardItem) {
           try {
-            const mod = await import('html2canvas');
-            html2canvasLib = mod.default || mod;
-          } catch (e) {
-            await new Promise((resolve, reject) => {
-              const s = document.createElement('script');
-              s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-              s.onload = resolve;
-              s.onerror = reject;
-              document.head.appendChild(s);
-            });
-            html2canvasLib = (window as any).html2canvas;
+            await navigator.clipboard.write([
+              new (window as any).ClipboardItem({
+                'image/png': blob,
+              }),
+            ]);
+          } catch (clipErr) {
+            console.warn('Clipboard write fallback:', clipErr);
           }
         }
 
-        if (html2canvasLib) {
-          const canvas = await html2canvasLib(element, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-          });
+        // 2. Afficher la modale de prévisualisation et partage WhatsApp
+        const imageUrl = URL.createObjectURL(blob);
+        const cleanPhone = (parentPhone || '').replace(/\D/g, '');
+        const fileName = `Recu_Reduction_${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
 
-          const dataUrl = canvas.toDataURL('image/png');
-          const link = document.createElement('a');
-          link.download = `${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
-          link.href = dataUrl;
-          link.click();
-          setToastMessage(`📥 Image du Reçu (${receiptNumber}.png) téléchargée avec succès !`);
-          setShowToast(true);
-          setTimeout(() => setShowToast(false), 3000);
-        }
-      }
+        setWhatsAppPreviewData({
+          imageUrl,
+          blob,
+          fileName,
+          phone: parentPhone || '+225 --',
+          cleanPhone,
+          name: parentName || 'Parent d\'élève',
+        });
+
+        setToastMessage('✓ Image du reçu copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+        setShowToast(true);
+        setIsGeneratingImage(false);
+      }, 'image/png');
     } catch (err) {
-      console.warn('Download image note:', err);
-    } finally {
+      console.error('Erreur génération image reçu:', err);
       setIsGeneratingImage(false);
+      const cleanPhone = (parentPhone || '').replace(/\D/g, '');
+      const schoolDisplayName = currentSchool.shortName || currentSchool.name || 'EPC MANOI';
+      const message = `*Reçu Officiel de Scolarité — ${schoolDisplayName}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_Reçu officiel certifié par le Service Comptabilité de ${schoolDisplayName}._`;
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
     }
+  };
+
+  const renderDiscountReceiptSlip = (badgeLabel?: string) => {
+    return (
+      <div
+        id="printable-receipt-card"
+        className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-800 shadow-xl space-y-5 relative overflow-hidden printable-receipt-area print:p-4 print:border-none print:shadow-none print:w-full print:m-0"
+      >
+        {/* 1. EN-TÊTE OFFICIEL AVEC LES DEUX LOGOS, NOM, SIGLE, DEVISE, SLOGAN, CONTACTS ET CODE MENA */}
+        <div className="pb-4 border-b-2 border-slate-800 flex items-center justify-between gap-4">
+          {/* Logo de l'École (Gauche) */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-2xl shadow-md shrink-0 border border-emerald-900 overflow-hidden">
+            {currentSchool.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={currentSchool.logoUrl} alt="Logo École" className="w-full h-full object-cover" />
+            ) : (
+              <span>EPC</span>
+            )}
+          </div>
+
+          {/* Informations Officielles de l'École */}
+          <div className="text-center flex-1 space-y-1">
+            <h2 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading leading-tight uppercase">
+              {currentSchool.name}
+            </h2>
+
+            <div className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase tracking-wide">
+              ({currentSchool.shortName || 'EPC MANOI'})
+            </div>
+
+            <p className="text-[11px] font-bold text-emerald-800 italic">
+              {currentSchool.receiptHeaderMotto || currentSchool.motto || '« Faisons de nos enfants les élites de demain. »'}
+            </p>
+
+            <p className="text-[10px] text-slate-600 font-medium">
+              Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Abobo Biabou 2'} • Tél : {currentSchool.receiptHeaderPhone || currentSchool.phone || '+225 01 02 61 14 09'}
+            </p>
+
+            {/* Code Établissement / Code MENA */}
+            <div className="inline-block bg-slate-900 text-white text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
+              Code Établissement : {currentSchool.menaCode || currentSchool.ministryCode || '321119'}
+            </div>
+          </div>
+
+          {/* Armoiries / Emblème du Pays (Droite) */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center p-1 shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={currentSchool.countryEmblemUrl || 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'}
+              alt="Armoiries Nationales"
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
+
+        {/* 2. TITRE DU REÇU & N° DE REÇU */}
+        <div className="text-center bg-slate-950 text-white py-3 px-4 rounded-2xl shadow-sm space-y-1">
+          <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-heading text-emerald-400">
+            REÇU OFFICIEL DE SCOLARITÉ & RÉDUCTION SPÉCIALE {badgeLabel ? `— ${badgeLabel}` : ''}
+          </h3>
+          <div className="flex items-center justify-center gap-3 text-[11px] font-mono flex-wrap">
+            <span className="text-amber-300 font-bold bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10">
+              N° {receiptNumber}
+            </span>
+            <span className="text-slate-300 font-medium">
+              Date : <strong className="text-white">{formatDate(issueDate)}</strong>
+            </span>
+          </div>
+        </div>
+
+        {/* 3. COORDONNÉES FAMILLE & CONTACTS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase text-slate-400 block">Responsable Légal / Parent :</span>
+            <p className="font-black text-slate-900 text-sm">{parentName || '—'}</p>
+
+            <div className="space-y-0.5 text-[11px] font-mono">
+              <p className="text-slate-800 font-bold flex items-center gap-1">
+                <span>📱 WhatsApp :</span>
+                <span className="text-emerald-800 font-extrabold">{parentPhone || '—'}</span>
+              </p>
+              {secondaryPhones.map((ph, idx) => (
+                <p key={idx} className="text-slate-600">
+                  📞 Contact {idx + 2} : <strong>{ph}</strong>
+                </p>
+              ))}
+            </div>
+
+            <p className="text-slate-500 text-[11px]">📍 {parentAddress || 'Abidjan, Côte d\'Ivoire'}</p>
+          </div>
+
+          <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
+            <span className="text-[10px] font-bold uppercase text-slate-400 block">Motif de Réduction Spéciale :</span>
+            <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200">
+              {discountType}
+            </span>
+            <p className="text-[10px] text-slate-500 mt-1">
+              Année Scolaire active : <strong className="text-emerald-800">{currentSchool.academicYear || '2026-2027'}</strong>
+            </p>
+          </div>
+        </div>
+
+        {/* 4. TABLEAU DES ENFANTS BÉNÉFICIAIRES */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+            <span>LISTE DES ENFANTS INSCRITS DE LA FAMILLE ({children.length}) :</span>
+            <span className="text-[11px] text-slate-400 font-normal">Maternelle à 3ème</span>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">
+                  <th className="py-2 pl-3 pr-2 w-8 text-center">N°</th>
+                  <th className="py-2 px-2">Nom & Prénoms de l&apos;Élève</th>
+                  <th className="py-2 px-2 text-center">Classe</th>
+                  <th className="py-2 pr-3 pl-2 text-right">Scolarité Initiale</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                {children.map((child, idx) => (
+                  <tr key={child.id} className="hover:bg-slate-50/60">
+                    <td className="py-2 pl-3 pr-2 font-mono text-center text-slate-400 text-[11px]">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2 px-2 font-bold text-slate-900">
+                      {child.fullName || `Élève N°${idx + 1}`}
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
+                        {child.grade}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3 pl-2 text-right font-mono font-semibold">
+                      {formatFCFA(child.tuitionAmount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 5. GRAND RÉCAPITULATIF FINANCIER */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 rounded-2xl bg-slate-950 text-white shadow-md">
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+              Somme Totale
+            </span>
+            <p className="text-xs sm:text-sm font-extrabold font-heading text-slate-200">
+              {formatFCFA(totalBrutFCFA)}
+            </p>
+          </div>
+
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
+              Réduction Accordée
+            </span>
+            <p className="text-xs sm:text-sm font-extrabold font-heading text-amber-300">
+              -{formatFCFA(discountAmountFCFA)}
+            </p>
+          </div>
+
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
+              Somme Net À Payer
+            </span>
+            <p className="text-sm sm:text-base font-extrabold font-heading text-emerald-400">
+              {formatFCFA(netToPayFCFA)}
+            </p>
+          </div>
+
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase font-bold text-blue-400 block tracking-wider">
+              Somme Versée
+            </span>
+            <p className="text-sm sm:text-base font-extrabold font-heading text-white">
+              {formatFCFA(totalPaidFCFA)}
+            </p>
+          </div>
+        </div>
+
+        {/* 6. DÉTAIL DES VERSEMENTS + RESTE À PAYER */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+            <span>HISTORIQUE DES VERSEMENTS EFFECTUÉS ({installments.length}/5) :</span>
+            <span className="text-emerald-700 font-extrabold font-heading text-sm">
+              Reste À Payer : {formatFCFA(remainingBalanceFCFA)}
+            </span>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 overflow-hidden text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">
+                  <th className="py-1.5 pl-3">Échéance</th>
+                  <th className="py-1.5 px-2">Date</th>
+                  <th className="py-1.5 px-2">Moyen de Paiement</th>
+                  <th className="py-1.5 px-2">N° Reçu</th>
+                  <th className="py-1.5 pr-3 text-right">Montant Versé</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[11px]">
+                {installments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-3 text-center text-slate-400">
+                      Aucun versement enregistré pour ce reçu.
+                    </td>
+                  </tr>
+                ) : (
+                  installments.map((inst, i) => (
+                    <tr key={inst.id} className="font-medium text-slate-800">
+                      <td className="py-1.5 pl-3 font-bold">Versement N°{i + 1}</td>
+                      <td className="py-1.5 px-2 font-mono">{formatDate(inst.paymentDate)}</td>
+                      <td className="py-1.5 px-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 font-semibold text-[10px]">
+                          {inst.paymentMethod} {inst.reference ? `(${inst.reference})` : ''}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2 font-mono text-slate-500">{inst.receiptNumber}</td>
+                      <td className="py-1.5 pr-3 text-right font-mono font-bold text-emerald-800">
+                        {formatFCFA(inst.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 7. PIED DE PAGE : CACHET OFFICIEL & SIGNATURE */}
+        <div className="pt-4 border-t-2 border-slate-800 flex items-end justify-between text-xs gap-4">
+          <div className="space-y-1 max-w-[260px]">
+            <span className="text-[10px] font-bold text-slate-400 uppercase block">Mention Obligatoire :</span>
+            <p className="text-[10px] text-slate-500 leading-tight italic">
+              Ce reçu certifie les versements effectués sous réserve d&apos;encaissement définitif. Aucun remboursement après validation.
+            </p>
+          </div>
+
+          <div className="text-center space-y-1 shrink-0">
+            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+              Cachet Officiel & Direction
+            </span>
+            <div className="w-36 h-20 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/40 flex flex-col items-center justify-center p-1 text-emerald-900 shadow-2xs relative">
+              <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName || 'EPC MANOI'}</span>
+              <span className="text-[8px] font-bold text-emerald-700">SERVICE COMPTABILITÉ</span>
+              <span className="text-[8px] font-mono text-slate-500 mt-0.5">PAYÉ & CERTIFIÉ ✓</span>
+              <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                <Building2 className="w-12 h-12 text-emerald-900" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="space-y-6 pb-12 font-sans">
       {/* Toast de notification */}
       {showToast && (
-        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-800 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-800 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 print:hidden">
           <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
           <span className="font-bold text-xs">{toastMessage}</span>
         </div>
@@ -609,7 +832,7 @@ export function SpecialDiscountsView({
         </div>
       </div>
 
-      {/* 2. Les 3 Blocs KPI (Actualisés : 11 élèves, Maternelle à Terminale, 5 Reçus Actifs) */}
+      {/* 2. Les 3 Blocs KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 print:hidden">
         {/* Card 1: Total Élèves Bénéficiaires */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
@@ -655,7 +878,7 @@ export function SpecialDiscountsView({
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
             <span>Niveaux scolaires</span>
-            <span className="font-semibold text-slate-700">Maternelle à Terminale</span>
+            <span className="font-semibold text-slate-700">Maternelle à 3ème</span>
           </div>
         </div>
 
@@ -719,7 +942,7 @@ export function SpecialDiscountsView({
       </div>
 
       {/* 3. DISPOSITIF REÇU AUTOMATIQUE : FORMULAIRE À GAUCHE (5 COLS) + REÇU OFFICIEL À DROITE (7 COLS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start print:hidden">
         
         {/* ================= PANNEAU DE CONTRÔLE / FORMULAIRE (5 COLONNES) ================= */}
         <div className="lg:col-span-5 bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs space-y-5 print:hidden">
@@ -739,9 +962,8 @@ export function SpecialDiscountsView({
               </div>
             </div>
 
-            {/* Historique des Reçus + Nouveau Reçu Vierge positionnés en haut à droite des paramètres */}
+            {/* Historique des Reçus + Nouveau Reçu Vierge */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* SÉLECTEUR DÉROULANT HISTORIQUE DES REÇUS */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   type="button"
@@ -758,7 +980,7 @@ export function SpecialDiscountsView({
                   <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
                       <span>Reçus Enregistrés ({savedReceipts.length})</span>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Maternelle à Tle</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Maternelle à 3ème</span>
                     </div>
                     <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 py-1">
                       {savedReceipts.map((rec, idx) => (
@@ -804,7 +1026,7 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* SECTION 1 : COORDONNÉES DU PARENT & TÉLÉPHONE WHATSAPP (AVEC JUSQU'À 3 NUMÉROS) */}
+          {/* SECTION 1 : COORDONNÉES DU PARENT & TÉLÉPHONE WHATSAPP */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-heading">
               1. Coordonnées du Responsable Légal
@@ -837,9 +1059,9 @@ export function SpecialDiscountsView({
                 />
               </div>
               
-              {/* Date d'inscription avec FrenchDateInput optimisé */}
+              {/* Date d'inscription avec FrenchDateInput */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Date d'inscription *</label>
+                <label className="text-[11px] font-bold text-slate-700">Date d&apos;inscription *</label>
                 <FrenchDateInput
                   value={issueDate}
                   onChange={setIssueDate}
@@ -891,13 +1113,13 @@ export function SpecialDiscountsView({
                 type="text"
                 value={parentAddress}
                 onChange={(e) => setParentAddress(e.target.value)}
-                placeholder="Ex : Cocody Angré 8ème Tranche, Abidjan"
+                placeholder="Ex : Abobo Biabou 2, Abidjan"
                 className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-slate-800"
               />
             </div>
           </div>
 
-          {/* SECTION 2 : SYNTHÈSE & SAISIE FINANCIÈRE DIRECTE (TOUS LES CHAMPS SONT LIBREMENT MODIFIABLES) */}
+          {/* SECTION 2 : SYNTHÈSE & SAISIE FINANCIÈRE DIRECTE */}
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 font-heading flex items-center gap-1.5">
@@ -919,9 +1141,8 @@ export function SpecialDiscountsView({
               )}
             </div>
 
-            {/* Les 4 Blocs de Saisie & Calculs en direct dans le panneau — Tous Modifiables ! */}
+            {/* Les 4 Blocs de Saisie & Calculs en direct dans le panneau */}
             <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-slate-900 text-white shadow-inner">
-              
               {/* 1. Somme Totale */}
               <div className="space-y-1">
                 <label className="text-[10px] uppercase font-bold text-slate-400 block">Somme Totale (FCFA)</label>
@@ -952,7 +1173,7 @@ export function SpecialDiscountsView({
                 />
               </div>
 
-              {/* 3. Somme Net À Payer (MODIFIABLE DIRECTEMENT !) */}
+              {/* 3. Somme Net À Payer */}
               <div className="space-y-1 pt-1 border-t border-slate-800">
                 <label className="text-[10px] uppercase font-bold text-emerald-400 block">Net À Payer (FCFA) *</label>
                 <input
@@ -963,7 +1184,7 @@ export function SpecialDiscountsView({
                 />
               </div>
 
-              {/* 4. Somme Versée (MODIFIABLE DIRECTEMENT !) */}
+              {/* 4. Somme Versée */}
               <div className="space-y-1 pt-1 border-t border-slate-800">
                 <label className="text-[10px] uppercase font-bold text-blue-400 block">Somme Versée (FCFA) *</label>
                 <input
@@ -975,7 +1196,7 @@ export function SpecialDiscountsView({
               </div>
             </div>
 
-            {/* BLOC RESTE À PAYER OBLIGATOIRE MIS EN ÉVIDENCE */}
+            {/* BLOC RESTE À PAYER */}
             <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
               remainingBalanceFCFA === 0
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold'
@@ -988,7 +1209,7 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* SECTION 3 : MOTIF DE RÉDUCTION & TAUX APPLIQUÉ */}
+          {/* SECTION 3 : MOTIF DE RÉDUCTION */}
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-heading">
               3. Motif de la Réduction
@@ -1019,7 +1240,7 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* SECTION 4 : ENFANTS BÉNÉFICIAIRES (JUSQU'À 10 ENFANTS — MATERNELLE À TERMINALE) */}
+          {/* SECTION 4 : ENFANTS BÉNÉFICIAIRES */}
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-heading">
@@ -1090,7 +1311,7 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* SECTION 5 : HISTORIQUE DES VERSEMENTS (JUSQU'À 5 VERSEMENTS) */}
+          {/* SECTION 5 : HISTORIQUE DES VERSEMENTS */}
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-heading">
@@ -1186,296 +1407,149 @@ export function SpecialDiscountsView({
           </div>
         </div>
 
-        {/* ================= REÇU OFFICIEL EN DIRECT (7 COLONNES — IMPRIMABLE A4 & CAPTURABLE EN IMAGE) ================= */}
-        <div id="printable-receipt-card" className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-800 shadow-xl space-y-5 relative overflow-hidden print:p-0 print:border-none print:shadow-none">
-          
-          {/* 1. EN-TÊTE OFFICIEL AVEC LES DEUX LOGOS, NOM, SIGLE, DEVISE, SLOGAN, CONTACTS ET CODE MENA */}
-          <div className="pb-4 border-b-2 border-slate-800 flex items-center justify-between gap-4">
-            
-            {/* Logo de l'École (Gauche) */}
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-2xl shadow-md shrink-0 border border-emerald-900 overflow-hidden">
-              {currentSchool.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={currentSchool.logoUrl} alt="Logo École" className="w-full h-full object-cover" />
-              ) : (
-                <span>SF</span>
-              )}
+        {/* ================= REÇU OFFICIEL EN DIRECT (7 COLONNES SUR ÉCRAN) ================= */}
+        <div className="lg:col-span-7 space-y-4 print:hidden">
+          {/* Barre d'action rapide sur le reçu */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">Reçu actif :</span>
+              <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                {receiptNumber}
+              </span>
             </div>
 
-            {/* Informations Officielles de l'École (Centrées : Nom, Sigle, Devise, Slogan, Situation, Code Établissement) */}
-            <div className="text-center flex-1 space-y-1">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading leading-tight uppercase">
-                {currentSchool.name}
-              </h2>
-              
-              <div className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase tracking-wide">
-                ({currentSchool.shortName || 'EPC MANOI'})
-              </div>
-              
-              <p className="text-[11px] font-bold text-emerald-800 italic">
-                {currentSchool.receiptHeaderMotto || currentSchool.motto || '« Discipline • Rigueur • Réussite »'}
-              </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+                title="Imprimer le reçu officiel sur une page A4"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Imprimer le Reçu</span>
+              </button>
 
-              {/* Slogan officiel de l'école */}
-              <p className="text-[10px] font-bold text-amber-700 italic">
-                {currentSchool.receiptHeaderSlogan || currentSchool.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux'}
-              </p>
-              
-              <p className="text-[10px] text-slate-600 font-medium">
-                Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Abidjan'} • Tél : {currentSchool.receiptHeaderPhone || currentSchool.phone || '+225 27 22 44 11 00'}
-              </p>
-
-              {/* Code Établissement / Code MENA */}
-              <div className="inline-block bg-slate-900 text-white text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
-                Code Établissement : {currentSchool.menaCode || currentSchool.ministryCode || 'MENA-04829-CI'}
-              </div>
-            </div>
-
-            {/* Armoiries / Emblème du Pays (Droite) */}
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center p-1 shrink-0 overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={currentSchool.countryEmblemUrl || 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'}
-                alt="Armoiries Nationales"
-                className="w-full h-full object-contain"
-              />
+              <button
+                type="button"
+                onClick={handleShareWhatsappWithImageCopy}
+                disabled={isGeneratingImage}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
+              >
+                {isGeneratingImage ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>{isGeneratingImage ? 'Capture en cours...' : 'Partager sur WhatsApp'}</span>
+              </button>
             </div>
           </div>
 
-          {/* 2. TITRE DU REÇU, N° DE REÇU & DATE D'INSCRIPTION POSITIONNÉE APRÈS LE TITRE */}
-          <div className="text-center bg-slate-950 text-white py-3 px-4 rounded-2xl shadow-sm space-y-1">
-            <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-heading text-emerald-400">
-              REÇU OFFICIEL DE SCOLARITÉ & RÉDUCTION SPÉCIALE
-            </h3>
-            <div className="flex items-center justify-center gap-3 text-[11px] font-mono flex-wrap">
-              <span className="text-amber-300 font-bold bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10">
-                N° {receiptNumber}
-              </span>
-              <span className="text-slate-300 font-medium">
-                Date d'inscription : <strong className="text-white">{formatDate(issueDate)}</strong>
-              </span>
-            </div>
-          </div>
-
-          {/* 3. COORDONNÉES FAMILLE & TOUS LES CONTACTS TÉLÉPHONIQUES ENREGISTRÉS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase text-slate-400 block">Responsable Légal / Parent :</span>
-              <p className="font-black text-slate-900 text-sm">{parentName || '—'}</p>
-              
-              {/* Affichage de tous les numéros de contact (jusqu'à 3 numéros) */}
-              <div className="space-y-0.5 text-[11px] font-mono">
-                <p className="text-slate-800 font-bold flex items-center gap-1">
-                  <span>📱 WhatsApp :</span>
-                  <span className="text-emerald-800 font-extrabold">{parentPhone || '—'}</span>
-                </p>
-                {secondaryPhones.map((ph, idx) => (
-                  <p key={idx} className="text-slate-600">
-                    📞 Contact {idx + 2} : <strong>{ph}</strong>
-                  </p>
-                ))}
-              </div>
-
-              <p className="text-slate-500 text-[11px]">📍 {parentAddress || 'Abidjan, Côte d\'Ivoire'}</p>
-            </div>
-            
-            <div className="space-y-1 sm:border-l sm:border-slate-200 sm:pl-3">
-              <span className="text-[10px] font-bold uppercase text-slate-400 block">Motif de Réduction Spéciale :</span>
-              <span className="inline-block px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200">
-                {discountType}
-              </span>
-              <p className="text-[10px] text-slate-500 mt-1">
-                Année Scolaire active : <strong className="text-emerald-800">{currentSchool.academicYear || '2026-2027'}</strong>
-              </p>
-            </div>
-          </div>
-
-          {/* 4. TABLEAU DES ENFANTS BÉNÉFICIAIRES (JUSQU'À 10 ENFANTS — MATERNELLE À TERMINALE) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>LISTE DES ENFANTS INSCRITS DE LA FAMILLE ({children.length}) :</span>
-              <span className="text-[11px] text-slate-400 font-normal">Maternelle à Terminale</span>
-            </div>
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">
-                    <th className="py-2 pl-3 pr-2 w-8 text-center">N°</th>
-                    <th className="py-2 px-2">Nom & Prénoms de l'Élève</th>
-                    <th className="py-2 px-2 text-center">Classe</th>
-                    <th className="py-2 pr-3 pl-2 text-right">Scolarité Initiale</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                  {children.map((child, idx) => (
-                    <tr key={child.id} className="hover:bg-slate-50/60">
-                      <td className="py-2 pl-3 pr-2 font-mono text-center text-slate-400 text-[11px]">
-                        {idx + 1}
-                      </td>
-                      <td className="py-2 px-2 font-bold text-slate-900">
-                        {child.fullName || `Élève N°${idx + 1}`}
-                      </td>
-                      <td className="py-2 px-2 text-center">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
-                          {child.grade}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-3 pl-2 text-right font-mono font-semibold">
-                        {formatFCFA(child.tuitionAmount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 5. GRAND RÉCAPITULATIF FINANCIER (LES 4 BLOCS MAJEURS DEMANDÉS) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 rounded-2xl bg-slate-950 text-white shadow-md">
-            {/* Somme Totale */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
-                Somme Totale
-              </span>
-              <p className="text-xs sm:text-sm font-extrabold font-heading text-slate-200">
-                {formatFCFA(totalBrutFCFA)}
-              </p>
-            </div>
-
-            {/* Réduction */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
-                Réduction Accordée
-              </span>
-              <p className="text-xs sm:text-sm font-extrabold font-heading text-amber-300">
-                -{formatFCFA(discountAmountFCFA)}
-              </p>
-            </div>
-
-            {/* Somme Net À Payer */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
-                Somme Net À Payer
-              </span>
-              <p className="text-sm sm:text-base font-extrabold font-heading text-emerald-400">
-                {formatFCFA(netToPayFCFA)}
-              </p>
-            </div>
-
-            {/* Somme Versée */}
-            <div className="space-y-0.5">
-              <span className="text-[10px] uppercase font-bold text-blue-400 block tracking-wider">
-                Somme Versée
-              </span>
-              <p className="text-sm sm:text-base font-extrabold font-heading text-white">
-                {formatFCFA(totalPaidFCFA)}
-              </p>
-            </div>
-          </div>
-
-          {/* 6. DÉTAIL DES 5 VERSEMENTS + RESTE À PAYER EN ÉVIDENCE */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>HISTORIQUE DES VERSEMENTS EFFECTUÉS ({installments.length}/5) :</span>
-              <span className="text-emerald-700 font-extrabold font-heading text-sm">
-                Reste À Payer : {formatFCFA(remainingBalanceFCFA)}
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 overflow-hidden text-xs">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">
-                    <th className="py-1.5 pl-3">Échéance</th>
-                    <th className="py-1.5 px-2">Date</th>
-                    <th className="py-1.5 px-2">Moyen de Paiement</th>
-                    <th className="py-1.5 px-2">N° Reçu</th>
-                    <th className="py-1.5 pr-3 text-right">Montant Versé</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-[11px]">
-                  {installments.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-3 text-center text-slate-400">
-                        Aucun versement enregistré pour ce reçu.
-                      </td>
-                    </tr>
-                  ) : (
-                    installments.map((inst, i) => (
-                      <tr key={inst.id} className="font-medium text-slate-800">
-                        <td className="py-1.5 pl-3 font-bold">Versement N°{i + 1}</td>
-                        <td className="py-1.5 px-2 font-mono">{formatDate(inst.paymentDate)}</td>
-                        <td className="py-1.5 px-2">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 font-semibold text-[10px]">
-                            {inst.paymentMethod} {inst.reference ? `(${inst.reference})` : ''}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-2 font-mono text-slate-500">{inst.receiptNumber}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono font-bold text-emerald-800">
-                          {formatFCFA(inst.amount)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 7. PIED DE PAGE : CACHET OFFICIEL & SIGNATURE DE L'ÉCOLE */}
-          <div className="pt-4 border-t-2 border-slate-800 flex items-end justify-between text-xs gap-4">
-            <div className="space-y-1 max-w-[260px]">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Mention Obligatoire :</span>
-              <p className="text-[10px] text-slate-500 leading-tight italic">
-                Ce reçu certifie les versements effectués sous réserve d'encaissement définitif. Aucun remboursement après validation.
-              </p>
-            </div>
-
-            {/* Cachet & Signature */}
-            <div className="text-center space-y-1 shrink-0">
-              <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                Cachet Officiel & Direction
-              </span>
-              <div className="w-36 h-20 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/40 flex flex-col items-center justify-center p-1 text-emerald-900 shadow-2xs relative">
-                <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName || 'EPC MANOI'}</span>
-                <span className="text-[8px] font-bold text-emerald-700">SERVICE COMPTABILITÉ</span>
-                <span className="text-[8px] font-mono text-slate-500 mt-0.5">PAYÉ & CERTIFIÉ ✓</span>
-                <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
-                  <Building2 className="w-12 h-12 text-emerald-900" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Boutons d'Action Rapide en dessous du Reçu Automatique (Imprimer & Partager WhatsApp) */}
-          <div className="pt-2 flex items-center gap-2.5 flex-wrap print:hidden">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-              title="Imprimer le reçu officiel sur une page A4"
-            >
-              <Printer className="w-4 h-4 text-emerald-600" />
-              <span>Imprimer le Reçu</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleShareWhatsappWithImageCopy}
-              disabled={isGeneratingImage}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
-              title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
-            >
-              {isGeneratingImage ? (
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-              ) : (
-                <Smartphone className="w-4 h-4 text-emerald-600" />
-              )}
-              <span>Partager sur WhatsApp</span>
-            </button>
-          </div>
+          {/* Rendu du Reçu à l'écran */}
+          {renderDiscountReceiptSlip()}
         </div>
       </div>
+
+      {/* ================= SECTION D'IMPRESSION OFFICIELLE (1 SEUL REÇU PAR PAGE A4) ================= */}
+      <div id="official-discount-receipt-print" className="hidden print:block print:w-full printable-receipt-area">
+        {renderDiscountReceiptSlip('EXEMPLAIRE OFFICIEL')}
+      </div>
+
+      {/* ================= MODAL PRÉVISUALISATION & PARTAGE PHOTO REÇU WHATSAPP ================= */}
+      {whatsAppPreviewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-heading">
+                    Photo HD du Reçu de Scolarité
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Parent : <strong className="text-slate-900 font-mono whitespace-nowrap">{whatsAppPreviewData.phone}</strong> ({whatsAppPreviewData.name})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsAppPreviewData(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Aperçu fidèle de l'image capturée */}
+            <div className="rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 max-h-72 overflow-y-auto p-1.5 shadow-inner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={whatsAppPreviewData.imageUrl}
+                alt="Photo officielle du reçu de réduction"
+                className="w-full object-contain rounded-xl shadow-xs"
+              />
+            </div>
+
+            {/* Instruction claire */}
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-emerald-900">
+                  Image du reçu déjà copiée dans votre presse-papier !
+                </p>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
+                  Cliquez sur <strong>« Ouvrir le WhatsApp du parent »</strong> puis faites <strong>Ctrl + V</strong> (ou Coller) dans la discussion pour envoyer la photo officielle.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions principales */}
+            <div className="space-y-2 pt-1">
+              <a
+                href={
+                  whatsAppPreviewData.cleanPhone
+                    ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
+                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}._`
+                      )}`
+                    : `https://wa.me/?text=${encodeURIComponent(
+                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}._`
+                      )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Ouvrir WhatsApp ({whatsAppPreviewData.phone})</span>
+              </a>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyReceiptImageToClipboard(whatsAppPreviewData.blob)}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Recopier l&apos;image</span>
+                </button>
+
+                <a
+                  href={whatsAppPreviewData.imageUrl}
+                  download={whatsAppPreviewData.fileName}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Télécharger PNG</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

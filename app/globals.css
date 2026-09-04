@@ -150,6 +150,8 @@ h1, h2, h3, h4, h5, h6, .font-heading {
 
   /* Target receipt area to take full clean page */
   #official-receipt-print,
+  #official-salary-receipt-print,
+  #official-discount-receipt-print,
   .printable-receipt-area {
     display: block !important;
     position: static !important;

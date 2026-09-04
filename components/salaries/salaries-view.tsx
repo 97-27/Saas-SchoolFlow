@@ -8,39 +8,25 @@ import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { getLiveSchool, getLiveStaffUsers, DATA_UPDATED_EVENT, StaffUser } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
-  DollarSign,
-  PlusCircle,
-  Search,
-  RotateCcw,
   Printer,
-  FileCheck,
-  Building2,
-  Calendar,
   Trash2,
-  Edit3,
   CheckCircle2,
-  AlertCircle,
-  CreditCard,
   Receipt,
   Download,
   Eye,
   X,
   Sparkles,
-  Layers,
   Check,
   User,
   Users,
   Wallet,
   Briefcase,
-  ReceiptText,
   FileSpreadsheet,
   Award,
   ChevronDown,
-  Clock,
-  ShieldCheck,
-  MessageSquare,
-  Share2,
   Smartphone,
+  Copy,
+  Search,
 } from 'lucide-react';
 
 export interface SalaryPayment {
@@ -65,8 +51,6 @@ export interface SalaryPayment {
 }
 
 const STORAGE_KEY = 'schoolflow_staff_salaries_v1';
-
-const DEFAULT_SALARIES: SalaryPayment[] = [];
 
 const EMPTY_SALARY: SalaryPayment = {
   id: '',
@@ -208,7 +192,6 @@ export function SalariesView({
   // Filtres
   const [searchQuery, setSearchQuery] = useState('');
   const [periodFilter, setPeriodFilter] = useState('ALL');
-  const [methodFilter, setMethodFilter] = useState('ALL');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -260,7 +243,7 @@ export function SalariesView({
       matricule: matricule.trim() || `EMP-2026-${String(nextIndex).padStart(3, '0')}`,
       phone: phone.trim() || '+225 07 00 00 00 00',
       payPeriod: payPeriod,
-      paymentDate: paymentDate || '31/10/2026',
+      paymentDate: paymentDate || '30/09/2026',
       baseSalary: Number(baseSalary) || 0,
       bonuses: Number(bonuses) || 0,
       deductions: Number(deductions) || 0,
@@ -288,6 +271,8 @@ export function SalariesView({
       saveSalaries(filtered);
       if (selectedSalary.id === id && filtered.length > 0) {
         setSelectedSalary(filtered[0]);
+      } else if (filtered.length === 0) {
+        setSelectedSalary(EMPTY_SALARY);
       }
       showToast(`🗑️ Reçu de salaire ${recNum} supprimé.`);
     }
@@ -303,11 +288,10 @@ export function SalariesView({
         sal.matricule.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchPeriod = periodFilter === 'ALL' || sal.payPeriod === periodFilter;
-      const matchMethod = methodFilter === 'ALL' || sal.paymentMethod === methodFilter;
 
-      return matchSearch && matchPeriod && matchMethod;
+      return matchSearch && matchPeriod;
     });
-  }, [salaries, searchQuery, periodFilter, methodFilter]);
+  }, [salaries, searchQuery, periodFilter]);
 
   // Statistiques globales
   const totalMasseSalariale = useMemo(() => {
@@ -322,29 +306,60 @@ export function SalariesView({
     return salaries.reduce((sum, s) => sum + s.deductions, 0);
   }, [salaries]);
 
+  const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
+    imageUrl: string;
+    blob: Blob;
+    fileName: string;
+    phone: string;
+    cleanPhone: string;
+    name: string;
+  } | null>(null);
+  const [isCapturingWhatsApp, setIsCapturingWhatsApp] = useState(false);
+
   const handlePrint = () => {
     window.print();
   };
 
+  const handleCopyReceiptImageToClipboard = async (blob: Blob) => {
+    try {
+      if (navigator.clipboard && (window as any).ClipboardItem) {
+        await navigator.clipboard.write([
+          new (window as any).ClipboardItem({
+            'image/png': blob,
+          }),
+        ]);
+        showToast('✓ Image du reçu copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+      } else {
+        showToast('ℹ️ Image HD du reçu prête pour WhatsApp.');
+      }
+    } catch (err) {
+      console.warn('Copie presse-papier:', err);
+    }
+  };
+
   const handleShareWhatsApp = async () => {
-    const receiptElement = document.getElementById('official-receipt-print');
+    const receiptElement = document.getElementById('salary-receipt-card');
     if (!receiptElement) return;
 
-    showToast('📸 Génération de l\'image HD du reçu...');
+    setIsCapturingWhatsApp(true);
+    showToast('📸 Capture HD du bulletin de salaire en cours...');
 
     try {
       const canvas = await html2canvas(receiptElement, {
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
       });
 
       canvas.toBlob(async (blob) => {
-        if (!blob) return;
+        if (!blob) {
+          setIsCapturingWhatsApp(false);
+          return;
+        }
 
-        // 1. Copier directement dans le presse-papier pour Coller (Ctrl + V) dans WhatsApp
-        let copied = false;
+        // 1. Copier automatiquement dans le presse-papier
         if (navigator.clipboard && (window as any).ClipboardItem) {
           try {
             await navigator.clipboard.write([
@@ -352,35 +367,266 @@ export function SalariesView({
                 'image/png': blob,
               }),
             ]);
-            copied = true;
           } catch (err) {
-            console.warn('Copie presse-papier image non disponible:', err);
+            console.warn('Clipboard write fallback:', err);
           }
         }
 
-        // 2. Ouvrir WhatsApp avec message d'accompagnement
-        const cleanPhone = selectedSalary.phone.replace(/[^0-9]/g, '');
-        const message = `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`;
+        // 2. Afficher la modale de prévisualisation et partage WhatsApp
+        const imageUrl = URL.createObjectURL(blob);
+        const cleanPhone = (selectedSalary.phone || '').replace(/[^0-9]/g, '');
+        setWhatsAppPreviewData({
+          imageUrl,
+          blob,
+          fileName: `Bulletin_Salaire_${selectedSalary.receiptNumber}_${(selectedSalary.staffName || 'Personnel').replace(/\s+/g, '_')}.png`,
+          phone: selectedSalary.phone || '+225 --',
+          cleanPhone,
+          name: `${selectedSalary.civility} ${selectedSalary.staffName}`,
+        });
 
-        const encoded = encodeURIComponent(message);
-        const waUrl = cleanPhone
-          ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encoded}`
-          : `https://api.whatsapp.com/send?text=${encoded}`;
-
-        window.open(waUrl, '_blank');
-        showToast('📸 Image du reçu copiée dans le presse-papier ! Collez-la (Ctrl + V) dans WhatsApp.');
+        showToast('✓ Image du bulletin copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.');
+        setIsCapturingWhatsApp(false);
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
-      showToast('⚠️ Erreur lors de la capture de l\'image du reçu.');
+      setIsCapturingWhatsApp(false);
+      const cleanPhone = (selectedSalary.phone || '').replace(/[^0-9]/g, '');
+      const message = `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`;
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+      showToast('✓ Redirection vers WhatsApp effectuée.');
     }
   };
 
+  const renderSalaryReceiptSlip = (badgeLabel?: string) => {
+    return (
+      <div
+        id="salary-receipt-card"
+        className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-300 shadow-xl relative overflow-hidden text-slate-800 space-y-5 printable-receipt-area print:p-4 print:border-none print:shadow-none print:w-full print:m-0"
+      >
+        {/* 1. EN-TÊTE OFFICIEL DE L'ÉTABLISSEMENT — 3 COLONNES CENTRÉES */}
+        <div className="flex items-center justify-between gap-3 sm:gap-4 border-b-2 border-slate-800 pb-4 relative z-10">
+          {/* Gauche : Logo École */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white border border-slate-200 p-1.5 shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
+            {currentSchool.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentSchool.logoUrl}
+                alt="Logo École"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span className="text-base font-black text-emerald-800">
+                {currentSchool.shortName?.slice(0, 3) || 'EPC'}
+              </span>
+            )}
+          </div>
+
+          {/* Centre : Nom Officiel + Sigle Centré, Slogan, Situation & Code MENA */}
+          <div className="text-center flex-1 px-2 space-y-1">
+            <h3
+              suppressHydrationWarning
+              className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-heading uppercase tracking-tight leading-snug"
+            >
+              {currentSchool.name}
+            </h3>
+
+            {currentSchool.shortName && (
+              <p
+                suppressHydrationWarning
+                className="text-xs sm:text-sm font-extrabold text-emerald-800 font-heading tracking-wider"
+              >
+                ({currentSchool.shortName})
+              </p>
+            )}
+
+            <p
+              suppressHydrationWarning
+              className="text-[10px] sm:text-[11px] font-semibold text-emerald-800 italic"
+            >
+              « {currentSchool.receiptHeaderSlogan || currentSchool.slogan || currentSchool.motto || "Faisons de nos enfants les élites de demain."} »
+            </p>
+
+            <p suppressHydrationWarning className="text-[9.5px] sm:text-[10px] text-slate-600">
+              Situation : {currentSchool.district || currentSchool.city || 'Abobo Biabou 2'} • Tél : {currentSchool.phone || '+225 01 02 61 14 09'}
+            </p>
+
+            <div className="inline-block bg-slate-900 text-white text-[9.5px] sm:text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
+              Code Établissement : {currentSchool.ministryCode || currentSchool.menaCode || '321119'}
+            </div>
+          </div>
+
+          {/* Droite : Armoiries / Emblème du Pays */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center p-1 shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={currentSchool.countryEmblemUrl || 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'}
+              alt="Armoiries Nationales"
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
+
+        {/* 2. TITRE PRINCIPAL DU REÇU */}
+        <div className="text-center space-y-1 relative z-10 py-1">
+          <div className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white font-heading text-xs sm:text-sm font-extrabold uppercase tracking-wider shadow-sm">
+            BULLETIN & REÇU DE PAIEMENT DE SALAIRE {badgeLabel ? `— ${badgeLabel}` : ''}
+          </div>
+          <div className="flex items-center justify-center gap-3 text-xs font-mono">
+            <span className="font-bold text-slate-700">N° Quittance :</span>
+            <span className="font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+              {selectedSalary.receiptNumber}
+            </span>
+            <span className="text-slate-400">•</span>
+            <span className="text-slate-600 font-sans">Date : <strong>{selectedSalary.paymentDate}</strong></span>
+          </div>
+        </div>
+
+        {/* 3. CADRE IDENTITÉ DU SALARIÉ / ENSEIGNANT */}
+        <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 relative z-10 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div>
+              <span className="text-[10.5px] text-slate-500 font-medium block">Nom & Prénoms du Salarié :</span>
+              <span className="text-sm font-extrabold text-slate-900 font-heading">
+                {selectedSalary.civility} {selectedSalary.staffName}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10.5px] text-slate-500 font-medium block">Fonction / Poste occupé :</span>
+              <span className="text-xs font-bold text-slate-800">
+                {selectedSalary.role}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/70 text-xs">
+            <div>
+              <span className="text-[10px] text-slate-500 font-medium block">Matricule Employé :</span>
+              <span className="font-mono font-bold text-slate-900">{selectedSalary.matricule}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500 font-medium block">Mois de Traitement :</span>
+              <span className="font-bold text-emerald-800">{selectedSalary.payPeriod}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-500 font-medium block">Mode de Règlement :</span>
+              <span className="font-semibold text-slate-800">{selectedSalary.paymentMethod}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 4. TABLEAU DE DÉCOMPTE COMPTABLE DU SALAIRE */}
+        <div className="border border-slate-300 rounded-2xl overflow-hidden relative z-10">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-300">
+              <tr>
+                <th className="py-2.5 px-4 text-left">Désignation & Rubriques</th>
+                <th className="py-2.5 px-3 text-right">Gains (FCFA)</th>
+                <th className="py-2.5 px-4 text-right">Retenues (FCFA)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              <tr>
+                <td className="py-2 px-4 font-semibold text-slate-900">Salaire de Base Brut Mensuel</td>
+                <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">{formatFCFA(selectedSalary.baseSalary)}</td>
+                <td className="py-2 px-4 text-right font-mono text-slate-400">-</td>
+              </tr>
+              {selectedSalary.bonuses > 0 && (
+                <tr className="bg-emerald-50/40">
+                  <td className="py-2 px-4 font-semibold text-emerald-900">
+                    + Primes de Rendement, Indemnités & Heures Sup.
+                  </td>
+                  <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">+{formatFCFA(selectedSalary.bonuses)}</td>
+                  <td className="py-2 px-4 text-right font-mono text-slate-400">-</td>
+                </tr>
+              )}
+              {selectedSalary.deductions > 0 && (
+                <tr className="bg-rose-50/40">
+                  <td className="py-2 px-4 font-semibold text-rose-900">
+                    - Retenues & Avances sur Salaire
+                  </td>
+                  <td className="py-2 px-4 text-right font-mono text-slate-400">-</td>
+                  <td className="py-2 px-4 text-right font-mono font-bold text-rose-700">-{formatFCFA(selectedSalary.deductions)}</td>
+                </tr>
+              )}
+              {/* Ligne TOTAL NET */}
+              <tr className="bg-slate-900 text-white font-extrabold">
+                <td className="py-3 px-4 uppercase tracking-wider text-xs font-heading">
+                  NET TOTAL VERSÉ AU SALARIÉ
+                </td>
+                <td colSpan={2} className="py-3 px-4 text-right font-mono text-base sm:text-lg font-heading text-amber-300">
+                  {formatFCFA(selectedSalary.netSalary)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Observations / Référence */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <span className="text-slate-600">
+            Réf. Pièce : <strong className="font-mono text-slate-900">{selectedSalary.transactionRef}</strong>
+          </span>
+          <span className="text-slate-600">
+            Ordonnancé par : <strong className="text-slate-900">{selectedSalary.authorizedBy}</strong>
+          </span>
+        </div>
+
+        {/* 5. DOUBLE BLOC DES SIGNATURES & CACHET OFFICIEL */}
+        <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-slate-200 relative z-10">
+          {/* Signature Salarié */}
+          <div className="space-y-1 text-center">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-600 block">
+              L&apos;Employé(e) / Bénéficiaire
+            </span>
+            <p className="text-[9px] text-slate-400 italic">
+              « Lu, approuvé et certifié exact »
+            </p>
+            <div className="h-20 flex items-end justify-center pb-1">
+              <span className="text-[10px] font-mono text-slate-400">Émargement</span>
+            </div>
+          </div>
+
+          {/* Signature & Cachet Comptabilité Générale */}
+          <div className="space-y-1 text-center">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-900 block">
+              L&apos;Économe / Comptabilité Générale
+            </span>
+            <p className="text-[9px] text-emerald-800 font-bold">
+              Service Comptabilité & Finances
+            </p>
+            <div className="h-20 flex items-center justify-center relative">
+              {/* Tampon / Cachet Officiel de l'école */}
+              <div className="w-28 h-16 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/60 flex flex-col items-center justify-center p-1 transform rotate-[-3deg] shadow-xs">
+                <span className="text-[7.5px] font-black text-emerald-900 uppercase tracking-tighter">
+                  {currentSchool.shortName || currentSchool.name || 'EPC MANOI'}
+                </span>
+                <span className="text-[7px] font-bold text-emerald-700 uppercase">
+                  COMPTABILITÉ GÉNÉRALE
+                </span>
+                <span className="text-[7.5px] font-extrabold text-emerald-800">
+                  PAYÉ LE {selectedSalary.paymentDate}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bas de page légal */}
+        <div className="pt-2 text-center text-[9px] text-slate-400 border-t border-slate-100">
+          Ce document officiel tient lieu de quittance libératoire de salaire pour la période indiquée. Émis via SchoolFlow Africa.
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6 sm:space-y-7">
+    <div className="space-y-6 sm:space-y-7 pb-12">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-700 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200 border border-emerald-500">
+        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-700 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200 border border-emerald-500 print:hidden">
           <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
           <span className="text-xs font-bold">{toastMessage}</span>
         </div>
@@ -407,7 +653,7 @@ export function SalariesView({
       </div>
 
       {/* ═══════════════ 4 CARTES KPI STATISTIQUES FINANCIÈRES ═══════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 print:hidden">
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
@@ -486,10 +732,10 @@ export function SalariesView({
       </div>
 
       {/* ═══════════════ GRILLE PRINCIPALE (FORMULAIRE À GAUCHE + REÇU AUTOMATIQUE À DROITE) ═══════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start print:hidden">
         
         {/* ================= COLONNE GAUCHE (5 COLONNES) : FORMULAIRE DE SAISIE DE SALAIRE ================= */}
-        <div className="lg:col-span-5 bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-5">
+        <div className="lg:col-span-5 bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-5 print:hidden">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
@@ -499,108 +745,133 @@ export function SalariesView({
                 Paiement de Salaire & Quittance
               </h2>
             </div>
-            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-              Nouveau Reçu
+            <span className="text-[11px] text-slate-500 font-medium">
+              Saisie libre & dynamique
             </span>
           </div>
 
-          <form onSubmit={handleCreateSalary} className="space-y-4 text-xs">
-            
-            {/* Sélection rapide personnel existant */}
+          <form onSubmit={handleCreateSalary} className="space-y-4">
+            {/* Sélection d'un membre existant */}
             {staffUsers.length > 0 && (
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block text-[11px]">
-                  Sélectionner un membre du personnel existant :
+              <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
+                <label className="text-[11px] font-bold text-emerald-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Remplissage automatique depuis la liste du Personnel :</span>
                 </label>
                 <div className="relative">
                   <select
                     value={selectedStaffId}
                     onChange={(e) => handleStaffSelect(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 appearance-none cursor-pointer"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-slate-900 cursor-pointer shadow-2xs appearance-none"
                   >
-                    <option value="">-- Choisir dans la liste du personnel ou saisir librement --</option>
-                    {staffUsers
-                      .filter((staff) => staff.roleId !== 'fondateur')
-                      .map((staff) => (
-                        <option key={staff.id} value={staff.id}>
-                          {staff.fullName} ({staff.role})
-                        </option>
-                      ))}
+                    <option value="">Sélectionner un enseignant / membre du personnel...</option>
+                    {staffUsers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.fullName} — {s.role || s.subjectOrGrade || 'Personnel'} ({s.phone || 'Sans tél'})
+                      </option>
+                    ))}
                   </select>
-                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronDown className="w-4 h-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
             )}
 
-            {/* Civilité & Nom Prénoms du Bénéficiaire */}
+            {/* Civilité & Nom */}
             <div className="space-y-1">
               <label className="font-bold text-slate-700 block text-[11px]">
                 Civilité, Nom et Prénoms du Bénéficiaire *
               </label>
               <div className="flex gap-2">
-                <select
-                  value={civility}
-                  onChange={(e) => setCivility(e.target.value as any)}
-                  className="w-20 px-2 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 text-center cursor-pointer"
-                >
-                  <option value="Mr">Mr</option>
-                  <option value="Mme">Mme</option>
-                  <option value="Mlle">Mlle</option>
-                </select>
-                <input
-                  type="text"
-                  required
-                  value={staffName}
-                  onChange={(e) => setStaffName(e.target.value)}
-                  placeholder="Ex : Kouamé Konan"
-                  className="flex-1 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 placeholder:text-slate-400"
-                />
+                <div className="w-20 shrink-0">
+                  <select
+                    value={civility}
+                    onChange={(e) => setCivility(e.target.value as any)}
+                    className="w-full px-2 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 cursor-pointer text-center"
+                  >
+                    <option value="Mr">Mr</option>
+                    <option value="Mme">Mme</option>
+                    <option value="Mlle">Mlle</option>
+                  </select>
+                </div>
+                <div className="relative flex-1">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={staffName}
+                    onChange={(e) => setStaffName(e.target.value)}
+                    placeholder="Ex : KOUAME Kouassi Jean"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Fonction / Matière & Matricule */}
+            {/* Fonction & Matricule */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block text-[11px]">
-                  Fonction / Matière *
+                  Poste / Fonction *
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  placeholder="Ex : Professeur de Mathématiques"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900"
-                />
+                <div className="relative">
+                  <Briefcase className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    placeholder="Ex : Professeur de Mathématiques"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900"
+                  />
+                </div>
               </div>
+
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block text-[11px]">
-                  Matricule / N° Embauche
+                  N° Matricule / Code Employé
                 </label>
                 <input
                   type="text"
                   value={matricule}
                   onChange={(e) => setMatricule(e.target.value)}
-                  placeholder="Ex : ENS-2026-004"
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 uppercase"
+                  placeholder="Ex : EMP-2026-001"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-medium text-slate-900"
                 />
               </div>
             </div>
 
-            {/* Période / Mois de Paie & Date de Paiement */}
+            {/* Téléphone WhatsApp Salarié */}
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 block text-[11px] flex items-center justify-between">
+                <span>Téléphone / WhatsApp du Salarié</span>
+                <span className="text-[10px] text-emerald-600 font-semibold">Pour envoi du reçu</span>
+              </label>
+              <div className="relative">
+                <Smartphone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ex : +225 07 45 88 99 00"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-medium text-slate-900"
+                />
+              </div>
+            </div>
+
+            {/* Période du Salaire & Date de Paiement */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block text-[11px]">
-                  Mois / Période de Paie *
+                  Mois de Traitement *
                 </label>
                 <select
                   value={payPeriod}
                   onChange={(e) => setPayPeriod(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 cursor-pointer"
                 >
-                  {PAY_PERIODS.map((period) => (
-                    <option key={period} value={period}>
-                      {period}
+                  {PAY_PERIODS.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
                     </option>
                   ))}
                 </select>
@@ -608,49 +879,49 @@ export function SalariesView({
 
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block text-[11px]">
-                  Date de Paiement (JJ/MM/AAAA) *
+                  Date de Versement *
                 </label>
                 <FrenchDateInput
                   value={paymentDate}
                   onChange={setPaymentDate}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-medium text-slate-900"
                 />
               </div>
             </div>
 
-            {/* GRILLE FINANCIÈRE : SALAIRE BASE + PRIMES - RETENUES */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 flex items-center justify-between">
-                <span>Détail Financier (FCFA)</span>
-                <span className="text-emerald-700">Calcul Automatique</span>
+            {/* Rubriques Financières : Salaire de Base, Primes, Retenues */}
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-slate-900 font-heading">
+                  Rubriques & Décompte Financier (FCFA)
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">En FCFA</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-600 block">
-                    Salaire de Base *
+                  <label className="text-[10px] font-bold text-slate-700 block">
+                    Salaire de Base Brut *
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="1000"
-                    required
-                    value={baseSalary || ''}
+                    value={baseSalary === 0 ? '' : baseSalary}
                     onChange={(e) => setBaseSalary(Number(e.target.value))}
-                    placeholder="250000"
+                    placeholder="0"
                     className="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 focus:border-emerald-600 text-xs font-mono font-bold text-slate-900"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-emerald-700 block">
-                    + Primes / Heures
+                    + Primes / Heures Sup.
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="1000"
-                    value={bonuses || ''}
+                    value={bonuses === 0 ? '' : bonuses}
                     onChange={(e) => setBonuses(Number(e.target.value))}
                     placeholder="0"
                     className="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 focus:border-emerald-600 text-xs font-mono font-bold text-emerald-800"
@@ -665,7 +936,7 @@ export function SalariesView({
                     type="number"
                     min="0"
                     step="1000"
-                    value={deductions || ''}
+                    value={deductions === 0 ? '' : deductions}
                     onChange={(e) => setDeductions(Number(e.target.value))}
                     placeholder="0"
                     className="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 focus:border-rose-600 text-xs font-mono font-bold text-rose-800"
@@ -756,11 +1027,10 @@ export function SalariesView({
           </form>
         </div>
 
-        {/* ================= COLONNE DROITE (7 COLONNES) : BULLETIN & REÇU OFFICIEL IMPRIMABLE ================= */}
-        <div className="lg:col-span-7 space-y-4">
-          
+        {/* ================= COLONNE DROITE (7 COLONNES) : BULLETIN & REÇU OFFICIEL SUR ÉCRAN ================= */}
+        <div className="lg:col-span-7 space-y-4 print:hidden">
           {/* Barre d'action rapide sur le reçu */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs no-print">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-700">Reçu sélectionné :</span>
               <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
@@ -784,242 +1054,28 @@ export function SalariesView({
               <button
                 type="button"
                 onClick={handleShareWhatsApp}
-                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer"
+                disabled={isCapturingWhatsApp}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                 title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
               >
                 <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Partager sur WhatsApp</span>
+                <span>{isCapturingWhatsApp ? 'Capture en cours...' : 'Partager sur WhatsApp'}</span>
               </button>
             </div>
           </div>
 
-          {/* REÇU AUTOMATIQUE OFFICIEL DE SALAIRE (STYLE CONFORME MENA) */}
-          <div
-            id="official-receipt-print"
-            className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-300 shadow-xl relative overflow-hidden text-slate-800 space-y-5 printable-receipt-area"
-          >
-            {/* 1. EN-TÊTE OFFICIEL DE L'ÉTABLISSEMENT — 3 COLONNES CENTRÉES */}
-            <div className="flex items-center justify-between gap-3 sm:gap-4 border-b-2 border-slate-800 pb-4 relative z-10">
-              
-              {/* Gauche : Logo École */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white border border-slate-200 p-1.5 shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
-                {currentSchool.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={currentSchool.logoUrl}
-                    alt="Logo École"
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <span className="text-base font-black text-emerald-800">
-                    {currentSchool.shortName?.slice(0, 3) || 'EPC'}
-                  </span>
-                )}
-              </div>
-
-              {/* Centre : Nom Officiel + Sigle Centré, Slogan, Situation & Code MENA */}
-              <div className="text-center flex-1 px-2 space-y-1">
-                {/* Nom entier de l'école (sur sa propre ligne, grand et bien centré) */}
-                <h3
-                  suppressHydrationWarning
-                  className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-heading uppercase tracking-tight leading-snug"
-                >
-                  {currentSchool.name}
-                </h3>
-
-                {/* Sigle de l'école entre parenthèses sur la ligne du dessous */}
-                {currentSchool.shortName && (
-                  <p
-                    suppressHydrationWarning
-                    className="text-xs sm:text-sm font-extrabold text-emerald-800 font-heading tracking-wider"
-                  >
-                    ({currentSchool.shortName})
-                  </p>
-                )}
-
-                {/* Slogan officiel */}
-                <p
-                  suppressHydrationWarning
-                  className="text-[10px] sm:text-[11px] font-semibold text-emerald-800 italic"
-                >
-                  « {currentSchool.receiptHeaderSlogan || currentSchool.slogan || currentSchool.motto || "L'excellence au service du savoir"} »
-                </p>
-
-                <p suppressHydrationWarning className="text-[9.5px] sm:text-[10px] text-slate-600">
-                  Situation : {currentSchool.district || currentSchool.city || 'Abidjan'} • Tél : {currentSchool.phone || '+225 01 31 43 92 21'}
-                </p>
-
-                <div className="inline-block bg-slate-900 text-white text-[9.5px] sm:text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
-                  Code Établissement : {currentSchool.ministryCode || currentSchool.menaCode || 'MENA-04829-CI'}
-                </div>
-              </div>
-
-              {/* Droite : Armoiries / Emblème du Pays */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center p-1 shrink-0 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={currentSchool.countryEmblemUrl || 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Coat_of_arms_of_Ivory_Coast.svg/300px-Coat_of_arms_of_Ivory_Coast.svg.png'}
-                  alt="Armoiries Nationales"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-
-            {/* 2. TITRE PRINCIPAL DU REÇU */}
-            <div className="text-center space-y-1 relative z-10 py-1">
-              <div className="inline-block px-4 py-1 rounded-full bg-slate-900 text-white font-heading text-xs sm:text-sm font-extrabold uppercase tracking-wider shadow-sm">
-                BULLETIN & REÇU DE PAIEMENT DE SALAIRE
-              </div>
-              <div className="flex items-center justify-center gap-3 text-xs font-mono">
-                <span className="font-bold text-slate-700">N° Quittance :</span>
-                <span className="font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
-                  {selectedSalary.receiptNumber}
-                </span>
-                <span className="text-slate-400">•</span>
-                <span className="text-slate-600 font-sans">Date : <strong>{selectedSalary.paymentDate}</strong></span>
-              </div>
-            </div>
-
-            {/* 3. CADRE IDENTITÉ DU SALARIÉ / ENSEIGNANT */}
-            <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200 relative z-10 space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-[10.5px] text-slate-500 font-medium block">Nom & Prénoms du Salarié :</span>
-                  <span className="text-sm font-extrabold text-slate-900 font-heading">
-                    {selectedSalary.civility} {selectedSalary.staffName}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10.5px] text-slate-500 font-medium block">Fonction / Poste occupé :</span>
-                  <span className="text-xs font-bold text-slate-800">
-                    {selectedSalary.role}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/70 text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-500 font-medium block">Matricule Employé :</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedSalary.matricule}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 font-medium block">Mois de Traitement :</span>
-                  <span className="font-bold text-emerald-800">{selectedSalary.payPeriod}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-500 font-medium block">Mode de Règlement :</span>
-                  <span className="font-semibold text-slate-800">{selectedSalary.paymentMethod}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. TABLEAU DE DÉCOMPTE COMPTABLE DU SALAIRE */}
-            <div className="border border-slate-300 rounded-2xl overflow-hidden relative z-10">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-extrabold uppercase text-[10px] border-b border-slate-300">
-                  <tr>
-                    <th className="py-2.5 px-4 text-left">Désignation & Rubriques</th>
-                    <th className="py-2.5 px-3 text-right">Gains (FCFA)</th>
-                    <th className="py-2.5 px-4 text-right">Retenues (FCFA)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  <tr>
-                    <td className="py-2 px-4 font-semibold text-slate-900">Salaire de Base Brut Mensuel</td>
-                    <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">{formatFCFA(selectedSalary.baseSalary)}</td>
-                    <td className="py-2 px-4 text-right font-mono text-slate-400">-</td>
-                  </tr>
-                  {selectedSalary.bonuses > 0 && (
-                    <tr className="bg-emerald-50/40">
-                      <td className="py-2 px-4 font-semibold text-emerald-900">
-                        + Primes de Rendement, Indemnités & Heures Sup.
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">+{formatFCFA(selectedSalary.bonuses)}</td>
-                      <td className="py-2 px-4 text-right font-mono text-slate-400">-</td>
-                    </tr>
-                  )}
-                  {selectedSalary.deductions > 0 && (
-                    <tr className="bg-rose-50/40">
-                      <td className="py-2 px-4 font-semibold text-rose-900">
-                        - Retenues & Avances sur Salaire
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-slate-400">-</td>
-                      <td className="py-2 px-4 text-right font-mono font-bold text-rose-700">-{formatFCFA(selectedSalary.deductions)}</td>
-                    </tr>
-                  )}
-                  {/* Ligne TOTAL NET */}
-                  <tr className="bg-slate-900 text-white font-extrabold">
-                    <td className="py-3 px-4 uppercase tracking-wider text-xs font-heading">
-                      NET TOTAL VERSÉ AU SALARIÉ
-                    </td>
-                    <td colSpan={2} className="py-3 px-4 text-right font-mono text-base sm:text-lg font-heading text-amber-300">
-                      {formatFCFA(selectedSalary.netSalary)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Observations / Référence */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-              <span className="text-slate-600">
-                Réf. Pièce : <strong className="font-mono text-slate-900">{selectedSalary.transactionRef}</strong>
-              </span>
-              <span className="text-slate-600">
-                Ordonnancé par : <strong className="text-slate-900">{selectedSalary.authorizedBy}</strong>
-              </span>
-            </div>
-
-            {/* 5. DOUBLE BLOC DES SIGNATURES & CACHET OFFICIEL */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t-2 border-slate-200 relative z-10">
-              {/* Signature Salarié */}
-              <div className="space-y-1 text-center">
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-600 block">
-                  L&apos;Employé(e) / Bénéficiaire
-                </span>
-                <p className="text-[9px] text-slate-400 italic">
-                  « Lu, approuvé et certifié exact »
-                </p>
-                <div className="h-20 flex items-end justify-center pb-1">
-                  <span className="text-[10px] font-mono text-slate-400">Émargement</span>
-                </div>
-              </div>
-
-              {/* Signature & Cachet Comptabilité Générale */}
-              <div className="space-y-1 text-center">
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-900 block">
-                  L&apos;Économe / Comptabilité Générale
-                </span>
-                <p className="text-[9px] text-emerald-800 font-bold">
-                  Service Comptabilité & Finances
-                </p>
-                <div className="h-20 flex items-center justify-center relative">
-                  {/* Tampon / Cachet Officiel de l'école */}
-                  <div className="w-28 h-16 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/60 flex flex-col items-center justify-center p-1 transform rotate-[-3deg] shadow-xs">
-                    <span className="text-[7.5px] font-black text-emerald-900 uppercase tracking-tighter">
-                      {currentSchool.shortName || currentSchool.name || 'EPC MANOI'}
-                    </span>
-                    <span className="text-[7px] font-bold text-emerald-700 uppercase">
-                      COMPTABILITÉ GÉNÉRALE
-                    </span>
-                    <span className="text-[7.5px] font-extrabold text-emerald-800">
-                      PAYÉ LE {selectedSalary.paymentDate}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Bas de page légal */}
-            <div className="pt-2 text-center text-[9px] text-slate-400 border-t border-slate-100">
-              Ce document officiel tient lieu de quittance libératoire de salaire pour la période indiquée. Émis via SchoolFlow Africa.
-            </div>
-          </div>
+          {/* Rendu du Reçu à l'écran */}
+          {renderSalaryReceiptSlip()}
         </div>
       </div>
 
-      {/* ═══════════════ TABLEAU RÉCAPITULATIF DE TOUS LES SALAIRES VERSÉS ═══════════════ */}
-      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
+      {/* ================= SECTION D'IMPRESSION OFFICIELLE (1 SEUL REÇU PAR PAGE A4) ================= */}
+      <div id="official-salary-receipt-print" className="hidden print:block print:w-full printable-receipt-area">
+        {renderSalaryReceiptSlip('EXEMPLAIRE OFFICIEL')}
+      </div>
+
+      {/* ================= TABLEAU RÉCAPITULATIF DE TOUS LES SALAIRES VERSÉS ================= */}
+      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/80 shadow-xs space-y-4 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-slate-900 font-heading">
@@ -1138,6 +1194,101 @@ export function SalariesView({
           </table>
         </div>
       </div>
+
+      {/* ================= MODAL PRÉVISUALISATION & PARTAGE PHOTO REÇU WHATSAPP ================= */}
+      {whatsAppPreviewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Header Modal */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 font-heading">
+                    Photo HD du Bulletin de Salaire
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Bénéficiaire : <strong className="text-slate-900 font-mono whitespace-nowrap">{whatsAppPreviewData.phone}</strong> ({whatsAppPreviewData.name})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsAppPreviewData(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Aperçu fidèle de l'image capturée */}
+            <div className="rounded-2xl border-2 border-slate-200 overflow-hidden bg-slate-50 max-h-72 overflow-y-auto p-1.5 shadow-inner">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={whatsAppPreviewData.imageUrl}
+                alt="Photo officielle du reçu de salaire"
+                className="w-full object-contain rounded-xl shadow-xs"
+              />
+            </div>
+
+            {/* Instruction claire */}
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-emerald-900">
+                  Image du reçu déjà copiée dans votre presse-papier !
+                </p>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
+                  Cliquez sur <strong>« Ouvrir WhatsApp du salarié »</strong> puis faites <strong>Ctrl + V</strong> (ou Coller) dans la discussion pour envoyer le bulletin officiel.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions principales */}
+            <div className="space-y-2 pt-1">
+              <a
+                href={
+                  whatsAppPreviewData.cleanPhone
+                    ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
+                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`
+                      )}`
+                    : `https://wa.me/?text=${encodeURIComponent(
+                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`
+                      )}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Ouvrir WhatsApp ({whatsAppPreviewData.phone})</span>
+              </a>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyReceiptImageToClipboard(whatsAppPreviewData.blob)}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Recopier l&apos;image</span>
+                </button>
+
+                <a
+                  href={whatsAppPreviewData.imageUrl}
+                  download={whatsAppPreviewData.fileName}
+                  className="inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Télécharger PNG</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
