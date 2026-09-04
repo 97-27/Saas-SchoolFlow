@@ -866,15 +866,8 @@ _Quittance officielle délivrée par le Service Comptabilité & Finances via Sch
                 )}
               </div>
 
-              {/* Centre : République, Nom Officiel + Sigle Centré, Slogan, Situation & Code MENA */}
+              {/* Centre : Nom Officiel + Sigle Centré, Slogan, Situation & Code MENA */}
               <div className="text-center flex-1 px-2 space-y-1">
-                <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest text-slate-800">
-                  {currentSchool.country === 'Sénégal' ? 'RÉPUBLIQUE DU SÉNÉGAL' : 'RÉPUBLIQUE DE CÔTE D’IVOIRE'}
-                </div>
-                <p className="text-[8.5px] sm:text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                  « Union • Discipline • Travail »
-                </p>
-
                 {/* Nom entier de l'école (sur sa propre ligne, grand et bien centré) */}
                 <h3
                   suppressHydrationWarning
