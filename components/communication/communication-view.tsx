@@ -80,11 +80,38 @@ export function CommunicationView({
   const [currentSchool, setCurrentSchool] = useState<School>(school || defaultSchool);
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
   
+  const sanitizeMessages = (list: ParentMessage[]): ParentMessage[] => {
+    return (list || []).filter(
+      (m) =>
+        m &&
+        !m.parentName?.includes('Mme Touré (Mère de Cheick)') &&
+        !m.parentName?.includes('M. Koffi (Père de Marie)') &&
+        !m.parentName?.includes('Mme Bamba (Mère de Seydou)') &&
+        !m.parentName?.includes('M. Diabaté (Père d’Awa)') &&
+        !m.parentName?.includes('Mme Koné (Mère de Jean)')
+    );
+  };
+
+  const sanitizeBroadcasts = (list: BroadcastRecord[]): BroadcastRecord[] => {
+    return (list || []).filter(
+      (b) =>
+        b &&
+        !b.title?.includes('Rentrée Scolaire 2026-2027') &&
+        !b.title?.includes('Fermeture Exceptionnelle') &&
+        !b.title?.includes('Réunion Parents-Professeurs')
+    );
+  };
+
   const [messages, setMessages] = useState<ParentMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
-        if (saved) return JSON.parse(saved);
+        const saved =
+          localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(PARENT_MESSAGES_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return sanitizeMessages(parsed);
+        }
       } catch (e) {}
     }
     return [];
@@ -93,8 +120,13 @@ export function CommunicationView({
   const [broadcasts, setBroadcasts] = useState<BroadcastRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) || localStorage.getItem(BROADCAST_RECORDS_KEY);
-        if (saved) return JSON.parse(saved);
+        const saved =
+          localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(BROADCAST_RECORDS_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return sanitizeBroadcasts(parsed);
+        }
       } catch (e) {}
     }
     return [];
@@ -111,13 +143,39 @@ export function CommunicationView({
       setStudents(upStus);
       if (typeof window !== 'undefined') {
         try {
-          const savedMsgs = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
-          setMessages(savedMsgs ? JSON.parse(savedMsgs) : []);
-          const savedBcs = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) || localStorage.getItem(BROADCAST_RECORDS_KEY);
-          setBroadcasts(savedBcs ? JSON.parse(savedBcs) : []);
+          const savedMsgs =
+            localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) ||
+            localStorage.getItem(PARENT_MESSAGES_KEY);
+          if (savedMsgs) {
+            const parsed = JSON.parse(savedMsgs);
+            const cleaned = sanitizeMessages(parsed);
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
+              localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(cleaned));
+            }
+            setMessages(cleaned);
+          } else {
+            setMessages([]);
+          }
+
+          const savedBcs =
+            localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) ||
+            localStorage.getItem(BROADCAST_RECORDS_KEY);
+          if (savedBcs) {
+            const parsedB = JSON.parse(savedBcs);
+            const cleanedB = sanitizeBroadcasts(parsedB);
+            if (cleanedB.length !== parsedB.length) {
+              localStorage.setItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`, JSON.stringify(cleanedB));
+              localStorage.setItem(BROADCAST_RECORDS_KEY, JSON.stringify(cleanedB));
+            }
+            setBroadcasts(cleanedB);
+          } else {
+            setBroadcasts([]);
+          }
         } catch (e) {}
       }
     };
+    handleUpdate();
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school, initialStudents]);

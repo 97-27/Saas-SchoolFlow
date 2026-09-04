@@ -111,11 +111,33 @@ export function SpecialDiscountsView({
   schoolSlug,
 }: SpecialDiscountsViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
+  const sanitizeReceipts = (list: FamilyDiscountReceipt[]): FamilyDiscountReceipt[] => {
+    return (list || []).filter(
+      (r) =>
+        r &&
+        !r.parentName?.includes('KOUASSI Kouamé') &&
+        !r.parentName?.includes('BAMBA Souleymane') &&
+        !r.parentName?.includes('TRAORÉ Mamadou') &&
+        !r.parentName?.includes('KOFFI N’Dri') &&
+        !r.parentName?.includes('DIALLO Ibrahima') &&
+        !r.children?.some((c) =>
+          ['Chantal Adjobi', 'Salif Bado', 'Mariam Barry', 'Roland Akoto', 'Estelle N’Guessan', 'Hervé Bamba', 'Kady Sangaré'].some((name) =>
+            c.fullName?.includes(name)
+          )
+        )
+    );
+  };
+
   const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DISCOUNTS_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        const saved =
+          localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(DISCOUNTS_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return sanitizeReceipts(parsed);
+        }
       } catch (e) {}
     }
     return [];

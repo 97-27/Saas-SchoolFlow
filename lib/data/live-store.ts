@@ -253,12 +253,28 @@ export function saveLiveSchool(school: School): void {
   }
 }
 
+const isLegacyMockStudent = (stu: any) => {
+  if (!stu) return true;
+  const name = (stu.fullName || `${stu.firstName || ''} ${stu.lastName || ''}`).trim().toUpperCase();
+  const mat = (stu.matricule || '').toUpperCase();
+  return (
+    mat.startsWith('260148') ||
+    name === 'AWA MENSAH' ||
+    name === 'JEAN-MARC BAKAYOKO' ||
+    name === 'AMINATA TOURE' ||
+    name === 'SEYDOU KOUASSI' ||
+    name === 'AMADOU DIALLO' ||
+    name === 'FATOU BAMBA' ||
+    name === 'KOUASSI YAO JEAN-EUDES'
+  );
+};
+
 /**
  * Récupère les élèves enregistrés en local + fusionne avec les élèves initiaux.
- * Exclut automatiquement tous les élèves supprimés.
+ * Exclut automatiquement tous les élèves supprimés et les anciens mocks.
  */
 export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: string): Student[] {
-  if (typeof window === 'undefined') return initialStudents;
+  if (typeof window === 'undefined') return [];
 
   try {
     const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
@@ -268,7 +284,8 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
       const rawSchool = localStorage.getItem(schoolKey);
       if (rawSchool) {
-        return JSON.parse(rawSchool);
+        const parsed = JSON.parse(rawSchool);
+        return (parsed || []).filter((s: any) => !isLegacyMockStudent(s));
       }
       return []; // Zéro élève par défaut pour toute nouvelle école
     }
@@ -281,7 +298,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // Si les données de l'école ont été réinitialisées à zéro, ne pas réinjecter les mockStudents
     if (status.isDataReset) {
       return localStudents.filter(
-        (stu) => stu && stu.studentNumber && !deletedIds.has(stu.id) && !deletedIds.has(stu.studentNumber)
+        (stu) => stu && stu.studentNumber && !deletedIds.has(stu.id) && !deletedIds.has(stu.studentNumber) && !isLegacyMockStudent(stu)
       );
     }
 
@@ -291,7 +308,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 
     // Priorité absolue aux élèves inscrits en local
     for (const stu of [...localStudents, ...initialStudents]) {
-      if (!stu || !stu.studentNumber) continue;
+      if (!stu || !stu.studentNumber || isLegacyMockStudent(stu)) continue;
       if (deletedIds.has(stu.id) || deletedIds.has(stu.studentNumber)) continue;
       if (!seenIds.has(stu.id) && !seenNumbers.has(stu.studentNumber)) {
         seenIds.add(stu.id);
@@ -319,7 +336,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     return reindexedStudents;
   } catch (error) {
     console.error('Erreur lecture localStorage students:', error);
-    return initialStudents;
+    return [];
   }
 }
 
@@ -328,7 +345,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
  * Exclut automatiquement les factures des élèves supprimés.
  */
 export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: string): Invoice[] {
-  if (typeof window === 'undefined') return initialInvoices;
+  if (typeof window === 'undefined') return [];
 
   try {
     const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
@@ -338,7 +355,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       const schoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
       const rawSchool = localStorage.getItem(schoolKey);
       if (rawSchool) {
-        return JSON.parse(rawSchool);
+        const parsed = JSON.parse(rawSchool);
+        return (parsed || []).filter((inv: any) => !isLegacyMockStudent({ fullName: inv.studentName, matricule: '' }));
       }
       return []; // Zéro facture / 0 FCFA pour toute nouvelle école
     }
@@ -351,7 +369,13 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
     // Si les données de l'école ont été réinitialisées à zéro, ne pas réinjecter les factures initiales
     if (status.isDataReset) {
       return localInvoices.filter(
-        (inv) => inv && inv.invoiceNumber && !deletedIds.has(inv.id) && !deletedIds.has(inv.studentId) && !deletedIds.has(inv.invoiceNumber)
+        (inv) =>
+          inv &&
+          inv.invoiceNumber &&
+          !deletedIds.has(inv.id) &&
+          !deletedIds.has(inv.studentId) &&
+          !deletedIds.has(inv.invoiceNumber) &&
+          !isLegacyMockStudent({ fullName: inv.studentName, matricule: '' })
       );
     }
 
@@ -370,7 +394,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
     // Priorité absolue aux encaissements enregistrés en local
     for (const inv of [...localInvoices, ...initialInvoices]) {
-      if (!inv || !inv.invoiceNumber) continue;
+      if (!inv || !inv.invoiceNumber || isLegacyMockStudent({ fullName: inv.studentName, matricule: '' })) continue;
       if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
       if (!seenIds.has(inv.id) && !seenNumbers.has(inv.invoiceNumber)) {
         seenIds.add(inv.id);

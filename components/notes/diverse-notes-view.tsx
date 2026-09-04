@@ -84,12 +84,32 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [students, setStudents] = useState<Student[]>([]);
 
-  // Liste des notes persistée (vide par défaut)
+  const sanitizeNotes = (list: DiverseNote[]): DiverseNote[] => {
+    return (list || []).filter(
+      (n) =>
+        n &&
+        !n.noteNumber?.startsWith('NOTE-2026-') &&
+        !n.title?.includes('Dispositif de Soutien Pédagogique') &&
+        !n.title?.includes('Règlement Intérieur') &&
+        !n.title?.includes('Visite Médicale') &&
+        !n.title?.includes('Conseil de Direction') &&
+        !n.title?.includes('Rappel Procédures de Caisse') &&
+        !n.targetStudentName?.includes('Kouadio Aya Grâce') &&
+        !n.author?.includes('M. Amadou Fall')
+    );
+  };
+
+  // Liste des notes persistée (vide par défaut et purgée des anciens mocks)
   const [notes, setNotes] = useState<DiverseNote[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        const saved =
+          localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return sanitizeNotes(parsed);
+        }
       } catch (e) {}
     }
     return [];
@@ -127,23 +147,37 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Synchronisation avec le store
+  // Synchronisation avec le store et purge automatique
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     setStudents(getLiveStudents(mockStudents, schoolSlug));
 
-    const handleUpdate = () => {
+    const loadAndSanitize = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       setStudents(getLiveStudents(mockStudents, schoolSlug));
       if (typeof window !== 'undefined') {
         try {
-          const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
-          setNotes(saved ? JSON.parse(saved) : []);
+          const saved =
+            localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) ||
+            localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const cleaned = sanitizeNotes(parsed);
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
+              localStorage.setItem(DIVERSE_NOTES_STORAGE_KEY, JSON.stringify(cleaned));
+            }
+            setNotes(cleaned);
+            return;
+          }
         } catch (e) {}
+        setNotes([]);
       }
     };
-    window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
+
+    loadAndSanitize();
+    window.addEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
   }, [schoolSlug, school]);
 
   // Sauvegarder dans localStorage

@@ -114,11 +114,29 @@ export function SalariesView({
     () => initialSchool || defaultSchool
   );
 
+  const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] => {
+    return (list || []).filter(
+      (s) =>
+        s &&
+        !s.receiptNumber?.startsWith('SAL-2026-') &&
+        !s.staffName?.includes('KOUAME KOUASSI') &&
+        !s.staffName?.includes('TOURE ABOUBACAR') &&
+        !s.staffName?.includes('MENSAH AKOUVI') &&
+        !s.staffName?.includes('DIALLO SOULEYMANE') &&
+        !s.staffName?.includes('BAMBA FATOU') &&
+        !s.staffName?.includes('YAO BROU')
+    );
+  };
+
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
-        if (stored) return JSON.parse(stored);
+        const stored =
+          localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return sanitizeSalaries(parsed);
+        }
       } catch (e) {}
     }
     return [];
@@ -132,10 +150,16 @@ export function SalariesView({
     setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
     setStaffUsers(getLiveStaffUsers(schoolSlug));
     try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+      const stored =
+        localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
       const list = stored ? JSON.parse(stored) : [];
-      setSalaries(list);
-      setSelectedSalary(list[0] || EMPTY_SALARY);
+      const cleaned = sanitizeSalaries(list);
+      if (cleaned.length !== list.length) {
+        localStorage.setItem(`${STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      setSalaries(cleaned);
+      setSelectedSalary(cleaned[0] || EMPTY_SALARY);
     } catch (e) {}
 
     const handleUpdate = () => {

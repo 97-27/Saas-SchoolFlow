@@ -97,12 +97,33 @@ interface ExpensesViewProps {
 export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
-  // Liste des dépenses persistée (vide par défaut : 0 FCFA)
+  const sanitizeExpenses = (list: ExpenseItem[]): ExpenseItem[] => {
+    return (list || []).filter(
+      (exp) =>
+        exp &&
+        !exp.reference?.startsWith('DEP-2026-') &&
+        !exp.title?.includes('Rames de papier') &&
+        !exp.title?.includes('Facture Électricité CIE') &&
+        !exp.title?.includes('Réparation Climatiseurs') &&
+        !exp.title?.includes('Achat Produits Entretien') &&
+        !exp.title?.includes('Salaires Enseignants') &&
+        !exp.beneficiary?.includes('Librairie de France') &&
+        !exp.beneficiary?.includes('CIE Côte d’Ivoire') &&
+        !exp.beneficiary?.includes('SOTRA Transports')
+    );
+  };
+
+  // Liste des dépenses persistée (vide par défaut : 0 FCFA et purgée des anciens mocks)
   const [expenses, setExpenses] = useState<ExpenseItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
+        const saved =
+          localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(EXPENSES_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return sanitizeExpenses(parsed);
+        }
       } catch (e) {}
     }
     return [];
@@ -134,20 +155,33 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Synchronisation
+  // Synchronisation et purge automatique
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
-    const handleUpdate = () => {
+    const loadAndSanitize = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
-          setExpenses(saved ? JSON.parse(saved) : []);
+          const saved =
+            localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) ||
+            localStorage.getItem(EXPENSES_STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            const cleaned = sanitizeExpenses(parsed);
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
+              localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(cleaned));
+            }
+            setExpenses(cleaned);
+            return;
+          }
         } catch (e) {}
+        setExpenses([]);
       }
     };
-    window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
+    loadAndSanitize();
+    window.addEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
   }, [schoolSlug, school]);
 
   const saveExpensesToStorage = (list: ExpenseItem[]) => {
