@@ -58,92 +58,7 @@ export interface DiverseNote {
 
 const DIVERSE_NOTES_STORAGE_KEY = 'schoolflow_diverse_notes_v1';
 
-const INITIAL_MOCK_NOTES: DiverseNote[] = [
-  {
-    id: 'note-001',
-    noteNumber: 'NOTE-2026-001',
-    title: 'Dispositif de Soutien Pédagogique — Rentrée 2026-2027',
-    category: 'Pédagogique',
-    priority: 'Importante',
-    targetType: 'Classe Spécifique',
-    targetGrade: 'CM2',
-    targetStudentName: 'Kouadio Aya Grâce',
-    author: 'M. Amadou Fall (Directeur des Études)',
-    date: '2026-09-08',
-    note1: 'Évaluation diagnostique initiale réalisée avec succès en mathématiques et expression écrite.',
-    note2: 'Mise en place de séances de renforcement les mercredis après-midi (14h00 - 16h00).',
-    note3: 'Point d’étape programmé avec les parents à la fin du 1er mois pour évaluer la progression.',
-    summary: 'Plan d’accompagnement personnalisé validé par le conseil de classe pour consolider les acquis avant le passage en 6ème.',
-    status: 'En cours',
-    isConfidential: false,
-  },
-  {
-    id: 'note-002',
-    noteNumber: 'NOTE-2026-002',
-    title: 'Organisation des Conseils de Classes du 1er Trimestre',
-    category: 'Direction Générale',
-    priority: 'Urgente',
-    targetType: 'Général (Établissement)',
-    author: 'Direction Générale (EPC MANOI)',
-    date: '2026-09-15',
-    note1: 'Clôture de la saisie des notes et moyennes fixée au vendredi 20 novembre 2026.',
-    note2: 'Publication des plannings de passage pour la Maternelle, le Primaire et le Secondaire.',
-    note3: 'Génération automatique des bulletins numériques via SchoolFlow avec envoi WhatsApp aux parents.',
-    summary: 'Directives officielles adressées à l’ensemble du corps professoral pour le bon déroulement des délibérations.',
-    status: 'En cours',
-    isConfidential: false,
-  },
-  {
-    id: 'note-003',
-    noteNumber: 'NOTE-2026-003',
-    title: 'Suivi de Discipline & Ponctualité aux Cours',
-    category: 'Discipline & Vie Scolaire',
-    priority: 'Normale',
-    targetType: 'Classe Spécifique',
-    targetGrade: '4ème',
-    targetStudentName: 'Koné Mariam',
-    author: 'Surveillant Général',
-    date: '2026-09-22',
-    note1: 'Entretien individuel mené avec l’élève et engagement formel de respect des horaires.',
-    note2: 'Notification d’assiduité transmise au parent via le portail WhatsApp.',
-    note3: 'Assiduité exemplaire constatée sur les deux dernières semaines de cours.',
-    summary: 'Régularisation de la situation de ponctualité effectuée en accord avec la famille.',
-    status: 'Traité / Validé',
-    isConfidential: false,
-  },
-  {
-    id: 'note-004',
-    noteNumber: 'NOTE-2026-004',
-    title: 'Point d’Audit Financier & Encaissements de Scolarité',
-    category: 'Comptabilité & Caisse',
-    priority: 'Importante',
-    targetType: 'Général (Établissement)',
-    author: 'Service Comptabilité',
-    date: '2026-09-28',
-    note1: 'Taux de recouvrement global de rentrée supérieur à 88% des prévisions budgétaires.',
-    note2: 'Traitement finalisé de l’ensemble des dossiers de réductions spéciales fratrie.',
-    note3: 'Clôture et rapprochement bancaire hebdomadaire certifié sans aucun écart de caisse.',
-    summary: 'Synthèse comptable mensuelle soumise à la direction de l’établissement.',
-    status: 'Traité / Validé',
-    isConfidential: true,
-  },
-  {
-    id: 'note-005',
-    noteNumber: 'NOTE-2026-005',
-    title: 'Commission Hygiène & Menus de la Restauration Scolaire',
-    category: 'Santé & Social',
-    priority: 'Basse',
-    targetType: 'Personnel Enseignant',
-    author: 'Responsable Demi-Pension',
-    date: '2026-10-02',
-    note1: 'Validation des menus équilibrés pour le mois d’octobre (plats locaux et fruits frais).',
-    note2: 'Vérification scrupuleuse des fiches médicales et régimes sans arachides / sans lactose.',
-    note3: 'Contrôle quotidien de la chaîne du froid et du protocole sanitaire.',
-    summary: 'Rapport de conformité nutritionnelle approuvé par l’infirmerie scolaire.',
-    status: 'Traité / Validé',
-    isConfidential: false,
-  },
-];
+const INITIAL_MOCK_NOTES: DiverseNote[] = [];
 
 const CATEGORIES_LIST = [
   'Toutes les catégories',
@@ -169,21 +84,15 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [students, setStudents] = useState<Student[]>([]);
 
-  // Liste des notes persistée
+  // Liste des notes persistée (vide par défaut)
   const [notes, setNotes] = useState<DiverseNote[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`);
-          return saved ? JSON.parse(saved) : [];
-        }
         const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return INITIAL_MOCK_NOTES;
+    return [];
   });
 
   // Filtres & Recherche
@@ -228,14 +137,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
       setStudents(getLiveStudents(mockStudents, schoolSlug));
       if (typeof window !== 'undefined') {
         try {
-          const sub = getSchoolSubscription(schoolSlug);
-          if (sub.isDataReset) {
-            const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`);
-            setNotes(saved ? JSON.parse(saved) : []);
-          } else {
-            const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
-            if (saved) setNotes(JSON.parse(saved));
-          }
+          const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+          setNotes(saved ? JSON.parse(saved) : []);
         } catch (e) {}
       }
     };

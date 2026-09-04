@@ -65,88 +65,28 @@ export interface SalaryPayment {
 
 const STORAGE_KEY = 'schoolflow_staff_salaries_v1';
 
-const DEFAULT_SALARIES: SalaryPayment[] = [
-  {
-    id: 'sal-001',
-    receiptNumber: 'SAL-2026-001',
-    civility: 'Mr',
-    staffName: 'Kouamé Konan',
-    role: 'Professeur de Mathématiques & Sciences',
-    matricule: 'ENS-2026-004',
-    phone: '+225 07 48 92 11 00',
-    payPeriod: 'Septembre 2026',
-    paymentDate: '30/09/2026',
-    baseSalary: 280000,
-    bonuses: 35000,
-    deductions: 0,
-    netSalary: 315000,
-    paymentMethod: 'Virement bancaire',
-    transactionRef: 'VIR-BNI-984210',
-    authorizedBy: 'Direction Générale',
-    notes: 'Salaire complet + prime de rentrée scolaire et coordination de niveau 3ème.',
-    createdAt: '2026-09-30T10:00:00Z',
-  },
-  {
-    id: 'sal-002',
-    receiptNumber: 'SAL-2026-002',
-    civility: 'Mme',
-    staffName: 'Aïcha Diop',
-    role: 'Comptable & Responsable Caisse',
-    matricule: 'CPT-2026-003',
-    phone: '+225 07 33 44 55 66',
-    payPeriod: 'Septembre 2026',
-    paymentDate: '30/09/2026',
-    baseSalary: 320000,
-    bonuses: 25000,
-    deductions: 10000,
-    netSalary: 335000,
-    paymentMethod: 'Wave',
-    transactionRef: 'WAVE-PAY-88231',
-    authorizedBy: 'Fondateur',
-    notes: 'Salaire mensuel de gestion et suivi des encaissements scolarités.',
-    createdAt: '2026-09-30T11:30:00Z',
-  },
-  {
-    id: 'sal-003',
-    receiptNumber: 'SAL-2026-003',
-    civility: 'Mme',
-    staffName: 'Mariam Traoré',
-    role: 'Secrétaire de Direction & Accueil',
-    matricule: 'SEC-2026-005',
-    phone: '+225 07 55 66 77 88',
-    payPeriod: 'Septembre 2026',
-    paymentDate: '30/09/2026',
-    baseSalary: 220000,
-    bonuses: 15000,
-    deductions: 0,
-    netSalary: 235000,
-    paymentMethod: 'Espèces',
-    transactionRef: 'CAISSE-ESP-0941',
-    authorizedBy: 'Direction Générale',
-    notes: 'Rémunération mensuelle secrétariat & gestion des inscriptions.',
-    createdAt: '2026-09-30T14:00:00Z',
-  },
-  {
-    id: 'sal-004',
-    receiptNumber: 'SAL-2026-004',
-    civility: 'Mr',
-    staffName: 'Jean-Marc Kouassi',
-    role: 'Directeur Général des Études',
-    matricule: 'DIR-2026-001',
-    phone: '+225 07 45 67 89 01',
-    payPeriod: 'Septembre 2026',
-    paymentDate: '30/09/2026',
-    baseSalary: 550000,
-    bonuses: 50000,
-    deductions: 0,
-    netSalary: 600000,
-    paymentMethod: 'Virement bancaire',
-    transactionRef: 'VIR-SGCI-441029',
-    authorizedBy: 'Conseil d\'Administration',
-    notes: 'Traitement de direction générale et primes de supervision pédagogique.',
-    createdAt: '2026-09-30T09:00:00Z',
-  },
-];
+const DEFAULT_SALARIES: SalaryPayment[] = [];
+
+const EMPTY_SALARY: SalaryPayment = {
+  id: '',
+  receiptNumber: 'SAL-2026-001',
+  civility: 'Mr',
+  staffName: '—',
+  role: 'Membre du personnel',
+  matricule: 'EMP-001',
+  phone: '—',
+  payPeriod: 'Septembre 2026',
+  paymentDate: '30/09/2026',
+  baseSalary: 0,
+  bonuses: 0,
+  deductions: 0,
+  netSalary: 0,
+  paymentMethod: 'Virement bancaire',
+  transactionRef: '—',
+  authorizedBy: 'Direction Générale',
+  notes: '',
+  createdAt: '',
+};
 
 const PAY_PERIODS = [
   'Septembre 2026',
@@ -177,46 +117,35 @@ export function SalariesView({
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
-          return stored ? JSON.parse(stored) : [];
-        }
         const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
         if (stored) return JSON.parse(stored);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return DEFAULT_SALARIES;
+    return [];
   });
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+
+  // État du reçu actuellement sélectionné pour l'aperçu et l'impression
+  const [selectedSalary, setSelectedSalary] = useState<SalaryPayment>(() => salaries[0] || EMPTY_SALARY);
 
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
     setStaffUsers(getLiveStaffUsers(schoolSlug));
     try {
-      const sub = getSchoolSubscription(schoolSlug);
-      if (sub.isDataReset) {
-        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
-        setSalaries(stored ? JSON.parse(stored) : []);
-      } else {
-        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
-        if (stored) setSalaries(JSON.parse(stored));
-      }
+      const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+      const list = stored ? JSON.parse(stored) : [];
+      setSalaries(list);
+      setSelectedSalary(list[0] || EMPTY_SALARY);
     } catch (e) {}
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
       setStaffUsers(getLiveStaffUsers(schoolSlug));
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
-          setSalaries(stored ? JSON.parse(stored) : []);
-        } else {
-          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
-          if (stored) setSalaries(JSON.parse(stored));
-        }
+        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        const list = stored ? JSON.parse(stored) : [];
+        setSalaries(list);
+        setSelectedSalary(list[0] || EMPTY_SALARY);
       } catch (e) {}
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -234,21 +163,18 @@ export function SalariesView({
     } catch (e) {}
   };
 
-  // État du reçu actuellement sélectionné pour l'aperçu et l'impression
-  const [selectedSalary, setSelectedSalary] = useState<SalaryPayment>(() => salaries[0] || DEFAULT_SALARIES[0]);
-
   // Formulaire d'enregistrement
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [civility, setCivility] = useState<'Mr' | 'Mme' | 'Mlle'>('Mr');
   const [staffName, setStaffName] = useState<string>('');
-  const [role, setRole] = useState<string>('Professeur de Mathématiques');
-  const [matricule, setMatricule] = useState<string>('ENS-2026-004');
-  const [phone, setPhone] = useState<string>('+225 07 00 00 00 00');
-  const [payPeriod, setPayPeriod] = useState<string>('Octobre 2026');
-  const [paymentDate, setPaymentDate] = useState<string>('31/10/2026');
-  const [baseSalary, setBaseSalary] = useState<number>(280000);
-  const [bonuses, setBonuses] = useState<number>(20000);
-  const [deductions, setDeductions] = useState<number>(0);
+  const [role, setRole] = useState<string>('');
+  const [matricule, setMatricule] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [payPeriod, setPayPeriod] = useState<string>('Septembre 2026');
+  const [paymentDate, setPaymentDate] = useState<string>('30/09/2026');
+  const [baseSalary, setBaseSalary] = useState<number | ''>('');
+  const [bonuses, setBonuses] = useState<number | ''>('');
+  const [deductions, setDeductions] = useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = useState<'Virement bancaire' | 'Chèque' | 'Espèces' | 'Wave' | 'Orange Money' | 'MTN MoMo'>('Virement bancaire');
   const [transactionRef, setTransactionRef] = useState<string>('');
   const [authorizedBy, setAuthorizedBy] = useState<string>('Direction Générale');

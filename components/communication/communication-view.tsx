@@ -65,91 +65,9 @@ interface BroadcastRecord {
   body: string;
 }
 
-const INITIAL_PARENT_MESSAGES: ParentMessage[] = [
-  {
-    id: 'msg-1',
-    parentName: 'M. Kouassi Jean-Baptiste',
-    studentName: 'Awa Kouassi',
-    studentGrade: '6ème',
-    parentPhone: '+225 07 08 12 34 56',
-    subject: 'Justification d\'absence pour rendez-vous médical',
-    message: 'Bonjour Monsieur le Directeur, ma fille Awa sera absente ce lundi matin pour une consultation ophtalmologique. Elle sera de retour en cours dès 14h.',
-    category: 'absence',
-    timestamp: '29/08/2026 08:30',
-    status: 'new',
-  },
-  {
-    id: 'msg-2',
-    parentName: 'Mme Traoré Fatoumata',
-    studentName: 'Ibrahim Traoré',
-    studentGrade: 'CM2',
-    parentPhone: '+225 05 44 22 11 00',
-    subject: 'Confirmation de paiement scolarité 2ème tranche',
-    message: 'Bonjour, j\'ai effectué le versement de 50 000 FCFA par virement Wave ce matin avec la référence WAVE-8849. Merci de me faire parvenir la quittance.',
-    category: 'finance',
-    timestamp: '29/08/2026 09:15',
-    status: 'new',
-  },
-  {
-    id: 'msg-3',
-    parentName: 'M. Bamba Souleymane',
-    studentName: 'Assétou Bamba',
-    studentGrade: '3ème',
-    parentPhone: '+225 01 02 03 04 05',
-    subject: 'Demande de certificat de scolarité',
-    message: 'Bonjour, j\'aurais besoin d\'un certificat de scolarité en urgence pour la constitution du dossier d\'assurance de ma fille Assétou.',
-    category: 'document',
-    timestamp: '28/08/2026 16:40',
-    status: 'in_progress',
-  },
-  {
-    id: 'msg-4',
-    parentName: 'Mme Mensah Christine',
-    studentName: 'Emmanuel Mensah',
-    studentGrade: 'CP1',
-    parentPhone: '+225 07 77 88 99 00',
-    subject: 'Régime alimentaire & Inscription Cantine',
-    message: 'Bonjour, mon fils Emmanuel présente une allergie aux arachides. Merci de veiller à ce que ses repas à la cantine soient bien adaptés.',
-    category: 'info',
-    timestamp: '28/08/2026 11:20',
-    status: 'resolved',
-  },
-  {
-    id: 'msg-5',
-    parentName: 'M. Yao Kouamé',
-    studentName: 'Grace Yao',
-    studentGrade: 'CE2',
-    parentPhone: '+225 05 55 66 77 88',
-    subject: 'Abonnement au transport scolaire du matin',
-    message: 'Bonjour, nous souhaitons inscrire Grace au circuit de bus scolaire N° 2 (Zone Palmeraie) à compter de la semaine prochaine.',
-    category: 'info',
-    timestamp: '27/08/2026 14:05',
-    status: 'resolved',
-  },
-];
+const INITIAL_PARENT_MESSAGES: ParentMessage[] = [];
 
-const INITIAL_BROADCASTS: BroadcastRecord[] = [
-  {
-    id: 'bc-1',
-    date: '28/08/2026 10:00',
-    targetType: 'all',
-    targetLabel: 'Toute l\'École (Tous les parents)',
-    recipientCount: 56,
-    channel: 'whatsapp',
-    subject: 'Circulaire Rentrée Scolaire 2026-2027',
-    body: 'Chers Parents d\'élèves, nous vous confirmons la reprise effective des cours le lundi 07 septembre à 07h30.',
-  },
-  {
-    id: 'bc-2',
-    date: '25/08/2026 14:30',
-    targetType: 'cycle',
-    targetLabel: 'Cycle Collège (6ème à 3ème)',
-    recipientCount: 24,
-    channel: 'whatsapp',
-    subject: 'Réunion des parents d\'élèves de 3ème — Préparation BEPC',
-    body: 'Rencontre obligatoire d\'information sur le calendrier et les épreuves blanches du BEPC.',
-  },
-];
+const INITIAL_BROADCASTS: BroadcastRecord[] = [];
 
 const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
 const BROADCAST_RECORDS_KEY = 'schoolflow_broadcast_records_v1';
@@ -165,33 +83,21 @@ export function CommunicationView({
   const [messages, setMessages] = useState<ParentMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const saved = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`);
-          return saved ? JSON.parse(saved) : [];
-        }
         const saved = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
         if (saved) return JSON.parse(saved);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return INITIAL_PARENT_MESSAGES;
+    return [];
   });
 
   const [broadcasts, setBroadcasts] = useState<BroadcastRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const saved = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`);
-          return saved ? JSON.parse(saved) : [];
-        }
         const saved = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) || localStorage.getItem(BROADCAST_RECORDS_KEY);
         if (saved) return JSON.parse(saved);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return INITIAL_BROADCASTS;
+    return [];
   });
 
   useEffect(() => {
@@ -205,13 +111,10 @@ export function CommunicationView({
       setStudents(upStus);
       if (typeof window !== 'undefined') {
         try {
-          const sub = getSchoolSubscription(schoolSlug);
-          if (sub.isDataReset || upStus.length === 0) {
-            const savedMsgs = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`);
-            setMessages(savedMsgs ? JSON.parse(savedMsgs) : []);
-            const savedBcs = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`);
-            setBroadcasts(savedBcs ? JSON.parse(savedBcs) : []);
-          }
+          const savedMsgs = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
+          setMessages(savedMsgs ? JSON.parse(savedMsgs) : []);
+          const savedBcs = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) || localStorage.getItem(BROADCAST_RECORDS_KEY);
+          setBroadcasts(savedBcs ? JSON.parse(savedBcs) : []);
         } catch (e) {}
       }
     };

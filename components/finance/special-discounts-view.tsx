@@ -95,180 +95,8 @@ const DEFAULT_CHILDREN_CLASSES = [
   'Terminale D',
 ];
 
-// 5 Reçus Officiels Pré-Enregistrés (Numérotés REC-FAM-2026-001 à REC-FAM-2026-005)
-const INITIAL_FIVE_RECEIPTS: FamilyDiscountReceipt[] = [
-  {
-    id: 'fam-001',
-    receiptNumber: 'REC-FAM-2026-001',
-    parentName: 'M. Kouadio Emmanuel',
-    parentPhone: '+225 07 48 92 11 00',
-    secondaryPhones: ['+225 05 01 22 33 44', '+225 27 22 45 88 90'],
-    parentAddress: 'Cocody Angré 8ème Tranche, Abidjan',
-    discountType: 'Réduction 3 enfants',
-    discountAmountFCFA: 84000,
-    customTotalAmountFCFA: 560000,
-    customNetToPayFCFA: 476000,
-    customPaidAmountFCFA: 476000,
-    issueDate: '2026-09-08',
-    children: [
-      { id: 'ch-1', fullName: 'Kouadio Aya Grâce', grade: 'CM2', gender: 'female', tuitionAmount: 180000 },
-      { id: 'ch-2', fullName: 'Kouadio Jean-Yves', grade: '6ème', gender: 'male', tuitionAmount: 220000 },
-      { id: 'ch-3', fullName: 'Kouadio Marie-Ange', grade: 'CE1', gender: 'female', tuitionAmount: 160000 },
-    ],
-    installments: [
-      {
-        id: 'inst-1',
-        installmentNumber: 1,
-        paymentDate: '2026-09-08',
-        amount: 250000,
-        paymentMethod: 'Orange Money',
-        reference: 'OM-98214309',
-        receiptNumber: 'REC-FAM-2026-001/1',
-      },
-      {
-        id: 'inst-2',
-        installmentNumber: 2,
-        paymentDate: '2026-10-15',
-        amount: 226000,
-        paymentMethod: 'Wave',
-        reference: 'WV-4829104',
-        receiptNumber: 'REC-FAM-2026-001/2',
-      },
-    ],
-  },
-  {
-    id: 'fam-002',
-    receiptNumber: 'REC-FAM-2026-002',
-    parentName: 'Mme Bamba Fatoumata',
-    parentPhone: '+225 05 06 12 34 56',
-    secondaryPhones: ['+225 07 10 20 30 40'],
-    parentAddress: 'Cocody Palmeraie, Abidjan',
-    discountType: 'Enfant du Personnel / Enseignant',
-    discountAmountFCFA: 117000,
-    customTotalAmountFCFA: 390000,
-    customNetToPayFCFA: 273000,
-    customPaidAmountFCFA: 273000,
-    issueDate: '2026-09-12',
-    children: [
-      { id: 'ch-4', fullName: 'Bamba Ousmane Junior', grade: 'Terminale D', gender: 'male', tuitionAmount: 240000 },
-      { id: 'ch-5', fullName: 'Bamba Aïcha', grade: 'CP2', gender: 'female', tuitionAmount: 150000 },
-    ],
-    installments: [
-      {
-        id: 'inst-3',
-        installmentNumber: 1,
-        paymentDate: '2026-09-12',
-        amount: 273000,
-        paymentMethod: 'Virement',
-        reference: 'VIR-BNI-2026-88',
-        receiptNumber: 'REC-FAM-2026-002/1',
-      },
-    ],
-  },
-  {
-    id: 'fam-003',
-    receiptNumber: 'REC-FAM-2026-003',
-    parentName: 'El Hadj Diop Mamadou',
-    parentPhone: '+225 01 02 03 04 05',
-    secondaryPhones: ['+225 07 88 99 00 11'],
-    parentAddress: 'Cocody Deux-Plateaux Vallon',
-    discountType: 'Bourse au Mérite & Excellence',
-    discountAmountFCFA: 120000,
-    customTotalAmountFCFA: 240000,
-    customNetToPayFCFA: 120000,
-    customPaidAmountFCFA: 120000,
-    issueDate: '2026-09-18',
-    children: [
-      { id: 'ch-6', fullName: 'Diop Cheikh Tidiane', grade: '1ère C', gender: 'male', tuitionAmount: 240000 },
-    ],
-    installments: [
-      {
-        id: 'inst-4',
-        installmentNumber: 1,
-        paymentDate: '2026-09-18',
-        amount: 120000,
-        paymentMethod: 'Espèces',
-        receiptNumber: 'REC-FAM-2026-003/1',
-      },
-    ],
-  },
-  {
-    id: 'fam-004',
-    receiptNumber: 'REC-FAM-2026-004',
-    parentName: 'M. Koné Bakary',
-    parentPhone: '+225 07 11 22 33 44',
-    secondaryPhones: [],
-    parentAddress: 'Yopougon Selmer, Abidjan',
-    discountType: 'Réduction 2 enfants',
-    discountAmountFCFA: 40000,
-    customTotalAmountFCFA: 370000,
-    customNetToPayFCFA: 330000,
-    customPaidAmountFCFA: 330000,
-    issueDate: '2026-09-22',
-    children: [
-      { id: 'ch-7', fullName: 'Koné Mariam', grade: '4ème', gender: 'female', tuitionAmount: 200000 },
-      { id: 'ch-8', fullName: 'Koné Ismaël', grade: 'CM1', gender: 'male', tuitionAmount: 170000 },
-    ],
-    installments: [
-      {
-        id: 'inst-5',
-        installmentNumber: 1,
-        paymentDate: '2026-09-22',
-        amount: 200000,
-        paymentMethod: 'Wave',
-        reference: 'WV-9912401',
-        receiptNumber: 'REC-FAM-2026-004/1',
-      },
-      {
-        id: 'inst-6',
-        installmentNumber: 2,
-        paymentDate: '2026-10-20',
-        amount: 130000,
-        paymentMethod: 'Espèces',
-        receiptNumber: 'REC-FAM-2026-004/2',
-      },
-    ],
-  },
-  {
-    id: 'fam-005',
-    receiptNumber: 'REC-FAM-2026-005',
-    parentName: 'Dr. Traoré Seydou',
-    parentPhone: '+225 07 99 88 77 66',
-    secondaryPhones: ['+225 05 44 55 66 77'],
-    parentAddress: 'Cocody Riviera Golf, Abidjan',
-    discountType: 'Cas Social & Solidarité',
-    discountAmountFCFA: 150000,
-    customTotalAmountFCFA: 540000,
-    customNetToPayFCFA: 390000,
-    customPaidAmountFCFA: 250000,
-    issueDate: '2026-09-28',
-    children: [
-      { id: 'ch-9', fullName: 'Traoré Salimata', grade: '2nde A', gender: 'female', tuitionAmount: 210000 },
-      { id: 'ch-10', fullName: 'Traoré Abdoulaye', grade: '5ème', gender: 'male', tuitionAmount: 190000 },
-      { id: 'ch-11', fullName: 'Traoré Aminata', grade: 'Maternelle (G.S.)', gender: 'female', tuitionAmount: 140000 },
-    ],
-    installments: [
-      {
-        id: 'inst-7',
-        installmentNumber: 1,
-        paymentDate: '2026-09-28',
-        amount: 250000,
-        paymentMethod: 'Chèque',
-        reference: 'CHQ-SGBCI-4819',
-        receiptNumber: 'REC-FAM-2026-005/1',
-      },
-      {
-        id: 'inst-8',
-        installmentNumber: 2,
-        paymentDate: '2026-11-05',
-        amount: 140000,
-        paymentMethod: 'Moov Money',
-        reference: 'MV-882190',
-        receiptNumber: 'REC-FAM-2026-005/2',
-      },
-    ],
-  },
-];
+// Reçus Officiels Pré-Enregistrés (vide par défaut)
+const INITIAL_FIVE_RECEIPTS: FamilyDiscountReceipt[] = [];
 
 const DISCOUNTS_STORAGE_KEY = 'schoolflow_special_discounts_v1';
 
@@ -286,17 +114,11 @@ export function SpecialDiscountsView({
   const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`);
-          return saved ? JSON.parse(saved) : [];
-        }
         const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DISCOUNTS_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return INITIAL_FIVE_RECEIPTS;
+    return [];
   });
   const [selectedReceiptIndex, setSelectedReceiptIndex] = useState<number>(0);
   const [isReceiptDropdownOpen, setIsReceiptDropdownOpen] = useState<boolean>(false);
@@ -336,18 +158,21 @@ export function SpecialDiscountsView({
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const sub = getSchoolSubscription(schoolSlug);
-          if (sub.isDataReset) {
-            const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`);
-            const list = saved ? JSON.parse(saved) : [];
-            setSavedReceipts(list);
-            if (list.length === 0) {
-              setParentName('');
-              setParentPhone('');
-              setChildren([]);
-              setInstallments([]);
-              setDiscountAmountFCFA(0);
-            }
+          const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DISCOUNTS_STORAGE_KEY);
+          const list = saved ? JSON.parse(saved) : [];
+          setSavedReceipts(list);
+          if (list.length === 0) {
+            setParentName('');
+            setParentPhone('');
+            setSecondaryPhones([]);
+            setParentAddress('');
+            setReceiptNumber('REC-FAM-2026-001');
+            setChildren([]);
+            setInstallments([]);
+            setDiscountAmountFCFA(0);
+            setManualTotalAmountFCFA(null);
+            setManualNetToPayFCFA(null);
+            setManualPaidAmountFCFA(null);
           }
         } catch (e) {}
       }

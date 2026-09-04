@@ -64,106 +64,7 @@ export interface ExpenseItem {
 
 const EXPENSES_STORAGE_KEY = 'schoolflow_school_expenses_v1';
 
-const INITIAL_EXPENSES: ExpenseItem[] = [
-  {
-    id: 'exp-001',
-    reference: 'DEP-2026-001',
-    title: 'Salaires & Honoraires des Enseignants — Septembre 2026',
-    category: 'Salaires & Primes du Personnel',
-    amount: 4850000,
-    expenseDate: '2026-09-30',
-    paymentMethod: 'Virement Bancaire',
-    beneficiary: 'Corps Professoral & Personnel Administratif (32 agents)',
-    receiptInvoiceRef: 'ETAT-SAL-09-2026',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Direction Générale (EPC MANOI)',
-    description: 'Virement groupé des émoluments et primes de rentrée pour l’ensemble des enseignants du primaire et secondaire.',
-  },
-  {
-    id: 'exp-002',
-    reference: 'DEP-2026-002',
-    title: 'Achat Manuels Scolaires, Craies & Fournitures Générales',
-    category: 'Fournitures & Matériel Pédagogique',
-    amount: 1420000,
-    expenseDate: '2026-09-10',
-    paymentMethod: 'Chèque',
-    beneficiary: 'Librairie de France — Plateau Abidjan',
-    receiptInvoiceRef: 'FAC-LDF-48201',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Service Comptabilité',
-    description: 'Cahiers de textes officiels, registres d’appel, boîtes de craies sans poussière et rames de papier A4.',
-  },
-  {
-    id: 'exp-003',
-    reference: 'DEP-2026-003',
-    title: 'Approvisionnement Vivres Frais & Épicerie — Cantine',
-    category: 'Alimentation & Cantine Scolaire',
-    amount: 850000,
-    expenseDate: '2026-09-14',
-    paymentMethod: 'Wave',
-    beneficiary: 'Grossiste Alimentaire Marché Cocody Angré',
-    receiptInvoiceRef: 'BL-CANT-092',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Responsable Cantine',
-    description: 'Sacs de riz parfumé 50kg, bidons d’huile, poissons frais, légumes et régimes de bananes.',
-  },
-  {
-    id: 'exp-004',
-    reference: 'DEP-2026-004',
-    title: 'Carburant Gasoil & Vidange Flotte Cars Scolaires',
-    category: 'Carburant & Entretien Transports',
-    amount: 620000,
-    expenseDate: '2026-09-18',
-    paymentMethod: 'Espèces (Caisse)',
-    beneficiary: 'Station TotalEnergies Angré 8ème Tranche',
-    receiptInvoiceRef: 'CARB-TOT-889',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Responsable Transport',
-    description: 'Tickets carburant hebdomadaires pour les 4 minibus de ramassage scolaire des élèves.',
-  },
-  {
-    id: 'exp-005',
-    reference: 'DEP-2026-005',
-    title: 'Factures Électricité CIE & Eau SODECI — Septembre',
-    category: 'Électricité, Eau & Télécoms',
-    amount: 540000,
-    expenseDate: '2026-09-25',
-    paymentMethod: 'Orange Money',
-    beneficiary: 'CIE & SODECI Côte d’Ivoire',
-    receiptInvoiceRef: 'FAC-CIE-99214',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Direction Générale',
-    description: 'Consommation électrique des salles climatisées, éclairage des cours et alimentation en eau des blocs sanitaires.',
-  },
-  {
-    id: 'exp-006',
-    reference: 'DEP-2026-006',
-    title: 'Travaux de Rénovation Peinture & Plomberie Sanitaires',
-    category: 'Maintenance & Travaux Établissement',
-    amount: 380000,
-    expenseDate: '2026-09-05',
-    paymentMethod: 'Espèces (Caisse)',
-    beneficiary: 'Entreprise Artisanale BTP Diomandé',
-    receiptInvoiceRef: 'DEV-BTP-2026-04',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Directeur des Études',
-    description: 'Peinture lavable des couloirs du primaire et remplacement des robinetteries automatiques.',
-  },
-  {
-    id: 'exp-007',
-    reference: 'DEP-2026-007',
-    title: 'Abonnement Internet Fibre Optique Haute Vitesse (3 Mois)',
-    category: 'Électricité, Eau & Télécoms',
-    amount: 225000,
-    expenseDate: '2026-09-02',
-    paymentMethod: 'Wave',
-    beneficiary: 'Orange Côte d’Ivoire — Fibre Pro',
-    receiptInvoiceRef: 'OR-FIB-84210',
-    status: 'Payé / Décaissé',
-    authorizedBy: 'Service Informatique',
-    description: 'Connexion 300 Mbps pour les salles informatiques et le secrétariat administratif.',
-  },
-];
+const INITIAL_EXPENSES: ExpenseItem[] = [];
 
 const CATEGORIES_LIST = [
   'Toutes les catégories',
@@ -196,21 +97,15 @@ interface ExpensesViewProps {
 export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
-  // Liste des dépenses persistée
+  // Liste des dépenses persistée (vide par défaut : 0 FCFA)
   const [expenses, setExpenses] = useState<ExpenseItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub.isDataReset) {
-          const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`);
-          return saved ? JSON.parse(saved) : [];
-        }
         const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
-    return INITIAL_EXPENSES;
+    return [];
   });
 
   // Filtres & Recherche
@@ -246,14 +141,8 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const sub = getSchoolSubscription(schoolSlug);
-          if (sub.isDataReset) {
-            const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`);
-            setExpenses(saved ? JSON.parse(saved) : []);
-          } else {
-            const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
-            if (saved) setExpenses(JSON.parse(saved));
-          }
+          const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
+          setExpenses(saved ? JSON.parse(saved) : []);
         } catch (e) {}
       }
     };

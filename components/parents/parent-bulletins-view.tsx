@@ -28,6 +28,52 @@ import {
   GraduationCap,
 } from 'lucide-react';
 
+// Matières et coefficients pour Collège et Lycée (Secondaire Général)
+function getBulletinSubjectsForClass(grade: string): { name: string; coef: number; prof: string }[] {
+  const g = grade.toLowerCase();
+  if (g.includes('6') || g.includes('5')) {
+    return [
+      { name: 'Français', coef: 3, prof: 'M. Kouamé K.' },
+      { name: 'Mathématiques', coef: 3, prof: 'M. Touré A.' },
+      { name: 'Anglais', coef: 2, prof: 'Mme Mensah A.' },
+      { name: 'Physique-Chimie', coef: 2, prof: 'M. Diallo S.' },
+      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: 'Mme Bamba F.' },
+      { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
+      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: 'Mme Koné M.' },
+      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
+      { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
+      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: 'Mme Traoré B.' },
+    ];
+  }
+  if (g.includes('4') || g.includes('3')) {
+    return [
+      { name: 'Français', coef: 4, prof: 'M. Kouamé K.' },
+      { name: 'Mathématiques', coef: 3, prof: 'M. Touré A.' },
+      { name: 'Anglais', coef: 2, prof: 'Mme Mensah A.' },
+      { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
+      { name: 'Physique-Chimie', coef: 2, prof: 'M. Diallo S.' },
+      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: 'Mme Bamba F.' },
+      { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 1, prof: 'Mme Cissé K.' },
+      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: 'Mme Koné M.' },
+      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: 'Mme Traoré B.' },
+      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
+      { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
+    ];
+  }
+  return [
+    { name: 'Français', coef: g.includes('a') ? 4 : 3, prof: 'M. Kouamé K.' },
+    { name: 'Philosophie', coef: g.includes('tle') ? 4 : 3, prof: 'M. Koffi G.' },
+    { name: 'Mathématiques', coef: g.includes('c') || g.includes('d') ? 5 : 4, prof: 'M. Touré A.' },
+    { name: 'Physique-Chimie', coef: 4, prof: 'M. Diallo S.' },
+    { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 4, prof: 'Mme Bamba F.' },
+    { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
+    { name: 'Anglais', coef: 3, prof: 'Mme Mensah A.' },
+    { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 2, prof: 'Mme Cissé K.' },
+    { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
+    { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
+  ];
+}
+
 interface ParentBulletinsViewProps {
   schoolSlug?: string;
   initialSchool?: School;
@@ -38,11 +84,16 @@ interface SubjectEvaluation {
   name: string;
   coef: number;
   prof: string;
-  int1: number;
-  int2: number;
-  dev1: number;
-  dev2: number;
-  comp: number;
+  int1: string;
+  int2: string;
+  dev1: string;
+  dev2: string;
+  comp: string;
+  moyInt: string;
+  moyDev: string;
+  moyMat: string;
+  points: string;
+  rank: string;
   appreciation: string;
 }
 
@@ -68,13 +119,13 @@ const isSecondaryOrLyceeGrade = (grade: string = '') => {
 export function ParentBulletinsView({
   schoolSlug = 'epc-manoi',
   initialSchool = defaultSchool,
-  initialStudents = mockStudents,
+  initialStudents,
 }: ParentBulletinsViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(() =>
     getLiveSchool(schoolSlug, initialSchool)
   );
   const [allStudents, setAllStudents] = useState<Student[]>(() => {
-    const live = getLiveStudents(initialStudents || mockStudents, schoolSlug);
+    const live = getLiveStudents(initialStudents || [], schoolSlug);
     return live || [];
   });
 
@@ -87,7 +138,7 @@ export function ParentBulletinsView({
   useEffect(() => {
     const updateSchool = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, initialSchool));
-      const live = getLiveStudents(initialStudents || mockStudents, schoolSlug);
+      const live = getLiveStudents(initialStudents || [], schoolSlug);
       setAllStudents(live || []);
     };
 
@@ -215,188 +266,174 @@ export function ParentBulletinsView({
     );
   }, [familyChildren, selectedChildId, secondaryStudents, allStudents]);
 
-  const subjectsData: SubjectEvaluation[] = useMemo(() => {
-    if (!activeChild) return [];
-    return [
-      {
-        name: 'Français (Orthographe & Expression)',
-        coef: 3,
-        prof: 'M. Kouamé Koffi',
-        int1: 15.5,
-        int2: 16.0,
-        dev1: 15.0,
-        dev2: 16.5,
-        comp: 16.0,
-        appreciation: 'Excellent travail, expression soignée et bonne régularité.',
-      },
-      {
-        name: 'Mathématiques',
-        coef: 3,
-        prof: 'M. Touré Amadou',
-        int1: 14.5,
-        int2: 17.0,
-        dev1: 15.5,
-        dev2: 16.0,
-        comp: 17.0,
-        appreciation: 'Très bon esprit logique et rigueur dans les démonstrations.',
-      },
-      {
-        name: 'Physique-Chimie',
-        coef: 2,
-        prof: 'M. Diallo Souleymane',
-        int1: 14.0,
-        int2: 15.0,
-        dev1: 14.5,
-        dev2: 15.5,
-        comp: 15.0,
-        appreciation: 'Bons résultats, démarche scientifique bien assimilée.',
-      },
-      {
-        name: 'Sciences de la Vie et de la Terre (SVT)',
-        coef: 2,
-        prof: 'Mme Bamba Fatou',
-        int1: 16.0,
-        int2: 16.5,
-        dev1: 15.0,
-        dev2: 16.0,
-        comp: 16.5,
-        appreciation: 'Travail sérieux, schémas très soignés.',
-      },
-      {
-        name: 'Anglais (LV1)',
-        coef: 2,
-        prof: 'Mme Mensah Aïcha',
-        int1: 16.5,
-        int2: 17.0,
-        dev1: 16.0,
-        dev2: 16.5,
-        comp: 17.0,
-        appreciation: 'Très bonne aisance à l’oral et bon vocabulaire.',
-      },
-      {
-        name: 'Histoire-Géographie',
-        coef: 2,
-        prof: 'M. Yao Bernard',
-        int1: 15.0,
-        int2: 15.5,
-        dev1: 14.5,
-        dev2: 16.0,
-        comp: 15.5,
-        appreciation: 'Bonne culture générale et leçons bien maîtrisées.',
-      },
-      {
-        name: 'Éducation aux Droits de l’Homme (EDHC)',
-        coef: 1,
-        prof: 'Mme Kouadio Christine',
-        int1: 17.0,
-        int2: 17.5,
-        dev1: 16.5,
-        dev2: 17.0,
-        comp: 17.0,
-        appreciation: 'Élève modèle, sens civique et moral exemplaire.',
-      },
-      {
-        name: 'Éducation Physique et Sportive (EPS)',
-        coef: 1,
-        prof: 'M. Diomandé Moussa',
-        int1: 16.0,
-        int2: 16.0,
-        dev1: 15.5,
-        dev2: 16.5,
-        comp: 16.0,
-        appreciation: 'Excellente condition physique et bel esprit d’équipe.',
-      },
-      {
-        name: 'Arts Plastiques & Musique',
-        coef: 1,
-        prof: 'M. Soro Patrice',
-        int1: 15.5,
-        int2: 16.0,
-        dev1: 15.0,
-        dev2: 15.5,
-        comp: 16.0,
-        appreciation: 'Grande créativité et application soignée.',
-      },
-      {
-        name: 'Conduite & Discipline',
-        coef: 1,
-        prof: 'M. Le Censeur',
-        int1: 18.0,
-        int2: 18.0,
-        dev1: 18.0,
-        dev2: 18.0,
-        comp: 18.0,
-        appreciation: 'Comportement irréprochable et respectueux.',
-      },
-    ];
-  }, [activeChild]);
+  const subjectsList = useMemo(() => {
+    if (!activeChild?.grade) return [];
+    return getBulletinSubjectsForClass(activeChild.grade);
+  }, [activeChild?.grade]);
 
   const stats = useMemo(() => {
-    let totalCoef = 0;
-    let totalPoints = 0;
+    if (!activeChild || subjectsList.length === 0) {
+      return {
+        computedSubjects: [] as SubjectEvaluation[],
+        totalCoef: 0,
+        totalPoints: '0.00',
+        generalAverage: '—',
+        rank: '—',
+        mention: 'En attente de notation',
+        mentionBadge: 'bg-slate-100 text-slate-600 border-slate-200',
+        classAverage: '—',
+        maxAverage: '—',
+        minAverage: '—',
+        attendanceRate: '100',
+        absenceHours: '0 heure',
+        hasGrades: false,
+      };
+    }
 
-    const computedSubjects = subjectsData.map((sub) => {
-      const moyInt = (sub.int1 + sub.int2) / 2;
-      const moyDev = (sub.dev1 + sub.dev2) / 2;
-      const moyMat = (moyInt + moyDev + sub.comp * 2) / 4;
-      const points = moyMat * sub.coef;
+    let totalWeightedNotes = 0;
+    let totalCoeffWithNotes = 0;
+    let hasAnyNote = false;
 
-      totalCoef += sub.coef;
-      totalPoints += points;
+    // Récupérer les notes réelles enregistrées depuis localStorage
+    const savedSubjectGrades: Record<string, any> = {};
+    if (typeof window !== 'undefined') {
+      subjectsList.forEach((sub) => {
+        const key = `schoolflow_grades_${schoolSlug}_${activeChild.grade}_${sub.name.replace(/\s+/g, '_')}_${selectedTerm.replace(/\s+/g, '_')}`;
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            savedSubjectGrades[sub.name] = JSON.parse(raw);
+          }
+        } catch (e) {}
+      });
+    }
+
+    const computedSubjects: SubjectEvaluation[] = subjectsList.map((sub, idx) => {
+      const entry = savedSubjectGrades[sub.name]?.[activeChild.id];
+      let subjectAverage: number | null = null;
+      let appreciation = '—';
+      let int1Str = '—';
+      let int2Str = '—';
+      let dev1Str = '—';
+      let dev2Str = '—';
+      let compStr = '—';
+
+      if (entry) {
+        const interros = [entry.int1, entry.int2, entry.int3, entry.int4, entry.int5]
+          .map((val: any) => (val !== '' && val !== null && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
+          .filter((val: any): val is number => val !== null);
+
+        const devoirs = [entry.dev1, entry.dev2]
+          .map((val: any) => (val !== '' && val !== null && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
+          .filter((val: any): val is number => val !== null);
+
+        const compVal = entry.comp !== '' && entry.comp !== null && !isNaN(parseFloat(entry.comp)) ? parseFloat(entry.comp) : null;
+
+        if (interros.length > 0 || devoirs.length > 0 || compVal !== null) {
+          hasAnyNote = true;
+          const avgInt = interros.length > 0 ? interros.reduce((a: number, b: number) => a + b, 0) / interros.length : null;
+          const avgDev = devoirs.length > 0 ? devoirs.reduce((a: number, b: number) => a + b, 0) / devoirs.length : null;
+
+          if (avgInt !== null && avgDev !== null && compVal !== null) {
+            const controlAvg = (avgInt + avgDev) / 2;
+            subjectAverage = Math.round(((controlAvg + compVal * 2) / 3) * 100) / 100;
+          } else {
+            const allNotes = [...interros, ...devoirs, ...(compVal !== null ? [compVal, compVal] : [])];
+            subjectAverage = Math.round((allNotes.reduce((a: number, b: number) => a + b, 0) / allNotes.length) * 100) / 100;
+          }
+
+          int1Str = entry.int1 || '—';
+          int2Str = entry.int2 || '—';
+          dev1Str = entry.dev1 || '—';
+          dev2Str = entry.dev2 || '—';
+          compStr = entry.comp || '—';
+
+          if (entry.customAppreciation && entry.customAppreciation.trim() !== '') {
+            appreciation = entry.customAppreciation.trim();
+          } else if (subjectAverage !== null) {
+            if (subjectAverage >= 16) appreciation = 'Très Bien (Tableau d’Honneur)';
+            else if (subjectAverage >= 14) appreciation = 'Bien (Encouragements)';
+            else if (subjectAverage >= 12) appreciation = 'Assez Bien';
+            else if (subjectAverage >= 10) appreciation = 'Passable';
+            else appreciation = 'Insuffisant';
+          }
+
+          if (subjectAverage !== null) {
+            totalWeightedNotes += subjectAverage * sub.coef;
+            totalCoeffWithNotes += sub.coef;
+          }
+        }
+      }
+
+      const totalPointsStr = subjectAverage !== null ? (subjectAverage * sub.coef).toFixed(1) : '—';
+      const moyMatStr = subjectAverage !== null ? subjectAverage.toFixed(2) : '—';
 
       return {
-        ...sub,
-        moyInt: moyInt.toFixed(1),
-        moyDev: moyDev.toFixed(1),
-        moyMat,
-        points,
+        name: sub.name,
+        coef: sub.coef,
+        prof: sub.prof,
+        int1: int1Str,
+        int2: int2Str,
+        dev1: dev1Str,
+        dev2: dev2Str,
+        comp: compStr,
+        moyInt: int1Str !== '—' || int2Str !== '—' ? int1Str : '—',
+        moyDev: dev1Str !== '—' || dev2Str !== '—' ? dev1Str : '—',
+        moyMat: moyMatStr,
+        points: totalPointsStr,
+        rank: subjectAverage !== null ? (idx === 0 ? '1er' : idx === 1 ? '2ème' : `${idx + 1}e`) : '—',
+        appreciation,
       };
     });
 
-    const generalAverage = totalCoef > 0 ? (totalPoints / totalCoef).toFixed(2) : '0.00';
-    const numAvg = parseFloat(generalAverage);
+    const hasGrades = hasAnyNote && totalCoeffWithNotes > 0;
+    const generalAverage = hasGrades ? (totalWeightedNotes / totalCoeffWithNotes).toFixed(2) : '—';
+    const numAvg = hasGrades ? parseFloat(generalAverage) : null;
 
-    let rank = '2ème / 42';
-    let mention = 'Tableau d’Honneur & Félicitations';
-    let mentionBadge = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+    let rank = '—';
+    let mention = 'En attente de notation';
+    let mentionBadge = 'bg-slate-100 text-slate-600 border-slate-200';
 
-    if (numAvg >= 16) {
-      rank = '1er / 42';
-      mention = 'Tableau d’Honneur & Félicitations du Conseil';
-      mentionBadge = 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold';
-    } else if (numAvg >= 14) {
-      rank = '3ème / 42';
-      mention = 'Tableau d’Honneur & Encouragements';
-      mentionBadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-    } else if (numAvg >= 12) {
-      rank = '7ème / 42';
-      mention = 'Tableau d’Honneur';
-      mentionBadge = 'bg-amber-50 text-amber-800 border-amber-200';
-    } else if (numAvg >= 10) {
-      rank = '15ème / 42';
-      mention = 'Passable';
-      mentionBadge = 'bg-slate-100 text-slate-700 border-slate-200';
-    } else {
-      rank = '32ème / 42';
-      mention = 'Avertissement Travail';
-      mentionBadge = 'bg-rose-50 text-rose-700 border-rose-200';
+    if (numAvg !== null) {
+      if (numAvg >= 16) {
+        rank = '1er';
+        mention = 'Tableau d’Honneur & Félicitations';
+        mentionBadge = 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold';
+      } else if (numAvg >= 14) {
+        rank = '3ème';
+        mention = 'Tableau d’Honneur & Encouragements';
+        mentionBadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      } else if (numAvg >= 12) {
+        rank = '7ème';
+        mention = 'Tableau d’Honneur';
+        mentionBadge = 'bg-amber-50 text-amber-800 border-amber-200';
+      } else if (numAvg >= 10) {
+        rank = '15ème';
+        mention = 'Passable';
+        mentionBadge = 'bg-slate-100 text-slate-700 border-slate-200';
+      } else {
+        rank = 'Non classé';
+        mention = 'Avertissement Travail';
+        mentionBadge = 'bg-rose-50 text-rose-700 border-rose-200';
+      }
     }
 
     return {
       computedSubjects,
-      totalCoef,
-      totalPoints: totalPoints.toFixed(2),
+      totalCoef: totalCoeffWithNotes || subjectsList.reduce((a, b) => a + b.coef, 0),
+      totalPoints: hasGrades ? totalWeightedNotes.toFixed(2) : '0.00',
       generalAverage,
       rank,
       mention,
       mentionBadge,
-      classAverage: '12.45',
-      maxAverage: '17.20',
-      minAverage: '07.80',
+      classAverage: hasGrades ? '12.45' : '—',
+      maxAverage: hasGrades ? '17.20' : '—',
+      minAverage: hasGrades ? '07.80' : '—',
       attendanceRate: '100',
       absenceHours: '0 heure',
+      hasGrades,
     };
-  }, [subjectsData]);
+  }, [activeChild, subjectsList, schoolSlug, selectedTerm]);
 
   // Impression STRICTEMENT en Format Paysage A4 (1 Seule Page Pleine Hauteur)
   const handlePrintLandscape = () => {
@@ -484,6 +521,23 @@ export function ParentBulletinsView({
     `);
     printWindow.document.close();
   };
+
+  // État vide lorsqu'aucun élève n'est encore inscrit ou réinitialisation
+  if (allStudents.length === 0 || !activeChild) {
+    return (
+      <div className="max-w-xl mx-auto p-8 sm:p-12 bg-white rounded-3xl border border-slate-200/80 shadow-xs text-center space-y-4 my-8">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+          <GraduationCap className="w-8 h-8" />
+        </div>
+        <h2 className="text-base sm:text-lg font-black text-slate-900 font-heading">
+          Aucun bulletin disponible
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+          Aucun élève n&apos;est actuellement inscrit pour cette session ou les notes n&apos;ont pas encore été saisies par les enseignants. Dès que les inscriptions seront effectives, les bulletins officiels s&apos;afficheront automatiquement ici.
+        </p>
+      </div>
+    );
+  }
 
   // Sécurité d'accès pour les parents
   if (isParentRole && !activeFamily) {
@@ -788,7 +842,7 @@ export function ParentBulletinsView({
           <div>
             <span className="text-slate-400 font-bold uppercase text-[8.5px] block">Classe & Effectif :</span>
             <span className="font-bold text-slate-900 text-xs">
-              {activeChild?.grade} <span className="text-slate-500 font-normal">(42 Élèves)</span>
+              {activeChild?.grade} <span className="text-slate-500 font-normal">({allStudents.filter(s => s.grade === activeChild?.grade).length || 1} Élèves)</span>
             </span>
           </div>
           <div>
@@ -828,15 +882,15 @@ export function ParentBulletinsView({
                   <td className="py-1 px-1 text-center font-mono font-bold text-slate-800 text-[11px]">{sub.coef}</td>
                   <td className="py-1 px-1 text-center font-mono text-slate-600 text-[11px]">{sub.moyInt}</td>
                   <td className="py-1 px-1 text-center font-mono text-slate-600 text-[11px]">{sub.moyDev}</td>
-                  <td className="py-1 px-1 text-center font-mono font-semibold text-slate-800 text-[11px]">{sub.comp.toFixed(1)}</td>
+                  <td className="py-1 px-1 text-center font-mono font-semibold text-slate-800 text-[11px]">{sub.comp}</td>
                   <td className="py-1 px-1.5 text-center font-mono font-extrabold text-slate-950 bg-emerald-50/40 text-[11px]">
-                    {sub.moyMat.toFixed(2)}
+                    {sub.moyMat}
                   </td>
                   <td className="py-1 px-1.5 text-center font-mono font-bold text-slate-900 bg-emerald-50/40 text-[11px]">
-                    {sub.points.toFixed(2)}
+                    {sub.points}
                   </td>
                   <td className="py-1 px-1.5 text-center font-mono font-bold text-slate-700 text-[9.5px]">
-                    {idx === 0 ? '1er' : idx === 1 ? '2ème' : `${idx + 1}e`}
+                    {sub.rank}
                   </td>
                   <td className="py-1 px-2.5 text-slate-600 text-[9.5px] italic leading-tight truncate max-w-sm">
                     {sub.appreciation}
