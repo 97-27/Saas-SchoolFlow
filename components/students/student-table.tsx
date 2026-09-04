@@ -162,7 +162,7 @@ export function StudentTable({
     );
 
     // Save to local storage and sync invoice across dashboard and caisse
-    updateRegisteredStudent(updated);
+    updateRegisteredStudent(updated, schoolSlug);
 
     setSuccessMessage(`Coordonnées et statut de l'élève ${updated.fullName} mis à jour avec succès !`);
     setTimeout(() => setSuccessMessage(null), 5000);
@@ -1233,7 +1233,7 @@ export function StudentTable({
                 type="button"
                 onClick={() => {
                   const ids = studentToDelete.map((s) => s.id);
-                  deleteLiveStudents(ids);
+                  deleteLiveStudents(ids, schoolSlug);
                   setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
                   setStudentToDelete(null);
                   setSuccessMessage(

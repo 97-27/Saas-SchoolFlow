@@ -2,7 +2,7 @@
 
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools } from '@/lib/data/mock-data';
-import { saveSchoolToSupabase, saveStudentToSupabase } from '@/lib/supabase/services';
+import { saveSchoolToSupabase, saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -566,6 +566,7 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
 
     // Synchronisation en arrière-plan avec Supabase Cloud
     saveStudentToSupabase(student, schoolSlug).catch(() => {});
+    saveInvoiceToSupabase(invoice, schoolSlug).catch(() => {});
 
     // 3. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
@@ -677,6 +678,7 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
 
     // Synchronisation en arrière-plan avec Supabase Cloud
     saveStudentToSupabase(student, schoolSlug).catch(() => {});
+    saveInvoiceToSupabase(updatedInvoice, schoolSlug).catch(() => {});
 
     // 3. Propagation globale de l'événement
     broadcastLiveUpdate({

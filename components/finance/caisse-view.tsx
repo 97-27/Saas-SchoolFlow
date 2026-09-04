@@ -42,11 +42,11 @@ export function CaisseView({
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
   useEffect(() => {
-    setInvoices(getLiveInvoices(initialInvoices));
+    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setInvoices(getLiveInvoices(initialInvoices));
+      setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);

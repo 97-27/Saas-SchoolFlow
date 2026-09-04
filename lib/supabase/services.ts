@@ -262,3 +262,58 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
     return [];
   }
 }
+
+export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    let { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) {
+      const { data: newSchool } = await supabase
+        .from('schools')
+        .insert({
+          slug: schoolSlug,
+          name: schoolSlug.toUpperCase(),
+        })
+        .select('id')
+        .single();
+      school = newSchool;
+    }
+
+    if (!school) return false;
+
+    const payload = {
+      school_id: school.id,
+      invoice_number: invoice.invoiceNumber,
+      student_id: invoice.studentId || null,
+      fee_type: invoice.feeType || "Frais d'inscription & Scolarité",
+      amount: invoice.amount || 0,
+      paid_amount: invoice.paidAmount || 0,
+      discount_amount: invoice.discountAmount || 0,
+      net_amount: invoice.netAmount || invoice.amount || 0,
+      balance_remaining: invoice.balanceRemaining || 0,
+      payment_method: invoice.paymentMethod || 'Espèces en caisse',
+      issue_date: invoice.issueDate || new Date().toISOString().split('T')[0],
+      due_date: invoice.dueDate || new Date().toISOString().split('T')[0],
+      status: invoice.status || 'draft',
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('invoices')
+      .upsert(payload, { onConflict: 'invoice_number' });
+
+    if (error) {
+      console.warn('saveInvoiceToSupabase warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveInvoiceToSupabase catch:', err);
+    return false;
+  }
+}

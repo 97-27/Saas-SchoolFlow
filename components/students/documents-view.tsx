@@ -1194,7 +1194,7 @@ export function DocumentsView({
                 type="button"
                 onClick={() => {
                   const ids = studentToDelete.map((s) => s.id);
-                  deleteLiveStudents(ids);
+                  deleteLiveStudents(ids, schoolSlug);
                   setSelectedStudentIds((prev) => prev.filter((id) => !ids.includes(id)));
                   setStudentToDelete(null);
                   setUploadSuccessToast(

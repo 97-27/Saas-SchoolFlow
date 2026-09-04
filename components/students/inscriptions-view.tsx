@@ -453,7 +453,7 @@ export function InscriptionsView({
     };
 
     // Save to persistent storage and broadcast event
-    saveRegisteredStudent(newStudent, newInvoice);
+    saveRegisteredStudent(newStudent, newInvoice, schoolSlug);
 
     setSuccessModalData(newStudent);
     setShowConfirmModal(false);
@@ -1065,28 +1065,30 @@ export function InscriptionsView({
             </span>
           </div>
 
-          <div className="col-span-2 pt-1 border-t border-slate-200/80 flex items-center justify-between flex-wrap gap-1">
-            <div>
+          <div className="col-span-2 pt-2 border-t border-slate-200/80 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <span className="text-[10px] text-slate-500 block uppercase font-bold">
                 Nom & Prénom de l&apos;Élève :
               </span>
-              <span className="font-black text-slate-950 uppercase font-heading text-sm sm:text-base">
-                {lastName || 'NOM'} {firstName || 'PRÉNOM'}
-              </span>{' '}
-              <span className="ml-1 text-[11px] font-bold text-slate-700">
-                ({gender === 'female' ? '♀ Fille' : '♂ Garçon'})
-              </span>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="font-black text-slate-950 uppercase font-heading text-sm sm:text-base truncate">
+                  {lastName || 'NOM'} {firstName || 'PRÉNOM'}
+                </span>
+                <span className="text-[11px] font-bold text-slate-700 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                  {gender === 'female' ? '♀ Fille' : '♂ Garçon'}
+                </span>
+              </div>
             </div>
 
-            {/* Badge Statut de l'élève (Nouveau / Ancien) */}
-            <div className="text-right">
-              <span className="text-[10px] text-slate-500 block uppercase font-bold">
+            {/* Badge Statut de l'élève (Nouveau / Ancien) sur la même ligne */}
+            <div className="shrink-0 flex items-center gap-1.5 self-center">
+              <span className="text-[10px] text-slate-500 uppercase font-bold hidden sm:inline">
                 Statut :
               </span>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-black border ${
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black border shadow-2xs whitespace-nowrap ${
                 enrollmentType === 'nouveau'
-                  ? 'bg-emerald-100 text-emerald-950 border-emerald-300 shadow-2xs'
-                  : 'bg-blue-100 text-blue-950 border-blue-300 shadow-2xs'
+                  ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                  : 'bg-blue-100 text-blue-950 border-blue-300'
               }`}>
                 {enrollmentType === 'nouveau' ? '🌟 Nouvel Élève' : '🔄 Ancien Élève'}
               </span>
