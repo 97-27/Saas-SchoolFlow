@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { School } from '@/lib/data/types';
 import { defaultSchool } from '@/lib/data/mock-data';
@@ -315,6 +315,7 @@ export function SalariesView({
     name: string;
   } | null>(null);
   const [isCapturingWhatsApp, setIsCapturingWhatsApp] = useState(false);
+  const receiptCardRef = useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
     window.print();
@@ -338,7 +339,7 @@ export function SalariesView({
   };
 
   const handleShareWhatsApp = async () => {
-    const receiptElement = document.getElementById('salary-receipt-card');
+    const receiptElement = receiptCardRef.current || document.getElementById('salary-receipt-card');
     if (!receiptElement) return;
 
     setIsCapturingWhatsApp(true);
@@ -351,42 +352,59 @@ export function SalariesView({
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
+        imageTimeout: 8000,
       });
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsCapturingWhatsApp(false);
-          return;
+      let blob: Blob | null = null;
+      try {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      } catch (blobErr) {
+        console.warn('toBlob error:', blobErr);
+      }
+
+      if (!blob) {
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          const res = await fetch(dataUrl);
+          blob = await res.blob();
+        } catch (fetchErr) {
+          console.warn('dataUrl fallback error:', fetchErr);
         }
+      }
 
-        // 1. Copier automatiquement dans le presse-papier
-        if (navigator.clipboard && (window as any).ClipboardItem) {
-          try {
-            await navigator.clipboard.write([
-              new (window as any).ClipboardItem({
-                'image/png': blob,
-              }),
-            ]);
-          } catch (err) {
-            console.warn('Clipboard write fallback:', err);
-          }
-        }
-
-        // 2. Afficher la modale de prévisualisation et partage WhatsApp
-        const imageUrl = URL.createObjectURL(blob);
-        const cleanPhone = (selectedSalary.phone || '').replace(/[^0-9]/g, '');
-        setWhatsAppPreviewData({
-          imageUrl,
-          blob,
-          fileName: `Bulletin_Salaire_${selectedSalary.receiptNumber}_${(selectedSalary.staffName || 'Personnel').replace(/\s+/g, '_')}.png`,
-          phone: selectedSalary.phone || '+225 --',
-          cleanPhone,
-          name: `${selectedSalary.civility} ${selectedSalary.staffName}`,
-        });
-
-        showToast('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      if (!blob) {
         setIsCapturingWhatsApp(false);
-      }, 'image/png');
+        showToast('⚠️ Erreur lors de la capture du reçu.');
+        return;
+      }
+
+      // 1. Copier automatiquement dans le presse-papier
+      if (navigator.clipboard && (window as any).ClipboardItem) {
+        try {
+          await navigator.clipboard.write([
+            new (window as any).ClipboardItem({
+              'image/png': blob,
+            }),
+          ]);
+        } catch (err) {
+          console.warn('Clipboard write fallback:', err);
+        }
+      }
+
+      // 2. Afficher la modale de prévisualisation et partage WhatsApp
+      const imageUrl = URL.createObjectURL(blob);
+      const cleanPhone = (selectedSalary.phone || '').replace(/[^0-9]/g, '');
+      setWhatsAppPreviewData({
+        imageUrl,
+        blob,
+        fileName: `Bulletin_Salaire_${selectedSalary.receiptNumber}_${(selectedSalary.staffName || 'Personnel').replace(/\s+/g, '_')}.png`,
+        phone: selectedSalary.phone || '+225 --',
+        cleanPhone,
+        name: `${selectedSalary.civility} ${selectedSalary.staffName}`,
+      });
+
+      showToast('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setIsCapturingWhatsApp(false);
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsCapturingWhatsApp(false);
@@ -394,10 +412,11 @@ export function SalariesView({
     }
   };
 
-  const renderSalaryReceiptSlip = (badgeLabel?: string) => {
+  const renderSalaryReceiptSlip = (badgeLabel?: string, isPrint = false) => {
     return (
       <div
-        id="salary-receipt-card"
+        ref={isPrint ? undefined : receiptCardRef}
+        id={isPrint ? "salary-receipt-card-print" : "salary-receipt-card"}
         className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-300 shadow-xl relative overflow-hidden text-slate-800 space-y-5 printable-receipt-area print:p-4 print:border-none print:shadow-none print:w-full print:m-0"
       >
         {/* 1. EN-TÊTE OFFICIEL DE L'ÉTABLISSEMENT — 3 COLONNES CENTRÉES */}
@@ -1065,7 +1084,7 @@ export function SalariesView({
 
       {/* ================= SECTION D'IMPRESSION OFFICIELLE (1 SEUL REÇU PAR PAGE A4) ================= */}
       <div id="official-salary-receipt-print" className="hidden print:block print:w-full printable-receipt-area">
-        {renderSalaryReceiptSlip('EXEMPLAIRE OFFICIEL')}
+        {renderSalaryReceiptSlip('EXEMPLAIRE OFFICIEL', true)}
       </div>
 
       {/* ================= TABLEAU RÉCAPITULATIF DE TOUS LES SALAIRES VERSÉS ================= */}

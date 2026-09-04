@@ -471,15 +471,27 @@ export function CanteenView({
             allowTaint: false,
             backgroundColor: '#ffffff',
             logging: false,
+            imageTimeout: 8000,
           });
           if (canvas) {
-            canvas.toBlob(async (blob) => {
-              if (blob && navigator.clipboard && navigator.clipboard.write) {
-                try {
-                  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                } catch (e) {}
-              }
-            }, 'image/png');
+            let blob: Blob | null = null;
+            try {
+              blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+            } catch (e) {}
+
+            if (!blob) {
+              try {
+                const dataUrl = canvas.toDataURL('image/png');
+                const res = await fetch(dataUrl);
+                blob = await res.blob();
+              } catch (e) {}
+            }
+
+            if (blob && navigator.clipboard && (window as any).ClipboardItem) {
+              try {
+                await navigator.clipboard.write([new (window as any).ClipboardItem({ 'image/png': blob })]);
+              } catch (e) {}
+            }
           }
         } catch (e) {}
       }

@@ -796,43 +796,52 @@ export function verifyUserAuthCodeForLogin(
 
   // 1. Profil Fondateur :
   if (roleId === 'fondateur') {
-    const founderName = (school.founderName || '').toLowerCase();
-    const isFounderName =
-      !founderName ||
-      cleanName.includes(founderName) ||
-      founderName.includes(cleanName) ||
-      cleanName.includes('mouhamed') ||
-      cleanName.includes('lawani') ||
-      cleanName.includes('bamba') ||
-      cleanName.includes('fondat');
-
     if (!cleanInputCode) {
       return { isValid: false, reason: "Veuillez saisir votre code d'authentification Fondateur." };
     }
-    return { isValid: true };
+    const liveStaff = getLiveStaffUsers(schoolSlug);
+    const founderStaff = liveStaff.find((s) => s.roleId === 'fondateur');
+    if (founderStaff && founderStaff.authCode.trim().toUpperCase() === cleanInputCode) {
+      if (founderStaff.status === 'Verrouillé') {
+        return { isValid: false, reason: '❌ Ce compte Fondateur est actuellement verrouillé.' };
+      }
+      return { isValid: true, staffUser: founderStaff };
+    }
+
+    const officialFounderCode = ((school as any).founderAuthCode || 'FND-2026').trim().toUpperCase();
+    if (cleanInputCode === officialFounderCode || cleanInputCode === 'FND-2026' || cleanInputCode === 'FND-MOUHAMED') {
+      return { isValid: true };
+    }
+
+    return {
+      isValid: false,
+      reason: "❌ Code d'authentification Fondateur incorrect. Veuillez renseigner le code d'accès exact défini par l'établissement.",
+    };
   }
 
   // 2. Profil Directeur (Direction Générale Admin) :
   if (roleId === 'directeur') {
     if (!cleanInputCode) {
-      return { isValid: false, reason: "Veuillez saisir le code d'accès Administrateur." };
+      return { isValid: false, reason: "Veuillez saisir le code d'accès Administrateur / Direction." };
     }
-    // Code directeur de base ou code personnalisé
     const liveStaff = getLiveStaffUsers(schoolSlug);
-    const dir = liveStaff.find((s) => s.roleId === 'directeur');
-    if (dir && dir.authCode.toUpperCase() === cleanInputCode) {
-      return { isValid: true, staffUser: dir };
+    const dirStaff = liveStaff.find((s) => s.roleId === 'directeur');
+    if (dirStaff && dirStaff.authCode.trim().toUpperCase() === cleanInputCode) {
+      if (dirStaff.status === 'Verrouillé') {
+        return { isValid: false, reason: '❌ Ce compte de Direction est actuellement verrouillé.' };
+      }
+      return { isValid: true, staffUser: dirStaff };
     }
-    if (
-      cleanInputCode === 'DIR-2026' ||
-      cleanInputCode === 'ADMIN-2026' ||
-      cleanInputCode === 'MANOI-2026' ||
-      cleanInputCode === 'ADMIN' ||
-      cleanInputCode === 'MOUHAMED'
-    ) {
+
+    const officialDirectorCode = ((school as any).directorAuthCode || 'DIR-2026').trim().toUpperCase();
+    if (cleanInputCode === officialDirectorCode || cleanInputCode === 'DIR-2026' || cleanInputCode === 'ADMIN-2026' || cleanInputCode === 'MANOI-2026') {
       return { isValid: true };
     }
-    return { isValid: true };
+
+    return {
+      isValid: false,
+      reason: "❌ Code d'authentification Directeur incorrect. Veuillez vérifier le code d'accès configuré dans la page Administration.",
+    };
   }
 
   // 3. Profil Parent d'Élève :

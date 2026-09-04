@@ -163,6 +163,8 @@ export function SpecialDiscountsView({
     name: string;
   } | null>(null);
 
+  const receiptCardRef = useRef<HTMLDivElement>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -484,7 +486,7 @@ export function SpecialDiscountsView({
 
   // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp (Sans redirection automatique)
   const handleShareWhatsappWithImageCopy = async () => {
-    const element = document.getElementById('printable-receipt-card');
+    const element = receiptCardRef.current || document.getElementById('printable-receipt-card');
     if (!element) return;
 
     setIsGeneratingImage(true);
@@ -498,48 +500,64 @@ export function SpecialDiscountsView({
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
+        imageTimeout: 8000,
       });
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsGeneratingImage(false);
-          setToastMessage('⚠️ Erreur lors de la capture du reçu.');
-          setShowToast(true);
-          return;
+      let blob: Blob | null = null;
+      try {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      } catch (blobErr) {
+        console.warn('toBlob error:', blobErr);
+      }
+
+      if (!blob) {
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          const res = await fetch(dataUrl);
+          blob = await res.blob();
+        } catch (fetchErr) {
+          console.warn('dataUrl fallback failed:', fetchErr);
         }
+      }
 
-        // 1. Copier automatiquement dans le presse-papier
-        if (navigator.clipboard && (window as any).ClipboardItem) {
-          try {
-            await navigator.clipboard.write([
-              new (window as any).ClipboardItem({
-                'image/png': blob,
-              }),
-            ]);
-          } catch (clipErr) {
-            console.warn('Clipboard write fallback:', clipErr);
-          }
-        }
-
-        // 2. Afficher la modale de prévisualisation et partage WhatsApp (sans redirection automatique)
-        const imageUrl = URL.createObjectURL(blob);
-        const cleanPhone = (parentPhone || '').replace(/\D/g, '');
-        const fileName = `Recu_Reduction_${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
-
-        setWhatsAppPreviewData({
-          imageUrl,
-          blob,
-          fileName,
-          phone: parentPhone || '+225 --',
-          cleanPhone,
-          name: parentName || 'Parent d\'élève',
-        });
-
-        setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 7000);
+      if (!blob) {
         setIsGeneratingImage(false);
-      }, 'image/png');
+        setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+        setShowToast(true);
+        return;
+      }
+
+      // 1. Copier automatiquement dans le presse-papier
+      if (navigator.clipboard && (window as any).ClipboardItem) {
+        try {
+          await navigator.clipboard.write([
+            new (window as any).ClipboardItem({
+              'image/png': blob,
+            }),
+          ]);
+        } catch (clipErr) {
+          console.warn('Clipboard write fallback:', clipErr);
+        }
+      }
+
+      // 2. Afficher la modale de prévisualisation et partage WhatsApp (sans redirection automatique)
+      const imageUrl = URL.createObjectURL(blob);
+      const cleanPhone = (parentPhone || '').replace(/\D/g, '');
+      const fileName = `Recu_Reduction_${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
+
+      setWhatsAppPreviewData({
+        imageUrl,
+        blob,
+        fileName,
+        phone: parentPhone || '+225 --',
+        cleanPhone,
+        name: parentName || 'Parent d\'élève',
+      });
+
+      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 7000);
+      setIsGeneratingImage(false);
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsGeneratingImage(false);
@@ -549,10 +567,11 @@ export function SpecialDiscountsView({
     }
   };
 
-  const renderDiscountReceiptSlip = (badgeLabel?: string) => {
+  const renderDiscountReceiptSlip = (badgeLabel?: string, isPrint = false) => {
     return (
       <div
-        id="printable-receipt-card"
+        ref={isPrint ? undefined : receiptCardRef}
+        id={isPrint ? "printable-receipt-card-print" : "printable-receipt-card"}
         className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-slate-800 shadow-xl space-y-5 relative overflow-hidden printable-receipt-area print:p-4 print:border-none print:shadow-none print:w-full print:m-0"
       >
         {/* 1. EN-TÊTE OFFICIEL AVEC LES DEUX LOGOS, NOM, SIGLE, DEVISE, SLOGAN, CONTACTS ET CODE MENA */}
@@ -1452,7 +1471,7 @@ export function SpecialDiscountsView({
 
       {/* ================= SECTION D'IMPRESSION OFFICIELLE (1 SEUL REÇU PAR PAGE A4) ================= */}
       <div id="official-discount-receipt-print" className="hidden print:block print:w-full printable-receipt-area">
-        {renderDiscountReceiptSlip('EXEMPLAIRE OFFICIEL')}
+        {renderDiscountReceiptSlip('EXEMPLAIRE OFFICIEL', true)}
       </div>
 
       {/* ================= MODAL PRÉVISUALISATION & PARTAGE PHOTO REÇU WHATSAPP ================= */}

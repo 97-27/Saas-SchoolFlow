@@ -638,37 +638,54 @@ export function BoardingView({
       const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
       const fileName = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsGeneratingImage(false);
-          return;
-        }
+      let blob: Blob | null = null;
+      try {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      } catch (blobErr) {
+        console.warn('toBlob error:', blobErr);
+      }
 
-        // Copier l'image dans le presse-papier pour WhatsApp (Ctrl+V)
+      if (!blob) {
         try {
-          if (navigator.clipboard && (window as any).ClipboardItem) {
-            await navigator.clipboard.write([
-              new (window as any).ClipboardItem({ 'image/png': blob }),
-            ]);
-          }
-        } catch (e) {
-          console.warn('Clipboard write fallback', e);
+          const dataUrl = canvas.toDataURL('image/png');
+          const res = await fetch(dataUrl);
+          blob = await res.blob();
+        } catch (fetchErr) {
+          console.warn('dataUrl fallback failed:', fetchErr);
         }
+      }
 
-        const imageUrl = URL.createObjectURL(blob);
-        setWhatsAppPreviewData({
-          imageUrl,
-          blob,
-          fileName,
-          phone: formParentContact || '+225 --',
-          cleanPhone,
-          name: formStudentName || 'Élève Interne',
-        });
-
-        setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
-        setTimeout(() => setToastMessage(null), 7000);
+      if (!blob) {
         setIsGeneratingImage(false);
-      }, 'image/png');
+        setToastMessage('⚠️ Erreur lors de la génération de l\'image.');
+        setTimeout(() => setToastMessage(null), 3500);
+        return;
+      }
+
+      // Copier l'image dans le presse-papier pour WhatsApp (Ctrl+V)
+      try {
+        if (navigator.clipboard && (window as any).ClipboardItem) {
+          await navigator.clipboard.write([
+            new (window as any).ClipboardItem({ 'image/png': blob }),
+          ]);
+        }
+      } catch (e) {
+        console.warn('Clipboard write fallback', e);
+      }
+
+      const imageUrl = URL.createObjectURL(blob);
+      setWhatsAppPreviewData({
+        imageUrl,
+        blob,
+        fileName,
+        phone: formParentContact || '+225 --',
+        cleanPhone,
+        name: formStudentName || 'Élève Interne',
+      });
+
+      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setTimeout(() => setToastMessage(null), 7000);
+      setIsGeneratingImage(false);
     } catch (e) {
       console.error(e);
       setIsGeneratingImage(false);
