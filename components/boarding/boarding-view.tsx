@@ -203,6 +203,10 @@ export function BoardingView({
         whatsappPhone: cs.parentContact || '+225 07 00 00 00 00',
         tuitionAmount: 0,
         paidAmount: 0,
+        paymentDate: '01/09/2026',
+        attendanceRate: 100,
+        status: 'active',
+        tuitionStatus: 'paid',
       };
 
       const studentMonths = monthlyPayments[cs.studentId] || {};
@@ -450,6 +454,10 @@ export function BoardingView({
           whatsappPhone: formParentContact.trim(),
           tuitionAmount: rate * 9,
           paidAmount: activeTotalCollected,
+          paymentDate: formPaymentDate || '03/09/2026',
+          attendanceRate: 100,
+          status: 'active',
+          tuitionStatus: activePaidMonthsCount === 9 ? 'paid' : activePaidMonthsCount > 0 ? 'partial' : 'unpaid',
         };
         const updatedStudentList = [newStudentObj, ...currentList.filter((s) => s.id !== targetStudentId)];
         localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudentList));
