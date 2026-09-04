@@ -1595,6 +1595,8 @@ export function BoardingView({
             </div>
           </div>
         </div>
+      </div>
+
       {/* ================= MODAL PRÉVISUALISATION & PARTAGE PHOTO REÇU WHATSAPP ================= */}
       {whatsAppPreviewData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
