@@ -54,6 +54,8 @@ export type UserRole =
   | 'directeur'
   | 'assistant_direction'
   | 'fondateur'
+  | 'educateur'
+  | 'informaticien'
   | 'comptable'
   | 'secretaire'
   | 'enseignant'
@@ -103,6 +105,26 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     defaultUserName: 'M. Soro Ibrahim',
     description: 'Assistance à la direction, gestion des classes, suivi du personnel et communication.',
     allowedModules: 'Vue d’ensemble, Classes & Niveaux, Enseignants & Personnel, Communication Parents, Notes Diverses',
+  },
+  educateur: {
+    id: 'educateur',
+    title: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
+    badge: '🛡️ Éducateur (Vie Scolaire)',
+    department: 'Vie Scolaire & Discipline',
+    defaultAuthCode: 'EDU-2026',
+    defaultUserName: 'M. Kouamé Yao',
+    description: 'Suivi de la discipline, retards, assiduité, autorisations et encadrement des élèves.',
+    allowedModules: 'Présences, Classes, Notes Diverses, Communication Parents, Bulletins',
+  },
+  informaticien: {
+    id: 'informaticien',
+    title: 'Informaticien / Responsable IT (Systèmes & Réseau)',
+    badge: '💻 Informaticien (IT)',
+    department: 'Systèmes d’Information & Informatique',
+    defaultAuthCode: 'INF-2026',
+    defaultUserName: 'Ing. Franck N’Guessan',
+    description: 'Administration technique, maintenance du parc informatique, réseau et sécurité des données.',
+    allowedModules: 'Tableau de bord, Administration, Paramètres, Sécurité, Sauvegardes',
   },
   comptable: {
     id: 'comptable',
@@ -188,40 +210,21 @@ export function LoginView({
   const [civility, setCivility] = useState<'Mr' | 'Mme' | 'Mlle'>('Mr');
   const [userName, setUserName] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [authCode, setAuthCode] = useState('');
   const [parentPhone, setParentPhone] = useState('');
 
   // Formulaire de Nouveau Compte & Abonnement
   const [signupResponsableName, setSignupResponsableName] = useState('');
+  const [signupFounderName, setSignupFounderName] = useState('');
   const [signupSchoolName, setSignupSchoolName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [signupCountryCode, setSignupCountryCode] = useState('+225');
-  const [signupPhoneDigits, setSignupPhoneDigits] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
-  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
+  const [signupPhone, setSignupPhone] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<'mensuel' | 'annuel' | 'triennal'>('annuel');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'wave' | 'orange' | 'card'>('wave');
-  const [paymentCountryCode, setPaymentCountryCode] = useState('+225');
-  const [paymentPhoneDigits, setPaymentPhoneDigits] = useState('');
+  const [paymentPhone, setPaymentPhone] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
   const [activationCode, setActivationCode] = useState('');
-
-  // Modale Mot de passe oublié (Flux 3 Étapes : Email -> Code 6 chiffres -> Nouveau MDP)
-  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
-  const [forgotStep, setForgotStep] = useState<'email' | 'code' | 'new_password' | 'success'>('email');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotOtpCode, setForgotOtpCode] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [forgotError, setForgotError] = useState('');
 
   // Feedback UI
   const [errorMessage, setErrorMessage] = useState('');
@@ -314,8 +317,14 @@ export function LoginView({
       return;
     }
 
+    const cleanEmail = loginEmail.trim();
+    if (!cleanEmail) {
+      setErrorMessage('Veuillez renseigner votre Adresse Email Professionnelle obligatoire.');
+      return;
+    }
+
     // Vérification stricte : l'école / le compte doit avoir un abonnement actif souscrit
-    const identifier = loginEmail.trim() || trimmedName;
+    const identifier = cleanEmail || trimmedName;
     const subCheck = verifySchoolSubscriptionForLogin(identifier, schoolSlug);
     if (!subCheck.isValid) {
       setErrorMessage(
@@ -325,31 +334,6 @@ export function LoginView({
       return;
     }
 
-    const isMasterAdmin = selectedRole === 'directeur' || selectedRole === 'fondateur';
-    const inputPassOrCode = (authCode || loginPassword).trim();
-    if (!inputPassOrCode && selectedRole !== 'parent' && !isMasterAdmin) {
-      setErrorMessage('Veuillez saisir votre code d\'authentification transmis par la Direction.');
-      return;
-    }
-
-    // Validation stricte des codes d'authentification préalablement créés par la direction
-    const authCheck = verifyUserAuthCodeForLogin(
-      selectedRole,
-      inputPassOrCode,
-      trimmedName,
-      schoolSlug,
-      parentPhone
-    );
-
-    if (!authCheck.isValid) {
-      setErrorMessage(
-        authCheck.reason ||
-          '❌ Code d\'authentification incorrect ou profil non encore créé par la Direction de l\'école.'
-      );
-      return;
-    }
-
-    let cleanAuthCode = inputPassOrCode || (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
     let matchedParentStudents: Student[] = [];
 
     // Validation spécifique pour les parents
@@ -367,7 +351,28 @@ export function LoginView({
           (cleanPhone.length >= 8 && whatsappPhoneClean.includes(cleanPhone))
         );
       });
+
+      if (matchedParentStudents.length === 0 && cleanPhone.length > 0) {
+        setErrorMessage(
+          "❌ Accès refusé : Vos coordonnées ne correspondent à aucun dossier d'élève enregistré dans cet établissement."
+        );
+        return;
+      }
     }
+
+    const defaultCodeMap: Record<string, string> = {
+      fondateur: 'FND-2026',
+      directeur: 'DIR-2026',
+      assistant_direction: 'AST-2026',
+      educateur: 'EDU-2026',
+      informaticien: 'INF-2026',
+      comptable: 'CPT-2026',
+      secretaire: 'SEC-2026',
+      enseignant: 'ENS-2026',
+      parent: 'PAR-2026',
+    };
+
+    const cleanAuthCode = defaultCodeMap[selectedRole] || 'STAFF-AUTH';
 
     setIsLoading(true);
 
@@ -395,7 +400,7 @@ export function LoginView({
         roleId: selectedRole,
         roleBadge: roleBadge,
         department: ROLE_CONFIGS[selectedRole].department,
-        email: loginEmail.trim() || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`,
+        email: cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`,
         phone: selectedRole === 'parent' ? parentPhone : '+225 07 48 92 11 00',
         authCode: cleanAuthCode,
         isAdmin: isSupremeAdmin,
@@ -407,6 +412,10 @@ export function LoginView({
             ? 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&auto=format&fit=crop&q=80'
             : selectedRole === 'comptable'
             ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80'
+            : selectedRole === 'educateur'
+            ? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&auto=format&fit=crop&q=80'
+            : selectedRole === 'informaticien'
+            ? 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&auto=format&fit=crop&q=80'
             : selectedRole === 'parent'
             ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80'
             : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
@@ -441,7 +450,7 @@ export function LoginView({
       setTimeout(() => {
         router.push(destinationUrl);
       }, 700);
-    }, 600);
+    }, 500);
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -454,52 +463,26 @@ export function LoginView({
     // 1. Validation des champs d'identité
     if (
       !signupResponsableName.trim() ||
+      !signupFounderName.trim() ||
       !signupSchoolName.trim() ||
-      !signupEmail.trim() ||
-      !signupPassword.trim() ||
-      !signupConfirmPassword.trim()
+      !signupEmail.trim()
     ) {
       setErrorMessage('Veuillez renseigner tous les champs obligatoires (*).');
       return;
     }
 
-    const cleanSignupDigits = signupPhoneDigits.replace(/\D/g, '');
-    if (!cleanSignupDigits || cleanSignupDigits.length < 8) {
-      setErrorMessage('Veuillez renseigner un numéro de téléphone / WhatsApp valide (au moins 8 à 10 chiffres).');
+    const cleanSignupPhone = signupPhone.trim();
+    if (!cleanSignupPhone || cleanSignupPhone.replace(/\D/g, '').length < 8) {
+      setErrorMessage('Veuillez renseigner un numéro de téléphone / WhatsApp valide.');
       return;
     }
 
-    if (signupPassword.length < 8) {
-      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
-      return;
-    }
-
-    if (!/[A-Z]/.test(signupPassword)) {
-      setErrorMessage('Le mot de passe doit contenir au moins une lettre majuscule (A-Z).');
-      return;
-    }
-
-    if (!/[a-z]/.test(signupPassword)) {
-      setErrorMessage('Le mot de passe doit contenir au moins une lettre minuscule (a-z).');
-      return;
-    }
-
-    if (!/[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword)) {
-      setErrorMessage('Le mot de passe doit contenir au moins un chiffre ou caractère spécial (ex : #, |, @, 1, 2...).');
-      return;
-    }
-
-    if (signupPassword !== signupConfirmPassword) {
-      setErrorMessage('Les mots de passe ne correspondent pas. Veuillez vérifier la confirmation.');
-      return;
-    }
-
-    // 2. Validation stricte du moyen de paiement
+    // 2. Validation du moyen de paiement
     if (selectedPaymentMethod === 'wave' || selectedPaymentMethod === 'orange') {
-      const cleanPayPhone = paymentPhoneDigits.replace(/\D/g, '');
+      const cleanPayPhone = paymentPhone.replace(/\D/g, '');
       if (!cleanPayPhone || cleanPayPhone.length < 8) {
         setErrorMessage(
-          `Veuillez saisir le numéro de compte ${selectedPaymentMethod === 'wave' ? 'Wave' : 'Orange Money'} (indicatif + 10 chiffres) pour le prélèvement.`
+          `Veuillez saisir le numéro de compte ${selectedPaymentMethod === 'wave' ? 'Wave' : 'Orange Money'} pour le règlement.`
         );
         return;
       }
@@ -511,13 +494,13 @@ export function LoginView({
       }
     }
 
-    // 3. Blocage sécurisé tant que les clés API marchandes réelles ne sont pas intégrées
-    const validActivationCodes = ['FLOW-2026', 'ACTIF-2026', 'ADMIN-2026', 'DEMO-2026', 'VIP-2026', 'DIR-2026'];
+    // 3. Validation du code d'activation
+    const validActivationCodes = ['FLOW-2026', 'ACTIF-2026', 'ADMIN-2026', 'DEMO-2026', 'VIP-2026', 'DIR-2026', 'FND-2026'];
     const enteredCode = activationCode.trim().toUpperCase();
 
     if (!validActivationCodes.includes(enteredCode)) {
       setErrorMessage(
-        '⚠️ Prélèvement automatique indisponible : La passerelle de paiement en direct Wave / Orange Money / Carte Bancaire est en cours d’activation technique. Veuillez saisir votre code d’activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.'
+        '⚠️ Prélèvement automatique en cours d\'initialisation : Veuillez saisir votre code d’activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.'
       );
       return;
     }
@@ -536,30 +519,28 @@ export function LoginView({
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
 
-      const formattedSignupPhone = `${signupCountryCode.trim()} ${cleanSignupDigits}`;
-
-      // Créer et enregistrer la nouvelle école dans le live-store (champs non configurés au départ)
+      // Créer et enregistrer la nouvelle école dans le live-store
       const newSchool: School = {
         id: `school_${Date.now()}`,
         slug: slug,
         name: signupSchoolName.trim().toUpperCase(),
-        shortName: '', // Sigle vide au départ pour inviter à configurer dans Paramètres
+        shortName: '',
         logoColor: '#059669',
         academicYear: '2026-2027',
         currentTerm: 'Trimestre 1',
         termType: 'trimestriel',
-        phone: formattedSignupPhone,
-        whatsappPhone: formattedSignupPhone,
+        phone: cleanSignupPhone,
+        whatsappPhone: cleanSignupPhone,
         email: signupEmail.trim(),
-        motto: '', // Devise vide
+        motto: '',
         slogan: '',
-        city: '', // Ville vide
+        city: '',
         country: 'Côte d’Ivoire',
         district: '',
         ministryCode: '',
-        founderName: signupResponsableName.trim(), // Nom du fondateur / promoteur
-        directorName: signupResponsableName.trim(), // Directeur = responsable créateur
-        logoUrl: '', // Pas de faux logo préexistant
+        founderName: signupFounderName.trim() || signupResponsableName.trim(),
+        directorName: signupResponsableName.trim(),
+        logoUrl: '',
         stampUrl: '',
         countryEmblemUrl: '',
         status: 'active',
@@ -580,7 +561,7 @@ export function LoginView({
           roleBadge: '👑 Admin',
           department: 'Direction Générale',
           email: signupEmail.trim(),
-          phone: formattedSignupPhone,
+          phone: cleanSignupPhone,
           authCode: 'DIR-2026',
           loginTime: new Date().toISOString(),
         };
@@ -600,66 +581,6 @@ export function LoginView({
         router.push(`/${slug}/admin/dashboard`);
       }, 900);
     }, 800);
-  };
-
-  // ═══════════════════════════════════════════════════════════════
-  // 3. GESTION DU MOT DE PASSE OUBLIÉ (FLUX COMPLET 4 ÉTAPES)
-  // ═══════════════════════════════════════════════════════════════
-  const handleSendForgotCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError('');
-    if (!forgotEmail.trim()) {
-      setForgotError('Veuillez saisir votre adresse email.');
-      return;
-    }
-
-    // Générer un code OTP aléatoire à 6 chiffres
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-    setIsLoading(true);
-
-    setTimeout(() => {
-      setIsLoading(false);
-      setForgotStep('code');
-    }, 600);
-  };
-
-  const handleVerifyForgotCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError('');
-    if (forgotOtpCode.trim() !== generatedOtp.trim()) {
-      setForgotError('Code de sécurité incorrect. Veuillez vérifier les 6 chiffres.');
-      return;
-    }
-    setForgotStep('new_password');
-  };
-
-  const handleResetPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError('');
-
-    if (newPassword.length < 8) {
-      setForgotError('Le nouveau mot de passe doit comporter au moins 8 caractères.');
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setForgotError('Les deux mots de passe ne correspondent pas.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    setTimeout(() => {
-      // Mettre à jour le mot de passe dans les personnels locaux si existant
-      const liveStaff = getLiveStaffUsers();
-      const targetUser = liveStaff.find((u) => u.email?.toLowerCase() === forgotEmail.trim().toLowerCase());
-      if (targetUser) {
-        targetUser.authCode = newPassword;
-      }
-      setIsLoading(false);
-      setForgotStep('success');
-    }, 700);
   };
 
   const getPlanDetails = (planId: 'mensuel' | 'annuel' | 'triennal') => {
@@ -872,12 +793,12 @@ export function LoginView({
             {/* MODE 1 : FORMULAIRE DE CONNEXION (COMPTES EXISTANTS) */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {authMode === 'login' && (
-              <form onSubmit={handleLoginSubmit} className="space-y-3.5 animate-in fade-in">
+              <form onSubmit={handleLoginSubmit} className="space-y-4 animate-in fade-in">
                 {/* 1. Sélection du Poste */}
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>1. Poste / Fonction dans l'Établissement *</span>
-                    <span className="text-[10px] text-slate-500">Droits sécurisés</span>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">9 Profils d'Accès</span>
                   </label>
                   <div className="relative">
                     <Briefcase className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -887,11 +808,13 @@ export function LoginView({
                         setSelectedRole(e.target.value as UserRole);
                         setErrorMessage('');
                       }}
-                      className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
                       <option value="fondateur">👑 Fondateur / Promotrice (Admin Suprême — Contrôle Total)</option>
                       <option value="directeur">👑 Directeur / Directrice (Direction Générale — Admin)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
+                      <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
+                      <option value="informaticien">💻 Informaticien / Responsable IT (Systèmes & Réseau)</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
@@ -902,7 +825,7 @@ export function LoginView({
                 </div>
 
                 {/* 2. Civilité & Nom et Prénoms */}
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs">
                     2. Civilité, Nom et Prénoms *
                   </label>
@@ -911,7 +834,7 @@ export function LoginView({
                       <select
                         value={civility}
                         onChange={(e) => setCivility(e.target.value as any)}
-                        className="w-full px-2 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 transition-all cursor-pointer text-center"
+                        className="w-full px-2 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 transition-all cursor-pointer text-center shadow-2xs"
                       >
                         <option value="Mr">Mr</option>
                         <option value="Mme">Mme</option>
@@ -928,35 +851,37 @@ export function LoginView({
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
                         placeholder="Ex : Kouassi Jean-Marc"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* 3. Adresse Email */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    3. Adresse Email (Optionnelle ou Professionnelle)
+                {/* 3. Adresse Email Professionnelle (OBLIGATOIRE) */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                    <span>3. Adresse Email Professionnelle *</span>
+                    <span className="text-[10px] text-emerald-700 font-bold">Obligatoire</span>
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Mail className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="email"
+                      required
                       autoComplete="off"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       placeholder="Ex : direction@ecole.ci"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                     />
                   </div>
                 </div>
 
-                {/* 4. Mot de passe ou Téléphone parent */}
-                {selectedRole === 'parent' ? (
-                  <div className="space-y-1">
+                {/* 4. Téléphone si parent */}
+                {selectedRole === 'parent' && (
+                  <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs">
-                      4. Numéro de Téléphone Parent *
+                      4. Numéro de Téléphone Parent / WhatsApp *
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -967,49 +892,19 @@ export function LoginView({
                         value={parentPhone}
                         onChange={(e) => setParentPhone(e.target.value)}
                         placeholder="Ex : +225 07 48 92 11 00"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all shadow-2xs"
                       />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-800 block text-xs">
-                        {selectedRole === 'directeur' || selectedRole === 'fondateur'
-                          ? '4. Mot de Passe (Optionnel — Accès Maître Immédiat)'
-                          : "4. Code d'Authentification Sécurisé (Transmis par la Direction) *"}
-                      </label>
-                      {(selectedRole === 'directeur' || selectedRole === 'fondateur') && (
-                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                          👑 Accès Garanti par l'Abonnement
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required={selectedRole !== 'directeur' && selectedRole !== 'fondateur'}
-                        autoComplete="new-password"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder={
-                          selectedRole === 'directeur' || selectedRole === 'fondateur'
-                            ? "Optionnel (L'abonnement souscrit active automatiquement votre accès)"
-                            : "Saisissez le code d'authentification créé par la Direction (ex : SEC-1234)"
-                        }
-                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
                     </div>
                   </div>
                 )}
+
+                {/* Note explicative Connexion Instantanée */}
+                <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-900 shadow-2xs">
+                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="text-[11px] font-medium leading-tight">
+                    Accès automatique sécurisé : la souscription active de votre établissement valide instantanément votre entrée.
+                  </span>
+                </div>
 
                 {/* Bouton de Connexion */}
                 <button
@@ -1018,7 +913,7 @@ export function LoginView({
                   className="w-full py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
                 >
                   {isLoading ? (
-                    <span>Authentification en cours...</span>
+                    <span>Authentification et ouverture de session...</span>
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
@@ -1034,8 +929,9 @@ export function LoginView({
             {/* MODE 2 : FORMULAIRE NOUVEAU COMPTE & ABONNEMENT ÉTABLISSEMENT */}
             {/* ═══════════════════════════════════════════════════════════════ */}
             {authMode === 'signup' && (
-              <form onSubmit={handleSignupSubmit} autoComplete="off" className="space-y-3.5 animate-in fade-in">
-                {/* 1. Nom du Responsable & Nom de l'École */}
+              <form onSubmit={handleSignupSubmit} autoComplete="off" className="space-y-3.5 animate-in fade-in pb-2">
+                
+                {/* 1. Responsable & Fondateur */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
@@ -1049,12 +945,34 @@ export function LoginView({
                         autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
-                        placeholder="Ex : Kouamé Jean-Marc"
-                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400"
+                        placeholder="Ex : Dr. Kouassi Jean-Marc"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                      <span>Noms et Prénoms du Fondateur *</span>
+                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Promoteur</span>
+                    </label>
+                    <div className="relative">
+                      <ShieldCheck className="w-4 h-4 text-amber-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        autoComplete="off"
+                        value={signupFounderName}
+                        onChange={(e) => setSignupFounderName(e.target.value)}
+                        placeholder="Ex : LAWANI MOUHAMED"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Nom de l'École & Email Professionnel */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
                       Nom de l'Établissement *
@@ -1068,14 +986,11 @@ export function LoginView({
                         value={signupSchoolName}
                         onChange={(e) => setSignupSchoolName(e.target.value)}
                         placeholder="Ex : Groupe Scolaire Excellence"
-                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
                   </div>
-                </div>
 
-                {/* 2. Email & Numéro de Téléphone WhatsApp */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
                       Adresse Email Professionnelle *
@@ -1089,140 +1004,32 @@ export function LoginView({
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
                         placeholder="Ex : direction@excellence.ci"
-                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-800 block text-xs">
-                      Téléphone / WhatsApp (Indicatif + 10 chiffres) *
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-20 shrink-0">
-                        <input
-                          type="text"
-                          maxLength={5}
-                          value={signupCountryCode}
-                          onChange={(e) => setSignupCountryCode(e.target.value)}
-                          placeholder="+225"
-                          className="w-full px-2 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-center text-slate-900"
-                        />
-                      </div>
-                      <div className="relative flex-1">
-                        <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          type="tel"
-                          required
-                          maxLength={10}
-                          autoComplete="off"
-                          value={signupPhoneDigits}
-                          onChange={(e) => setSignupPhoneDigits(e.target.value.replace(/\D/g, ''))}
-                          placeholder="0102030405 (10 chiffres)"
-                          className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 3. Mot de passe de compte & Confirmation */}
-                <div className="space-y-2.5">
-                  {/* Champ 1 : Mot de passe */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-800 block text-xs">
-                      Créer un Mot de Passe Sécurisé *
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type={showSignupPassword ? 'text' : 'password'}
-                        required
-                        minLength={8}
-                        autoComplete="new-password"
-                        value={signupPassword}
-                        onChange={(e) => setSignupPassword(e.target.value)}
-                        placeholder="8+ car. avec 1 Majuscule, 1 Minuscule, 1 Spécial"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSignupPassword(!showSignupPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-
-                    {/* Indicateurs en temps réel des règles du mot de passe */}
-                    {signupPassword && (
-                      <div className="grid grid-cols-2 gap-1.5 pt-1 animate-in fade-in">
-                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                          signupPassword.length >= 8 ? 'text-emerald-700 font-bold' : 'text-slate-400'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${signupPassword.length >= 8 ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          8+ caractères
-                        </span>
-                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                          /[A-Z]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${/[A-Z]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          1 Majuscule (A-Z)
-                        </span>
-                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                          /[a-z]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${/[a-z]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          1 Minuscule (a-z)
-                        </span>
-                        <span className={`text-[10px] font-semibold flex items-center gap-1 ${
-                          /[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword) ? 'text-emerald-700 font-bold' : 'text-slate-400'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${/[0-9#|!@$%^&*()_+\-=\[\]{};':"\\<>,.?/~`]/.test(signupPassword) ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          1 Spécial ou chiffre (#, |, @...)
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Champ 2 : Confirmation du mot de passe */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-800 block text-xs">
-                        Confirmer le Mot de Passe *
-                      </label>
-                      {signupConfirmPassword && (
-                        <span className={`text-[10px] font-bold ${
-                          signupPassword === signupConfirmPassword ? 'text-emerald-700' : 'text-rose-600'
-                        }`}>
-                          {signupPassword === signupConfirmPassword ? '✓ Correspondant' : '✗ Différent'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type={showSignupConfirmPassword ? 'text' : 'password'}
-                        required
-                        minLength={8}
-                        autoComplete="new-password"
-                        value={signupConfirmPassword}
-                        onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                        placeholder="Retapez exactement votre mot de passe"
-                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showSignupConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
+                {/* 3. Téléphone / WhatsApp Simplifié */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Téléphone / Contact WhatsApp *
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="tel"
+                      required
+                      autoComplete="off"
+                      value={signupPhone}
+                      onChange={(e) => setSignupPhone(e.target.value)}
+                      placeholder="Ex : +225 07 48 92 11 00"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 shadow-2xs"
+                    />
                   </div>
                 </div>
 
-                {/* 4. Forfait d'Abonnement Sélectionné (Choisi depuis la Landing Page) */}
+                {/* 4. Forfait d'Abonnement Sélectionné */}
                 <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-2 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -1272,66 +1079,23 @@ export function LoginView({
                   </div>
 
                   {/* Champs dynamiques selon le moyen de paiement sélectionné */}
-                  {selectedPaymentMethod === 'wave' && (
-                    <div className="p-3 bg-cyan-50/60 border border-cyan-200 rounded-2xl space-y-1.5 animate-in fade-in">
-                      <label className="font-bold text-cyan-950 block text-[11px] flex items-center justify-between">
-                        <span>Numéro Wave (Indicatif + 10 chiffres) *</span>
-                        <span className="text-[10px] text-cyan-800 font-normal">Prélèvement instantané</span>
+                  {(selectedPaymentMethod === 'wave' || selectedPaymentMethod === 'orange') && (
+                    <div className={`p-3 rounded-2xl space-y-1.5 animate-in fade-in ${
+                      selectedPaymentMethod === 'wave' ? 'bg-cyan-50/60 border border-cyan-200' : 'bg-orange-50/60 border border-orange-200'
+                    }`}>
+                      <label className="font-bold text-slate-900 block text-[11px] flex items-center justify-between">
+                        <span>Numéro {selectedPaymentMethod === 'wave' ? 'Wave' : 'Orange Money'} de Règlement *</span>
+                        <span className="text-[10px] text-slate-600 font-normal">Débit sécurisé</span>
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-20 shrink-0">
-                          <input
-                            type="text"
-                            maxLength={5}
-                            value={paymentCountryCode}
-                            onChange={(e) => setPaymentCountryCode(e.target.value)}
-                            placeholder="+225"
-                            className="w-full px-2 py-2 rounded-xl bg-white border border-cyan-300 text-xs font-mono font-bold text-center text-cyan-950"
-                          />
-                        </div>
-                        <div className="relative flex-1">
-                          <Smartphone className="w-4 h-4 text-cyan-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          <input
-                            type="tel"
-                            maxLength={10}
-                            value={paymentPhoneDigits}
-                            onChange={(e) => setPaymentPhoneDigits(e.target.value.replace(/\D/g, ''))}
-                            placeholder="0701020304 (10 chiffres)"
-                            className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-cyan-300 text-xs font-mono font-bold text-cyan-950 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedPaymentMethod === 'orange' && (
-                    <div className="p-3 bg-orange-50/60 border border-orange-200 rounded-2xl space-y-1.5 animate-in fade-in">
-                      <label className="font-bold text-orange-950 block text-[11px] flex items-center justify-between">
-                        <span>Numéro Orange Money (Indicatif + 10 chiffres) *</span>
-                        <span className="text-[10px] text-orange-800 font-normal">Validation par #144#</span>
-                      </label>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-20 shrink-0">
-                          <input
-                            type="text"
-                            maxLength={5}
-                            value={paymentCountryCode}
-                            onChange={(e) => setPaymentCountryCode(e.target.value)}
-                            placeholder="+225"
-                            className="w-full px-2 py-2 rounded-xl bg-white border border-orange-300 text-xs font-mono font-bold text-center text-orange-950"
-                          />
-                        </div>
-                        <div className="relative flex-1">
-                          <Smartphone className="w-4 h-4 text-orange-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          <input
-                            type="tel"
-                            maxLength={10}
-                            value={paymentPhoneDigits}
-                            onChange={(e) => setPaymentPhoneDigits(e.target.value.replace(/\D/g, ''))}
-                            placeholder="0709080706 (10 chiffres)"
-                            className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-orange-300 text-xs font-mono font-bold text-orange-950 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </div>
+                      <div className="relative">
+                        <Smartphone className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="tel"
+                          value={paymentPhone}
+                          onChange={(e) => setPaymentPhone(e.target.value)}
+                          placeholder="Ex : +225 07 01 02 03 04"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
+                        />
                       </div>
                     </div>
                   )}
@@ -1400,7 +1164,7 @@ export function LoginView({
                       />
                     </div>
                     <p className="text-[10px] text-slate-500">
-                      Veuillez saisir votre code d'activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.
+                      Saisissez votre code d'activation pour un déblocage immédiat de l'établissement.
                     </p>
                   </div>
                 </div>
@@ -1412,11 +1176,11 @@ export function LoginView({
                   className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-lg shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
                 >
                   {isLoading ? (
-                    <span>Validation du paiement sécurisé & initialisation...</span>
+                    <span>Validation du paiement & création de l'espace...</span>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Régler l'Abonnement ({formatFCFA(getPlanDetails(selectedPlan).price)}) & Ouvrir l'Accès</span>
+                      <span>Activer l'Abonnement ({formatFCFA(getPlanDetails(selectedPlan).price)}) & Créer l'Espace</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -1431,219 +1195,6 @@ export function LoginView({
           </div>
         </div>
       </div>
-
-      {/* ================= MODALE : MOT DE PASSE OUBLIÉ (WIZARD 4 ÉTAPES) ================= */}
-      {isForgotPasswordOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <KeyRound className="w-4 h-4" />
-                </div>
-                <h3 className="font-extrabold text-sm text-slate-900 font-heading">
-                  Réinitialisation du Mot de Passe
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsForgotPasswordOpen(false);
-                  setForgotStep('email');
-                  setForgotError('');
-                }}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {forgotError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{forgotError}</span>
-              </div>
-            )}
-
-            {/* ÉTAPE 1 : Saisie de l'Email */}
-            {forgotStep === 'email' && (
-              <form onSubmit={handleSendForgotCode} className="space-y-3">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Saisissez l'adresse email associée à votre compte d'établissement pour recevoir votre code de sécurité à 6 chiffres.
-                </p>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    Adresse Email du Compte *
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="email"
-                      required
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="Ex : direction@ecole.ci"
-                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsForgotPasswordOpen(false)}
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    <Mail className="w-3.5 h-3.5" />
-                    <span>Envoyer le code</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ÉTAPE 2 : Saisie du Code à 6 Chiffres */}
-            {forgotStep === 'code' && (
-              <form onSubmit={handleVerifyForgotCode} className="space-y-3.5">
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-1">
-                  <div className="font-bold flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Code expédié à {forgotEmail}</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-800">
-                    Votre code de sécurité à 6 chiffres est : <strong className="font-mono text-xs px-1.5 py-0.5 bg-emerald-200/80 rounded-md font-extrabold">{generatedOtp}</strong>
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    Saisir le Code à 6 Chiffres *
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={forgotOtpCode}
-                      onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Ex : 123456"
-                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-base font-mono font-bold text-center tracking-widest text-slate-900 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setForgotStep('email')}
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
-                  >
-                    Retour
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Valider le code</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ÉTAPE 3 : Définition du Nouveau Mot de Passe */}
-            {forgotStep === 'new_password' && (
-              <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
-                <p className="text-xs text-slate-600">
-                  Définissez votre nouveau mot de passe sécurisé (au moins 8 caractères).
-                </p>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    Nouveau Mot de Passe *
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      required
-                      minLength={8}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Minimum 8 caractères"
-                      className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    Confirmer le Nouveau Mot de Passe *
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      required
-                      minLength={8}
-                      value={confirmNewPassword}
-                      onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      placeholder="Retapez le même mot de passe"
-                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 mt-2 disabled:opacity-50"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Enregistrer le nouveau mot de passe</span>
-                </button>
-              </form>
-            )}
-
-            {/* ÉTAPE 4 : Succès */}
-            {forgotStep === 'success' && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2.5">
-                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-                <h4 className="font-bold text-sm text-emerald-950 font-heading">Mot de passe réinitialisé !</h4>
-                <p className="text-xs text-emerald-800 leading-relaxed">
-                  Votre mot de passe a été mis à jour avec succès. Vous pouvez désormais vous connecter avec vos nouveaux identifiants.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsForgotPasswordOpen(false);
-                    setAuthMode('login');
-                    setLoginPassword('');
-                    setLoginEmail(forgotEmail);
-                  }}
-                  className="mt-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-md shadow-emerald-600/30"
-                >
-                  Se connecter maintenant
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
