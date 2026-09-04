@@ -551,7 +551,7 @@ export function LoginView({
         country: 'Côte d’Ivoire',
         district: '',
         ministryCode: '',
-        founderName: '', // Fondateur vide
+        founderName: signupResponsableName.trim(), // Nom du fondateur / promoteur
         directorName: signupResponsableName.trim(), // Directeur = responsable créateur
         logoUrl: '', // Pas de faux logo préexistant
         stampUrl: '',

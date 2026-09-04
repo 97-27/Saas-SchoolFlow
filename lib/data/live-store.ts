@@ -94,7 +94,7 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
       country: 'Côte d’Ivoire',
       district: 'Abidjan',
       ministryCode: '321119',
-      founderName: slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : 'Fondateur / Promoteur',
+      founderName: slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUHAMED' : 'Fondateur / Promoteur',
       directorName: 'M. Jean-Marc Kouassi (Direction Pédagogique)',
       studiesDirectorName: 'Direction des Études',
       status: 'active',
@@ -132,7 +132,7 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
         ...local,
         name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
         shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
-        founderName: local.founderName || fallback?.founderName || (slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : 'Fondateur de l’Établissement'),
+        founderName: local.founderName || fallback?.founderName || (slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUHAMED' : 'Fondateur de l’Établissement'),
         directorName: local.directorName || fallback?.directorName || 'M. Jean-Marc Kouassi (Direction Pédagogique)',
         slug: slug,
       };
