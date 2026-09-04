@@ -455,6 +455,10 @@ export function InscriptionsView({
     // Save to persistent storage and broadcast event
     saveRegisteredStudent(newStudent, newInvoice, schoolSlug);
 
+    // Mettre à jour immédiatement la liste locale des élèves pour recalculer le prochain ID/Reçu
+    const refreshedStudents = getLiveStudents(initialStudents, schoolSlug);
+    setStudents(refreshedStudents);
+
     setSuccessModalData(newStudent);
     setShowConfirmModal(false);
     setSuccessToast(`Élève ${newStudent.fullName} (${newStudent.studentNumber}) enregistré(e) avec succès !`);
@@ -2354,12 +2358,12 @@ export function InscriptionsView({
       {successModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95 duration-200 text-center relative">
-            {/* Bouton Croix pour fermer la modale */}
+            {/* Bouton Croix pour fermer la modale et passer automatiquement au reçu suivant */}
             <button
               type="button"
-              onClick={() => setSuccessModalData(null)}
+              onClick={handleCloseSuccessAndNext}
               className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-              title="Fermer"
+              title="Fermer et préparer l'élève suivant"
             >
               <X className="w-5 h-5" />
             </button>

@@ -43,7 +43,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
   // Date active du journal (par défaut 2026-08-27)
   const [selectedJournalDate, setSelectedJournalDate] = useState<string>('2026-08-27');
-  const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('day_only');
+  const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('all_dates');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState('Toutes les classes');
