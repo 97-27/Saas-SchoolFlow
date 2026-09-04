@@ -85,7 +85,7 @@ export function getDeletedStudentIds(): Set<string> {
 /**
  * Supprime un ou plusieurs élèves de manière centralisée et définitive de toutes les pages.
  */
-export function deleteLiveStudents(idsToDelete: string[]): void {
+export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): void {
   if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return;
 
   try {
@@ -106,6 +106,18 @@ export function deleteLiveStudents(idsToDelete: string[]): void {
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
     }
 
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      if (rawSchool) {
+        const prevSchool: Student[] = JSON.parse(rawSchool);
+        const filtered = prevSchool.filter(
+          (s) => !deleteSet.has(s.id) && !deleteSet.has(s.studentNumber)
+        );
+        localStorage.setItem(schoolKey, JSON.stringify(filtered));
+      }
+    }
+
     // Nettoyer stockage local des factures / scolarités
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     if (rawInvoices) {
@@ -119,10 +131,26 @@ export function deleteLiveStudents(idsToDelete: string[]): void {
       localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filtered));
     }
 
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+      const rawInvSchool = localStorage.getItem(invSchoolKey);
+      if (rawInvSchool) {
+        const prevInvSchool: Invoice[] = JSON.parse(rawInvSchool);
+        const filtered = prevInvSchool.filter(
+          (inv) =>
+            !deleteSet.has(inv.id) &&
+            !deleteSet.has(inv.studentId) &&
+            !deleteSet.has(inv.invoiceNumber)
+        );
+        localStorage.setItem(invSchoolKey, JSON.stringify(filtered));
+      }
+    }
+
     // Déclencher la diffusion temps réel parallèle
     broadcastLiveUpdate({
       action: 'students_deleted',
       deletedIds: idsToDelete,
+      schoolSlug,
     });
   } catch (error) {
     console.error('Erreur suppression live-store students:', error);
@@ -494,7 +522,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
  * Enregistre un nouvel élève et son encaissement associé dans le stockage persistant,
  * et propage un événement custom pour mettre à jour instantanément les autres composants.
  */
-export function saveRegisteredStudent(student: Student, invoice: Invoice): void {
+export function saveRegisteredStudent(student: Student, invoice: Invoice, schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
 
   try {
@@ -507,6 +535,16 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice): void 
     const updatedStudents = [student, ...filteredStudents];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
 
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+      const filteredSchool = prevSchool.filter(
+        (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+      );
+      localStorage.setItem(schoolKey, JSON.stringify([student, ...filteredSchool]));
+    }
+
     // 2. Sauvegarde facture / quittance
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
@@ -516,15 +554,25 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice): void 
     const updatedInvoices = [invoice, ...filteredInvoices];
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
 
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+      const rawInvSchool = localStorage.getItem(invSchoolKey);
+      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+      const filteredInvSchool = prevInvSchool.filter(
+        (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+      );
+      localStorage.setItem(invSchoolKey, JSON.stringify([invoice, ...filteredInvSchool]));
+    }
+
     // Synchronisation en arrière-plan avec Supabase Cloud
-    // Synchronisation en arrière-plan avec Supabase Cloud
-    saveStudentToSupabase(student, 'epc-manoi').catch(() => {});
+    saveStudentToSupabase(student, schoolSlug).catch(() => {});
 
     // 3. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
       action: 'student_registered',
       student,
       invoice,
+      schoolSlug,
     });
   } catch (error) {
     console.error('Erreur sauvegarde live-store:', error);
@@ -535,7 +583,7 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice): void 
  * Met à jour un élève existant et synchronise automatiquement sa facture / caisse
  * et notifie le tableau de bord et toutes les vues actives.
  */
-export function updateRegisteredStudent(student: Student): void {
+export function updateRegisteredStudent(student: Student, schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
 
   try {
@@ -547,6 +595,17 @@ export function updateRegisteredStudent(student: Student): void {
       ...prevStudents.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
     ];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+      const updatedSchool = [
+        student,
+        ...prevSchool.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
+      ];
+      localStorage.setItem(schoolKey, JSON.stringify(updatedSchool));
+    }
 
     // 2. Mise à jour ou création de la facture correspondante
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
@@ -603,14 +662,28 @@ export function updateRegisteredStudent(student: Student): void {
     ];
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
 
+    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+      const rawInvSchool = localStorage.getItem(invSchoolKey);
+      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+      const nextInvSchool = [
+        updatedInvoice,
+        ...prevInvSchool.filter(
+          (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
+        ),
+      ];
+      localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
+    }
+
     // Synchronisation en arrière-plan avec Supabase Cloud
-    saveStudentToSupabase(student, 'epc-manoi').catch(() => {});
+    saveStudentToSupabase(student, schoolSlug).catch(() => {});
 
     // 3. Propagation globale de l'événement
     broadcastLiveUpdate({
       action: 'student_updated',
       student,
       invoice: updatedInvoice,
+      schoolSlug,
     });
   } catch (error) {
     console.error('Erreur mise à jour live-store student:', error);

@@ -494,17 +494,6 @@ export function LoginView({
       }
     }
 
-    // 3. Validation du code d'activation
-    const validActivationCodes = ['FLOW-2026', 'ACTIF-2026', 'ADMIN-2026', 'DEMO-2026', 'VIP-2026', 'DIR-2026', 'FND-2026'];
-    const enteredCode = activationCode.trim().toUpperCase();
-
-    if (!validActivationCodes.includes(enteredCode)) {
-      setErrorMessage(
-        '⚠️ Prélèvement automatique en cours d\'initialisation : Veuillez saisir votre code d’activation ou contacter la direction commerciale SchoolFlow au 01 70 36 36 56.'
-      );
-      return;
-    }
-
     setIsLoading(true);
 
     setTimeout(() => {
@@ -964,7 +953,7 @@ export function LoginView({
                         autoComplete="off"
                         value={signupFounderName}
                         onChange={(e) => setSignupFounderName(e.target.value)}
-                        placeholder="Ex : LAWANI MOUHAMED"
+                        placeholder="Ex : M. Bakayoko Souleymane"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
@@ -1150,7 +1139,7 @@ export function LoginView({
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
                     <label className="font-bold text-slate-800 block text-[11px] flex items-center justify-between">
                       <span>Code d'activation / Bon de commande (Optionnel)</span>
-                      <span className="text-[10px] text-emerald-700 font-bold">01 70 36 36 56</span>
+                      <span className="text-[10px] text-emerald-700 font-bold font-mono">+225 01 70 36 36 56</span>
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
