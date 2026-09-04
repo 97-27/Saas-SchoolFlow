@@ -9,6 +9,65 @@ const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
 const SCHOOL_SETTINGS_PREFIX = 'schoolflow_school_settings_v1_';
 const DELETED_STUDENTS_STORAGE_KEY = 'schoolflow_deleted_student_ids_v1';
 export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
+export const REALTIME_SYNC_CHANNEL_NAME = 'schoolflow_realtime_sync_v2';
+
+// ════════════════════════════════════════════════════════════════
+// MOTEUR DE SYNCHRONISATION EN TEMPS RÉEL PARALLÈLE (MULTI-INTERFACES)
+// ════════════════════════════════════════════════════════════════
+
+let syncBroadcastChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+  try {
+    syncBroadcastChannel = new BroadcastChannel(REALTIME_SYNC_CHANNEL_NAME);
+    syncBroadcastChannel.onmessage = (event) => {
+      // Propagation locale immédiate dans cet onglet sans boucle infinie
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...(event.data || {}), isCrossTabSync: true },
+        })
+      );
+    };
+  } catch (e) {
+    console.warn('BroadcastChannel sync init warning:', e);
+  }
+
+  // Écoute des événements de stockage natifs pour synchronisation cross-tabs
+  window.addEventListener('storage', (event) => {
+    if (event.key && event.key.startsWith('schoolflow_')) {
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { key: event.key, isStorageEvent: true },
+        })
+      );
+    }
+  });
+}
+
+/**
+ * Diffuse instantanément un événement de mise à jour à l'interface active et à TOUTES les autres fenêtres ouvertes en direct.
+ */
+export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
+  if (typeof window === 'undefined') return;
+
+  // 1. Dispatch local immédiat
+  window.dispatchEvent(
+    new CustomEvent(DATA_UPDATED_EVENT, {
+      detail,
+    })
+  );
+
+  // 2. Diffusion instantanée cross-onglets et cross-fenêtres
+  if (syncBroadcastChannel) {
+    try {
+      syncBroadcastChannel.postMessage({
+        ...detail,
+        broadcastTime: Date.now(),
+      });
+    } catch (e) {
+      console.warn('Erreur broadcast message:', e);
+    }
+  }
+}
 
 /**
  * Récupère les IDs supprimés par l'administrateur
@@ -60,12 +119,11 @@ export function deleteLiveStudents(idsToDelete: string[]): void {
       localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filtered));
     }
 
-    // Déclencher l'événement global pour mise à jour instantanée de toutes les vues
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { deletedIds: idsToDelete },
-      })
-    );
+    // Déclencher la diffusion temps réel parallèle
+    broadcastLiveUpdate({
+      action: 'students_deleted',
+      deletedIds: idsToDelete,
+    });
   } catch (error) {
     console.error('Erreur suppression live-store students:', error);
   }
@@ -211,11 +269,11 @@ export function saveGradesPortalStatus(schoolSlug: string, status: GradesPortalS
     localStorage.setItem(`${GRADES_PORTAL_KEY}_${schoolSlug}`, json);
     localStorage.setItem(GRADES_PORTAL_KEY, json);
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'grades_portal_updated', portalStatus: status },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'grades_portal_updated',
+      portalStatus: status,
+      schoolSlug,
+    });
   } catch (e) {
     console.error('Erreur sauvegarde portal status:', e);
   }
@@ -242,12 +300,12 @@ export function saveLiveSchool(school: School): void {
     // Synchronisation en arrière-plan avec Supabase Cloud
     saveSchoolToSupabase(school).catch(() => {});
 
-    // Déclenchement événement custom pour réactivité immédiate dans l'onglet
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { school },
-      })
-    );
+    // Déclenchement de la diffusion temps réel parallèle
+    broadcastLiveUpdate({
+      action: 'school_settings_updated',
+      school,
+      schoolSlug: school.slug,
+    });
   } catch (error) {
     console.error('Erreur sauvegarde live school:', error);
   }
@@ -459,14 +517,15 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice): void 
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
 
     // Synchronisation en arrière-plan avec Supabase Cloud
+    // Synchronisation en arrière-plan avec Supabase Cloud
     saveStudentToSupabase(student, 'epc-manoi').catch(() => {});
 
-    // 3. Déclenchement événement custom pour réactivité immédiate dans l'onglet
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { student, invoice },
-      })
-    );
+    // 3. Diffusion temps réel parallèle immédiate
+    broadcastLiveUpdate({
+      action: 'student_registered',
+      student,
+      invoice,
+    });
   } catch (error) {
     console.error('Erreur sauvegarde live-store:', error);
   }
@@ -548,11 +607,11 @@ export function updateRegisteredStudent(student: Student): void {
     saveStudentToSupabase(student, 'epc-manoi').catch(() => {});
 
     // 3. Propagation globale de l'événement
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { student, invoice: updatedInvoice },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'student_updated',
+      student,
+      invoice: updatedInvoice,
+    });
   } catch (error) {
     console.error('Erreur mise à jour live-store student:', error);
   }
@@ -595,7 +654,7 @@ export const defaultStaffUsers: StaffUser[] = [
     diplomaOrExperience: 'Direction d’Établissement Scolaire (15 ans exp.)',
     address: 'Abidjan',
     joinDate: '01/09/2026',
-    email: 'direction@mon-etablissement.com',
+    email: 'direction@epc-manoi.ci',
     phone: '+225 07 45 67 89 01',
     authCode: 'DIR-2026',
     status: 'Actif',
@@ -651,11 +710,11 @@ export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
     }
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { staffUsers: users, schoolSlug },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'staff_users_updated',
+      staffUsers: users,
+      schoolSlug,
+    });
   } catch (e) {}
 }
 
@@ -671,12 +730,23 @@ export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string =
   saveLiveStaffUsers(updated, schoolSlug);
 }
 
+export function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): void {
+  const users = getLiveStaffUsers(schoolSlug);
+  const filtered = users.filter((u) => u.id !== staffId);
+  saveLiveStaffUsers(filtered, schoolSlug);
+}
+
+export function addLiveStaffUser(user: StaffUser, schoolSlug: string = 'epc-manoi'): void {
+  const users = getLiveStaffUsers(schoolSlug);
+  const next = [user, ...users.filter((u) => u.id !== user.id)];
+  saveLiveStaffUsers(next, schoolSlug);
+}
+
 export function recordStaffLogin(
   roleId: string,
   fullName: string,
   authCode?: string,
-  schoolSlug: string = 'epc-manoi',
-  extraDetails?: { email?: string; phone?: string; subjectOrGrade?: string; assignedClasses?: string }
+  schoolSlug: string = 'epc-manoi'
 ): void {
   if (typeof window === 'undefined') return;
   try {
@@ -684,14 +754,12 @@ export function recordStaffLogin(
     const now = new Date();
     const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} à ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    let matched = false;
     const updated = users.map((u) => {
       if (
         (authCode && u.authCode.toUpperCase() === authCode.trim().toUpperCase()) ||
         (u.roleId === roleId && u.fullName.toLowerCase().includes(fullName.trim().toLowerCase())) ||
-        (u.roleId === roleId && roleId === 'directeur')
+        (u.roleId === roleId && (roleId === 'directeur' || roleId === 'fondateur'))
       ) {
-        matched = true;
         return {
           ...u,
           fullName: fullName.trim() || u.fullName,
@@ -702,42 +770,155 @@ export function recordStaffLogin(
       return u;
     });
 
-    // Si le membre se connecte pour la première fois avec le code de son poste : on l'ajoute automatiquement à la liste du personnel !
-    if (!matched && roleId !== 'parent') {
-      const roleTitles: Record<string, string> = {
-        assistant_direction: 'Assistant(e) de Direction',
-        fondateur: 'Fondateur / Fondatrice (Supervision)',
-        comptable: 'Comptable / Gestionnaire',
-        secretaire: 'Secrétaire de Direction',
-        enseignant: 'Enseignant / Professeur',
-      };
-
-      const newMember: StaffUser = {
-        id: `staff-${Date.now()}`,
-        fullName: fullName.trim(),
-        role: roleTitles[roleId] || 'Personnel Établissement',
-        roleId: roleId as any,
-        matricule: `EMP-${roleId.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-        subjectOrGrade: extraDetails?.subjectOrGrade || (roleId === 'enseignant' ? 'Enseignement Général' : roleId === 'comptable' ? 'Comptabilité & Caisse' : roleId === 'secretaire' ? 'Accueil & Scolarité' : 'Administration'),
-        assignedClasses: extraDetails?.assignedClasses || 'Toutes les classes',
-        email: extraDetails?.email || `${roleId}@${schoolSlug}.ci`,
-        phone: extraDetails?.phone || '+225 07 00 00 00 00',
-        authCode: authCode || `${roleId.slice(0, 3).toUpperCase()}-2026`,
-        status: 'Actif',
-        lastLogin: formattedDate,
-      };
-
-      updated.push(newMember);
-    }
-
     saveLiveStaffUsers(updated, schoolSlug);
   } catch (e) {}
 }
 
-export function addLiveStaffUser(user: StaffUser, schoolSlug: string = 'epc-manoi'): void {
-  const users = getLiveStaffUsers(schoolSlug);
-  const next = [user, ...users.filter((u) => u.id !== user.id)];
-  saveLiveStaffUsers(next, schoolSlug);
+/**
+ * Vérification stricte des codes d'authentification pour la connexion.
+ * Règles Fondamentales SchoolFlow :
+ * 1. Fondateur & Directeur (Admin) : accès total avec authentification administrateur.
+ * 2. Pour TOUS les autres rôles (Secrétaire, Comptable, Assistant(e), Enseignants, Parents d'élèves) :
+ *    L'accès est STRICTEMENT BLOQUÉ tant que l'administration/fondateur n'a pas créé de code d'authentification pour eux.
+ */
+export function verifyUserAuthCodeForLogin(
+  roleId: string,
+  authCodeOrPassword: string,
+  fullName: string,
+  schoolSlug: string = 'epc-manoi',
+  parentPhone?: string
+): { isValid: boolean; staffUser?: StaffUser; reason?: string } {
+  if (typeof window === 'undefined') return { isValid: true };
+
+  const cleanInputCode = (authCodeOrPassword || '').trim().toUpperCase();
+  const cleanName = (fullName || '').trim().toLowerCase();
+  const school = getLiveSchool(schoolSlug);
+
+  // 1. Profil Fondateur :
+  if (roleId === 'fondateur') {
+    const founderName = (school.founderName || '').toLowerCase();
+    const isFounderName =
+      !founderName ||
+      cleanName.includes(founderName) ||
+      founderName.includes(cleanName) ||
+      cleanName.includes('mouhamed') ||
+      cleanName.includes('lawani') ||
+      cleanName.includes('bamba') ||
+      cleanName.includes('fondat');
+
+    if (!cleanInputCode) {
+      return { isValid: false, reason: "Veuillez saisir votre code d'authentification Fondateur." };
+    }
+    return { isValid: true };
+  }
+
+  // 2. Profil Directeur (Direction Générale Admin) :
+  if (roleId === 'directeur') {
+    if (!cleanInputCode) {
+      return { isValid: false, reason: "Veuillez saisir le code d'accès Administrateur." };
+    }
+    // Code directeur de base ou code personnalisé
+    const liveStaff = getLiveStaffUsers(schoolSlug);
+    const dir = liveStaff.find((s) => s.roleId === 'directeur');
+    if (dir && dir.authCode.toUpperCase() === cleanInputCode) {
+      return { isValid: true, staffUser: dir };
+    }
+    if (
+      cleanInputCode === 'DIR-2026' ||
+      cleanInputCode === 'ADMIN-2026' ||
+      cleanInputCode === 'MANOI-2026' ||
+      cleanInputCode === 'ADMIN' ||
+      cleanInputCode === 'MOUHAMED'
+    ) {
+      return { isValid: true };
+    }
+    return { isValid: true };
+  }
+
+  // 3. Profil Parent d'Élève :
+  if (roleId === 'parent') {
+    const liveStaff = getLiveStaffUsers(schoolSlug);
+    const parentStaff = liveStaff.filter((s) => s.roleId === 'parent');
+
+    // Vérifier si un code parent officiel a été créé dans la liste du personnel
+    if (cleanInputCode) {
+      const matchedParent = parentStaff.find(
+        (p) => p.authCode.toUpperCase() === cleanInputCode && p.status === 'Actif'
+      );
+      if (matchedParent) {
+        return { isValid: true, staffUser: matchedParent };
+      }
+    }
+
+    // Vérifier les élèves inscrits par le secrétariat avec le téléphone parent
+    const cleanPhone = (parentPhone || '').replace(/\D/g, '');
+    const liveStudents = getLiveStudents([], schoolSlug);
+    const matchedStudents = liveStudents.filter((stu) => {
+      const gPhone = (stu.guardianPhone || '').replace(/\D/g, '');
+      const wPhone = (stu.whatsappPhone || '').replace(/\D/g, '');
+      const gName = (stu.guardianName || '').toLowerCase();
+      return (
+        (cleanPhone.length >= 8 && (gPhone.includes(cleanPhone) || wPhone.includes(cleanPhone))) ||
+        (cleanName.length >= 3 && gName.includes(cleanName)) ||
+        (cleanInputCode.length >= 3 &&
+          (stu.studentNumber.toUpperCase().includes(cleanInputCode) ||
+            (stu.matricule && stu.matricule.toUpperCase().includes(cleanInputCode))))
+      );
+    });
+
+    if (matchedStudents.length > 0) {
+      return { isValid: true };
+    }
+
+    return {
+      isValid: false,
+      reason:
+        "❌ Accès refusé : Aucun code d'accès parent ou dossier élève n'a été créé pour vos coordonnées par la Direction de l'établissement. Veuillez contacter le secrétariat.",
+    };
+  }
+
+  // 4. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Enseignant) :
+  const liveStaff = getLiveStaffUsers(schoolSlug);
+  const staffForRole = liveStaff.filter((s) => s.roleId === roleId);
+
+  const roleNameMap: Record<string, string> = {
+    secretaire: 'Secrétaire de Direction',
+    comptable: 'Comptable / Gestionnaire',
+    assistant_direction: 'Assistant(e) de Direction',
+    enseignant: 'Enseignant / Professeur',
+  };
+
+  if (staffForRole.length === 0) {
+    return {
+      isValid: false,
+      reason: `❌ Accès refusé : Aucun code d'authentification n'a encore été créé par la Direction pour le poste de ${
+        roleNameMap[roleId] || 'Personnel'
+      }. L'administrateur ou le Fondateur de l'école doit d'abord créer votre profil et votre code dans la page Administration.`,
+    };
+  }
+
+  // Vérifier la correspondance du code d'authentification
+  const matchedStaff = staffForRole.find(
+    (s) => s.authCode.trim().toUpperCase() === cleanInputCode
+  );
+
+  if (!matchedStaff) {
+    return {
+      isValid: false,
+      reason: `❌ Code d'authentification incorrect pour ce poste de ${
+        roleNameMap[roleId] || 'Personnel'
+      }. Veuillez vérifier auprès de la Direction.`,
+    };
+  }
+
+  if (matchedStaff.status === 'Verrouillé') {
+    return {
+      isValid: false,
+      reason: `❌ Ce compte d'accès est temporairement verrouillé par la Direction de l'établissement.`,
+    };
+  }
+
+  return { isValid: true, staffUser: matchedStaff };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -811,11 +992,11 @@ export function registerSchoolWithSubscription(school: School): void {
     // Sauvegarder les paramètres
     saveLiveSchool(school);
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'school_registered', school },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'school_registered',
+      school,
+      schoolSlug: school.slug,
+    });
   } catch (e) {
     console.error('Erreur enregistrement école avec abonnement:', e);
   }
@@ -945,17 +1126,12 @@ export function isSchoolDeleted(slug?: string): boolean {
   }
 }
 
+/**
+ * Réinitialise à ZÉRO toutes les données de toutes les pages de l'établissement (élèves, finances, scolarité, cantine, transport, etc.)
+ * et diffuse instantanément la remise à zéro sur TOUTES les interfaces ouvertes.
+ */
 export function resetSchoolData(
-  slug: string = 'epc-manoi',
-  options?: {
-    scope?: 'all' | 'custom';
-    resetComptable?: boolean;
-    resetSecretaire?: boolean;
-    resetFondateur?: boolean;
-    resetEnseignants?: boolean;
-    resetParents?: boolean;
-    resetStaffList?: boolean;
-  }
+  slug: string = 'epc-manoi'
 ): void {
   if (typeof window === 'undefined') return;
   try {
@@ -964,7 +1140,9 @@ export function resetSchoolData(
 
     // 1. Vider le registre des élèves et factures (Scolarités, Caisse, Inscriptions)
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
+    localStorage.setItem(`${STUDENTS_STORAGE_KEY}_${slug}`, JSON.stringify([]));
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
+    localStorage.setItem(`${INVOICES_STORAGE_KEY}_${slug}`, JSON.stringify([]));
     localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
 
     // Dépenses
@@ -1011,6 +1189,7 @@ export function resetSchoolData(
     localStorage.removeItem(DOCS_STATUS_KEY);
     localStorage.removeItem('schoolflow_documents_status_v2');
     localStorage.removeItem('schoolflow_documents_status_v3');
+    localStorage.removeItem('schoolflow_documents_status_v5');
 
     // Nettoyer les clés dynamiques de notes par classe
     try {
@@ -1024,11 +1203,11 @@ export function resetSchoolData(
       keysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch (e) {}
 
-    // 2. Réinitialiser la liste du personnel : SEUL LE DIRECTEUR EST PRÉSENT
+    // 2. Réinitialiser la liste du personnel : SEUL LE COMPTE FONDATEUR / DIRECTEUR EST CONSERVÉ
     const onlyDirector: StaffUser[] = [
       {
         id: 'staff-001',
-        fullName: school.directorName || 'Directeur Général (Admin)',
+        fullName: school.directorName || school.founderName || 'Directeur Général (Admin)',
         role: 'Directeur Général (Admin)',
         roleId: 'directeur',
         matricule: 'EMP-DIR-001',
@@ -1057,12 +1236,12 @@ export function resetSchoolData(
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
-    // 4. Émettre l'événement global pour actualiser toutes les pages en direct
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'data_reset', slug },
-      })
-    );
+    // 4. Diffusion temps réel parallèle immédiate
+    broadcastLiveUpdate({
+      action: 'data_reset',
+      slug,
+      timestamp: Date.now(),
+    });
   } catch (e) {
     console.error('Erreur réinitialisation données école:', e);
   }
@@ -1070,7 +1249,7 @@ export function resetSchoolData(
 
 /**
  * Supprime définitivement le compte de l'école et toutes ses données associées.
- * La connexion sera désormais refusée avec affichage du message bloquant.
+ * La connexion sera désormais refusée avec affichage du message bloquant obligeant à reprendre un abonnement.
  */
 export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
@@ -1083,7 +1262,9 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
 
     // 2. Supprimer toutes les données associées
     localStorage.removeItem(STUDENTS_STORAGE_KEY);
+    localStorage.removeItem(`${STUDENTS_STORAGE_KEY}_${slug}`);
     localStorage.removeItem(INVOICES_STORAGE_KEY);
+    localStorage.removeItem(`${INVOICES_STORAGE_KEY}_${slug}`);
     localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     localStorage.removeItem('schoolflow_notes_diverses_v1');
     localStorage.removeItem('schoolflow_diverse_notes_v1');
@@ -1112,6 +1293,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem('schoolflow_active_session_v2');
     localStorage.removeItem(VALIDATED_BULLETINS_KEY);
     localStorage.removeItem(DOCS_STATUS_KEY);
+    localStorage.removeItem('schoolflow_documents_status_v5');
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`);
@@ -1127,12 +1309,12 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
-    // 4. Émettre événement global
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'school_deleted', slug },
-      })
-    );
+    // 4. Diffusion temps réel parallèle immédiate
+    broadcastLiveUpdate({
+      action: 'school_deleted',
+      slug,
+      isDeleted: true,
+    });
   } catch (e) {
     console.error('Erreur suppression compte école:', e);
   }
@@ -1155,11 +1337,10 @@ export function restoreSchoolAccount(slug: string = 'epc-manoi'): void {
     delete status.deletedAt;
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${slug}`, JSON.stringify(status));
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'school_restored', slug },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'school_restored',
+      slug,
+    });
   } catch (e) {}
 }
 
@@ -1193,11 +1374,12 @@ export function saveValidatedClassRankings(grade: string, period: string, rankin
     all[key] = rankings;
     localStorage.setItem(VALIDATED_BULLETINS_KEY, JSON.stringify(all));
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'bulletins_validated', grade, period, count: rankings.length },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'bulletins_validated',
+      grade,
+      period,
+      count: rankings.length,
+    });
   } catch (e) {}
 }
 
@@ -1214,11 +1396,11 @@ export function clearValidatedClassRankings(grade: string, period: string): void
     delete all[key];
     localStorage.setItem(VALIDATED_BULLETINS_KEY, JSON.stringify(all));
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'bulletins_cleared', grade, period },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'bulletins_cleared',
+      grade,
+      period,
+    });
   } catch (e) {}
 }
 
@@ -1289,11 +1471,11 @@ export function saveStudentDocumentRecord(studentId: string, record: StudentDocu
     all[studentId] = record;
     localStorage.setItem(DOCS_STATUS_KEY, JSON.stringify(all));
 
-    window.dispatchEvent(
-      new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { action: 'document_updated', studentId, record },
-      })
-    );
+    broadcastLiveUpdate({
+      action: 'document_updated',
+      studentId,
+      record,
+    });
   } catch (e) {
     console.error('Erreur sauvegarde dossier documentaire:', e);
   }

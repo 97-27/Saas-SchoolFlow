@@ -147,7 +147,7 @@ export function Sidebar({
       icon: LayoutDashboard,
       active: pathname.includes('/dashboard'),
     },
-    ...(roleId === 'directeur'
+    ...((roleId === 'directeur' || roleId === 'fondateur')
       ? [
           {
             key: 'administration',
@@ -386,9 +386,10 @@ export function Sidebar({
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'fondateur') {
-    // 🏛️ FONDATEUR : Voit tout l'établissement en mode consultation
+    // 👑 FONDATEUR : Administrateur Suprême (Accès total à tous les modules et aux codes)
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
       {
         key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
         active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),

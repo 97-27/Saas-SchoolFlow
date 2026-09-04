@@ -45,6 +45,8 @@ import {
   saveLiveSchool,
   registerSchoolWithSubscription,
   verifySchoolSubscriptionForLogin,
+  verifyUserAuthCodeForLogin,
+  broadcastLiveUpdate,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 
@@ -70,14 +72,25 @@ export interface RoleConfig {
 }
 
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
+  fondateur: {
+    id: 'fondateur',
+    title: 'Fondateur / Promotrice (Admin Suprême — Contrôle Total)',
+    badge: '👑 Fondateur (Admin)',
+    department: 'Présidence & Direction Suprême',
+    defaultAuthCode: 'FND-2026',
+    defaultUserName: 'LAWANI MOUHAMED',
+    description: 'Propriétaire et Administrateur Suprême de l’école. Accès total et illimité à l’ensemble des modules.',
+    allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
+    isAdmin: true,
+  },
   directeur: {
     id: 'directeur',
-    title: 'Directeur / Direction (Admin — Contrôle Total)',
-    badge: '👑 Admin',
-    department: 'Direction Générale',
+    title: 'Directeur Général (Admin — Contrôle Total)',
+    badge: '👑 Direction (Admin)',
+    department: 'Direction Générale & Études',
     defaultAuthCode: 'DIR-2026',
     defaultUserName: 'Dr. Jean-Marc Kouassi',
-    description: 'Contrôle total et accès illimité à l’ensemble des modules et actions de l’école.',
+    description: 'Gestion pédagogique, administrative et financière globale de l’établissement.',
     allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
     isAdmin: true,
   },
@@ -90,16 +103,6 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     defaultUserName: 'M. Soro Ibrahim',
     description: 'Assistance à la direction, gestion des classes, suivi du personnel et communication.',
     allowedModules: 'Vue d’ensemble, Classes & Niveaux, Enseignants & Personnel, Communication Parents, Notes Diverses',
-  },
-  fondateur: {
-    id: 'fondateur',
-    title: 'Fondateur / Fondatrice (Supervision Globale)',
-    badge: '🏛️ Fondateur',
-    department: 'Supervision',
-    defaultAuthCode: 'FND-2026',
-    defaultUserName: 'El Hadj Bamba Ousmane',
-    description: 'Supervision globale de l’établissement en mode consultation seule.',
-    allowedModules: 'Tableau de bord, Scolarités, Finances, Salaires, Pédagogie (Consultation Seule)',
   },
   comptable: {
     id: 'comptable',
@@ -322,23 +325,36 @@ export function LoginView({
       return;
     }
 
-    if (!loginPassword.trim() && !authCode.trim() && selectedRole !== 'parent') {
+    const inputPassOrCode = (authCode || loginPassword).trim();
+    if (!inputPassOrCode && selectedRole !== 'parent') {
       setErrorMessage('Veuillez saisir votre mot de passe ou code d\'authentification.');
       return;
     }
 
-    let cleanAuthCode = 'PASS-AUTH';
+    // Validation stricte des codes d'authentification préalablement créés par la direction
+    const authCheck = verifyUserAuthCodeForLogin(
+      selectedRole,
+      inputPassOrCode,
+      trimmedName,
+      schoolSlug,
+      parentPhone
+    );
+
+    if (!authCheck.isValid) {
+      setErrorMessage(
+        authCheck.reason ||
+          '❌ Code d\'authentification incorrect ou profil non encore créé par la Direction de l\'école.'
+      );
+      return;
+    }
+
+    let cleanAuthCode = inputPassOrCode || (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
     let matchedParentStudents: Student[] = [];
 
     // Validation spécifique pour les parents
     if (selectedRole === 'parent') {
       const cleanPhone = parentPhone.replace(/[^0-9]/g, '');
-      if (!cleanPhone || cleanPhone.length < 8) {
-        setErrorMessage('Veuillez saisir un numéro de téléphone parent valide (au moins 8 chiffres).');
-        return;
-      }
-
-      const allLiveStudents = getLiveStudents(mockStudents);
+      const allLiveStudents = getLiveStudents(mockStudents, schoolSlug);
       matchedParentStudents = allLiveStudents.filter((student) => {
         const guardian = (student.guardianName || '').toLowerCase();
         const guardianPhoneClean = (student.guardianPhone || '').replace(/\D/g, '');
@@ -350,43 +366,25 @@ export function LoginView({
           (cleanPhone.length >= 8 && whatsappPhoneClean.includes(cleanPhone))
         );
       });
-
-      if (matchedParentStudents.length === 0) {
-        setErrorMessage(
-          `❌ Aucun élève n'est associé au parent « ${trimmedName} » (${parentPhone}) dans les dossiers de l'école. Veuillez vérifier ou vous rapprocher du secrétariat.`
-        );
-        return;
-      }
-    } else {
-      // Personnel : vérification du code ou mot de passe
-      const liveStaff = getLiveStaffUsers();
-      const staffForRole = liveStaff.filter((s) => s.roleId === selectedRole);
-      const validCodesForRole = staffForRole.map((s) => s.authCode.trim().toUpperCase());
-      const defaultCode = ROLE_CONFIGS[selectedRole]?.defaultAuthCode?.toUpperCase();
-      if (defaultCode && !validCodesForRole.includes(defaultCode)) {
-        validCodesForRole.push(defaultCode);
-      }
-      validCodesForRole.push('DIR-2026', 'ADMIN-2026', 'MANOI-2026', 'ADMIN', 'DIR', 'DIR-MANOI', 'MOHAMED', 'MOUHAMED', '1234', '0000');
-
-      const inputAuth = (authCode || loginPassword).trim().toUpperCase();
-      if (selectedRole === 'directeur' || schoolSlug === 'epc-manoi') {
-        validCodesForRole.push(inputAuth);
-      }
-
-      if (inputAuth && !validCodesForRole.includes(inputAuth) && inputAuth.length < 4 && selectedRole !== 'directeur') {
-        setErrorMessage('Mot de passe ou code d\'authentification incorrect. Veuillez vérifier auprès de la Direction.');
-        return;
-      }
-      cleanAuthCode = inputAuth || (selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
     }
 
     setIsLoading(true);
 
     setTimeout(() => {
       const finalFullName = `${civility} ${trimmedName}`;
-      const isDirector = selectedRole === 'directeur';
-      const roleBadge = isDirector ? '👑 Admin' : ROLE_CONFIGS[selectedRole].badge;
-      const roleTitle = isDirector ? 'DR' : ROLE_CONFIGS[selectedRole].title;
+      const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'directeur';
+      const roleBadge =
+        selectedRole === 'fondateur'
+          ? '👑 Fondateur (Admin)'
+          : selectedRole === 'directeur'
+          ? '👑 Direction (Admin)'
+          : ROLE_CONFIGS[selectedRole].badge;
+      const roleTitle =
+        selectedRole === 'fondateur'
+          ? 'Fondateur / Promotrice'
+          : selectedRole === 'directeur'
+          ? 'DR'
+          : ROLE_CONFIGS[selectedRole].title;
 
       const sessionData = {
         fullName: finalFullName,
@@ -399,9 +397,10 @@ export function LoginView({
         email: loginEmail.trim() || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`,
         phone: selectedRole === 'parent' ? parentPhone : '+225 07 48 92 11 00',
         authCode: cleanAuthCode,
+        isAdmin: isSupremeAdmin,
         matchedChildrenIds: matchedParentStudents.map((s) => s.id),
         avatarUrl:
-          selectedRole === 'directeur'
+          selectedRole === 'fondateur' || selectedRole === 'directeur'
             ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'
             : selectedRole === 'secretaire'
             ? 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&auto=format&fit=crop&q=80'
@@ -415,15 +414,19 @@ export function LoginView({
 
       try {
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
-        recordStaffLogin(selectedRole, finalFullName, cleanAuthCode);
-        window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+        recordStaffLogin(selectedRole, finalFullName, cleanAuthCode, schoolSlug);
+        broadcastLiveUpdate({
+          action: 'user_login',
+          user: sessionData,
+          schoolSlug,
+        });
       } catch (err) {
         console.error('Erreur stockage session:', err);
       }
 
       setSuccessToast({
         title: 'Authentification réussie !',
-        subtitle: `Bienvenue, ${finalFullName} (${ROLE_CONFIGS[selectedRole].badge})`,
+        subtitle: `Bienvenue, ${finalFullName} (${roleBadge})`,
       });
       setIsLoading(false);
 
@@ -885,12 +888,12 @@ export function LoginView({
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer"
                     >
-                      <option value="directeur">👑 Directeur / Directrice (Admin — Contrôle Total)</option>
+                      <option value="fondateur">👑 Fondateur / Promotrice (Admin Suprême — Contrôle Total)</option>
+                      <option value="directeur">👑 Directeur / Directrice (Direction Générale — Admin)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
-                      <option value="fondateur">🏛️ Fondateur / Fondatrice (Supervision)</option>
                       <option value="parent">👨‍👩‍👧 Parent d'Élève (Espace Famille)</option>
                     </select>
                     <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

@@ -213,7 +213,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     }
     deleteSchoolAccount(school.slug || 'epc-manoi');
     setIsDeleteModalOpen(false);
-    window.location.href = '/login?deleted=true';
+    window.location.href = '/login?mode=signup&deleted=true';
   };
 
   const tabs = [

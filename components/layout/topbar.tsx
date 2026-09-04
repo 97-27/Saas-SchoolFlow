@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { School } from '@/lib/data/types';
 import { defaultSchool } from '@/lib/data/mock-data';
-import { getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveSchool, DATA_UPDATED_EVENT, broadcastLiveUpdate } from '@/lib/data/live-store';
 import {
   Menu,
   Bell,
@@ -57,10 +57,10 @@ export function Topbar({
     fullName: 'LAWANI MOUHAMED',
     email: 'direction@epc-manoi.ci',
     phone: '+225 07 48 92 11 00',
-    role: 'DR',
-    roleId: 'directeur',
-    roleBadge: '👑 DR',
-    department: 'Direction',
+    role: 'Fondateur / Promotrice',
+    roleId: 'fondateur',
+    roleBadge: '👑 Fondateur (Admin)',
+    department: 'Direction Suprême',
     avatarUrl: '',
   });
 
@@ -80,13 +80,23 @@ export function Topbar({
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.fullName) {
+            const isFounder = parsed.roleId === 'fondateur';
+            const isDirector = parsed.roleId === 'directeur';
             setActiveSession({
               fullName: parsed.fullName,
               email: parsed.email || live.email || 'direction@epc-manoi.ci',
               phone: parsed.phone || live.whatsappPhone || '+225 07 48 92 11 00',
-              role: parsed.roleId === 'directeur' ? 'DR' : (parsed.role || 'DR'),
-              roleId: parsed.roleId || 'directeur',
-              roleBadge: parsed.roleId === 'directeur' ? '👑 DR' : (parsed.roleBadge || '👑 DR'),
+              role: isFounder
+                ? 'Fondateur / Promotrice'
+                : isDirector
+                ? 'DR'
+                : (parsed.role || 'DR'),
+              roleId: parsed.roleId || 'fondateur',
+              roleBadge: isFounder
+                ? '👑 Fondateur (Admin)'
+                : isDirector
+                ? '👑 DR'
+                : (parsed.roleBadge || '👑 DR'),
               department: parsed.department || 'Direction',
               avatarUrl: parsed.avatarUrl || '',
             });
@@ -109,13 +119,13 @@ export function Topbar({
       } catch (e) {}
 
       setActiveSession({
-        fullName: live.directorName || 'M. Jean-Marc Kouassi',
+        fullName: live.founderName || live.directorName || 'LAWANI MOUHAMED',
         email: live.email || 'direction@epc-manoi.ci',
         phone: live.whatsappPhone || '+225 07 48 92 11 00',
-        role: 'DR',
-        roleId: 'directeur',
-        roleBadge: '👑 DR',
-        department: 'Direction',
+        role: 'Fondateur / Promotrice',
+        roleId: 'fondateur',
+        roleBadge: '👑 Fondateur (Admin)',
+        department: 'Direction Suprême',
         avatarUrl: '',
       });
     };
@@ -154,7 +164,10 @@ export function Topbar({
         phone: updated.phone,
       };
       localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
-      window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+      broadcastLiveUpdate({
+        action: 'session_updated',
+        session: newSession,
+      });
     } catch (err) {}
   };
 
@@ -174,11 +187,10 @@ export function Topbar({
         const parsed = stored ? JSON.parse(stored) : {};
         const newSession = { ...parsed, avatarUrl: dataUrl };
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
-        window.dispatchEvent(
-          new CustomEvent(DATA_UPDATED_EVENT, {
-            detail: { session: newSession },
-          })
-        );
+        broadcastLiveUpdate({
+          action: 'session_updated',
+          session: newSession,
+        });
       } catch (err) {}
     };
     reader.readAsDataURL(file);

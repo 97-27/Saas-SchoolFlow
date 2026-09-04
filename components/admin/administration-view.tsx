@@ -8,6 +8,8 @@ import {
   updateStaffAuthCode,
   updateFullStaffUser,
   addLiveStaffUser,
+  deleteLiveStaffUser,
+  getLiveSchool,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import {
@@ -39,6 +41,8 @@ import {
   Calendar,
   MapPin,
   Award,
+  Trash2,
+  Share2,
 } from 'lucide-react';
 
 interface AdministrationViewProps {
@@ -175,6 +179,32 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const updated = staffList.map((s) => (s.id === staff.id ? { ...s, status: nextStatus as any } : s));
     saveLiveStaffUsers(updated, schoolSlug);
     showToast(`Statut de ${staff.fullName} : ${nextStatus}`);
+  };
+
+  // Partager les accès officiels sur WhatsApp
+  const handleShareWhatsApp = (staff: StaffUser) => {
+    const school = getLiveSchool(schoolSlug);
+    const cleanPhone = (staff.phone || '').replace(/[^0-9]/g, '');
+    const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/${schoolSlug}/login` : `https://saas-school-flow-12xh.vercel.app/${schoolSlug}/login`;
+    const message = `👋 *Bonjour ${staff.fullName}*,\n\nVoici vos accès officiels sur la plateforme *SchoolFlow* de l’établissement *${school.shortName || school.name}* :\n\n👤 *Poste / Rôle* : ${staff.role}\n🆔 *Matricule* : ${staff.matricule || 'Attribué'}\n🔑 *Code d'Authentification* : *${staff.authCode}*\n🌐 *Lien de Connexion Direct* : ${loginUrl}\n\n_(Gardez ce code strictement personnel et confidentiel pour accéder à votre espace de travail)._`;
+
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+    showToast(`Lien et code de ${staff.fullName} prêts sur WhatsApp`);
+  };
+
+  // Supprimer / Révoquer un profil et son code
+  const handleDeleteStaff = (staff: StaffUser) => {
+    if (staff.roleId === 'directeur' && staffList.filter((s) => s.roleId === 'directeur').length <= 1) {
+      alert("Impossible de supprimer le compte Administrateur Principal.");
+      return;
+    }
+    if (confirm(`Confirmez-vous la révocation définitive du compte de « ${staff.fullName} » ? Son code d'accès sera immédiatement désactivé.`)) {
+      deleteLiveStaffUser(staff.id, schoolSlug);
+      showToast(`Compte et code de ${staff.fullName} révoqués avec succès.`);
+    }
   };
 
   // Sauvegarder l'édition complète d'un membre
@@ -666,6 +696,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   {/* Actions Direction */}
                   <td className="py-3.5 px-4 text-right whitespace-nowrap">
                     <div className="inline-flex items-center gap-1.5">
+                      {/* Partager accès sur WhatsApp */}
+                      <button
+                        type="button"
+                        onClick={() => handleShareWhatsApp(member)}
+                        className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer"
+                        title="Envoyer le code et le lien de connexion sur WhatsApp"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+
                       {/* Consulter fiche complète */}
                       <button
                         type="button"
@@ -686,19 +726,17 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
 
-                      {/* Générer nouveau code rapide */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const randCode = generateRandomCode(member.roleId);
-                          updateStaffAuthCode(member.id, randCode);
-                          showToast(`Nouveau code généré pour ${member.fullName} : ${randCode}`);
-                        }}
-                        className="p-1.5 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
-                        title="Régénérer un code aléatoire"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Révoquer / Supprimer */}
+                      {member.roleId !== 'directeur' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStaff(member)}
+                          className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                          title="Révoquer définitivement ce compte et son code d'accès"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
 
