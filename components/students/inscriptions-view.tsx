@@ -67,11 +67,11 @@ export function InscriptionsView({
 
   // Synchronisation dynamique avec le live-store (Élèves & Paramètres École)
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
     setSchoolState(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
       setSchoolState(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);

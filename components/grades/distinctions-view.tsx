@@ -51,8 +51,8 @@ export function DistinctionsView({
     getLiveSchool(schoolSlug, school || defaultSchool)
   );
   const [students, setStudents] = useState<Student[]>(() => {
-    const live = getLiveStudents(initialStudents);
-    return live && live.length > 0 ? live : initialStudents;
+    const live = getLiveStudents(initialStudents, schoolSlug);
+    return live || [];
   });
 
   // Cycles Scolaires : Maternelle (P.S. à G.S.), Primaire (CP1 à CM2), Collège (6ème à 3ème), Lycée (2nde à Terminale)
@@ -71,8 +71,8 @@ export function DistinctionsView({
 
   const syncLiveState = () => {
     setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
-    const live = getLiveStudents(initialStudents);
-    if (live && live.length > 0) setStudents(live);
+    const live = getLiveStudents(initialStudents, schoolSlug);
+    setStudents(live || []);
     setValidatedRankings(getValidatedClassRankings(selectedClass, selectedPeriod));
   };
 

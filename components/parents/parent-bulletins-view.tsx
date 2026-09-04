@@ -74,8 +74,8 @@ export function ParentBulletinsView({
     getLiveSchool(schoolSlug, initialSchool)
   );
   const [allStudents, setAllStudents] = useState<Student[]>(() => {
-    const live = getLiveStudents(initialStudents || mockStudents);
-    return live && live.length > 0 ? live : mockStudents;
+    const live = getLiveStudents(initialStudents || mockStudents, schoolSlug);
+    return live || [];
   });
 
   const [activeSession, setActiveSession] = useState<any>(null);
@@ -87,8 +87,8 @@ export function ParentBulletinsView({
   useEffect(() => {
     const updateSchool = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, initialSchool));
-      const live = getLiveStudents(initialStudents || mockStudents);
-      if (live && live.length > 0) setAllStudents(live);
+      const live = getLiveStudents(initialStudents || mockStudents, schoolSlug);
+      setAllStudents(live || []);
     };
 
     updateSchool();

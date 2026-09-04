@@ -359,11 +359,11 @@ export function BulletinsView({
 
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

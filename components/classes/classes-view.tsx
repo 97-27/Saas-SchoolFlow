@@ -108,12 +108,12 @@ export function ClassesView({
 
   // Synchronisation des élèves, école et documents
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     loadDocumentsStatus();
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       loadDocumentsStatus();
     };

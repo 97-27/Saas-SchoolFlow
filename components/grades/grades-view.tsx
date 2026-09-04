@@ -309,11 +309,11 @@ export function GradesView({
 
   // Synchronisation des élèves et de l'école
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);

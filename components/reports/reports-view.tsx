@@ -47,13 +47,13 @@ export function ReportsView({
   const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('all');
 
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
-    setInvoices(getLiveInvoices(initialInvoices));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
+    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
     setSchoolState(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
-      setInvoices(getLiveInvoices(initialInvoices));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
+      setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
       setSchoolState(getLiveSchool(schoolSlug, school));
     };
 

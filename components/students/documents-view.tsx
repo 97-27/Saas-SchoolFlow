@@ -96,12 +96,12 @@ export function DocumentsView({
   };
 
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents));
+    setStudents(getLiveStudents(initialStudents, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     loadDocsStatus();
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents));
+      setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       loadDocsStatus();
     };

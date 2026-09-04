@@ -215,11 +215,11 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   // Synchronisation avec le store
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
-    setStudents(getLiveStudents(mockStudents));
+    setStudents(getLiveStudents(mockStudents, schoolSlug));
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
-      setStudents(getLiveStudents(mockStudents));
+      setStudents(getLiveStudents(mockStudents, schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

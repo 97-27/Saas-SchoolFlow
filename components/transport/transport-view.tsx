@@ -153,11 +153,11 @@ export function TransportView({
 
   // Synchronisation des élèves
   useEffect(() => {
-    setStudents(getLiveStudents(mockStudents));
+    setStudents(getLiveStudents(mockStudents, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(mockStudents));
+      setStudents(getLiveStudents(mockStudents, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
