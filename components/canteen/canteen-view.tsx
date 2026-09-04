@@ -35,6 +35,7 @@ import {
   BadgePercent,
   Copy,
   Loader2,
+  Smartphone,
 } from 'lucide-react';
 
 interface CanteenViewProps {
@@ -455,10 +456,33 @@ export function CanteenView({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Partage WhatsApp du reçu
+  // Partage WhatsApp du reçu avec copie d'image dans le presse-papier
   const handleSendReceiptWhatsApp = async (sub: any) => {
+    if (!sub) return;
     try {
       setIsGeneratingImage(true);
+      if (receiptCardRef.current) {
+        try {
+          const html2canvasModule = await import('html2canvas');
+          const html2canvas = html2canvasModule.default;
+          const canvas = await html2canvas(receiptCardRef.current, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+          });
+          if (canvas) {
+            canvas.toBlob(async (blob) => {
+              if (blob && navigator.clipboard && navigator.clipboard.write) {
+                try {
+                  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                } catch (e) {}
+              }
+            }, 'image/png');
+          }
+        } catch (e) {}
+      }
+
       const cleanPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/[^0-9]/g, '');
       const paidList = sub.paidMonths && sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun';
       const msg = `*REÇU DE RESTAURATION SCOLAIRE & CANTINE — ${currentSchool.shortName || currentSchool.name}*\n` +
@@ -471,14 +495,15 @@ export function CanteenView({
         (sub.discountAmount > 0 ? `🎁 *Réduction Spéciale* : -${formatFCFA(sub.discountAmount)}\n` : '') +
         `✅ *TOTAL NET ENCAISSÉ* : ${formatFCFA(sub.totalPaidAmount)}\n` +
         `--------------------------------------\n` +
+        `_(L'image du reçu est copiée : faites Coller / Ctrl+V pour l'envoyer)._\n` +
         `_Quittance certifiée par l'Intendance & Gestion de la Restauration._`;
 
       const waUrl = cleanPhone
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
         : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
       window.open(waUrl, '_blank');
-      setToastMessage('✓ Quittance officielle envoyée sur WhatsApp');
-      setTimeout(() => setToastMessage(null), 4000);
+      setToastMessage('📸 Image du reçu copiée dans le presse-papier ! Collez-la (Ctrl+V) dans WhatsApp.');
+      setTimeout(() => setToastMessage(null), 4500);
     } catch (e) {
       console.error(e);
     } finally {
@@ -1243,20 +1268,20 @@ export function CanteenView({
                   window.print();
                   setTimeout(() => document.body.classList.remove('print-receipt-only'), 1200);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer shadow-2xs"
               >
-                <Printer className="w-4 h-4 text-slate-600" />
-                <span>Imprimer A4</span>
+                <Printer className="w-4 h-4 text-emerald-600" />
+                <span>Imprimer le Reçu</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleSendReceiptWhatsApp(selectedStudentForReceipt)}
                 disabled={isGeneratingImage}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
               >
-                {isGeneratingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                <span>Envoyer par WhatsApp</span>
+                {isGeneratingImage ? <Loader2 className="w-4 h-4 animate-spin text-emerald-600" /> : <Smartphone className="w-4 h-4 text-emerald-600" />}
+                <span>Partager sur WhatsApp</span>
               </button>
             </div>
           </div>

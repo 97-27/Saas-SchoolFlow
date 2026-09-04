@@ -39,6 +39,7 @@ import {
   ImageIcon,
   Eye,
   ExternalLink,
+  Smartphone,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -611,7 +612,7 @@ export function BoardingView({
     }
   };
 
-  // 5. Action directe : Partage WhatsApp Mobile ou Desktop
+  // 5. Action directe : Partage WhatsApp Direct avec Copie Image dans le Presse-Papier
   const handleDirectWhatsAppShare = async () => {
     try {
       setIsGeneratingImage(true);
@@ -622,9 +623,8 @@ export function BoardingView({
       }
 
       const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
-      const fileName = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
       const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-      const messageText = `📄 Quittance d'internat officielle — ${formStudentName} (${formMatricule}) • Établissement ${currentSchool.shortName || currentSchool.name}`;
+      const messageText = `📄 *Quittance d'internat officielle — ${formStudentName} (${formMatricule})*\n🏫 Établissement : ${currentSchool.shortName || currentSchool.name}\n💰 Tarif mensuel : ${formatFCFA(formMonthlyRate)}\n📅 Date : ${formPaymentDate}\n_(L'image du reçu est copiée : faites Coller / Ctrl+V pour l'envoyer)._`;
 
       canvas.toBlob(async (blob) => {
         if (!blob) {
@@ -632,47 +632,24 @@ export function BoardingView({
           return;
         }
 
-        const file = new File([blob], fileName, { type: 'image/png' });
-
-        // Sur mobile avec Web Share API
-        if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: `Quittance Internat - ${formStudentName}`,
-              text: messageText,
-            });
-            setToastMessage('✓ Quittance envoyée sur WhatsApp !');
-            setIsGeneratingImage(false);
-            return;
-          } catch (err) {
-            // Fallback si annulation
-          }
-        }
-
-        // Sur Desktop : Copier l'image + Télécharger le fichier + Ouvrir WhatsApp
+        // Copier l'image dans le presse-papier pour WhatsApp (Ctrl+V)
         try {
           if (navigator.clipboard && navigator.clipboard.write) {
             await navigator.clipboard.write([
               new ClipboardItem({ 'image/png': blob }),
             ]);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Clipboard write fallback', e);
+        }
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = fileName;
-        link.href = url;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setToastMessage('📸 Image de la quittance copiée dans le presse-papier ! Collez-la (Ctrl+V) dans WhatsApp.');
+        setTimeout(() => setToastMessage(null), 4500);
 
         const waUrl = cleanPhone
           ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
           : `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
         window.open(waUrl, '_blank');
-
-        setGeneratedImagePreviewUrl(canvas.toDataURL('image/png'));
-        setIsShareModalOpen(true);
         setIsGeneratingImage(false);
       }, 'image/png');
     } catch (e) {
@@ -793,6 +770,24 @@ export function BoardingView({
           </div>
         </div>
       )}
+      {/* ═══════════════════════════════════════════════════════════════
+          EN-TÊTE DE PAGE AVEC ANNÉE SCOLAIRE SUR LA MÊME LIGNE
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+              Internat & Hébergement
+            </h1>
+            <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
+              {currentSchool.academicYear || '2026-2027'}
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
+            Gestion des dortoirs, chambres et génération des quittances officielles d&apos;internat — {currentSchool.name}
+          </p>
+        </div>
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════
           SECTION 1 : LES 3 CARTES STATISTIQUES KPI PANDHOWAN
@@ -1346,40 +1341,32 @@ export function BoardingView({
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Bouton Impression A4 Isolé */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Bouton Impression Reçu */}
               <button
                 type="button"
                 onClick={handlePrintReceipt}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
                 title="Imprimer uniquement ce reçu sur feuille A4"
               >
-                <Printer className="w-3.5 h-3.5 text-slate-600" />
-                <span>Imprimer A4</span>
+                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Imprimer le Reçu</span>
               </button>
 
-              {/* Bouton Télécharger Image PNG */}
-              <button
-                type="button"
-                onClick={handleDownloadReceiptImage}
-                disabled={isGeneratingImage}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Télécharger la quittance au format Image PNG"
-              >
-                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-slate-600" />}
-                <span>Image PNG</span>
-              </button>
-
-              {/* Bouton Partager WhatsApp Direct avec image attachée */}
+              {/* Bouton Partager sur WhatsApp */}
               <button
                 type="button"
                 onClick={handleDirectWhatsAppShare}
                 disabled={isGeneratingImage}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Partager l'image HD du reçu directement sur WhatsApp"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+                title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
               >
-                {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
-                <span>WhatsApp</span>
+                {isGeneratingImage ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                ) : (
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                )}
+                <span>Partager sur WhatsApp</span>
               </button>
             </div>
           </div>

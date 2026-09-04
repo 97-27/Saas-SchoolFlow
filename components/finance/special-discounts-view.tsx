@@ -33,6 +33,7 @@ import {
   ChevronDown,
   FolderOpen,
   Check,
+  Loader2,
 } from 'lucide-react';
 
 export interface ChildItem {
@@ -603,80 +604,8 @@ export function SpecialDiscountsView({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Édition et impression instantanée des reçus officiels pour familles avec réductions et jusqu'à 10 enfants.
+            Édition et impression instantanée des reçus officiels pour familles avec réductions et jusqu&apos;à 10 enfants.
           </p>
-        </div>
-
-        {/* Actions du haut (Bouton "Aperçu Image Reçu" supprimé comme demandé pour équilibrer les 3 blocs) */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-          
-          {/* SÉLECTEUR DÉROULANT HISTORIQUE DES REÇUS */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => setIsReceiptDropdownOpen(!isReceiptDropdownOpen)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-            >
-              <FolderOpen className="w-4 h-4 text-emerald-600" />
-              <span>Historique des Reçus ({savedReceipts.length})</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-
-            {isReceiptDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
-                  <span>Reçus Enregistrés ({savedReceipts.length})</span>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Maternelle à Tle</span>
-                </div>
-                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 py-1">
-                  {savedReceipts.map((rec, idx) => (
-                    <button
-                      key={rec.id}
-                      type="button"
-                      onClick={() => handleSelectReceipt(idx)}
-                      className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer ${
-                        selectedReceiptIndex === idx
-                          ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-200'
-                          : 'hover:bg-slate-50 text-slate-700 font-medium'
-                      }`}
-                    >
-                      <div className="space-y-0.5 truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-emerald-700 font-bold">{rec.receiptNumber}</span>
-                          <span className="text-[10px] text-slate-400">({rec.children.length} enf.)</span>
-                        </div>
-                        <p className="truncate font-semibold text-slate-900">{rec.parentName}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[11px] font-mono font-bold text-slate-900 block">
-                          {formatFCFA(rec.children.reduce((a, c) => a + c.tuitionAmount, 0) - rec.discountAmountFCFA)}
-                        </span>
-                        <span className="text-[10px] text-slate-400">{formatDate(rec.issueDate)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetNewReceipt}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Nouveau Reçu Vierge</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimer le Reçu (PDF)</span>
-          </button>
         </div>
       </div>
 
@@ -795,14 +724,84 @@ export function SpecialDiscountsView({
         {/* ================= PANNEAU DE CONTRÔLE / FORMULAIRE (5 COLONNES) ================= */}
         <div className="lg:col-span-5 bg-white rounded-2xl p-4 sm:p-6 border border-slate-200/80 shadow-xs space-y-5 print:hidden">
           
-          <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-base font-extrabold font-heading text-slate-900 flex items-center gap-2">
-              <BadgePercent className="w-5 h-5 text-emerald-600" />
-              <span>Paramètres du Reçu</span>
-            </h2>
-            <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-              {receiptNumber}
-            </span>
+          <div className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <BadgePercent className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-extrabold font-heading text-slate-900 leading-tight">
+                  Paramètres du Reçu
+                </h2>
+                <span className="text-[10px] font-mono font-bold text-emerald-800">
+                  N° {receiptNumber}
+                </span>
+              </div>
+            </div>
+
+            {/* Historique des Reçus + Nouveau Reçu Vierge positionnés en haut à droite des paramètres */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* SÉLECTEUR DÉROULANT HISTORIQUE DES REÇUS */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptDropdownOpen(!isReceiptDropdownOpen)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-800 bg-slate-50 border border-slate-300 hover:bg-slate-100 transition-all shadow-2xs cursor-pointer"
+                  title="Consulter l'historique des reçus enregistrés"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Historique ({savedReceipts.length})</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
+
+                {isReceiptDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500">
+                      <span>Reçus Enregistrés ({savedReceipts.length})</span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">Maternelle à Tle</span>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 py-1">
+                      {savedReceipts.map((rec, idx) => (
+                        <button
+                          key={rec.id}
+                          type="button"
+                          onClick={() => handleSelectReceipt(idx)}
+                          className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                            selectedReceiptIndex === idx
+                              ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-200'
+                              : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          }`}
+                        >
+                          <div className="space-y-0.5 truncate">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-emerald-700 font-bold">{rec.receiptNumber}</span>
+                              <span className="text-[10px] text-slate-400">({rec.children.length} enf.)</span>
+                            </div>
+                            <p className="truncate font-semibold text-slate-900">{rec.parentName}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[11px] font-mono font-bold text-slate-900 block">
+                              {formatFCFA(rec.children.reduce((a, c) => a + c.tuitionAmount, 0) - rec.discountAmountFCFA)}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{formatDate(rec.issueDate)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetNewReceipt}
+                className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-all shadow-2xs cursor-pointer"
+                title="Créer un nouveau reçu vierge"
+              >
+                <RotateCcw className="w-3 h-3 text-slate-500" />
+                <span>Nouveau Vierge</span>
+              </button>
+            </div>
           </div>
 
           {/* SECTION 1 : COORDONNÉES DU PARENT & TÉLÉPHONE WHATSAPP (AVEC JUSQU'À 3 NUMÉROS) */}
@@ -1448,39 +1447,31 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* Boutons d'Action Rapide en bas de reçu */}
-          <div className="pt-2 flex items-center justify-between gap-2.5 flex-wrap print:hidden">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={handleShareWhatsappWithImageCopy}
-                disabled={isGeneratingImage}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer disabled:opacity-50"
-                title="Ouvre WhatsApp avec le message pré-rempli et copie l'image dans le presse-papier"
-              >
-                <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isGeneratingImage ? 'Préparation...' : 'Envoyer par WhatsApp'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownloadReceiptImage}
-                disabled={isGeneratingImage}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-colors cursor-pointer disabled:opacity-50"
-                title="Télécharger l'image PNG officielle du reçu"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-600" />
-                <span>Télécharger Image (PNG)</span>
-              </button>
-            </div>
-
+          {/* Boutons d'Action Rapide en dessous du Reçu Automatique (Imprimer & Partager WhatsApp) */}
+          <div className="pt-2 flex items-center gap-2.5 flex-wrap print:hidden">
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+              title="Imprimer le reçu officiel sur une page A4"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-emerald-600" />
               <span>Imprimer le Reçu</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleShareWhatsappWithImageCopy}
+              disabled={isGeneratingImage}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+              title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
+            >
+              {isGeneratingImage ? (
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+              ) : (
+                <Smartphone className="w-4 h-4 text-emerald-600" />
+              )}
+              <span>Partager sur WhatsApp</span>
             </button>
           </div>
         </div>

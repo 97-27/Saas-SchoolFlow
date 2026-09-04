@@ -40,6 +40,7 @@ import {
   ShieldCheck,
   MessageSquare,
   Share2,
+  Smartphone,
 } from 'lucide-react';
 
 export interface SalaryPayment {
@@ -329,7 +330,7 @@ export function SalariesView({
     const receiptElement = document.getElementById('official-receipt-print');
     if (!receiptElement) return;
 
-    showToast('📸 Génération de l\'image HD du reçu en cours...');
+    showToast('📸 Génération de l\'image HD du reçu...');
 
     try {
       const canvas = await html2canvas(receiptElement, {
@@ -357,25 +358,9 @@ export function SalariesView({
           }
         }
 
-        // 2. Téléchargement automatique de l'image
-        const imageUri = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = `Recu_Salaire_${selectedSalary.receiptNumber}_${selectedSalary.staffName.replace(/\s+/g, '_')}.png`;
-        link.href = imageUri;
-        link.click();
-
-        // 3. Ouvrir WhatsApp avec message d'accompagnement
+        // 2. Ouvrir WhatsApp avec message d'accompagnement
         const cleanPhone = selectedSalary.phone.replace(/[^0-9]/g, '');
-        const message = `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*
-🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*
-👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})
-🆔 Matricule : *${selectedSalary.matricule}*
-📅 Période : *${selectedSalary.payPeriod}*
-💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*
-
-${copied ? '✓ Image HD copiée dans votre presse-papier (Faites Coller / Ctrl+V directement dans WhatsApp).' : '✓ L\'image HD du reçu officiel a été téléchargée sur votre appareil.'}
-
-_Quittance officielle délivrée par le Service Comptabilité & Finances via SchoolFlow._`;
+        const message = `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`;
 
         const encoded = encodeURIComponent(message);
         const waUrl = cleanPhone
@@ -383,11 +368,7 @@ _Quittance officielle délivrée par le Service Comptabilité & Finances via Sch
           : `https://api.whatsapp.com/send?text=${encoded}`;
 
         window.open(waUrl, '_blank');
-        showToast(
-          copied
-            ? '✅ Image du reçu prête ! Collez-la (Ctrl + V) dans WhatsApp.'
-            : '✅ Image du reçu générée et téléchargée pour WhatsApp.'
-        );
+        showToast('📸 Image du reçu copiée dans le presse-papier ! Collez-la (Ctrl + V) dans WhatsApp.');
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
@@ -406,32 +387,22 @@ _Quittance officielle délivrée par le Service Comptabilité & Finances via Sch
       )}
 
       {/* ═══════════════ EN-TÊTE DE LA PAGE ═══════════════ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs print:hidden">
         <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
               <Receipt className="w-5 h-5" />
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight">
-                Salaires du Personnel & Reçus
-              </h1>
-              <p className="text-xs text-slate-500 font-sans">
-                Émission des bulletins de paie certifiés, quittances de salaires et gestion des rémunérations en <strong className="text-slate-800">FCFA</strong>.
-              </p>
-            </div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight">
+              Salaires du Personnel & Reçus
+            </h1>
+            <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
+              {currentSchool.academicYear || '2026-2027'}
+            </span>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 shadow-2xs transition-all cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span>Imprimer le Bulletin Actuel</span>
-          </button>
+          <p className="text-xs text-slate-500 font-sans">
+            Émission des bulletins de paie certifiés, quittances de salaires et gestion des rémunérations en <strong className="text-slate-800">FCFA</strong>.
+          </p>
         </div>
       </div>
 
@@ -798,25 +769,26 @@ _Quittance officielle délivrée par le Service Comptabilité & Finances via Sch
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Bouton Imprimer Reçu */}
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+                title="Imprimer uniquement ce bulletin et reçu de salaire"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Imprimer le Reçu</span>
+              </button>
+
               {/* Bouton Partager sur WhatsApp */}
               <button
                 type="button"
                 onClick={handleShareWhatsApp}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer hover:scale-102"
-                title="Envoyer le récapitulatif complet du reçu sur WhatsApp"
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer"
+                title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
               >
-                <MessageSquare className="w-3.5 h-3.5" />
+                <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Partager sur WhatsApp</span>
-              </button>
-
-              {/* Bouton Imprimer A4 */}
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimer A4</span>
               </button>
             </div>
           </div>
