@@ -229,7 +229,6 @@ export function FrenchDateInput({
             {displayDateStr || placeholder}
           </span>
         </div>
-        <span className="text-[10px] text-slate-400 font-sans font-semibold">JJ/MM/AAAA</span>
       </button>
 
       {/* POPUP DU CALENDRIER STYLE CAPTURE */}

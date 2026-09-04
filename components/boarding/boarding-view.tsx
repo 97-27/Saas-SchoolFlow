@@ -574,14 +574,74 @@ export function BoardingView({
     }
   };
 
-  // 5. Action directe : Ouvrir la discussion WhatsApp
-  const handleDirectWhatsAppChat = () => {
-    const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-    const captionText = `Quittance officielle de pensionnat — ${formStudentName} (${currentSchool.shortName || currentSchool.name})`;
-    const waUrl = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(captionText)}`
-      : `https://api.whatsapp.com/send?text=${encodeURIComponent(captionText)}`;
-    window.open(waUrl, '_blank');
+  // 5. Action directe : Partage WhatsApp Mobile ou Desktop
+  const handleDirectWhatsAppShare = async () => {
+    try {
+      setIsGeneratingImage(true);
+      const canvas = await generateReceiptCanvas();
+      if (!canvas) {
+        setIsGeneratingImage(false);
+        return;
+      }
+
+      const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
+      const fileName = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
+      const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
+      const messageText = `📄 Quittance d'internat officielle — ${formStudentName} (${formMatricule}) • Établissement ${currentSchool.shortName || currentSchool.name}`;
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsGeneratingImage(false);
+          return;
+        }
+
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        // Sur mobile avec Web Share API
+        if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: `Quittance Internat - ${formStudentName}`,
+              text: messageText,
+            });
+            setToastMessage('✓ Quittance envoyée sur WhatsApp !');
+            setIsGeneratingImage(false);
+            return;
+          } catch (err) {
+            // Fallback si annulation
+          }
+        }
+
+        // Sur Desktop : Copier l'image + Télécharger le fichier + Ouvrir WhatsApp
+        try {
+          if (navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob }),
+            ]);
+          }
+        } catch (e) {}
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = fileName;
+        link.href = url;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+        const waUrl = cleanPhone
+          ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+          : `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
+        window.open(waUrl, '_blank');
+
+        setGeneratedImagePreviewUrl(canvas.toDataURL('image/png'));
+        setIsShareModalOpen(true);
+        setIsGeneratingImage(false);
+      }, 'image/png');
+    } catch (e) {
+      console.error(e);
+      setIsGeneratingImage(false);
+    }
   };
 
   // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai - 100 Places Max)
@@ -653,14 +713,21 @@ export function BoardingView({
               <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs text-emerald-950 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
-                  L&apos;image est déjà <strong>copiée dans votre presse-papier</strong> ! Vous pouvez la coller directement (Ctrl+V) dans votre discussion.
+                  L&apos;image est <strong>copiée dans votre presse-papier</strong> ! Appuyez simplement sur <strong>Ctrl+V (Coller)</strong> dans WhatsApp.
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={handleDirectWhatsAppChat}
+                  onClick={() => {
+                    const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
+                    const messageText = `📄 Quittance d'internat officielle — ${formStudentName} (${formMatricule})`;
+                    const waUrl = cleanPhone
+                      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+                      : `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
+                    window.open(waUrl, '_blank');
+                  }}
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
                 >
                   <MessageCircle className="w-4 h-4" />
@@ -1217,13 +1284,13 @@ export function BoardingView({
                 <span>Image PNG</span>
               </button>
 
-              {/* Bouton Partager WhatsApp avec Modale d'Aperçu */}
+              {/* Bouton Partager WhatsApp Direct avec image attachée */}
               <button
                 type="button"
-                onClick={handleOpenShareModal}
+                onClick={handleDirectWhatsAppShare}
                 disabled={isGeneratingImage}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
-                title="Afficher l'image HD du reçu et partager sur WhatsApp"
+                title="Partager l'image HD du reçu directement sur WhatsApp"
               >
                 {isGeneratingImage ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Share2 className="w-3.5 h-3.5 text-white" />}
                 <span>WhatsApp</span>
@@ -1344,35 +1411,37 @@ export function BoardingView({
               <table className="w-full text-left">
                 <thead className="bg-slate-100 text-slate-700 font-extrabold border-b border-slate-300 text-xs uppercase tracking-wider">
                   <tr>
-                    <th className="py-2 px-3.5">Désignation</th>
-                    <th className="py-2 px-3.5 text-center">Mois Réglés (sur 9)</th>
-                    <th className="py-2 px-3.5 text-right">Montant Encaissé</th>
+                    <th className="py-2.5 px-3.5">Désignation</th>
+                    <th className="py-2.5 px-3.5 text-center whitespace-nowrap">Mois Réglés (sur 9)</th>
+                    <th className="py-2.5 px-3.5 text-right whitespace-nowrap">Montant Encaissé</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 text-slate-900">
                   <tr>
-                    <td className="py-2.5 px-3.5">
+                    <td className="py-3 px-3.5">
                       <div className="font-extrabold text-slate-950">Pension d&apos;Internat Annuelle</div>
-                      <div className="text-[11px] text-slate-500 font-semibold">
-                        Tarif : {formatFCFA(formMonthlyRate)} / mois • Mode : {formPaymentMethod}
+                      <div className="text-[11px] sm:text-xs text-slate-500 font-medium whitespace-nowrap flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span>Tarif : <strong className="text-slate-900 font-bold">{formatFCFA(formMonthlyRate)} / mois</strong></span>
+                        <span className="text-slate-300">•</span>
+                        <span>Mode de Règlement : <strong className="text-slate-900 font-bold">{formPaymentMethod}</strong></span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3.5 text-center">
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 font-extrabold border border-emerald-300 text-xs">
+                    <td className="py-3 px-3.5 text-center whitespace-nowrap align-middle">
+                      <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-black border border-emerald-300 text-xs whitespace-nowrap inline-block shadow-2xs">
                         {activePaidMonthsCount} / 9 mois
                       </span>
                     </td>
-                    <td className="py-2.5 px-3.5 text-right font-black text-slate-950 font-heading text-sm sm:text-base">
+                    <td className="py-3 px-3.5 text-right font-black text-slate-950 font-heading text-sm sm:text-base whitespace-nowrap align-middle">
                       {formatFCFA(activeTotalCollected)}
                     </td>
                   </tr>
                 </tbody>
                 <tfoot className="bg-slate-50 font-bold border-t border-slate-300 text-xs sm:text-sm">
                   <tr>
-                    <td colSpan={2} className="py-2.5 px-3.5 text-slate-700 font-extrabold">
+                    <td colSpan={2} className="py-2.5 px-3.5 text-slate-700 font-extrabold whitespace-nowrap">
                       Reste Annuel à Solder (sur les 9 mois) :
                     </td>
-                    <td className="py-2.5 px-3.5 text-right text-rose-600 font-black font-heading text-sm sm:text-base">
+                    <td className="py-2.5 px-3.5 text-right text-rose-600 font-black font-heading text-sm sm:text-base whitespace-nowrap">
                       {formatFCFA(activeRemainingBalance)}
                     </td>
                   </tr>
