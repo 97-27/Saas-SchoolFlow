@@ -151,23 +151,69 @@ const INITIAL_BROADCASTS: BroadcastRecord[] = [
   },
 ];
 
+const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
+const BROADCAST_RECORDS_KEY = 'schoolflow_broadcast_records_v1';
+
 export function CommunicationView({
   initialStudents,
   school,
   schoolSlug,
 }: CommunicationViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school || defaultSchool);
-  const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [messages, setMessages] = useState<ParentMessage[]>(INITIAL_PARENT_MESSAGES);
-  const [broadcasts, setBroadcasts] = useState<BroadcastRecord[]>(INITIAL_BROADCASTS);
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
+  
+  const [messages, setMessages] = useState<ParentMessage[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const saved = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`);
+          return saved ? JSON.parse(saved) : [];
+        }
+        const saved = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
+        if (saved) return JSON.parse(saved);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
+      } catch (e) {}
+    }
+    return INITIAL_PARENT_MESSAGES;
+  });
+
+  const [broadcasts, setBroadcasts] = useState<BroadcastRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const saved = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`);
+          return saved ? JSON.parse(saved) : [];
+        }
+        const saved = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) || localStorage.getItem(BROADCAST_RECORDS_KEY);
+        if (saved) return JSON.parse(saved);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
+      } catch (e) {}
+    }
+    return INITIAL_BROADCASTS;
+  });
 
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
-    setStudents(getLiveStudents(initialStudents, schoolSlug));
+    const liveStus = getLiveStudents(initialStudents, schoolSlug);
+    setStudents(liveStus);
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
-      setStudents(getLiveStudents(initialStudents, schoolSlug));
+      const upStus = getLiveStudents(initialStudents, schoolSlug);
+      setStudents(upStus);
+      if (typeof window !== 'undefined') {
+        try {
+          const sub = getSchoolSubscription(schoolSlug);
+          if (sub.isDataReset || upStus.length === 0) {
+            const savedMsgs = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`);
+            setMessages(savedMsgs ? JSON.parse(savedMsgs) : []);
+            const savedBcs = localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`);
+            setBroadcasts(savedBcs ? JSON.parse(savedBcs) : []);
+          }
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

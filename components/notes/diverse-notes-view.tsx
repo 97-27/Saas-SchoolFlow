@@ -169,12 +169,18 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [students, setStudents] = useState<Student[]>([]);
 
-  // Liste des notes persistées
+  // Liste des notes persistée
   const [notes, setNotes] = useState<DiverseNote[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`);
+          return saved ? JSON.parse(saved) : [];
+        }
+        const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
     return INITIAL_MOCK_NOTES;
@@ -220,17 +226,32 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       setStudents(getLiveStudents(mockStudents, schoolSlug));
+      if (typeof window !== 'undefined') {
+        try {
+          const sub = getSchoolSubscription(schoolSlug);
+          if (sub.isDataReset) {
+            const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`);
+            setNotes(saved ? JSON.parse(saved) : []);
+          } else {
+            const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+            if (saved) setNotes(JSON.parse(saved));
+          }
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school]);
 
   // Sauvegarder dans localStorage
-  const saveNotesToStorage = (updatedList: DiverseNote[]) => {
-    setNotes(updatedList);
+  const saveNotesToStorage = (list: DiverseNote[]) => {
+    setNotes(list);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(DIVERSE_NOTES_STORAGE_KEY, JSON.stringify(updatedList));
+        localStorage.setItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(list));
+        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+          localStorage.setItem(DIVERSE_NOTES_STORAGE_KEY, JSON.stringify(list));
+        }
       } catch (e) {}
     }
   };

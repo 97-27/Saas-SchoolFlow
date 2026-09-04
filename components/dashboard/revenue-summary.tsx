@@ -18,18 +18,50 @@ export function RevenueSummary({
 }: RevenueSummaryProps) {
   // Calcul dynamique de la structure des encaissements réels
   const breakdownData = useMemo(() => {
+    if (students.length === 0 && invoices.length === 0) {
+      return {
+        items: [
+          {
+            category: "Droits d'Inscription & Réinscription",
+            description: 'Frais de dossier, cartes scolaires et réinscriptions',
+            amount: 0,
+            percentage: '0.0',
+            color: '#10b981',
+            bgColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+          },
+          {
+            category: 'Cantine Scolaire & Restauration',
+            description: 'Formules demi-pension et déjeuners',
+            amount: 0,
+            percentage: '0.0',
+            color: '#f59e0b',
+            bgColor: 'bg-amber-50 text-amber-700 border-amber-200',
+          },
+          {
+            category: 'Transport Scolaire & Bus',
+            description: 'Abonnements aux circuits de ramassage',
+            amount: 0,
+            percentage: '0.0',
+            color: '#3b82f6',
+            bgColor: 'bg-blue-50 text-blue-700 border-blue-200',
+          },
+        ],
+        totalCollected: 0,
+        targetAnnual: 0,
+      };
+    }
+
     // 1. Droits d'Inscription & Réinscription (base sur les élèves inscrits payés)
     const inscriptionAmount = students.reduce((acc, stu) => {
       const isNew = stu.enrollmentType === 'nouveau' || !stu.enrollmentType;
-      const fee = isNew ? 65000 : 45000;
+      const fee = stu.registrationFee || (isNew ? 65000 : 45000);
       return acc + (stu.paidAmount > 0 ? fee : 0);
-    }, 0) || 54250000;
+    }, 0);
 
-    // 2. Cantine Scolaire & Restauration
-    const canteenAmount = 18500000;
-
-    // 3. Transport Scolaire & Bus
-    const transportAmount = 11500000;
+    // 2. Cantine & Transport (calculé proportionnellement aux encaissements réels)
+    const totalTuitionPaid = students.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+    const canteenAmount = Math.round(totalTuitionPaid * 0.22);
+    const transportAmount = Math.round(totalTuitionPaid * 0.14);
 
     const totalCollected = inscriptionAmount + canteenAmount + transportAmount;
 
@@ -38,7 +70,7 @@ export function RevenueSummary({
         category: "Droits d'Inscription & Réinscription",
         description: 'Frais de dossier, cartes scolaires et réinscriptions',
         amount: inscriptionAmount,
-        percentage: totalCollected > 0 ? ((inscriptionAmount / totalCollected) * 100).toFixed(1) : '64.4',
+        percentage: totalCollected > 0 ? ((inscriptionAmount / totalCollected) * 100).toFixed(1) : '0.0',
         color: '#10b981', // emerald-500
         bgColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
@@ -46,15 +78,15 @@ export function RevenueSummary({
         category: 'Cantine Scolaire & Restauration',
         description: 'Formules demi-pension et déjeuners',
         amount: canteenAmount,
-        percentage: totalCollected > 0 ? ((canteenAmount / totalCollected) * 100).toFixed(1) : '22.0',
+        percentage: totalCollected > 0 ? ((canteenAmount / totalCollected) * 100).toFixed(1) : '0.0',
         color: '#f59e0b', // amber-500
         bgColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
       {
         category: 'Transport Scolaire & Bus',
-        description: 'Abonnements aux 4 lignes de ramassage',
+        description: 'Abonnements aux circuits de ramassage',
         amount: transportAmount,
-        percentage: totalCollected > 0 ? ((transportAmount / totalCollected) * 100).toFixed(1) : '13.6',
+        percentage: totalCollected > 0 ? ((transportAmount / totalCollected) * 100).toFixed(1) : '0.0',
         color: '#3b82f6', // blue-500
         bgColor: 'bg-blue-50 text-blue-700 border-blue-200',
       },
@@ -63,51 +95,54 @@ export function RevenueSummary({
     return {
       items,
       totalCollected,
-      targetAnnual: totalCollected + 12150000,
+      targetAnnual: totalCollected + (students.reduce((acc, s) => acc + (s.balanceRemaining || 0), 0)),
     };
   }, [students, invoices]);
 
   // Recouvrement mensuel : Sommes exactes totalisées par mois d'activité (sans barre ni objectif)
   const monthlyData = useMemo(() => {
+    const totalPaid = students.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+    const isEmpty = students.length === 0 && invoices.length === 0;
+
     return [
       {
         month: 'Septembre 2026',
         label: 'Rentrée & Inscriptions',
-        collected: 45000000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.45),
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Octobre 2026',
         label: '1ère Échéance Scolarité',
-        collected: 18500000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.20),
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Novembre 2026',
         label: '2ème Échéance Scolarité',
-        collected: 15000000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.15),
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Décembre 2026',
         label: '3ème Échéance Scolarité',
-        collected: 12500000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.10),
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Janvier 2027',
         label: '4ème Échéance Scolarité',
-        collected: 9000000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.06),
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
       {
         month: 'Février 2027',
         label: '5ème Échéance (Solde)',
-        collected: 6250000,
+        collected: isEmpty ? 0 : Math.round(totalPaid * 0.04),
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
     ];
-  }, []);
+  }, [students, invoices]);
 
   const totalMonthlyCollected = useMemo(() => {
     return monthlyData.reduce((acc, m) => acc + m.collected, 0);

@@ -174,23 +174,49 @@ export function SalariesView({
     () => initialSchool || defaultSchool
   );
 
-  const [salaries, setSalaries] = useState<SalaryPayment[]>(DEFAULT_SALARIES);
+  const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
+          return stored ? JSON.parse(stored) : [];
+        }
+        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        if (stored) return JSON.parse(stored);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
+      } catch (e) {}
+    }
+    return DEFAULT_SALARIES;
+  });
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
 
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
-    setStaffUsers(getLiveStaffUsers());
+    setStaffUsers(getLiveStaffUsers(schoolSlug));
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setSalaries(JSON.parse(stored));
+      const sub = getSchoolSubscription(schoolSlug);
+      if (sub.isDataReset) {
+        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
+        setSalaries(stored ? JSON.parse(stored) : []);
+      } else {
+        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        if (stored) setSalaries(JSON.parse(stored));
+      }
     } catch (e) {}
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
-      setStaffUsers(getLiveStaffUsers());
+      setStaffUsers(getLiveStaffUsers(schoolSlug));
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) setSalaries(JSON.parse(stored));
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`);
+          setSalaries(stored ? JSON.parse(stored) : []);
+        } else {
+          const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+          if (stored) setSalaries(JSON.parse(stored));
+        }
       } catch (e) {}
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -200,7 +226,10 @@ export function SalariesView({
   const saveSalaries = (newList: SalaryPayment[]) => {
     setSalaries(newList);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+      localStorage.setItem(`${STORAGE_KEY}_${schoolSlug}`, JSON.stringify(newList));
+      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+      }
       window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
     } catch (e) {}
   };

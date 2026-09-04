@@ -190,14 +190,14 @@ export function InscriptionsView({
 
   // Compute next available Student ID sequence number
   const nextSeq = useMemo(() => {
-    if (students.length === 0) return 51;
+    if (students.length === 0) return 1;
     const nums = students
       .map((s) => {
         const match = s.studentNumber?.match(/\d+/);
         return match ? parseInt(match[0], 10) : 0;
       })
-      .filter((n) => !isNaN(n));
-    const maxNum = Math.max(50, ...nums);
+      .filter((n) => !isNaN(n) && n > 0);
+    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
     return maxNum + 1;
   }, [students]);
 

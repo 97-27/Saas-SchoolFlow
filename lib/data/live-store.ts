@@ -674,78 +674,179 @@ export const defaultStaffUsers: StaffUser[] = [
   },
 ];
 
-export function getLiveStaffUsers(): StaffUser[] {
+export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[] {
   if (typeof window === 'undefined') return defaultStaffUsers;
   try {
-    const raw = localStorage.getItem(STAFF_USERS_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(defaultStaffUsers));
-      return defaultStaffUsers;
+    const sub = getSchoolSubscription(schoolSlug);
+    const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
+    let raw = localStorage.getItem(storageKey);
+    if (!raw && schoolSlug === 'epc-manoi') {
+      raw = localStorage.getItem(STAFF_USERS_STORAGE_KEY);
     }
-    return JSON.parse(raw);
+
+    if (sub.isDataReset) {
+      if (raw) {
+        const parsed: StaffUser[] = JSON.parse(raw);
+        return parsed;
+      }
+      const school = getLiveSchool(schoolSlug);
+      const onlyDirector: StaffUser[] = [
+        {
+          id: 'staff-001',
+          fullName: school.directorName || 'Directeur Général (Admin)',
+          role: 'Directeur Général (Admin)',
+          roleId: 'directeur',
+          matricule: 'EMP-DIR-001',
+          subjectOrGrade: 'Direction & Pédagogie',
+          assignedClasses: 'Toutes les classes',
+          diplomaOrExperience: 'Direction d’Établissement Scolaire',
+          address: school.city || 'Abidjan',
+          joinDate: '01/09/2026',
+          email: school.email || `direction@${schoolSlug}.ci`,
+          phone: school.phone || '+225 07 45 67 89 01',
+          authCode: 'DIR-2026',
+          status: 'Actif',
+          lastLogin: 'En ligne',
+        },
+      ];
+      localStorage.setItem(storageKey, JSON.stringify(onlyDirector));
+      return onlyDirector;
+    }
+
+    if (raw) {
+      return JSON.parse(raw);
+    }
+
+    // Si nouvelle école (pas epc-manoi)
+    if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+      const school = getLiveSchool(schoolSlug);
+      const onlyDirector: StaffUser[] = [
+        {
+          id: 'staff-001',
+          fullName: school.directorName || 'Directeur Général (Admin)',
+          role: 'Directeur Général (Admin)',
+          roleId: 'directeur',
+          matricule: 'EMP-DIR-001',
+          subjectOrGrade: 'Direction & Pédagogie',
+          assignedClasses: 'Toutes les classes',
+          diplomaOrExperience: 'Direction d’Établissement Scolaire',
+          address: school.city || 'Abidjan',
+          joinDate: '01/09/2026',
+          email: school.email || `direction@${schoolSlug}.ci`,
+          phone: school.phone || '+225 07 45 67 89 01',
+          authCode: 'DIR-2026',
+          status: 'Actif',
+          lastLogin: 'En ligne',
+        },
+      ];
+      localStorage.setItem(storageKey, JSON.stringify(onlyDirector));
+      return onlyDirector;
+    }
+
+    // Par défaut pour epc-manoi si non réinitialisé
+    localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(defaultStaffUsers));
+    localStorage.setItem(storageKey, JSON.stringify(defaultStaffUsers));
+    return defaultStaffUsers;
   } catch (e) {
     return defaultStaffUsers;
   }
 }
 
-export function saveLiveStaffUsers(users: StaffUser[]): void {
+export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
+    const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
+    localStorage.setItem(storageKey, JSON.stringify(users));
+    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
+    }
     window.dispatchEvent(
       new CustomEvent(DATA_UPDATED_EVENT, {
-        detail: { staffUsers: users },
+        detail: { staffUsers: users, schoolSlug },
       })
     );
   } catch (e) {}
 }
 
-export function updateStaffAuthCode(staffId: string, newAuthCode: string): void {
-  const users = getLiveStaffUsers();
+export function updateStaffAuthCode(staffId: string, newAuthCode: string, schoolSlug: string = 'epc-manoi'): void {
+  const users = getLiveStaffUsers(schoolSlug);
   const updated = users.map((u) => (u.id === staffId ? { ...u, authCode: newAuthCode.trim().toUpperCase() } : u));
-  saveLiveStaffUsers(updated);
+  saveLiveStaffUsers(updated, schoolSlug);
 }
 
-export function updateFullStaffUser(updatedUser: StaffUser): void {
-  const users = getLiveStaffUsers();
+export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string = 'epc-manoi'): void {
+  const users = getLiveStaffUsers(schoolSlug);
   const updated = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
-  saveLiveStaffUsers(updated);
+  saveLiveStaffUsers(updated, schoolSlug);
 }
 
-export function recordStaffLogin(roleId: string, fullName: string, authCode?: string): void {
+export function recordStaffLogin(
+  roleId: string,
+  fullName: string,
+  authCode?: string,
+  schoolSlug: string = 'epc-manoi',
+  extraDetails?: { email?: string; phone?: string; subjectOrGrade?: string; assignedClasses?: string }
+): void {
   if (typeof window === 'undefined') return;
   try {
-    const users = getLiveStaffUsers();
+    const users = getLiveStaffUsers(schoolSlug);
     const now = new Date();
     const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} à ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     let matched = false;
     const updated = users.map((u) => {
-      // Correspondance par code d'authentification ou par rôle + nom
       if (
         (authCode && u.authCode.toUpperCase() === authCode.trim().toUpperCase()) ||
-        u.roleId === roleId
+        (u.roleId === roleId && u.fullName.toLowerCase().includes(fullName.trim().toLowerCase())) ||
+        (u.roleId === roleId && roleId === 'directeur')
       ) {
         matched = true;
         return {
           ...u,
           fullName: fullName.trim() || u.fullName,
           lastLogin: formattedDate,
+          status: 'Actif' as const,
         };
       }
       return u;
     });
 
-    if (matched) {
-      saveLiveStaffUsers(updated);
+    // Si le membre se connecte pour la première fois avec le code de son poste : on l'ajoute automatiquement à la liste du personnel !
+    if (!matched && roleId !== 'parent') {
+      const roleTitles: Record<string, string> = {
+        assistant_direction: 'Assistant(e) de Direction',
+        fondateur: 'Fondateur / Fondatrice (Supervision)',
+        comptable: 'Comptable / Gestionnaire',
+        secretaire: 'Secrétaire de Direction',
+        enseignant: 'Enseignant / Professeur',
+      };
+
+      const newMember: StaffUser = {
+        id: `staff-${Date.now()}`,
+        fullName: fullName.trim(),
+        role: roleTitles[roleId] || 'Personnel Établissement',
+        roleId: roleId as any,
+        matricule: `EMP-${roleId.slice(0, 3).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+        subjectOrGrade: extraDetails?.subjectOrGrade || (roleId === 'enseignant' ? 'Enseignement Général' : roleId === 'comptable' ? 'Comptabilité & Caisse' : roleId === 'secretaire' ? 'Accueil & Scolarité' : 'Administration'),
+        assignedClasses: extraDetails?.assignedClasses || 'Toutes les classes',
+        email: extraDetails?.email || `${roleId}@${schoolSlug}.ci`,
+        phone: extraDetails?.phone || '+225 07 00 00 00 00',
+        authCode: authCode || `${roleId.slice(0, 3).toUpperCase()}-2026`,
+        status: 'Actif',
+        lastLogin: formattedDate,
+      };
+
+      updated.push(newMember);
     }
+
+    saveLiveStaffUsers(updated, schoolSlug);
   } catch (e) {}
 }
 
-export function addLiveStaffUser(user: StaffUser): void {
-  const users = getLiveStaffUsers();
+export function addLiveStaffUser(user: StaffUser, schoolSlug: string = 'epc-manoi'): void {
+  const users = getLiveStaffUsers(schoolSlug);
   const next = [user, ...users.filter((u) => u.id !== user.id)];
-  saveLiveStaffUsers(next);
+  saveLiveStaffUsers(next, schoolSlug);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -842,7 +943,7 @@ export function verifySchoolSubscriptionForLogin(
   if (isSchoolDeleted(schoolSlug)) {
     return {
       isValid: false,
-      reason: 'Ce compte établissement a été supprimé ou désactivé par l’administration.',
+      reason: '❌ Ce compte établissement a été définitivement supprimé. Veuillez souscrire à un nouvel abonnement pour créer un nouvel espace.',
     };
   }
 
@@ -953,26 +1054,48 @@ export function isSchoolDeleted(slug?: string): boolean {
   }
 }
 
-/**
- * Réinitialise à zéro toutes les données scolaires (Élèves, Factures, Notes, Salaires, Dépenses)
- * sans supprimer l'école (utile pour nouvelle année scolaire ou nouveau cycle d'abonnement).
- */
-export function resetSchoolData(slug: string = 'epc-manoi'): void {
+export function resetSchoolData(
+  slug: string = 'epc-manoi',
+  options?: {
+    scope?: 'all' | 'custom';
+    resetComptable?: boolean;
+    resetSecretaire?: boolean;
+    resetFondateur?: boolean;
+    resetEnseignants?: boolean;
+    resetParents?: boolean;
+    resetStaffList?: boolean;
+  }
+): void {
   if (typeof window === 'undefined') return;
   try {
-    // 1. Vider le registre des élèves et factures
+    const school = getLiveSchool(slug);
+    const storageStaffKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
+
+    // 1. Vider le registre des élèves et factures (Scolarités, Caisse, Inscriptions)
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
     localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     localStorage.removeItem('schoolflow_notes_diverses_v1');
+    localStorage.removeItem('schoolflow_diverse_notes_v1');
     localStorage.removeItem('schoolflow_special_discounts_v1');
     localStorage.removeItem('schoolflow_staff_salaries_v1');
+    localStorage.removeItem('schoolflow_school_expenses_v1');
+    localStorage.removeItem('schoolflow_expenses_v1');
+    localStorage.removeItem('schoolflow_attendance_v1');
+    localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
+    localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
+    localStorage.removeItem('schoolflow_canteen_meals_history_v2');
+    localStorage.removeItem('schoolflow_transport_subscriptions_v2');
+    localStorage.removeItem('schoolflow_transport_monthly_payments_v2');
+    localStorage.removeItem('schoolflow_boarding_subscriptions_v3');
+    localStorage.removeItem('schoolflow_boarding_monthly_payments_v3');
+    localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
+    localStorage.removeItem('schoolflow_parent_messages_v1');
+    localStorage.removeItem('schoolflow_broadcast_records_v1');
     localStorage.removeItem(VALIDATED_BULLETINS_KEY);
     localStorage.removeItem(DOCS_STATUS_KEY);
     localStorage.removeItem('schoolflow_documents_status_v2');
     localStorage.removeItem('schoolflow_documents_status_v3');
-    localStorage.removeItem('schoolflow_expenses_v1');
-    localStorage.removeItem('schoolflow_attendance_v1');
 
     // Nettoyer les clés dynamiques de notes par classe
     try {
@@ -986,7 +1109,32 @@ export function resetSchoolData(slug: string = 'epc-manoi'): void {
       keysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch (e) {}
 
-    // 2. Enregistrer le statut de remise à zéro
+    // 2. Réinitialiser la liste du personnel : SEUL LE DIRECTEUR EST PRÉSENT
+    const onlyDirector: StaffUser[] = [
+      {
+        id: 'staff-001',
+        fullName: school.directorName || 'Directeur Général (Admin)',
+        role: 'Directeur Général (Admin)',
+        roleId: 'directeur',
+        matricule: 'EMP-DIR-001',
+        subjectOrGrade: 'Direction & Pédagogie',
+        assignedClasses: 'Toutes les classes',
+        diplomaOrExperience: 'Direction d’Établissement Scolaire',
+        address: school.city || 'Abidjan',
+        joinDate: '01/09/2026',
+        email: school.email || `direction@${slug}.ci`,
+        phone: school.phone || '+225 07 45 67 89 01',
+        authCode: 'DIR-2026',
+        status: 'Actif',
+        lastLogin: 'En ligne',
+      },
+    ];
+    localStorage.setItem(storageStaffKey, JSON.stringify(onlyDirector));
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(onlyDirector));
+    }
+
+    // 3. Enregistrer le statut de remise à zéro
     const status = getSchoolSubscription(slug);
     status.isDataReset = true;
     status.lastResetAt = new Date().toISOString();
@@ -994,7 +1142,7 @@ export function resetSchoolData(slug: string = 'epc-manoi'): void {
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
-    // 3. Émettre l'événement global
+    // 4. Émettre l'événement global pour actualiser toutes les pages en direct
     window.dispatchEvent(
       new CustomEvent(DATA_UPDATED_EVENT, {
         detail: { action: 'data_reset', slug },
@@ -1023,8 +1171,21 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem(INVOICES_STORAGE_KEY);
     localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     localStorage.removeItem('schoolflow_notes_diverses_v1');
+    localStorage.removeItem('schoolflow_diverse_notes_v1');
     localStorage.removeItem('schoolflow_special_discounts_v1');
     localStorage.removeItem('schoolflow_staff_salaries_v1');
+    localStorage.removeItem('schoolflow_school_expenses_v1');
+    localStorage.removeItem('schoolflow_expenses_v1');
+    localStorage.removeItem('schoolflow_attendance_v1');
+    localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
+    localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
+    localStorage.removeItem('schoolflow_transport_subscriptions_v2');
+    localStorage.removeItem('schoolflow_transport_monthly_payments_v2');
+    localStorage.removeItem('schoolflow_boarding_subscriptions_v3');
+    localStorage.removeItem('schoolflow_boarding_monthly_payments_v3');
+    localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
+    localStorage.removeItem('schoolflow_parent_messages_v1');
+    localStorage.removeItem('schoolflow_broadcast_records_v1');
     localStorage.removeItem('schoolflow_active_session_v2');
     localStorage.removeItem(VALIDATED_BULLETINS_KEY);
     localStorage.removeItem(DOCS_STATUS_KEY);
@@ -1032,6 +1193,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`);
     localStorage.removeItem('schoolflow_active_school_settings_v1');
+    localStorage.removeItem(`${STAFF_USERS_STORAGE_KEY}_${slug}`);
 
     // 3. Marquer le statut comme supprimé
     const status = getSchoolSubscription(slug);

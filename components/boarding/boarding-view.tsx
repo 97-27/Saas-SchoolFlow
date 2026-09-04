@@ -119,6 +119,31 @@ export function BoardingView({
     return [];
   });
 
+  // Capacité personnalisée de l'internat (modifiable par l'établissement)
+  const [boardingCapacity, setBoardingCapacity] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`schoolflow_boarding_capacity_${schoolSlug}`);
+        if (saved !== null) return parseInt(saved, 10) || 0;
+      } catch (e) {}
+    }
+    return 0;
+  });
+  const [isEditingCapacity, setIsEditingCapacity] = useState(false);
+  const [capacityInput, setCapacityInput] = useState(boardingCapacity.toString());
+
+  const handleSaveCapacity = (newVal: number) => {
+    setBoardingCapacity(newVal);
+    setIsEditingCapacity(false);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`schoolflow_boarding_capacity_${schoolSlug}`, newVal.toString());
+      } catch (e) {}
+    }
+    setToastMessage(`✓ Capacité de l’internat fixée à ${newVal} places.`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   // Synchronisation globale avec le live-store
   useEffect(() => {
     const liveSchool = getLiveSchool(schoolSlug, school);
@@ -830,30 +855,79 @@ export function BoardingView({
           </div>
         </div>
 
-        {/* KPI 3: Capacité & Occupation (Fixée à 100 Places) */}
+        {/* KPI 3: Capacité & Occupation (Modifiable par l'établissement) */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between hover:shadow-md transition-all sm:col-span-2 lg:col-span-1">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 shadow-2xs">
-              <Home className="w-5 h-5" />
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 shadow-2xs">
+                <Home className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
+                  Occupation des Dortoirs
+                </h3>
+                <p className="text-[11px] text-slate-400">Pavillons A (Garçons) & B (Filles)</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
-                Occupation des Dortoirs
-              </h3>
-              <p className="text-[11px] text-slate-400">Pavillons A (Garçons) & B (Filles)</p>
+            {!isEditingCapacity && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCapacityInput(boardingCapacity.toString());
+                  setIsEditingCapacity(true);
+                }}
+                className="p-1 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                title="Modifier la capacité totale de l'internat"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {isEditingCapacity ? (
+            <div className="space-y-2 py-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  value={capacityInput}
+                  onChange={(e) => setCapacityInput(e.target.value)}
+                  placeholder="Capacité max"
+                  className="w-24 px-2.5 py-1 text-sm font-bold rounded-lg border border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveCapacity(parseInt(capacityInput, 10) || 0)}
+                  className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 cursor-pointer"
+                >
+                  OK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingCapacity(false)}
+                  className="px-2 py-1 text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">Saisissez le nombre total de lits/places</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
-              {totalBoarders} / 100
-            </span>
-            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-              Places
-            </span>
-          </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+                {totalBoarders} / {boardingCapacity}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                Places
+              </span>
+            </div>
+          )}
+
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
             <span>Disponibles :</span>
-            <span className="font-bold text-slate-900">{Math.max(0, 100 - totalBoarders)} lits</span>
+            <span className="font-bold text-slate-900">
+              {boardingCapacity > 0 ? Math.max(0, boardingCapacity - totalBoarders) : 0} lits
+            </span>
           </div>
         </div>
       </div>

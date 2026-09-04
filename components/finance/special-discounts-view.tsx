@@ -270,6 +270,8 @@ const INITIAL_FIVE_RECEIPTS: FamilyDiscountReceipt[] = [
   },
 ];
 
+const DISCOUNTS_STORAGE_KEY = 'schoolflow_special_discounts_v1';
+
 interface SpecialDiscountsViewProps {
   initialDiscounts?: any[];
   school: School;
@@ -281,30 +283,45 @@ export function SpecialDiscountsView({
   schoolSlug,
 }: SpecialDiscountsViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
-  const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(INITIAL_FIVE_RECEIPTS);
+  const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`);
+          return saved ? JSON.parse(saved) : [];
+        }
+        const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DISCOUNTS_STORAGE_KEY);
+        if (saved) return JSON.parse(saved);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
+      } catch (e) {}
+    }
+    return INITIAL_FIVE_RECEIPTS;
+  });
   const [selectedReceiptIndex, setSelectedReceiptIndex] = useState<number>(0);
   const [isReceiptDropdownOpen, setIsReceiptDropdownOpen] = useState<boolean>(false);
 
-  // État du reçu en cours d'édition
-  const [parentName, setParentName] = useState<string>(INITIAL_FIVE_RECEIPTS[0].parentName);
-  const [parentPhone, setParentPhone] = useState<string>(INITIAL_FIVE_RECEIPTS[0].parentPhone);
-  const [secondaryPhones, setSecondaryPhones] = useState<string[]>(INITIAL_FIVE_RECEIPTS[0].secondaryPhones || []);
-  const [parentAddress, setParentAddress] = useState<string>(INITIAL_FIVE_RECEIPTS[0].parentAddress);
-  const [receiptNumber, setReceiptNumber] = useState<string>(INITIAL_FIVE_RECEIPTS[0].receiptNumber);
-  const [issueDate, setIssueDate] = useState<string>(INITIAL_FIVE_RECEIPTS[0].issueDate);
+  // État du reçu en cours d'édition (vide si savedReceipts est vide)
+  const firstRec = savedReceipts[0] || null;
+  const [parentName, setParentName] = useState<string>(firstRec?.parentName || '');
+  const [parentPhone, setParentPhone] = useState<string>(firstRec?.parentPhone || '');
+  const [secondaryPhones, setSecondaryPhones] = useState<string[]>(firstRec?.secondaryPhones || []);
+  const [parentAddress, setParentAddress] = useState<string>(firstRec?.parentAddress || '');
+  const [receiptNumber, setReceiptNumber] = useState<string>(firstRec?.receiptNumber || 'REC-FAM-2026-001');
+  const [issueDate, setIssueDate] = useState<string>(firstRec?.issueDate || '2026-09-01');
 
   // Saisie financière directe et 100% modifiable pour TOUS les champs (Total, Réduction, Net à payer, Somme versée)
-  const [manualTotalAmountFCFA, setManualTotalAmountFCFA] = useState<number | null>(INITIAL_FIVE_RECEIPTS[0].customTotalAmountFCFA || null);
-  const [discountType, setDiscountType] = useState<string>(INITIAL_FIVE_RECEIPTS[0].discountType);
-  const [discountAmountFCFA, setDiscountAmountFCFA] = useState<number>(INITIAL_FIVE_RECEIPTS[0].discountAmountFCFA);
-  const [manualNetToPayFCFA, setManualNetToPayFCFA] = useState<number | null>(INITIAL_FIVE_RECEIPTS[0].customNetToPayFCFA || null);
-  const [manualPaidAmountFCFA, setManualPaidAmountFCFA] = useState<number | null>(INITIAL_FIVE_RECEIPTS[0].customPaidAmountFCFA || null);
+  const [manualTotalAmountFCFA, setManualTotalAmountFCFA] = useState<number | null>(firstRec?.customTotalAmountFCFA || null);
+  const [discountType, setDiscountType] = useState<string>(firstRec?.discountType || 'Réduction Fratrie');
+  const [discountAmountFCFA, setDiscountAmountFCFA] = useState<number>(firstRec?.discountAmountFCFA || 0);
+  const [manualNetToPayFCFA, setManualNetToPayFCFA] = useState<number | null>(firstRec?.customNetToPayFCFA || null);
+  const [manualPaidAmountFCFA, setManualPaidAmountFCFA] = useState<number | null>(firstRec?.customPaidAmountFCFA || null);
 
   // Liste des enfants (jusqu'à 10 enfants !)
-  const [children, setChildren] = useState<ChildItem[]>(INITIAL_FIVE_RECEIPTS[0].children);
+  const [children, setChildren] = useState<ChildItem[]>(firstRec?.children || []);
 
   // Liste des versements (jusqu'à 5 versements)
-  const [installments, setInstallments] = useState<PaymentInstallment[]>(INITIAL_FIVE_RECEIPTS[0].installments);
+  const [installments, setInstallments] = useState<PaymentInstallment[]>(firstRec?.installments || []);
 
   // Toast & État capture d'image
   const [showToast, setShowToast] = useState(false);
@@ -317,6 +334,23 @@ export function SpecialDiscountsView({
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      if (typeof window !== 'undefined') {
+        try {
+          const sub = getSchoolSubscription(schoolSlug);
+          if (sub.isDataReset) {
+            const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`);
+            const list = saved ? JSON.parse(saved) : [];
+            setSavedReceipts(list);
+            if (list.length === 0) {
+              setParentName('');
+              setParentPhone('');
+              setChildren([]);
+              setInstallments([]);
+              setDiscountAmountFCFA(0);
+            }
+          }
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

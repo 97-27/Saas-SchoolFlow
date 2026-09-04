@@ -1277,28 +1277,131 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
       {/* ═══════════════ MODALE SÉCURITÉ 1 : RÉINITIALISATION DES DONNÉES ═══════════════ */}
       {isResetModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5 text-amber-600">
                 <AlertTriangle className="w-5 h-5" />
-                <h3 className="font-extrabold text-sm text-slate-900 font-heading">
-                  Confirmer la remise à zéro des données
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 font-heading">
+                  Réinitialisation des Données & Interfaces
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsResetModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1"
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Êtes-vous sûr de vouloir <strong>réinitialiser toutes les données scolaires</strong> (élèves, inscriptions, scolarités, factures, notes et salaires) ?
-              <br /><br />
-              L&apos;établissement <strong>{school.name}</strong> restera actif, mais toutes les tables recommenceront avec un compteur vierge.
+              Sélectionnez les interfaces et modules que vous souhaitez réinitialiser à zéro pour l&apos;établissement <strong>{school.name}</strong> :
             </p>
+
+            {/* Sélecteur de portée */}
+            <div className="space-y-2.5 pt-1">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Interface Comptable & Caisse
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Scolarités, droits d&apos;inscription, factures, dépenses et salaires
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Interface Secrétaire & Scolarité
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Registre des élèves, dossiers d&apos;inscriptions, fiches et documents scolaires
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Interface Fondateur & Supervision
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Statistiques consolidées, KPIs et bilans de trésorerie
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Interface Enseignants & Pédagogie
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Notes saisies, évaluations, appréciations et fiches de cours
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Interface Parents d&apos;Élèves
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Bulletins numériques, reçus de paiement et messageries WhatsApp
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-900 block">
+                      Comptes Personnel (Ne garder que le Directeur)
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Supprime les accès temporaires. Les membres se reconnecteront avec leur code de poste.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
+              ⚡ <strong>Remise à zéro immédiate</strong> : toutes les pages reviendront à 0 FCFA et les compteurs d&apos;ID recommenceront à <strong>ID-001</strong>.
+            </div>
 
             <div className="flex items-center gap-3 pt-2">
               <button

@@ -200,8 +200,14 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [expenses, setExpenses] = useState<ExpenseItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(EXPENSES_STORAGE_KEY);
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub.isDataReset) {
+          const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`);
+          return saved ? JSON.parse(saved) : [];
+        }
+        const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
         if (saved) return JSON.parse(saved);
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') return [];
       } catch (e) {}
     }
     return INITIAL_EXPENSES;
@@ -238,6 +244,18 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      if (typeof window !== 'undefined') {
+        try {
+          const sub = getSchoolSubscription(schoolSlug);
+          if (sub.isDataReset) {
+            const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`);
+            setExpenses(saved ? JSON.parse(saved) : []);
+          } else {
+            const saved = localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(EXPENSES_STORAGE_KEY);
+            if (saved) setExpenses(JSON.parse(saved));
+          }
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -247,7 +265,10 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     setExpenses(list);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(list));
+        localStorage.setItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(list));
+        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+          localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(list));
+        }
       } catch (e) {}
     }
   };

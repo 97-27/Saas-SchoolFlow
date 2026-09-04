@@ -109,14 +109,14 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const loadStaff = () => {
-    setStaffList(getLiveStaffUsers());
+    setStaffList(getLiveStaffUsers(schoolSlug));
   };
 
   useEffect(() => {
     loadStaff();
     window.addEventListener(DATA_UPDATED_EVENT, loadStaff);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, loadStaff);
-  }, []);
+  }, [schoolSlug]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -173,7 +173,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const toggleStatus = (staff: StaffUser) => {
     const nextStatus = staff.status === 'Actif' ? 'Verrouillé' : 'Actif';
     const updated = staffList.map((s) => (s.id === staff.id ? { ...s, status: nextStatus as any } : s));
-    saveLiveStaffUsers(updated);
+    saveLiveStaffUsers(updated, schoolSlug);
     showToast(`Statut de ${staff.fullName} : ${nextStatus}`);
   };
 
@@ -208,7 +208,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       status: editStatus,
     };
 
-    updateFullStaffUser(updatedUser);
+    updateFullStaffUser(updatedUser, schoolSlug);
     showToast(`✅ Informations et code de ${updatedUser.fullName} mis à jour avec succès !`);
     setEditingStaff(null);
   };
@@ -247,7 +247,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       lastLogin: 'Jamais connecté',
     };
 
-    addLiveStaffUser(newStaffMember);
+    addLiveStaffUser(newStaffMember, schoolSlug);
     showToast(`Compte configuré pour ${newStaffMember.fullName} (Code: ${newStaffMember.authCode})`);
     
     // Reset

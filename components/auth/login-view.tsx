@@ -293,7 +293,9 @@ export function LoginView({
     setErrorMessage('');
 
     if (isDeletedSchool) {
-      setErrorMessage('Ce compte établissement n\'existe plus ou a été supprimé. La connexion est impossible.');
+      setErrorMessage(
+        '❌ Ce compte établissement a été définitivement supprimé. Veuillez souscrire à un nouvel abonnement pour créer un nouvel espace.'
+      );
       return;
     }
 

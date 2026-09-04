@@ -619,16 +619,20 @@ export function TransportView({
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-amber-900 tracking-tight font-heading whitespace-nowrap">
-                4 Lignes Actives
+                {subscribers.length === 0 ? '0 Ligne configurée' : '4 Lignes Actives'}
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Cars climatisés, géolocalisés avec accompagnatrices
+              {subscribers.length === 0
+                ? 'Aucune ligne active pour le moment — Cliquez sur Itinéraires pour configurer vos circuits.'
+                : 'Cars climatisés, géolocalisés avec accompagnatrices'}
             </p>
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-amber-800 font-medium flex items-center justify-between">
             <span>Contrôle technique</span>
-            <span className="font-bold">✓ À jour & Certifié</span>
+            <span className="font-bold">
+              {subscribers.length === 0 ? 'En attente' : '✓ À jour & Certifié'}
+            </span>
           </div>
         </div>
       </div>
