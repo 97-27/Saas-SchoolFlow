@@ -644,6 +644,23 @@ const STAFF_USERS_STORAGE_KEY = 'schoolflow_registered_staff_v1';
 
 export const defaultStaffUsers: StaffUser[] = [
   {
+    id: 'staff-founder',
+    fullName: 'LAWANI MOUHAMED (Fondateur)',
+    role: 'Fondateur / Promotrice (Admin)',
+    roleId: 'fondateur',
+    matricule: 'EMP-FND-001',
+    subjectOrGrade: 'Présidence & Conseil d’Administration',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: 'fondateur@epc-manoi.ci',
+    phone: '+225 07 48 92 11 00',
+    authCode: 'FND-2026',
+    status: 'Actif',
+    lastLogin: 'En ligne',
+  },
+  {
     id: 'staff-001',
     fullName: 'M. Jean-Marc Kouassi (Direction Pédagogique)',
     role: 'Directeur Général (Admin)',
@@ -672,14 +689,42 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
     }
 
     if (raw) {
-      return JSON.parse(raw);
+      const list: StaffUser[] = JSON.parse(raw);
+      // S'assurer que le Fondateur et le Directeur figurent toujours dans la liste
+      const hasFounder = list.some((u) => u.roleId === 'fondateur');
+      const hasDirector = list.some((u) => u.roleId === 'directeur');
+      let updated = list;
+      if (!hasFounder) {
+        updated = [defaultStaffUsers[0], ...updated];
+      }
+      if (!hasDirector) {
+        updated = [defaultStaffUsers[1], ...updated];
+      }
+      return updated;
     }
 
     const school = getLiveSchool(schoolSlug);
-    const onlyDirector: StaffUser[] = [
+    const initialStaff: StaffUser[] = [
+      {
+        id: 'staff-founder',
+        fullName: school.founderName || 'LAWANI MOUHAMED (Fondateur)',
+        role: 'Fondateur / Promotrice (Admin)',
+        roleId: 'fondateur',
+        matricule: 'EMP-FND-001',
+        subjectOrGrade: 'Présidence & Conseil d’Administration',
+        assignedClasses: 'Toutes les classes',
+        diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
+        address: school.city || 'Abidjan',
+        joinDate: '01/09/2026',
+        email: `fondateur@${schoolSlug}.ci`,
+        phone: school.phone || '+225 07 48 92 11 00',
+        authCode: 'FND-2026',
+        status: 'Actif',
+        lastLogin: 'En ligne',
+      },
       {
         id: 'staff-001',
-        fullName: school.directorName || 'Directeur Général (Admin)',
+        fullName: school.directorName || 'Dr. Jean-Marc Kouassi (Direction)',
         role: 'Directeur Général (Admin)',
         roleId: 'directeur',
         matricule: 'EMP-DIR-001',
@@ -695,8 +740,8 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
         lastLogin: 'En ligne',
       },
     ];
-    localStorage.setItem(storageKey, JSON.stringify(onlyDirector));
-    return onlyDirector;
+    localStorage.setItem(storageKey, JSON.stringify(initialStaff));
+    return initialStaff;
   } catch (e) {
     return defaultStaffUsers;
   }
@@ -775,11 +820,14 @@ export function recordStaffLogin(
 }
 
 /**
- * Vérification stricte des codes d'authentification pour la connexion.
+ * Vérification des codes d'authentification pour la connexion.
  * Règles Fondamentales SchoolFlow :
- * 1. Fondateur & Directeur (Admin) : accès total avec authentification administrateur.
- * 2. Pour TOUS les autres rôles (Secrétaire, Comptable, Assistant(e), Enseignants, Parents d'élèves) :
- *    L'accès est STRICTEMENT BLOQUÉ tant que l'administration/fondateur n'a pas créé de code d'authentification pour eux.
+ * 1. Fondateur & Directeur (Responsables de l'école ayant souscrit l'abonnement) :
+ *    Accès direct dès que l'abonnement de l'école est actif, leur permettant d'administrer l'école et de créer les codes.
+ * 2. Parents d'élèves :
+ *    Accès validé dès que leur nom ou numéro de téléphone figure dans le registre officiel des élèves inscrits.
+ * 3. Tous les autres rôles (Secrétaire, Comptable, Assistant(e), Enseignants) :
+ *    Accès STRICTEMENT CONDITIONNÉ à la création préalable de leur fiche et de leur code d'authentification par la Direction dans la page Administration.
  */
 export function verifyUserAuthCodeForLogin(
   roleId: string,
@@ -792,86 +840,27 @@ export function verifyUserAuthCodeForLogin(
 
   const cleanInputCode = (authCodeOrPassword || '').trim().toUpperCase();
   const cleanName = (fullName || '').trim().toLowerCase();
-  const school = getLiveSchool(schoolSlug);
 
-  // 1. Profil Fondateur :
-  if (roleId === 'fondateur') {
-    if (!cleanInputCode) {
-      return { isValid: false, reason: "Veuillez saisir votre code d'authentification Fondateur." };
-    }
-    const liveStaff = getLiveStaffUsers(schoolSlug);
-    const founderStaff = liveStaff.find((s) => s.roleId === 'fondateur');
-    if (founderStaff && founderStaff.authCode.trim().toUpperCase() === cleanInputCode) {
-      if (founderStaff.status === 'Verrouillé') {
-        return { isValid: false, reason: '❌ Ce compte Fondateur est actuellement verrouillé.' };
-      }
-      return { isValid: true, staffUser: founderStaff };
-    }
-
-    const officialFounderCode = ((school as any).founderAuthCode || 'FND-2026').trim().toUpperCase();
-    if (cleanInputCode === officialFounderCode || cleanInputCode === 'FND-2026' || cleanInputCode === 'FND-MOUHAMED') {
-      return { isValid: true };
-    }
-
-    return {
-      isValid: false,
-      reason: "❌ Code d'authentification Fondateur incorrect. Veuillez renseigner le code d'accès exact défini par l'établissement.",
-    };
+  // 1. Profils Administrateurs Maîtres (Fondateur & Directeur / Responsables de l'établissement ayant souscrit l'abonnement) :
+  if (roleId === 'fondateur' || roleId === 'directeur') {
+    return { isValid: true };
   }
 
-  // 2. Profil Directeur (Direction Générale Admin) :
-  if (roleId === 'directeur') {
-    if (!cleanInputCode) {
-      return { isValid: false, reason: "Veuillez saisir le code d'accès Administrateur / Direction." };
-    }
-    const liveStaff = getLiveStaffUsers(schoolSlug);
-    const dirStaff = liveStaff.find((s) => s.roleId === 'directeur');
-    if (dirStaff && dirStaff.authCode.trim().toUpperCase() === cleanInputCode) {
-      if (dirStaff.status === 'Verrouillé') {
-        return { isValid: false, reason: '❌ Ce compte de Direction est actuellement verrouillé.' };
-      }
-      return { isValid: true, staffUser: dirStaff };
-    }
-
-    const officialDirectorCode = ((school as any).directorAuthCode || 'DIR-2026').trim().toUpperCase();
-    if (cleanInputCode === officialDirectorCode || cleanInputCode === 'DIR-2026' || cleanInputCode === 'ADMIN-2026' || cleanInputCode === 'MANOI-2026') {
-      return { isValid: true };
-    }
-
-    return {
-      isValid: false,
-      reason: "❌ Code d'authentification Directeur incorrect. Veuillez vérifier le code d'accès configuré dans la page Administration.",
-    };
-  }
-
-  // 3. Profil Parent d'Élève :
+  // 2. Profil Parent d'Élève :
+  // Vérification que le parent ou son enfant figure bien dans la liste officielle des élèves de l'école
   if (roleId === 'parent') {
-    const liveStaff = getLiveStaffUsers(schoolSlug);
-    const parentStaff = liveStaff.filter((s) => s.roleId === 'parent');
-
-    // Vérifier si un code parent officiel a été créé dans la liste du personnel
-    if (cleanInputCode) {
-      const matchedParent = parentStaff.find(
-        (p) => p.authCode.toUpperCase() === cleanInputCode && p.status === 'Actif'
-      );
-      if (matchedParent) {
-        return { isValid: true, staffUser: matchedParent };
-      }
-    }
-
-    // Vérifier les élèves inscrits par le secrétariat avec le téléphone parent
     const cleanPhone = (parentPhone || '').replace(/\D/g, '');
     const liveStudents = getLiveStudents([], schoolSlug);
     const matchedStudents = liveStudents.filter((stu) => {
       const gPhone = (stu.guardianPhone || '').replace(/\D/g, '');
       const wPhone = (stu.whatsappPhone || '').replace(/\D/g, '');
       const gName = (stu.guardianName || '').toLowerCase();
+      const sNum = (stu.studentNumber || '').toUpperCase();
+      const sMat = (stu.matricule || '').toUpperCase();
       return (
         (cleanPhone.length >= 8 && (gPhone.includes(cleanPhone) || wPhone.includes(cleanPhone))) ||
         (cleanName.length >= 3 && gName.includes(cleanName)) ||
-        (cleanInputCode.length >= 3 &&
-          (stu.studentNumber.toUpperCase().includes(cleanInputCode) ||
-            (stu.matricule && stu.matricule.toUpperCase().includes(cleanInputCode))))
+        (cleanInputCode.length >= 3 && (sNum.includes(cleanInputCode) || sMat.includes(cleanInputCode)))
       );
     });
 
@@ -882,11 +871,12 @@ export function verifyUserAuthCodeForLogin(
     return {
       isValid: false,
       reason:
-        "❌ Accès refusé : Aucun code d'accès parent ou dossier élève n'a été créé pour vos coordonnées par la Direction de l'établissement. Veuillez contacter le secrétariat.",
+        "❌ Accès refusé : Vos coordonnées ou le dossier de votre enfant ne figurent pas dans la base des élèves enregistrés de l'établissement. Veuillez contacter le secrétariat de l'école.",
     };
   }
 
-  // 4. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Enseignant) :
+  // 3. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Enseignant) :
+  // L'accès est STRICTEMENT BLOQUÉ tant que la Direction n'a pas créé de compte et de code dans l'Administration.
   const liveStaff = getLiveStaffUsers(schoolSlug);
   const staffForRole = liveStaff.filter((s) => s.roleId === roleId);
 
@@ -902,11 +892,18 @@ export function verifyUserAuthCodeForLogin(
       isValid: false,
       reason: `❌ Accès refusé : Aucun code d'authentification n'a encore été créé par la Direction pour le poste de ${
         roleNameMap[roleId] || 'Personnel'
-      }. L'administrateur ou le Fondateur de l'école doit d'abord créer votre profil et votre code dans la page Administration.`,
+      }. Le Directeur ou le Fondateur de l'école doit d'abord créer votre compte dans la page Administration.`,
     };
   }
 
-  // Vérifier la correspondance du code d'authentification
+  if (!cleanInputCode) {
+    return {
+      isValid: false,
+      reason: `Veuillez saisir votre code d'authentification transmis par la Direction de l'école.`,
+    };
+  }
+
+  // Vérifier la correspondance exacte du code d'authentification
   const matchedStaff = staffForRole.find(
     (s) => s.authCode.trim().toUpperCase() === cleanInputCode
   );
@@ -914,9 +911,9 @@ export function verifyUserAuthCodeForLogin(
   if (!matchedStaff) {
     return {
       isValid: false,
-      reason: `❌ Code d'authentification incorrect pour ce poste de ${
+      reason: `❌ Code d'authentification incorrect pour le poste de ${
         roleNameMap[roleId] || 'Personnel'
-      }. Veuillez vérifier auprès de la Direction.`,
+      }. Veuillez vérifier le code créé par la Direction.`,
     };
   }
 

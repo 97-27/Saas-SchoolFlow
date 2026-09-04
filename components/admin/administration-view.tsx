@@ -649,24 +649,31 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                   {/* Code d'authentification */}
                   <td className="py-3.5 px-4 text-center">
-                    <div className="inline-flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
-                      <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
-                        {member.authCode}
+                    {member.roleId === 'directeur' || member.roleId === 'fondateur' ? (
+                      <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold px-3 py-1.5 rounded-xl text-xs shadow-2xs whitespace-nowrap">
+                        <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                        <span>👑 Accès Maître (Direct)</span>
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyCode(member.authCode, member.id)}
-                        className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
-                        title="Copier le code d'authentification"
-                      >
-                        {copiedId === member.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
+                          {member.authCode}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCode(member.authCode, member.id)}
+                          className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                          title="Copier le code d'authentification"
+                        >
+                          {copiedId === member.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </td>
 
                   {/* Statut */}
@@ -695,39 +702,49 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                   {/* Actions Direction */}
                   <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1.5">
-                      {/* Partager accès sur WhatsApp */}
-                      <button
-                        type="button"
-                        onClick={() => handleShareWhatsApp(member)}
-                        className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer"
-                        title="Envoyer le code et le lien de connexion sur WhatsApp"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
+                    {member.roleId === 'directeur' ? (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                        <span>👑 Compte Maître (Directeur)</span>
+                      </div>
+                    ) : member.roleId === 'fondateur' ? (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                        <span>🏛️ Compte Fondateur (Maître)</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5">
+                        {/* Partager accès sur WhatsApp */}
+                        <button
+                          type="button"
+                          onClick={() => handleShareWhatsApp(member)}
+                          className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer"
+                          title="Envoyer le code et le lien de connexion sur WhatsApp"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
 
-                      {/* Consulter fiche complète */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStaffDetail(member)}
-                        className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
-                        title="Consulter la fiche détaillée"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
+                        {/* Consulter fiche complète */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStaffDetail(member)}
+                          className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                          title="Consulter la fiche détaillée"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
 
-                      {/* Modifier toutes les informations */}
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(member)}
-                        className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
-                        title="Modifier les coordonnées, le matricule et le code"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
+                        {/* Modifier toutes les informations */}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(member)}
+                          className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                          title="Modifier les coordonnées, le matricule et le code"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
 
-                      {/* Révoquer / Supprimer */}
-                      {member.roleId !== 'directeur' && (
+                        {/* Révoquer / Supprimer */}
                         <button
                           type="button"
                           onClick={() => handleDeleteStaff(member)}
@@ -736,8 +753,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </td>
 
                 </tr>

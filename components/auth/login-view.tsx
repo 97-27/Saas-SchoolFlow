@@ -325,9 +325,10 @@ export function LoginView({
       return;
     }
 
+    const isMasterAdmin = selectedRole === 'directeur' || selectedRole === 'fondateur';
     const inputPassOrCode = (authCode || loginPassword).trim();
-    if (!inputPassOrCode && selectedRole !== 'parent') {
-      setErrorMessage('Veuillez saisir votre mot de passe ou code d\'authentification.');
+    if (!inputPassOrCode && selectedRole !== 'parent' && !isMasterAdmin) {
+      setErrorMessage('Veuillez saisir votre code d\'authentification transmis par la Direction.');
       return;
     }
 
@@ -974,18 +975,29 @@ export function LoginView({
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="font-bold text-slate-800 block text-xs">
-                        4. Mot de Passe / Code d'Authentification *
+                        {selectedRole === 'directeur' || selectedRole === 'fondateur'
+                          ? '4. Mot de Passe (Optionnel — Accès Maître Immédiat)'
+                          : "4. Code d'Authentification Sécurisé (Transmis par la Direction) *"}
                       </label>
+                      {(selectedRole === 'directeur' || selectedRole === 'fondateur') && (
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          👑 Accès Garanti par l'Abonnement
+                        </span>
+                      )}
                     </div>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        required
+                        required={selectedRole !== 'directeur' && selectedRole !== 'fondateur'}
                         autoComplete="new-password"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="Entrez votre mot de passe ou code d'accès"
+                        placeholder={
+                          selectedRole === 'directeur' || selectedRole === 'fondateur'
+                            ? "Optionnel (L'abonnement souscrit active automatiquement votre accès)"
+                            : "Saisissez le code d'authentification créé par la Direction (ex : SEC-1234)"
+                        }
                         className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
                       />
                       <button
