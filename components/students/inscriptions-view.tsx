@@ -41,6 +41,7 @@ import {
   saveRegisteredStudent,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
+import { playRegistrationSuccessSound, playCopySound } from '@/lib/utils/audio';
 
 interface InscriptionsViewProps {
   initialStudents: Student[];
@@ -459,6 +460,9 @@ export function InscriptionsView({
     const refreshedStudents = getLiveStudents(initialStudents, schoolSlug);
     setStudents(refreshedStudents);
 
+    // Déclencher le signal sonore de succès
+    playRegistrationSuccessSound();
+
     setSuccessModalData(newStudent);
     setShowConfirmModal(false);
     setSuccessToast(`Élève ${newStudent.fullName} (${newStudent.studentNumber}) enregistré(e) avec succès !`);
@@ -470,7 +474,6 @@ export function InscriptionsView({
     handleStartNewReceipt();
   };
 
-  // Print official receipt
   // Print official receipt
   const handlePrintReceipt = () => {
     window.print();
@@ -485,8 +488,10 @@ export function InscriptionsView({
             'image/png': blob,
           }),
         ]);
+        playCopySound();
         setSuccessToast("✓ Image du reçu copiée dans le presse-papier ! Vous pouvez faire Coller (Ctrl + V) dans WhatsApp.");
       } else {
+        playCopySound();
         setSuccessToast("ℹ️ Image HD du reçu prête pour WhatsApp.");
       }
     } catch (err) {

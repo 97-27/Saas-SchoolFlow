@@ -339,67 +339,139 @@ export function saveLiveSchool(school: School): void {
   }
 }
 
-const isLegacyMockStudent = (stu: any) => {
-  if (!stu) return true;
-  const name = (stu.fullName || `${stu.firstName || ''} ${stu.lastName || ''}`).trim().toUpperCase();
-  const mat = (stu.matricule || '').toUpperCase();
-  return (
-    mat.startsWith('260148') ||
-    name === 'AWA MENSAH' ||
-    name === 'JEAN-MARC BAKAYOKO' ||
-    name === 'AMINATA TOURE' ||
-    name === 'SEYDOU KOUASSI' ||
-    name === 'AMADOU DIALLO' ||
-    name === 'FATOU BAMBA' ||
-    name === 'KOUASSI YAO JEAN-EUDES'
-  );
+// Helper de validation d'un élève
+const isValidStudent = (stu: any): boolean => {
+  return Boolean(stu && (stu.id || stu.studentNumber));
 };
 
 /**
- * Récupère les élèves enregistrés en local + fusionne avec les élèves initiaux.
- * Exclut automatiquement tous les élèves supprimés et les anciens mocks.
+ * Récupère les élèves enregistrés en local + fusionne avec les élèves existants.
+ * Exclut automatiquement tous les élèves supprimés par l'administrateur.
  */
 export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: string): Student[] {
   if (typeof window === 'undefined') return [];
 
   try {
-    const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
-
-    // Si c'est une NOUVELLE école souscrite (pas la démo MANOI), charger ses données isolées
-    if (!isManoiOrDemo) {
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      if (rawSchool) {
-        const parsed = JSON.parse(rawSchool);
-        return (parsed || []).filter((s: any) => !isLegacyMockStudent(s));
-      }
-      return []; // Zéro élève par défaut pour toute nouvelle école
-    }
-
-    const status = getSchoolSubscription('epc-manoi');
+    const slug = schoolSlug || 'epc-manoi';
     const deletedIds = getDeletedStudentIds();
-    const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    const localStudents: Student[] = raw ? JSON.parse(raw) : [];
 
-    // Si les données de l'école ont été réinitialisées à zéro, ne pas réinjecter les mockStudents
-    if (status.isDataReset) {
-      return localStudents.filter(
-        (stu) => stu && stu.studentNumber && !deletedIds.has(stu.id) && !deletedIds.has(stu.studentNumber) && !isLegacyMockStudent(stu)
-      );
+    // 1. Charger depuis la clé spécifique à l'école
+    const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
+    const rawSchool = localStorage.getItem(schoolKey);
+    const schoolStudents: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+
+    // 2. Charger depuis la clé globale
+    const rawGlobal = localStorage.getItem(STUDENTS_STORAGE_KEY);
+    const globalStudents: Student[] = rawGlobal ? JSON.parse(rawGlobal) : [];
+
+    // 3. Charger depuis les clés démo si applicable
+    let fallbackStudents: Student[] = [];
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      const rawManoi = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`);
+      const manoiStudents: Student[] = rawManoi ? JSON.parse(rawManoi) : [];
+      fallbackStudents = manoiStudents;
     }
+
+    const allCandidates = [
+      ...schoolStudents,
+      ...fallbackStudents,
+      ...globalStudents,
+    ];
 
     const seenIds = new Set<string>();
     const seenNumbers = new Set<string>();
     const uniqueStudents: Student[] = [];
 
-    // Priorité absolue aux élèves inscrits en local
-    for (const stu of [...localStudents, ...initialStudents]) {
-      if (!stu || !stu.studentNumber || isLegacyMockStudent(stu)) continue;
-      if (deletedIds.has(stu.id) || deletedIds.has(stu.studentNumber)) continue;
-      if (!seenIds.has(stu.id) && !seenNumbers.has(stu.studentNumber)) {
-        seenIds.add(stu.id);
-        seenNumbers.add(stu.studentNumber);
+    // Priorité absolue aux élèves enregistrés
+    for (const stu of allCandidates) {
+      if (!isValidStudent(stu)) continue;
+      if (deletedIds.has(stu.id) || (stu.studentNumber && deletedIds.has(stu.studentNumber))) continue;
+      
+      const idKey = stu.id || stu.studentNumber;
+      const numKey = stu.studentNumber || stu.id;
+      if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
+        seenIds.add(idKey);
+        seenNumbers.add(numKey);
         uniqueStudents.push(stu);
+      }
+    }
+
+    // Réconciliation automatique : si des factures locales existent sans objet élève correspondant, les réintégrer immédiatement
+    try {
+      const rawInvoicesSchool = localStorage.getItem(`${INVOICES_STORAGE_KEY}_${slug}`);
+      const rawInvoicesGlobal = localStorage.getItem(INVOICES_STORAGE_KEY);
+      const candidateInvoices: Invoice[] = [
+        ...(rawInvoicesSchool ? JSON.parse(rawInvoicesSchool) : []),
+        ...(rawInvoicesGlobal ? JSON.parse(rawInvoicesGlobal) : []),
+      ];
+
+      for (const inv of candidateInvoices) {
+        if (!inv || !inv.invoiceNumber) continue;
+        if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
+
+        const idKey = inv.studentId || inv.id || inv.invoiceNumber;
+        const numKey = inv.invoiceNumber || inv.studentId || inv.id;
+        if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
+          const numVal = parseInt(inv.invoiceNumber?.replace(/\D/g, '') || '1', 10);
+          const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+          const letterCode = letters[(numVal - 1) % letters.length];
+          const matriculeCode = `${26014800 + numVal}${letterCode}`;
+
+          const nameParts = (inv.studentName || 'Élève').trim().split(' ');
+          const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : (nameParts[0] || 'Élève');
+          const lastName = (nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0] || '').toUpperCase();
+
+          const reconstructedStudent: Student = {
+            id: inv.studentId || `stu-${numVal.toString().padStart(3, '0')}`,
+            studentNumber: inv.invoiceNumber.startsWith('ID-') ? inv.invoiceNumber : `ID-${numVal.toString().padStart(3, '0')}`,
+            matricule: matriculeCode,
+            firstName,
+            lastName,
+            fullName: inv.studentName,
+            grade: inv.studentGrade || '6ème',
+            gender: inv.studentGender || 'female',
+            avatar: inv.studentAvatar || '',
+            dateOfBirth: '2015-05-12',
+            guardianName: inv.guardianName || 'Parent',
+            guardianPhone: inv.guardianPhone || '+225 01 02 03 04 05',
+            whatsappPhone: inv.guardianPhone || '+225 01 02 03 04 05',
+            address: 'Abidjan',
+            enrollmentDate: inv.issueDate || '2026-08-27',
+            attendanceRate: 95,
+            status: 'active',
+            enrollmentType: inv.enrollmentType || 'nouveau',
+            tuitionAmount: inv.amount || 0,
+            discountAmount: inv.discountAmount || 0,
+            netAmount: inv.netAmount !== undefined ? inv.netAmount : (inv.amount || 0),
+            paidAmount: inv.paidAmount || 0,
+            balanceRemaining: inv.balanceRemaining !== undefined ? inv.balanceRemaining : Math.max(0, (inv.amount || 0) - (inv.paidAmount || 0)),
+            tuitionStatus: (inv.balanceRemaining === 0 || inv.status === 'paid') ? 'paid' : (inv.paidAmount && inv.paidAmount > 0) ? 'partial' : 'unpaid',
+            paymentDate: inv.issueDate || '2026-08-27',
+            paymentMethod: inv.paymentMethod || 'Espèces en caisse',
+            installments: inv.installments,
+            isBoarding: false,
+          };
+
+          seenIds.add(idKey);
+          seenNumbers.add(numKey);
+          uniqueStudents.push(reconstructedStudent);
+        }
+      }
+    } catch (e) {}
+
+    // Si aucun élève n'a encore été créé en local et que ce n'est pas un reset, utiliser les élèves initiaux
+    if (uniqueStudents.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+      const status = getSchoolSubscription('epc-manoi');
+      if (!status.isDataReset) {
+        for (const stu of initialStudents) {
+          if (!isValidStudent(stu)) continue;
+          if (deletedIds.has(stu.id) || (stu.studentNumber && deletedIds.has(stu.studentNumber))) continue;
+          if (!seenIds.has(stu.id) && !seenNumbers.has(stu.studentNumber)) {
+            seenIds.add(stu.id);
+            seenNumbers.add(stu.studentNumber);
+            uniqueStudents.push(stu);
+          }
+        }
       }
     }
 
@@ -410,16 +482,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       return numA - numB;
     });
 
-    // Ré-indexer de façon continue et stricte (ID-001, ID-002... ID-NNN) sans aucun saut
-    const reindexedStudents = sortedChronologically.map((stu, idx) => {
-      const continuousId = `ID-${(idx + 1).toString().padStart(3, '0')}`;
-      return {
-        ...stu,
-        studentNumber: continuousId,
-      };
-    });
-
-    return reindexedStudents;
+    return sortedChronologically;
   } catch (error) {
     console.error('Erreur lecture localStorage students:', error);
     return [];
@@ -427,46 +490,41 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 }
 
 /**
- * Récupère les factures / quittances enregistrées en local + fusionne avec les factures initiales.
+ * Récupère les factures / quittances enregistrées en local + fusionne avec les factures existantes.
  * Exclut automatiquement les factures des élèves supprimés.
  */
 export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: string): Invoice[] {
   if (typeof window === 'undefined') return [];
 
   try {
-    const isManoiOrDemo = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
-
-    // Si c'est une NOUVELLE école souscrite (pas la démo MANOI), charger ses factures isolées
-    if (!isManoiOrDemo) {
-      const schoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      if (rawSchool) {
-        const parsed = JSON.parse(rawSchool);
-        return (parsed || []).filter((inv: any) => !isLegacyMockStudent({ fullName: inv.studentName, matricule: '' }));
-      }
-      return []; // Zéro facture / 0 FCFA pour toute nouvelle école
-    }
-
-    const status = getSchoolSubscription('epc-manoi');
+    const slug = schoolSlug || 'epc-manoi';
     const deletedIds = getDeletedStudentIds();
-    const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-    const localInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
 
-    // Si les données de l'école ont été réinitialisées à zéro, ne pas réinjecter les factures initiales
-    if (status.isDataReset) {
-      return localInvoices.filter(
-        (inv) =>
-          inv &&
-          inv.invoiceNumber &&
-          !deletedIds.has(inv.id) &&
-          !deletedIds.has(inv.studentId) &&
-          !deletedIds.has(inv.invoiceNumber) &&
-          !isLegacyMockStudent({ fullName: inv.studentName, matricule: '' })
-      );
+    // 1. Charger depuis la clé spécifique à l'école
+    const schoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
+    const rawSchool = localStorage.getItem(schoolKey);
+    const schoolInvoices: Invoice[] = rawSchool ? JSON.parse(rawSchool) : [];
+
+    // 2. Charger depuis la clé globale
+    const rawGlobal = localStorage.getItem(INVOICES_STORAGE_KEY);
+    const globalInvoices: Invoice[] = rawGlobal ? JSON.parse(rawGlobal) : [];
+
+    // 3. Clés démo
+    let fallbackInvoices: Invoice[] = [];
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      const rawManoi = localStorage.getItem(`${INVOICES_STORAGE_KEY}_epc-manoi`);
+      const manoiInvoices: Invoice[] = rawManoi ? JSON.parse(rawManoi) : [];
+      fallbackInvoices = manoiInvoices;
     }
 
-    // Récupérer les élèves en direct pour synchroniser les noms/prénoms modifiés
-    const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
+    const allCandidates = [
+      ...schoolInvoices,
+      ...fallbackInvoices,
+      ...globalInvoices,
+    ];
+
+    // Récupérer les élèves en direct pour synchroniser les métadonnées
+    const rawStudents = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_${slug}`) || localStorage.getItem(STUDENTS_STORAGE_KEY);
     const localStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const studentMap = new Map<string, Student>();
     for (const stu of localStudents) {
@@ -479,8 +537,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
     const uniqueInvoices: Invoice[] = [];
 
     // Priorité absolue aux encaissements enregistrés en local
-    for (const inv of [...localInvoices, ...initialInvoices]) {
-      if (!inv || !inv.invoiceNumber || isLegacyMockStudent({ fullName: inv.studentName, matricule: '' })) continue;
+    for (const inv of allCandidates) {
+      if (!inv || !inv.invoiceNumber) continue;
       if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
       if (!seenIds.has(inv.id) && !seenNumbers.has(inv.invoiceNumber)) {
         seenIds.add(inv.id);
@@ -509,12 +567,65 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           uniqueInvoices.push(inv);
         }
       }
+    // Auto-réconciliation réciproque : si des élèves existent sans facture associée, créer la facture correspondante
+    for (const stu of localStudents) {
+      if (!stu || !stu.studentNumber) continue;
+      if (deletedIds.has(stu.id) || deletedIds.has(stu.studentNumber)) continue;
+
+      const idKey = stu.id || stu.studentNumber;
+      const numKey = stu.studentNumber || stu.id;
+      if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
+        const numVal = parseInt(stu.studentNumber?.replace(/\D/g, '') || '1', 10);
+        const reconstructedInvoice: Invoice = {
+          id: `inv-${numVal.toString().padStart(3, '0')}`,
+          invoiceNumber: stu.studentNumber,
+          studentId: stu.id,
+          studentName: stu.fullName || `${stu.firstName} ${stu.lastName}`.trim(),
+          studentAvatar: stu.avatar,
+          studentGrade: stu.grade,
+          studentGender: stu.gender,
+          guardianName: stu.guardianName,
+          guardianPhone: stu.whatsappPhone || stu.guardianPhone,
+          feeType: "Frais d'inscription & Scolarité",
+          amount: stu.tuitionAmount || 0,
+          discountAmount: stu.discountAmount || 0,
+          netAmount: stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0),
+          paidAmount: stu.paidAmount || 0,
+          balanceRemaining: stu.balanceRemaining !== undefined ? stu.balanceRemaining : Math.max(0, (stu.tuitionAmount || 0) - (stu.paidAmount || 0)),
+          paymentMethod: stu.paymentMethod || 'Espèces en caisse',
+          enrollmentType: stu.enrollmentType || 'nouveau',
+          installments: stu.installments,
+          issueDate: stu.paymentDate || '2026-08-27',
+          dueDate: stu.paymentDate || '2026-08-27',
+          status: (stu.balanceRemaining === 0 || stu.tuitionStatus === 'paid') ? 'paid' : (stu.paidAmount && stu.paidAmount > 0) ? 'partial' : 'sent',
+        };
+
+        seenIds.add(idKey);
+        seenNumbers.add(numKey);
+        uniqueInvoices.push(reconstructedInvoice);
+      }
+    }
+
+    // Fallback aux factures initiales uniquement si aucune facture locale n'existe pour la démo
+    if (uniqueInvoices.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+      const status = getSchoolSubscription('epc-manoi');
+      if (!status.isDataReset) {
+        for (const inv of initialInvoices) {
+          if (!inv || !inv.invoiceNumber) continue;
+          if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
+          if (!seenIds.has(inv.id) && !seenNumbers.has(inv.invoiceNumber)) {
+            seenIds.add(inv.id);
+            seenNumbers.add(inv.invoiceNumber);
+            uniqueInvoices.push(inv);
+          }
+        }
+      }
     }
 
     return uniqueInvoices;
   } catch (error) {
     console.error('Erreur lecture localStorage invoices:', error);
-    return initialInvoices;
+    return [];
   }
 }
 
@@ -526,54 +637,66 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
   if (typeof window === 'undefined') return;
 
   try {
-    // 1. Sauvegarde élève
+    const slug = schoolSlug || 'epc-manoi';
+
+    // 1. Sauvegarder dans la clé globale
     const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const filteredStudents = prevStudents.filter(
       (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
     );
-    const updatedStudents = [student, ...filteredStudents];
+    const studentWithSlug = { ...student, schoolSlug: slug, schoolId: slug };
+    const updatedStudents = [studentWithSlug, ...filteredStudents];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-      const filteredSchool = prevSchool.filter(
-        (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
-      );
-      localStorage.setItem(schoolKey, JSON.stringify([student, ...filteredSchool]));
+    // 2. Sauvegarder dans la clé spécifique à l'école
+    const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
+    const rawSchool = localStorage.getItem(schoolKey);
+    const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+    const filteredSchool = prevSchool.filter(
+      (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+    );
+    localStorage.setItem(schoolKey, JSON.stringify([studentWithSlug, ...filteredSchool]));
+
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify([studentWithSlug, ...filteredSchool]));
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify([studentWithSlug, ...filteredSchool]));
     }
 
-    // 2. Sauvegarde facture / quittance
+    // 3. Sauvegarder la facture dans la clé globale
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
     const filteredInvoices = prevInvoices.filter(
       (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
     );
-    const updatedInvoices = [invoice, ...filteredInvoices];
+    const invoiceWithSlug = { ...invoice, schoolSlug: slug, schoolId: slug };
+    const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-      const rawInvSchool = localStorage.getItem(invSchoolKey);
-      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-      const filteredInvSchool = prevInvSchool.filter(
-        (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-      );
-      localStorage.setItem(invSchoolKey, JSON.stringify([invoice, ...filteredInvSchool]));
+    // 4. Sauvegarder la facture dans la clé spécifique à l'école
+    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
+    const rawInvSchool = localStorage.getItem(invSchoolKey);
+    const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+    const filteredInvSchool = prevInvSchool.filter(
+      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+    );
+    localStorage.setItem(invSchoolKey, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
+
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
-    // Synchronisation en arrière-plan avec Supabase Cloud
-    saveStudentToSupabase(student, schoolSlug).catch(() => {});
-    saveInvoiceToSupabase(invoice, schoolSlug).catch(() => {});
+    // 5. Synchronisation Supabase Cloud en arrière-plan
+    saveStudentToSupabase(studentWithSlug, slug).catch(() => {});
+    saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
 
-    // 3. Diffusion temps réel parallèle immédiate
+    // 6. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
       action: 'student_registered',
-      student,
-      invoice,
-      schoolSlug,
+      student: studentWithSlug,
+      invoice: invoiceWithSlug,
+      schoolSlug: slug,
     });
   } catch (error) {
     console.error('Erreur sauvegarde live-store:', error);
