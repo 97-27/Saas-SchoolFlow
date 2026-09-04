@@ -39,48 +39,48 @@ export function getBulletinSubjectsForClass(grade: string): { name: string; coef
   // 6ème et 5ème (Mêmes matières et coefficients)
   if (g.includes('6') || g.includes('5')) {
     return [
-      { name: 'Français', coef: 3, prof: 'M. Kouamé K.' },
-      { name: 'Mathématiques', coef: 3, prof: 'M. Touré A.' },
-      { name: 'Anglais', coef: 2, prof: 'Mme Mensah A.' },
-      { name: 'Physique-Chimie', coef: 2, prof: 'M. Diallo S.' },
-      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: 'Mme Bamba F.' },
-      { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
-      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: 'Mme Koné M.' },
-      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
-      { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
-      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: 'Mme Traoré B.' },
+      { name: 'Français', coef: 3, prof: '—' },
+      { name: 'Mathématiques', coef: 3, prof: '—' },
+      { name: 'Anglais', coef: 2, prof: '—' },
+      { name: 'Physique-Chimie', coef: 2, prof: '—' },
+      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: '—' },
+      { name: 'Histoire-Géographie', coef: 2, prof: '—' },
+      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: '—' },
+      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: '—' },
+      { name: 'Conduite', coef: 1, prof: '—' },
+      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: '—' },
     ];
   }
 
   // 4ème et 3ème (Mêmes matières et coefficients)
   if (g.includes('4') || g.includes('3')) {
     return [
-      { name: 'Français', coef: 4, prof: 'M. Kouamé K.' },
-      { name: 'Mathématiques', coef: 3, prof: 'M. Touré A.' },
-      { name: 'Anglais', coef: 2, prof: 'Mme Mensah A.' },
-      { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
-      { name: 'Physique-Chimie', coef: 2, prof: 'M. Diallo S.' },
-      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: 'Mme Bamba F.' },
-      { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 1, prof: 'Mme Cissé K.' },
-      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: 'Mme Koné M.' },
-      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: 'Mme Traoré B.' },
-      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
-      { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
+      { name: 'Français', coef: 4, prof: '—' },
+      { name: 'Mathématiques', coef: 3, prof: '—' },
+      { name: 'Anglais', coef: 2, prof: '—' },
+      { name: 'Histoire-Géographie', coef: 2, prof: '—' },
+      { name: 'Physique-Chimie', coef: 2, prof: '—' },
+      { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 2, prof: '—' },
+      { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 1, prof: '—' },
+      { name: 'Éducation aux Droits de l’Homme (EDHC)', coef: 1, prof: '—' },
+      { name: 'Arts Plastiques / Éducation Musicale', coef: 1, prof: '—' },
+      { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: '—' },
+      { name: 'Conduite', coef: 1, prof: '—' },
     ];
   }
 
   // Lycée (2nde, 1ère, Terminale)
   return [
-    { name: 'Français', coef: g.includes('a') ? 4 : 3, prof: 'M. Kouamé K.' },
-    { name: 'Philosophie', coef: g.includes('tle') ? 4 : 3, prof: 'M. Koffi G.' },
-    { name: 'Mathématiques', coef: g.includes('c') || g.includes('d') ? 5 : 4, prof: 'M. Touré A.' },
-    { name: 'Physique-Chimie', coef: 4, prof: 'M. Diallo S.' },
-    { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 4, prof: 'Mme Bamba F.' },
-    { name: 'Histoire-Géographie', coef: 2, prof: 'M. Yao B.' },
-    { name: 'Anglais', coef: 3, prof: 'Mme Mensah A.' },
-    { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 2, prof: 'Mme Cissé K.' },
-    { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: 'M. N’Dri C.' },
-    { name: 'Conduite', coef: 1, prof: 'M. Kouassi J.' },
+    { name: 'Français', coef: g.includes('a') ? 4 : 3, prof: '—' },
+    { name: 'Philosophie', coef: g.includes('tle') ? 4 : 3, prof: '—' },
+    { name: 'Mathématiques', coef: g.includes('c') || g.includes('d') ? 5 : 4, prof: '—' },
+    { name: 'Physique-Chimie', coef: 4, prof: '—' },
+    { name: 'Sciences de la Vie et de la Terre (SVT)', coef: 4, prof: '—' },
+    { name: 'Histoire-Géographie', coef: 2, prof: '—' },
+    { name: 'Anglais', coef: 3, prof: '—' },
+    { name: 'Langues Vivantes (Espagnol / Allemand)', coef: 2, prof: '—' },
+    { name: 'Éducation Physique et Sportive (EPS)', coef: 1, prof: '—' },
+    { name: 'Conduite', coef: 1, prof: '—' },
   ];
 }
 
