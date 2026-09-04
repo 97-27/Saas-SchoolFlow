@@ -202,7 +202,7 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
 
     const { error } = await supabase
       .from('students')
-      .upsert(payload, { onConflict: 'student_number' });
+      .upsert(payload, { onConflict: 'school_id,student_number' });
 
     if (error) {
       console.error('Erreur saveStudentToSupabase:', error.message);
@@ -305,7 +305,7 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 
     const { error } = await supabase
       .from('invoices')
-      .upsert(payload, { onConflict: 'invoice_number' });
+      .upsert(payload, { onConflict: 'school_id,invoice_number' });
 
     if (error) {
       console.warn('saveInvoiceToSupabase warning:', error.message);

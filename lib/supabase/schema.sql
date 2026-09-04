@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS public.students (
     attendance_rate NUMERIC DEFAULT 100,
     status TEXT DEFAULT 'active', -- 'active', 'on_leave', 'transferred'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT uq_student_school_num UNIQUE (school_id, student_number)
 );
 
 -- 5. TABLE : VERSEMENTS & FACTURES DE SCOLARITÉ (INVOICES & PAYMENTS)
@@ -98,7 +99,8 @@ CREATE TABLE IF NOT EXISTS public.invoices (
     status TEXT DEFAULT 'draft', -- 'paid', 'sent', 'draft', 'overdue', 'partial'
     issue_date DATE DEFAULT CURRENT_DATE,
     due_date DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT uq_invoice_school_num UNIQUE (school_id, invoice_number)
 );
 
 -- 6. TABLE : HISTORIQUE DES TRANCHES DE VERSEMENTS (INSTALLMENTS)
