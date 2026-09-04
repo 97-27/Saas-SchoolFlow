@@ -96,9 +96,9 @@ export function CommunicationView({
     return (list || []).filter(
       (b) =>
         b &&
-        !b.title?.includes('Rentrée Scolaire 2026-2027') &&
-        !b.title?.includes('Fermeture Exceptionnelle') &&
-        !b.title?.includes('Réunion Parents-Professeurs')
+        !b.subject?.includes('Rentrée Scolaire 2026-2027') &&
+        !b.subject?.includes('Fermeture Exceptionnelle') &&
+        !b.subject?.includes('Réunion Parents-Professeurs')
     );
   };
 

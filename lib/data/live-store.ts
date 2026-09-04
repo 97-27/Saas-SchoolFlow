@@ -642,9 +642,6 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
     return defaultStaffUsers;
   }
 }
-    return defaultStaffUsers;
-  }
-}
 
 export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
