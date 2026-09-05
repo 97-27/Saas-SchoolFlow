@@ -43,7 +43,6 @@ export function ReportsView({
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [schoolState, setSchoolState] = useState<School>(school);
-  const [selectedPeriod, setSelectedPeriod] = useState<'all' | 'T1' | 'T2' | 'T3'>('all');
   const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('all');
 
   useEffect(() => {
@@ -124,75 +123,38 @@ export function ReportsView({
     });
   }, [students, selectedCycle]);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      if (selectedCycle === 'maternelle') return isMaternelle(inv.studentGrade);
-      if (selectedCycle === 'primaire') return isPrimaire(inv.studentGrade);
-      if (selectedCycle === 'college') return isCollege(inv.studentGrade);
-      if (selectedCycle === 'lycee') return isLycee(inv.studentGrade);
-      return true;
-    });
-  }, [invoices, selectedCycle]);
-
-  // Indicateurs Financiers Dynamiques selon Période (Annuel, T1, T2, T3) et Cycle
+  // Indicateurs Financiers Dynamiques Annuels (Strictement sur toute l'année scolaire)
   const stats = useMemo(() => {
     // Calcul par tranche de versement
     let v1Total = 0, v2Total = 0, v3Total = 0, v4Total = 0, v5Total = 0;
-    let v1Exigible = 0, v2Exigible = 0, v3Exigible = 0, v4Exigible = 0, v5Exigible = 0;
 
-    filteredInvoices.forEach((inv) => {
-      const net = inv.netAmount || inv.amount || 250000;
-      const paid = inv.paidAmount || 0;
-      const inst = inv.installments;
+    filteredStudents.forEach((stu) => {
+      const inst = stu.installments;
+      const paid = stu.paidAmount || 0;
 
-      // Exigible théorique par versement
-      const e1 = inst?.versement1?.amount ? Math.max(inst.versement1.amount, 100000) : Math.round(net * 0.40);
-      const e2 = inst?.versement2?.amount ? Math.max(inst.versement2.amount, 40000) : Math.round(net * 0.20);
-      const e3 = inst?.versement3?.amount ? Math.max(inst.versement3.amount, 40000) : Math.round(net * 0.15);
-      const e4 = inst?.versement4?.amount ? Math.max(inst.versement4.amount, 35000) : Math.round(net * 0.15);
-      const e5 = inst?.versement5?.amount ? Math.max(inst.versement5.amount, 25000) : Math.max(0, net - (e1 + e2 + e3 + e4));
+      const p1 = inst?.versement1?.amount !== undefined ? inst.versement1.amount : (paid > 0 ? Math.min(paid, 100000) : 0);
+      const p2 = inst?.versement2?.amount !== undefined ? inst.versement2.amount : (paid > 100000 ? Math.min(paid - 100000, 50000) : 0);
+      const p3 = inst?.versement3?.amount !== undefined ? inst.versement3.amount : (paid > 150000 ? Math.min(paid - 150000, 40000) : 0);
+      const p4 = inst?.versement4?.amount !== undefined ? inst.versement4.amount : (paid > 190000 ? Math.min(paid - 190000, 35000) : 0);
+      const p5 = inst?.versement5?.amount !== undefined ? inst.versement5.amount : (paid > 225000 ? Math.min(paid - 225000, 25000) : 0);
 
-      v1Exigible += e1;
-      v2Exigible += e2;
-      v3Exigible += e3;
-      v4Exigible += e4;
-      v5Exigible += e5;
-
-      // Encaissé réel par versement
-      v1Total += inst?.versement1?.amount || (paid > 0 ? Math.min(paid, e1) : 0);
-      v2Total += inst?.versement2?.amount || (paid > e1 ? Math.min(paid - e1, e2) : 0);
-      v3Total += inst?.versement3?.amount || (paid > e1 + e2 ? Math.min(paid - (e1 + e2), e3) : 0);
-      v4Total += inst?.versement4?.amount || (paid > e1 + e2 + e3 ? Math.min(paid - (e1 + e2 + e3), e4) : 0);
-      v5Total += inst?.versement5?.amount || (paid > e1 + e2 + e3 + e4 ? paid - (e1 + e2 + e3 + e4) : 0);
+      v1Total += p1;
+      v2Total += p2;
+      v3Total += p3;
+      v4Total += p4;
+      v5Total += p5;
     });
 
-    // Période sélectionnée
-    let totalExigible = 0;
-    let totalCollected = 0;
-    let periodLabel = 'Bilan Financier Annuel (2026-2027)';
-    let periodSub = 'Recouvrement cumulé de toutes les échéances (Septembre 2026 à Juin 2027)';
+    const periodLabel = 'Bilan Financier Annuel (2026-2027)';
+    const periodSub = 'Recouvrement cumulé de toutes les échéances sur toute l’année scolaire (Septembre à Juin)';
 
-    if (selectedPeriod === 'T1') {
-      periodLabel = 'Bilan Financier — Trimestre 1 (Septembre à Décembre 2026)';
-      periodSub = 'Inscriptions, 1er versement de rentrée et 2ème versement (1ère échéance Octobre/Novembre)';
-      totalExigible = v1Exigible + v2Exigible;
-      totalCollected = v1Total + v2Total;
-    } else if (selectedPeriod === 'T2') {
-      periodLabel = 'Bilan Financier — Trimestre 2 (Janvier à Mars 2027)';
-      periodSub = '3ème versement (Janvier) et 4ème versement (Février/Mars)';
-      totalExigible = v3Exigible + v4Exigible;
-      totalCollected = v3Total + v4Total;
-    } else if (selectedPeriod === 'T3') {
-      periodLabel = 'Bilan Financier — Trimestre 3 (Avril à Juin 2027)';
-      periodSub = '5ème versement (Avril/Mai) et solde de clôture de fin d’année';
-      totalExigible = v5Exigible;
-      totalCollected = v5Total;
-    } else {
-      totalExigible = filteredInvoices.reduce((acc, inv) => acc + (inv.netAmount || inv.amount), 0);
-      totalCollected = filteredInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
-    }
-
-    const totalOverdue = Math.max(0, totalExigible - totalCollected);
+    const totalExigible = filteredStudents.reduce((acc, s) => acc + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
+    const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+    const totalOverdue = filteredStudents.reduce((acc, s) => {
+      const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
+      const paid = s.paidAmount || 0;
+      return acc + (s.balanceRemaining !== undefined ? s.balanceRemaining : Math.max(0, net - paid));
+    }, 0);
     const rate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '100';
 
     const girlsCount = filteredStudents.filter((s) => s.gender === 'female').length;
@@ -200,7 +162,7 @@ export function ReportsView({
     const newCount = filteredStudents.filter((s) => s.enrollmentType === 'nouveau' || !s.enrollmentType).length;
     const returningCount = filteredStudents.filter((s) => s.enrollmentType === 'ancien').length;
 
-    // Détail par cycle selon la période sélectionnée
+    // Détail par cycle calculé directement sur les données élèves réelles
     const cyclesData = [
       { name: 'Maternelle (P.S. à G.S.)', check: isMaternelle, icon: Sparkles, color: 'emerald' },
       { name: 'Primaire (CP1 à CM2)', check: isPrimaire, icon: GraduationCap, color: 'blue' },
@@ -208,44 +170,14 @@ export function ReportsView({
       { name: 'Lycée (2nde à Terminale)', check: isLycee, icon: Layers, color: 'purple' },
     ].map((c) => {
       const cycStus = students.filter((s) => c.check(s.grade));
-      const cycInvs = invoices.filter((i) => c.check(i.studentGrade));
       
-      let cycExigible = 0;
-      let cycCollected = 0;
-
-      cycInvs.forEach((inv) => {
-        const net = inv.netAmount || inv.amount || 250000;
-        const paid = inv.paidAmount || 0;
-        const inst = inv.installments;
-
-        const e1 = inst?.versement1?.amount ? Math.max(inst.versement1.amount, 100000) : Math.round(net * 0.40);
-        const e2 = inst?.versement2?.amount ? Math.max(inst.versement2.amount, 40000) : Math.round(net * 0.20);
-        const e3 = inst?.versement3?.amount ? Math.max(inst.versement3.amount, 40000) : Math.round(net * 0.15);
-        const e4 = inst?.versement4?.amount ? Math.max(inst.versement4.amount, 35000) : Math.round(net * 0.15);
-        const e5 = inst?.versement5?.amount ? Math.max(inst.versement5.amount, 25000) : Math.max(0, net - (e1 + e2 + e3 + e4));
-
-        const p1 = inst?.versement1?.amount || (paid > 0 ? Math.min(paid, e1) : 0);
-        const p2 = inst?.versement2?.amount || (paid > e1 ? Math.min(paid - e1, e2) : 0);
-        const p3 = inst?.versement3?.amount || (paid > e1 + e2 ? Math.min(paid - (e1 + e2), e3) : 0);
-        const p4 = inst?.versement4?.amount || (paid > e1 + e2 + e3 ? Math.min(paid - (e1 + e2 + e3), e4) : 0);
-        const p5 = inst?.versement5?.amount || (paid > e1 + e2 + e3 + e4 ? paid - (e1 + e2 + e3 + e4) : 0);
-
-        if (selectedPeriod === 'T1') {
-          cycExigible += e1 + e2;
-          cycCollected += p1 + p2;
-        } else if (selectedPeriod === 'T2') {
-          cycExigible += e3 + e4;
-          cycCollected += p3 + p4;
-        } else if (selectedPeriod === 'T3') {
-          cycExigible += e5;
-          cycCollected += p5;
-        } else {
-          cycExigible += net;
-          cycCollected += paid;
-        }
-      });
-
-      const cycRemaining = Math.max(0, cycExigible - cycCollected);
+      const cycExigible = cycStus.reduce((acc, s) => acc + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
+      const cycCollected = cycStus.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+      const cycRemaining = cycStus.reduce((acc, s) => {
+        const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
+        const paid = s.paidAmount || 0;
+        return acc + (s.balanceRemaining !== undefined ? s.balanceRemaining : Math.max(0, net - paid));
+      }, 0);
       const cycRate = cycExigible > 0 ? ((cycCollected / cycExigible) * 100).toFixed(1) : '100';
 
       return {
@@ -279,7 +211,7 @@ export function ReportsView({
       v5Total,
       cyclesData,
     };
-  }, [filteredStudents, filteredInvoices, students, invoices, selectedPeriod]);
+  }, [filteredStudents, students]);
 
   return (
     <div className="space-y-6 pb-12">
@@ -461,7 +393,7 @@ export function ReportsView({
         </div>
       </div>
 
-      {/* 2. Barre de Filtres de Période & de Cycle */}
+      {/* 2. Barre de Filtres de Cycle */}
       <div className="print:hidden bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
         {/* Filtre Cycles */}
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -491,31 +423,10 @@ export function ReportsView({
           ))}
         </div>
 
-        {/* Filtre Périodes */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>Période :</span>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            Année Scolaire Complète (2026-2027)
           </span>
-          {[
-            { id: 'all', label: 'Annuel' },
-            { id: 'T1', label: 'Trimestre 1' },
-            { id: 'T2', label: 'Trimestre 2' },
-            { id: 'T3', label: 'Trimestre 3' },
-          ].map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setSelectedPeriod(p.id as any)}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedPeriod === p.id
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -615,11 +526,6 @@ export function ReportsView({
               <h2 className="text-base font-bold text-slate-900 font-heading">
                 {stats.periodLabel} — Recouvrement par Cycle
               </h2>
-              {selectedPeriod !== 'all' && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {selectedPeriod === 'T1' ? 'Trimestre 1' : selectedPeriod === 'T2' ? 'Trimestre 2' : 'Trimestre 3'}
-                </span>
-              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {stats.periodSub}
@@ -705,7 +611,7 @@ export function ReportsView({
             <tfoot>
               <tr className="bg-slate-100/90 font-black text-slate-950 border-t-2 border-slate-300">
                 <td className="py-3.5 pl-6 pr-3 font-heading uppercase text-xs">
-                  TOTAL GÉNÉRAL ({selectedPeriod === 'all' ? 'ANNUEL' : selectedPeriod})
+                  TOTAL GÉNÉRAL (ANNUEL)
                 </td>
                 <td className="py-3.5 px-3 text-center font-mono">{stats.totalStudents}</td>
                 <td className="py-3.5 px-3 text-center text-[11px]">
@@ -734,46 +640,34 @@ export function ReportsView({
             </p>
           </div>
           <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">
-            5 Tranches Officielles
+            5 Échéances Annuelles
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           {[
-            { label: '1er Versement (Rentrée)', period: 'T1', amount: stats.v1Total, color: 'emerald' },
-            { label: '2ème Versement (T1)', period: 'T1', amount: stats.v2Total, color: 'blue' },
-            { label: '3ème Versement (T2)', period: 'T2', amount: stats.v3Total, color: 'purple' },
-            { label: '4ème Versement (T2)', period: 'T2', amount: stats.v4Total, color: 'amber' },
-            { label: '5ème Versement (T3 Solde)', period: 'T3', amount: stats.v5Total, color: 'emerald' },
-          ].map((v, i) => {
-            const isHighlighted = selectedPeriod === 'all' || selectedPeriod === v.period;
-            return (
-              <div
-                key={i}
-                className={`p-4 rounded-2xl border transition-all ${
-                  isHighlighted
-                    ? 'bg-slate-50/90 border-emerald-300 shadow-xs'
-                    : 'bg-slate-50/40 border-slate-200/60 opacity-60'
-                } space-y-1.5`}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[11px] font-bold text-slate-700 block truncate">{v.label}</span>
-                  <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">
-                    {v.period}
-                  </span>
-                </div>
-                <span className="text-base sm:text-lg font-black font-mono text-slate-950 block">
-                  {formatFCFA(v.amount)}
+            { label: '1ère Échéance (Octobre)', amount: stats.v1Total },
+            { label: '2ème Échéance (Novembre)', amount: stats.v2Total },
+            { label: '3ème Échéance (Janvier)', amount: stats.v3Total },
+            { label: '4ème Échéance (Mars)', amount: stats.v4Total },
+            { label: '5ème Échéance (Mai / Solde)', amount: stats.v5Total },
+          ].map((v, i) => (
+            <div
+              key={i}
+              className="p-4 rounded-2xl border bg-slate-50/90 border-emerald-300 shadow-xs space-y-1.5"
+            >
+              <span className="text-[11px] font-bold text-slate-800 block truncate">{v.label}</span>
+              <span className="text-base sm:text-lg font-black font-mono text-slate-950 block">
+                {formatFCFA(v.amount)}
+              </span>
+              <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200/70">
+                <span>Part du total :</span>
+                <span className="font-bold text-slate-800">
+                  {stats.totalCollected > 0 ? ((v.amount / stats.totalCollected) * 100).toFixed(1) : 0}%
                 </span>
-                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200/70">
-                  <span>Part du total :</span>
-                  <span className="font-bold text-slate-800">
-                    {stats.totalCollected > 0 ? ((v.amount / stats.totalCollected) * 100).toFixed(1) : 0}%
-                  </span>
-                </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -74,9 +74,32 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     }
   }, [invoices.length]);
 
+  // Helper pour comparer 2 dates de manière robuste (gère JJ/MM/AAAA et YYYY-MM-DD)
+  const isMatchingDate = (inv: Invoice, targetDate: string) => {
+    if (!targetDate) return true;
+    const formattedTarget = formatDate(targetDate);
+    if (inv.issueDate && (formatDate(inv.issueDate) === formattedTarget || inv.issueDate === targetDate)) {
+      return true;
+    }
+    const inst = inv.installments;
+    if (inst) {
+      const dates = [
+        inst.versement1?.date,
+        inst.versement2?.date,
+        inst.versement3?.date,
+        inst.versement4?.date,
+        inst.versement5?.date,
+      ].filter(Boolean);
+      if (dates.some((d) => d && (formatDate(d) === formattedTarget || d === targetDate))) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Invoices du jour actif pour le bilan
   const dayInvoices = useMemo(() => {
-    return invoices.filter((inv) => inv.issueDate === selectedJournalDate);
+    return invoices.filter((inv) => isMatchingDate(inv, selectedJournalDate));
   }, [invoices, selectedJournalDate]);
 
   // Métriques du Bilan Journalier
@@ -85,7 +108,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     const totalAmount = dayInvoices.reduce((acc, inv) => acc + (inv.paidAmount !== undefined ? inv.paidAmount : inv.amount), 0);
     const newCount = dayInvoices.filter((inv) => inv.enrollmentType === 'nouveau' || !inv.enrollmentType).length;
     const oldCount = dayInvoices.filter((inv) => inv.enrollmentType === 'ancien').length;
-    const mismatchedDatesCount = invoices.filter((inv) => inv.issueDate !== selectedJournalDate).length;
+    const mismatchedDatesCount = invoices.filter((inv) => !isMatchingDate(inv, selectedJournalDate)).length;
 
     return {
       totalCount,
@@ -101,7 +124,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     const list = invoices.filter((inv) => {
       // Filtre de Date du Jour
       if (dateFilterMode === 'day_only') {
-        if (inv.issueDate !== selectedJournalDate) {
+        if (!isMatchingDate(inv, selectedJournalDate)) {
           return false;
         }
       }
@@ -509,7 +532,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                 const numVal = parseInt(invoice.invoiceNumber.replace(/\D/g, '') || '1', 10);
                 const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
                 const matriculeCode = `${26014800 + numVal}${letters[(numVal - 1) % letters.length]}`;
-                const isMatchingToday = invoice.issueDate === selectedJournalDate;
+                const isMatchingToday = isMatchingDate(invoice, selectedJournalDate);
 
                 return (
                   <tr

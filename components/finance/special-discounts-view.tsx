@@ -2,9 +2,15 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import { School } from '@/lib/data/types';
+import { School, Student, Invoice } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
-import { getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import {
+  getLiveSchool,
+  getLiveStudents,
+  saveRegisteredStudent,
+  updateRegisteredStudent,
+  DATA_UPDATED_EVENT,
+} from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   BadgePercent,
@@ -424,7 +430,7 @@ export function SpecialDiscountsView({
     setTimeout(() => setShowToast(false), 2500);
   };
 
-  // Sauvegarder ou mettre à jour le reçu
+  // Sauvegarder ou mettre à jour le reçu et synchroniser les élèves dans la liste générale
   const handleSaveReceipt = () => {
     const updatedReceipt: FamilyDiscountReceipt = {
       id: savedReceipts[selectedReceiptIndex]?.id || `fam-${Date.now()}`,
@@ -457,10 +463,124 @@ export function SpecialDiscountsView({
     try {
       localStorage.setItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(updatedList));
       localStorage.setItem(DISCOUNTS_STORAGE_KEY, JSON.stringify(updatedList));
+    } catch (e) {}
+
+    // Synchronisation automatique des enfants dans le répertoire global des élèves et de la scolarité
+    try {
+      const validChildren = children.filter((c) => c.fullName && c.fullName.trim().length > 0);
+      if (validChildren.length > 0) {
+        const currentStudents = getLiveStudents([], schoolSlug);
+
+        let maxSeq = currentStudents.reduce((max, s) => {
+          const m = s.studentNumber?.match(/ID-(\d+)/i) || s.id?.match(/ID-(\d+)/i);
+          return m ? Math.max(max, parseInt(m[1], 10)) : max;
+        }, currentStudents.length);
+
+        const childDiscount = validChildren.length > 0 ? Math.round(discountAmountFCFA / validChildren.length) : 0;
+        const childPaid = validChildren.length > 0 ? Math.round(totalPaidFCFA / validChildren.length) : 0;
+
+        validChildren.forEach((child) => {
+          const nameTrimmed = child.fullName.trim();
+          const parts = nameTrimmed.split(' ');
+          const lName = parts[0]?.toUpperCase() || 'ÉLÈVE';
+          const fName = parts.slice(1).join(' ') || '';
+          const tuition = child.tuitionAmount || 200000;
+          const net = Math.max(0, tuition - childDiscount);
+          const remaining = Math.max(0, net - childPaid);
+
+          // Vérifier si l'élève existe déjà par son nom ou ID
+          const existing = currentStudents.find(
+            (s) => s.fullName.toLowerCase() === nameTrimmed.toLowerCase() || s.id === child.id
+          );
+
+          if (existing) {
+            const updatedStu: Student = {
+              ...existing,
+              grade: child.grade || existing.grade,
+              gender: child.gender || existing.gender,
+              guardianName: parentName || existing.guardianName,
+              guardianPhone: parentPhone || existing.guardianPhone,
+              whatsappPhone: parentPhone || existing.whatsappPhone,
+              address: parentAddress || existing.address,
+              tuitionAmount: tuition,
+              discountAmount: childDiscount,
+              netAmount: net,
+              paidAmount: childPaid,
+              balanceRemaining: remaining,
+              paymentDate: issueDate || existing.paymentDate,
+              tuitionStatus: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'unpaid',
+            };
+            updateRegisteredStudent(updatedStu, schoolSlug);
+          } else {
+            maxSeq += 1;
+            const idStr = `ID-${String(maxSeq).padStart(3, '0')}`;
+            const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+            const matricule = `${26014800 + maxSeq}${letters[(maxSeq - 1) % letters.length]}`;
+
+            const newStu: Student = {
+              id: idStr,
+              studentNumber: idStr,
+              matricule: matricule,
+              lastName: lName,
+              firstName: fName,
+              fullName: nameTrimmed,
+              avatar: '',
+              grade: child.grade || '6ème',
+              gender: child.gender || 'male',
+              address: parentAddress || '',
+              guardianName: parentName || 'Parent Non Renseigné',
+              guardianPhone: parentPhone || '',
+              whatsappPhone: parentPhone || '',
+              registrationFee: 25000,
+              tuitionAmount: tuition,
+              discountAmount: childDiscount,
+              netAmount: net,
+              paidAmount: childPaid,
+              balanceRemaining: remaining,
+              paymentDate: issueDate || '01/09/2026',
+              attendanceRate: 98,
+              status: 'active',
+              tuitionStatus: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'unpaid',
+              enrollmentType: 'nouveau',
+              paymentMethod: installments[0]?.paymentMethod || 'Espèces',
+            };
+
+            const newInv: Invoice = {
+              id: `inv-${idStr.toLowerCase()}`,
+              invoiceNumber: idStr,
+              studentId: idStr,
+              studentName: nameTrimmed,
+              studentAvatar: '',
+              studentGrade: child.grade || '6ème',
+              studentGender: child.gender || 'male',
+              guardianName: parentName || 'Parent Non Renseigné',
+              guardianPhone: parentPhone || '',
+              feeType: `Scolarité Annuelle (Réduction Fratrie - ${discountType})`,
+              amount: tuition,
+              discountAmount: childDiscount,
+              netAmount: net,
+              paidAmount: childPaid,
+              balanceRemaining: remaining,
+              paymentMethod: installments[0]?.paymentMethod || 'Espèces',
+              enrollmentType: 'nouveau',
+              issueDate: issueDate || '01/09/2026',
+              dueDate: '2027-05-31',
+              status: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'unpaid',
+            };
+
+            saveRegisteredStudent(newStu, newInv, schoolSlug);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('Erreur synchronisation élèves réduction spéciale:', err);
+    }
+
+    try {
       window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
     } catch (e) {}
 
-    setToastMessage(`💾 Reçu N° ${receiptNumber} sauvegardé dans les archives !`);
+    setToastMessage(`💾 Reçu N° ${receiptNumber} sauvegardé & ${children.length} élève(s) synchronisé(s) dans l'annuaire !`);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };

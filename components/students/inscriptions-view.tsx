@@ -1187,85 +1187,90 @@ export function InscriptionsView({
             )}
           </div>
 
-          {/* Statuts des Prestations : Internat, Cantine, Transport, Frais Annexes & Tenue Tout Cousue */}
-          <div className="col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t border-slate-200">
-            {/* Internat */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-600">Internat :</span>
-              {isBoarding ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  <Check className="w-3 h-3 text-emerald-700" />
-                  Pensionnaire
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                  Externe
-                </span>
-              )}
+          {/* Statuts des Prestations : Internat, Cantine, Transport, Frais Annexes & Tenue Tout Cousue (Bien centrés et équilibrés) */}
+          <div className="col-span-2 pt-2 border-t border-slate-200">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 text-center">
+              Prestations & Services Complémentaires
             </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {/* 1. Internat */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🏢 Internat</span>
+                {isBoarding ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Pensionnaire
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                    Externe
+                  </span>
+                )}
+              </div>
 
-            {/* Cantine */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-600">Cantine :</span>
-              {isCanteen ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  <Check className="w-3 h-3 text-emerald-700" />
-                  Souscrit
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                  <X className="w-3 h-3 text-slate-400" />
-                  Non
-                </span>
-              )}
-            </div>
+              {/* 2. Cantine */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🍲 Cantine</span>
+                {isCanteen ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Souscrit
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                    <X className="w-3 h-3 text-slate-400" />
+                    Sans cantine
+                  </span>
+                )}
+              </div>
 
-            {/* Transport */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-600">Transport :</span>
-              {isTransport ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  <Check className="w-3 h-3 text-emerald-700" />
-                  Souscrit
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                  <X className="w-3 h-3 text-slate-400" />
-                  Non
-                </span>
-              )}
-            </div>
+              {/* 3. Transport */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🚌 Transport</span>
+                {isTransport ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Souscrit
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                    <X className="w-3 h-3 text-slate-400" />
+                    Sans transport
+                  </span>
+                )}
+              </div>
 
-            {/* Frais Annexes */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-600">Frais Annexes :</span>
-              {fraisAnnexesPaid ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  <Check className="w-3 h-3 text-emerald-700" />
-                  Payé
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-900 border border-rose-300">
-                  <X className="w-3 h-3 text-rose-700" />
-                  Non payé
-                </span>
-              )}
-            </div>
+              {/* 4. Frais Annexes */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🎒 Frais Annexes</span>
+                {fraisAnnexesPaid ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Payé
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                    <X className="w-3 h-3 text-rose-600" />
+                    Non payé
+                  </span>
+                )}
+              </div>
 
-            {/* Tenue Tout Cousue */}
-            <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-white border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-600">Tenue Cousue :</span>
-              {tenueCousuePaid ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                  <Check className="w-3 h-3 text-emerald-700" />
-                  Payé
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-black bg-rose-100 text-rose-900 border border-rose-300">
-                  <X className="w-3 h-3 text-rose-700" />
-                  Non payé
-                </span>
-              )}
+              {/* 5. Tenue Tout Cousue */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">👔 Tenue Cousue</span>
+                {tenueCousuePaid ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Payé
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                    <X className="w-3 h-3 text-rose-600" />
+                    Non payé
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -2044,7 +2049,7 @@ export function InscriptionsView({
                 </div>
 
                 {/* 5. Tenue Tout Cousue */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200 sm:col-span-2">
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
                   <span className="text-xs font-bold text-slate-800">
                     Tenue Tout Cousue
                   </span>
@@ -2505,68 +2510,118 @@ export function InscriptionsView({
       {/* ================= MODAL DE SUCCÈS APRÈS VALIDATION ================= */}
       {successModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 print:hidden">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95 duration-200 text-center relative">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95 duration-200 text-center relative">
             {/* Bouton Croix pour fermer la modale et passer automatiquement au reçu suivant */}
             <button
               type="button"
               onClick={handleCloseSuccessAndNext}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               title="Fermer et préparer l'élève suivant"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-8 h-8" />
+            {/* En-tête avec Icône de Succès & Titre */}
+            <div className="space-y-2">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 font-heading">
+                  Reçu d&apos;Inscription Enregistré !
+                </h3>
+                <span className="text-[11px] text-emerald-800 font-bold mt-1 bg-emerald-50 py-1 px-3 rounded-full inline-block border border-emerald-200">
+                  ✓ Synchronisé dans la Scolarité et le Tableau de bord
+                </span>
+              </div>
             </div>
 
-            <div>
-              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 font-heading">
-                Reçu d&apos;Inscription Enregistré !
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-sm mx-auto">
-                L&apos;élève <strong className="text-slate-900">{successModalData.fullName}</strong> ({successModalData.studentNumber}) est enregistré(e) en <strong className="text-slate-900">{successModalData.grade}</strong> ({successModalData.enrollmentType === 'ancien' ? 'Ancien élève' : 'Nouvel élève'}).
-              </p>
-              <p className="text-[11px] text-emerald-700 font-semibold mt-1.5 bg-emerald-50 py-1 px-3 rounded-full inline-block border border-emerald-200">
-                ✓ Synchronisé dans la Vue d&apos;ensemble et le Tableau de bord
-              </p>
+            {/* Récapitulatif structuré de l'élève sous forme de carte claire */}
+            <div className="bg-slate-50/90 rounded-2xl border border-slate-200 p-3.5 text-left text-xs space-y-2">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Élève & Matricule :</span>
+                <span className="font-extrabold text-slate-900 font-heading">
+                  {successModalData.fullName} <span className="font-mono font-bold text-slate-500">({successModalData.matricule || successModalData.studentNumber})</span>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Classe & Statut :</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {successModalData.grade}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded font-bold text-[10.5px] border ${
+                    successModalData.enrollmentType === 'ancien'
+                      ? 'bg-blue-50 text-blue-800 border-blue-200'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  }`}>
+                    {successModalData.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-slate-200/70">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Montant Versé :</span>
+                  <span className="font-mono font-black text-emerald-800 text-xs sm:text-sm">
+                    {formatFCFA(successModalData.paidAmount)}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Reste à Payer :</span>
+                  <span className={`font-mono font-black text-xs sm:text-sm ${
+                    (successModalData.balanceRemaining || 0) > 0 ? 'text-rose-700' : 'text-emerald-700'
+                  }`}>
+                    {(successModalData.balanceRemaining || 0) > 0
+                      ? formatFCFA(successModalData.balanceRemaining || 0)
+                      : '0 FCFA (Soldé)'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-slate-500 font-medium">Contact Parent (WhatsApp) :</span>
+                <span className="font-mono font-extrabold text-slate-900">
+                  {successModalData.whatsappPhone || successModalData.guardianPhone || 'Non spécifié'}
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-2.5 pt-2">
-              {/* Bouton WhatsApp avec texte bien disposé sur 2 lignes distinctes */}
+            {/* Boutons d'actions principaux spacieux et ergonomiques */}
+            <div className="space-y-2 pt-1">
+              {/* Bouton WhatsApp Principal */}
               <button
                 type="button"
                 onClick={() => handleCaptureAndShareWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone, successModalData.fullName)}
-                className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer"
+                className="w-full py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4" />
-                  <span>Envoyer la photo du reçu par WhatsApp aux parents</span>
-                </div>
-                <span className="text-[11px] text-emerald-100 font-mono font-normal">
-                  Numéro : {successModalData.whatsappPhone || successModalData.guardianPhone || 'Contact non renseigné'}
-                </span>
+                <Smartphone className="w-4 h-4" />
+                <span>Envoyer la photo du reçu par WhatsApp aux parents</span>
               </button>
 
-              {/* Bouton Imprimer le Reçu */}
-              <button
-                type="button"
-                onClick={handlePrintReceipt}
-                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer border border-slate-200"
-              >
-                <Printer className="w-4 h-4 text-slate-600" />
-                <span>Imprimer le reçu</span>
-              </button>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Bouton Imprimer le Reçu */}
+                <button
+                  type="button"
+                  onClick={handlePrintReceipt}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer border border-slate-200"
+                >
+                  <Printer className="w-4 h-4 text-slate-600" />
+                  <span>Imprimer le reçu</span>
+                </button>
 
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={handleCloseSuccessAndNext}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer"
-              >
-                + Inscrire l&apos;élève suivant (Nouveau Reçu)
-              </button>
+                {/* Bouton Élève Suivant */}
+                <button
+                  type="button"
+                  onClick={handleCloseSuccessAndNext}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Élève suivant (+ Reçu)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

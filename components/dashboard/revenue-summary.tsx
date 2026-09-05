@@ -51,24 +51,33 @@ export function RevenueSummary({
       };
     }
 
-    // 1. Droits d'Inscription & Réinscription (base sur les élèves inscrits payés)
+    // 1. Droits d'Inscription & Réinscription (25 000 FCFA par élève inscrit ou montant saisi)
     const inscriptionAmount = students.reduce((acc, stu) => {
-      const isNew = stu.enrollmentType === 'nouveau' || !stu.enrollmentType;
-      const fee = stu.registrationFee || (isNew ? 65000 : 45000);
-      return acc + (stu.paidAmount > 0 ? fee : 0);
+      const fee = stu.registrationFee !== undefined ? stu.registrationFee : 25000;
+      return acc + (stu.paidAmount > 0 || stu.tuitionAmount > 0 ? fee : 0);
     }, 0);
 
-    // 2. Cantine & Transport (calculé proportionnellement aux encaissements réels)
-    const totalTuitionPaid = students.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
-    const canteenAmount = Math.round(totalTuitionPaid * 0.22);
-    const transportAmount = Math.round(totalTuitionPaid * 0.14);
+    // 2. Cantine & Transport scolaires (sommes directes liées aux souscriptions élèves)
+    const canteenAmount = students.reduce((acc, stu) => {
+      if (stu.isCanteen) {
+        return acc + 250000; // 25 000 FCFA / mois x 10 mois
+      }
+      return acc;
+    }, 0);
+
+    const transportAmount = students.reduce((acc, stu) => {
+      if (stu.isTransport) {
+        return acc + 200000; // 20 000 FCFA / mois x 10 mois
+      }
+      return acc;
+    }, 0);
 
     const totalCollected = inscriptionAmount + canteenAmount + transportAmount;
 
     const items = [
       {
         category: "Droits d'Inscription & Réinscription",
-        description: 'Frais de dossier, cartes scolaires et réinscriptions',
+        description: 'Frais de dossier, cartes scolaires et admissions',
         amount: inscriptionAmount,
         percentage: totalCollected > 0 ? ((inscriptionAmount / totalCollected) * 100).toFixed(1) : '0.0',
         color: '#10b981', // emerald-500
@@ -99,46 +108,59 @@ export function RevenueSummary({
     };
   }, [students, invoices]);
 
-  // Recouvrement mensuel : Sommes exactes totalisées par mois d'activité (sans barre ni objectif)
+  // Recouvrement des 5 Échéances (commençant par Octobre sans répéter les droits d'inscription)
   const monthlyData = useMemo(() => {
-    const totalPaid = students.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
     const isEmpty = students.length === 0 && invoices.length === 0;
+
+    // Calcul direct par cumul des versements enregistrés sur les reçus des élèves
+    let v1 = 0, v2 = 0, v3 = 0, v4 = 0, v5 = 0;
+
+    students.forEach((stu) => {
+      const inst = stu.installments;
+      const paid = stu.paidAmount || 0;
+
+      const p1 = inst?.versement1?.amount !== undefined ? inst.versement1.amount : (paid > 0 ? Math.min(paid, 100000) : 0);
+      const p2 = inst?.versement2?.amount !== undefined ? inst.versement2.amount : (paid > 100000 ? Math.min(paid - 100000, 50000) : 0);
+      const p3 = inst?.versement3?.amount !== undefined ? inst.versement3.amount : (paid > 150000 ? Math.min(paid - 150000, 40000) : 0);
+      const p4 = inst?.versement4?.amount !== undefined ? inst.versement4.amount : (paid > 190000 ? Math.min(paid - 190000, 35000) : 0);
+      const p5 = inst?.versement5?.amount !== undefined ? inst.versement5.amount : (paid > 225000 ? Math.min(paid - 225000, 25000) : 0);
+
+      v1 += p1;
+      v2 += p2;
+      v3 += p3;
+      v4 += p4;
+      v5 += p5;
+    });
 
     return [
       {
-        month: 'Septembre 2026',
-        label: 'Rentrée & Inscriptions',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.45),
-        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      },
-      {
         month: 'Octobre 2026',
         label: '1ère Échéance Scolarité',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.20),
+        collected: isEmpty ? 0 : v1,
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Novembre 2026',
         label: '2ème Échéance Scolarité',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.15),
-        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      },
-      {
-        month: 'Décembre 2026',
-        label: '3ème Échéance Scolarité',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.10),
+        collected: isEmpty ? 0 : v2,
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Janvier 2027',
+        label: '3ème Échéance Scolarité',
+        collected: isEmpty ? 0 : v3,
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      },
+      {
+        month: 'Mars 2027',
         label: '4ème Échéance Scolarité',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.06),
+        collected: isEmpty ? 0 : v4,
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
       {
-        month: 'Février 2027',
-        label: '5ème Échéance (Solde)',
-        collected: isEmpty ? 0 : Math.round(totalPaid * 0.04),
+        month: 'Mai 2027',
+        label: '5ème Échéance (Solde Fin d’Année)',
+        collected: isEmpty ? 0 : v5,
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
     ];
@@ -160,10 +182,10 @@ export function RevenueSummary({
               </div>
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-slate-900 font-heading">
-                  Recouvrement mensuel (FCFA)
+                  Échéances de Scolarité & Recouvrement
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Total des sommes effectivement encaissées par mois
+                  Total des sommes reçues par échéance à partir d’octobre
                 </p>
               </div>
             </div>
@@ -172,7 +194,7 @@ export function RevenueSummary({
             </span>
           </div>
 
-          {/* Liste épurée des mois avec sommes nettes */}
+          {/* Liste épurée des 5 échéances avec sommes nettes */}
           <div className="space-y-2.5">
             {monthlyData.map((item) => (
               <div
@@ -198,7 +220,7 @@ export function RevenueSummary({
                     {formatFCFA(item.collected)}
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block mt-0.5 ${item.badgeColor}`}>
-                    Encaissé
+                    {item.collected > 0 ? 'Encaissé' : 'En attente'}
                   </span>
                 </div>
               </div>
@@ -206,9 +228,9 @@ export function RevenueSummary({
           </div>
         </div>
 
-        {/* Total cumulé des encaissements mensuels */}
+        {/* Total cumulé des encaissements des 5 échéances */}
         <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-slate-500 font-medium">Cumul total des 6 mois :</span>
+          <span className="text-slate-500 font-medium">Cumul total des 5 échéances :</span>
           <span className="font-extrabold font-heading text-emerald-700 text-sm sm:text-base">
             {formatFCFA(totalMonthlyCollected)}
           </span>
