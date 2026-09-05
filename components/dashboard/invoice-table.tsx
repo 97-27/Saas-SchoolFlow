@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, formatDateFrenchLong } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import {
   Search,
@@ -209,7 +209,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               <h2 className="text-base sm:text-lg font-bold text-slate-900 font-heading flex items-center gap-2">
                 <span>Journal des Paiements & Encaissements</span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  {formatDate(selectedJournalDate)}
+                  {formatDateFrenchLong(selectedJournalDate)}
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -265,7 +265,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10 flex items-center justify-between">
             <div>
               <span className="text-[10px] uppercase font-bold text-emerald-300 block tracking-wider">
-                Recettes du Jour ({formatDate(selectedJournalDate)})
+                Recettes du Jour ({formatDateFrenchLong(selectedJournalDate)})
               </span>
               <span className="text-lg sm:text-xl font-extrabold font-heading text-white tracking-tight">
                 {formatFCFA(dayMetrics.totalAmount)}
@@ -319,7 +319,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             <div className="flex items-center gap-1.5 mt-1">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span className="text-xs font-bold text-emerald-300 truncate">
-                Journal aligné au {formatDate(selectedJournalDate)}
+                Journal aligné au {formatDateFrenchLong(selectedJournalDate)}
               </span>
             </div>
           </div>
@@ -331,14 +331,13 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
               <span>
-                <strong>Information Bilan :</strong> Seules les opérations enregistrées le <strong>{formatDate(selectedJournalDate)}</strong> sont comptabilisées. ({dayMetrics.mismatchedDatesCount} opération(s) à d&apos;autres dates).
+                <strong>Information Bilan :</strong> Seules les opérations enregistrées le <strong>{formatDateFrenchLong(selectedJournalDate)}</strong> sont comptabilisées. ({dayMetrics.mismatchedDatesCount} opération(s) à d&apos;autres dates).
               </span>
             </div>
             <button
               type="button"
               onClick={() => {
                 setDateFilterMode('all_dates');
-                setCurrentPage(1);
               }}
               className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-bold text-[11px] hover:bg-amber-300 transition-colors cursor-pointer"
             >
@@ -356,7 +355,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             type="button"
             onClick={() => {
               setDateFilterMode('day_only');
-              setCurrentPage(1);
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               dateFilterMode === 'day_only'
@@ -364,7 +362,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            📅 Date du jour ({formatDate(selectedJournalDate)})
+            📅 Date du jour ({formatDateFrenchLong(selectedJournalDate)})
           </button>
           <button
             type="button"
@@ -518,7 +516,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Calendar className="w-8 h-8 text-slate-300" />
                     <p className="font-semibold text-slate-600">
-                      Aucun encaissement enregistré pour la date du {formatDate(selectedJournalDate)}.
+                      Aucun encaissement enregistré pour la date du {formatDateFrenchLong(selectedJournalDate)}.
                     </p>
                     <p className="text-xs text-slate-400">
                       Modifiez la date ou cliquez sur « Toutes les dates » pour consulter l&apos;historique complet.
@@ -624,7 +622,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>
-            Affichage de <strong className="text-slate-900 font-bold">{filteredInvoices.length}</strong> encaissement{filteredInvoices.length > 1 ? 's' : ''} ({dateFilterMode === 'day_only' ? `du ${formatDate(selectedJournalDate)}` : 'toutes dates confondues'}) • Défilement vertical direct
+            Affichage de <strong className="text-slate-900 font-bold">{filteredInvoices.length}</strong> encaissement{filteredInvoices.length > 1 ? 's' : ''} ({dateFilterMode === 'day_only' ? `du ${formatDateFrenchLong(selectedJournalDate)}` : 'toutes dates confondues'}) • Défilement vertical direct
           </span>
         </div>
         <span className="text-[11px] text-slate-400 font-medium">

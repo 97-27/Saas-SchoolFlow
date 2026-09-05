@@ -429,7 +429,6 @@ export function Sidebar({
       communicationGroupItem,
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'secretaire') {
     // 📝 SECRÉTAIRE : Vue d'ensemble, Documents scolaires, Enseignants et personnel, Communication parents, Notes diverses

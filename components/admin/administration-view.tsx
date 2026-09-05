@@ -20,27 +20,17 @@ import {
   Plus,
   Copy,
   Check,
-  Sparkles,
   Smartphone,
-  Mail,
-  RefreshCw,
   Edit2,
   Lock,
   Unlock,
-  AlertCircle,
   X,
   BookOpen,
-  Wallet,
-  FileSpreadsheet,
   CheckCircle2,
   UserCheck,
   Shield,
-  Send,
   Eye,
   GraduationCap,
-  Calendar,
-  MapPin,
-  Award,
   Trash2,
   Share2,
 } from 'lucide-react';
@@ -56,26 +46,26 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Modale d'ajout
+  // Modale d'ajout — Postes nécessitant un code d'authentification uniquement
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
-  const [newRole, setNewRole] = useState<'directeur' | 'assistant_direction' | 'fondateur' | 'educateur' | 'informaticien' | 'comptable' | 'secretaire' | 'enseignant' | 'parent'>('enseignant');
+  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
   const [newMatricule, setNewMatricule] = useState('');
-  const [newSubject, setNewSubject] = useState('');
-  const [newClasses, setNewClasses] = useState('');
+  const [newSubject, setNewSubject] = useState('Toutes les matières (Enseignant Titulaire / Polyvalent)');
+  const [newClasses, setNewClasses] = useState('Toutes les classes');
   const [newDiploma, setNewDiploma] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newAuthCode, setNewAuthCode] = useState('');
 
-  // Modale de Fiche Détaillée & Informations Professionnelles
+  // Modale de Fiche Détaillée & Plus d'Informations (Empêche le défilement horizontal et permet une vue exhaustive)
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffUser | null>(null);
 
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'directeur' | 'assistant_direction' | 'fondateur' | 'educateur' | 'informaticien' | 'comptable' | 'secretaire' | 'enseignant' | 'parent'>('enseignant');
+  const [editRole, setEditRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -85,29 +75,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [editPhone, setEditPhone] = useState('');
   const [editAuthCodeValue, setEditAuthCodeValue] = useState('');
   const [editStatus, setEditStatus] = useState<'Actif' | 'En attente' | 'Verrouillé'>('Actif');
-
-  // Refs pour le défilement horizontal synchronisé en haut
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
-  const tableScrollRef = React.useRef<HTMLDivElement>(null);
-
-  const handleTopScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
-      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-    }
-  };
-
-  const handleTableScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
-      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-    }
-  };
-
-  const handleScrollStep = (direction: 'left' | 'right') => {
-    if (tableScrollRef.current) {
-      const step = direction === 'left' ? -300 : 300;
-      tableScrollRef.current.scrollBy({ left: step, behavior: 'smooth' });
-    }
-  };
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -152,11 +119,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         ? 'CPT'
         : role === 'secretaire'
         ? 'SEC'
-        : role === 'fondateur'
-        ? 'FND'
-        : role === 'parent'
-        ? 'PAR'
-        : 'DIR';
+        : 'STF';
     const rand = Math.floor(1000 + Math.random() * 9000);
     return `${prefix}-${rand}`;
   };
@@ -165,10 +128,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const openEditModal = (staff: StaffUser) => {
     setEditingStaff(staff);
     setEditFullName(staff.fullName);
-    setEditRole(staff.roleId);
+    const validRoles: ('enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
+      'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
+    ];
+    setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
     setEditMatricule(staff.matricule || `EMP-${staff.authCode}`);
-    setEditSubject(staff.subjectOrGrade || '');
-    setEditClasses(staff.assignedClasses || '');
+    setEditSubject(staff.subjectOrGrade || 'Toutes les matières (Enseignant Titulaire / Polyvalent)');
+    setEditClasses(staff.assignedClasses || 'Toutes les classes');
     setEditDiploma(staff.diplomaOrExperience || '');
     setEditAddress(staff.address || '');
     setEditEmail(staff.email);
@@ -177,12 +143,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     setEditStatus(staff.status);
   };
 
-  // Basculer statut Actif / Verrouillé
+  // Basculer statut Actif / Verrouillé (Accès immédiatement bloqué si verrouillé)
   const toggleStatus = (staff: StaffUser) => {
     const nextStatus = staff.status === 'Actif' ? 'Verrouillé' : 'Actif';
     const updated = staffList.map((s) => (s.id === staff.id ? { ...s, status: nextStatus as any } : s));
     saveLiveStaffUsers(updated, schoolSlug);
-    showToast(`Statut de ${staff.fullName} : ${nextStatus}`);
+    showToast(
+      nextStatus === 'Verrouillé'
+        ? `🔒 Compte de ${staff.fullName} verrouillé. L'accès lui est désormais strictement bloqué.`
+        : `✅ Compte de ${staff.fullName} réactivé avec succès.`
+    );
   };
 
   // Partager les accès officiels sur WhatsApp
@@ -216,26 +186,26 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     e.preventDefault();
     if (!editingStaff || !editFullName.trim() || !editEmail.trim()) return;
 
-    const roleTitleMap = {
-      directeur: 'Directeur des Études (Admin)',
+    const roleTitleMap: Record<string, string> = {
       assistant_direction: 'Assistant(e) de Direction',
-      fondateur: 'Fondateur / Fondatrice (Supervision)',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
-      enseignant: 'Enseignant / Professeur',
+      enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
+      directeur: 'Directeur des Études (Admin)',
+      fondateur: 'Fondateur / Fondatrice (Supervision)',
       parent: 'Parent d’Élève (Espace Famille)',
     };
 
     const updatedUser: StaffUser = {
       ...editingStaff,
       fullName: editFullName.trim(),
-      role: roleTitleMap[editRole],
+      role: roleTitleMap[editRole] || 'Membre du Personnel',
       roleId: editRole,
       matricule: editMatricule.trim() || `EMP-${editAuthCodeValue.trim()}`,
-      subjectOrGrade: editSubject.trim() || undefined,
-      assignedClasses: editClasses.trim() || undefined,
+      subjectOrGrade: editSubject.trim() || (editRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
+      assignedClasses: editClasses.trim() || (editRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
       diplomaOrExperience: editDiploma.trim() || undefined,
       address: editAddress.trim() || undefined,
       email: editEmail.trim(),
@@ -255,29 +225,26 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     if (!newFullName.trim() || !newEmail.trim()) return;
 
     const generatedCode = newAuthCode.trim() || generateRandomCode(newRole);
-    const roleTitleMap = {
-      directeur: 'Directeur / Directrice (Admin)',
+    const roleTitleMap: Record<string, string> = {
       assistant_direction: 'Assistant(e) de Direction',
-      fondateur: 'Fondateur / Fondatrice (Supervision)',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
-      enseignant: 'Enseignant / Professeur',
-      parent: 'Parent d’Élève (Espace Famille)',
+      enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
     };
 
     const newStaffMember: StaffUser = {
       id: `staff-${Date.now().toString().slice(-4)}`,
       fullName: newFullName.trim(),
-      role: roleTitleMap[newRole],
+      role: roleTitleMap[newRole] || 'Membre du Personnel',
       roleId: newRole,
       matricule: newMatricule.trim() || `EMP-${generatedCode.toUpperCase()}`,
-      subjectOrGrade: newSubject.trim() || (newRole === 'enseignant' ? 'Professeur Titulaire' : 'Administration'),
-      assignedClasses: newClasses.trim() || (newRole === 'enseignant' ? '6ème, 5ème' : 'Toutes'),
+      subjectOrGrade: newSubject.trim() || (newRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
+      assignedClasses: newClasses.trim() || (newRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
-      joinDate: '31/08/2026',
+      joinDate: '01/09/2026',
       email: newEmail.trim(),
       phone: newPhone.trim() || '+225 07 00 00 00 00',
       authCode: generatedCode.toUpperCase(),
@@ -291,8 +258,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     // Reset
     setNewFullName('');
     setNewMatricule('');
-    setNewSubject('');
-    setNewClasses('');
+    setNewSubject('Toutes les matières (Enseignant Titulaire / Polyvalent)');
+    setNewClasses('Toutes les classes');
     setNewDiploma('');
     setNewAddress('');
     setNewEmail('');
@@ -341,7 +308,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 Administration & Codes d&apos;Accès Sécurisés
               </h1>
               <p className="text-xs text-slate-500 font-sans">
-                Espace Direction • Attribution, réinitialisation des codes d&apos;authentification et gestion des informations du personnel
+                Espace Direction • Attribution, réinitialisation des codes d&apos;authentification et gestion du personnel
               </p>
             </div>
           </div>
@@ -352,6 +319,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             type="button"
             onClick={() => {
               setNewAuthCode(generateRandomCode(newRole));
+              setNewSubject('Toutes les matières (Enseignant Titulaire / Polyvalent)');
+              setNewClasses('Toutes les classes');
               setIsAddModalOpen(true);
             }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all cursor-pointer"
@@ -373,14 +342,14 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             </div>
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Total Comptes
+                Total Personnel
               </h3>
               <span className="text-2xl font-extrabold text-slate-900 font-heading">
                 {totalUsers}
               </span>
             </div>
           </div>
-          <p className="text-[11px] text-slate-500">Personnel et profils répertoriés</p>
+          <p className="text-[11px] text-slate-500">Membres et profils répertoriés</p>
         </div>
 
         {/* Enseignants */}
@@ -409,14 +378,14 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             </div>
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Pôle Direction & Gestion
+                Pôle Gestion & Secrétariat
               </h3>
               <span className="text-2xl font-extrabold text-slate-900 font-heading">
                 {adminCount}
               </span>
             </div>
           </div>
-          <p className="text-[11px] text-slate-500">Directeur, Adjointe, Secrétaire, Comptable</p>
+          <p className="text-[11px] text-slate-500">Comptable, Secrétaire, Assistante, IT</p>
         </div>
 
         {/* Codes Actifs */}
@@ -434,7 +403,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               </span>
             </div>
           </div>
-          <p className="text-[11px] text-teal-700 font-semibold">Accès 100% sécurisé et protégé</p>
+          <p className="text-[11px] text-teal-700 font-semibold">Comptes autorisés et actifs</p>
         </div>
 
       </div>
@@ -476,11 +445,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
           }`}
         >
           <Shield className="w-3.5 h-3.5" />
-          <span>Direction & Administration ({adminCount})</span>
+          <span>Administration & Secrétariat ({adminCount})</span>
         </button>
       </div>
 
-      {/* ================= TABLEAU DE GESTION DU PERSONNEL & CODES ================= */}
+      {/* ================= TABLEAU DE GESTION DU PERSONNEL & CODES SANS BARRE DE DÉFILEMENT PARASITE ================= */}
       <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
         
         {/* BARRE D'OUTILS & FILTRES */}
@@ -502,276 +471,207 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               onChange={(e) => setRoleFilter(e.target.value)}
               className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 focus:border-emerald-600 focus:outline-none cursor-pointer"
             >
-              <option value="all">Tous les postes</option>
-              <option value="directeur">Directeur / Admin</option>
+              <option value="all">Tous les postes avec code</option>
+              <option value="enseignant">Enseignants (Toutes matières)</option>
+              <option value="secretaire">Secrétaires</option>
+              <option value="comptable">Comptables</option>
               <option value="assistant_direction">Assistant(e) Direction</option>
-              <option value="fondateur">Fondateur</option>
               <option value="educateur">Éducateurs (Vie Scolaire)</option>
               <option value="informaticien">Informaticiens (IT)</option>
-              <option value="enseignant">Enseignants</option>
-              <option value="comptable">Comptables</option>
-              <option value="secretaire">Secrétaires</option>
-              <option value="parent">Parents d&apos;Élèves</option>
             </select>
           </div>
         </div>
 
-        {/* BARRE DE NAVIGATION & DÉFILEMENT HORIZONTAL POSITIONNÉE EN HAUT */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50 p-2.5 sm:p-3 rounded-2xl border border-slate-200 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-700 flex items-center gap-1.5 text-[11.5px]">
-              <span>↔️</span>
-              <span>Défilement Horizontal du Tableau :</span>
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => handleScrollStep('left')}
-                className="px-2.5 py-1 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 shadow-2xs transition-all cursor-pointer flex items-center gap-1 text-[11px] active:scale-95"
-                title="Défiler vers la gauche"
-              >
-                <span>◀</span>
-                <span>Gauche</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleScrollStep('right')}
-                className="px-2.5 py-1 rounded-xl bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 shadow-2xs transition-all cursor-pointer flex items-center gap-1 text-[11px] active:scale-95"
-                title="Défiler vers la droite"
-              >
-                <span>Droite</span>
-                <span>▶</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Rail de défilement horizontal interactif en haut */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden md:inline">
-              Glisser ici :
-            </span>
-            <div
-              ref={topScrollRef}
-              onScroll={handleTopScroll}
-              className="flex-1 sm:w-[280px] md:w-[340px] overflow-x-auto h-5 bg-white border border-slate-300 rounded-lg p-0.5 shadow-inner cursor-ew-resize"
-              title="Faites glisser cette barre pour naviguer horizontalement dans le tableau"
-            >
-              <div className="w-[1150px] h-1" />
-            </div>
-          </div>
-        </div>
-
-        {/* TABLE DES MEMBRES ET CODES (Barre inférieure masquée au profit de celle du haut) */}
-        <div
-          ref={tableScrollRef}
-          onScroll={handleTableScroll}
-          className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-2xl border border-slate-200"
-        >
-          <table className="w-full text-left border-collapse text-xs min-w-[1100px]">
+        {/* TABLE DES MEMBRES ET CODES (Affichage fluide de toutes les colonnes sans défilement horizontal) */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                <th className="py-3.5 px-4 min-w-[200px]">Utilisateur / Personnel</th>
-                <th className="py-3.5 px-3 min-w-[120px] text-center">Matricule</th>
-                <th className="py-3.5 px-4 min-w-[160px]">Poste & Attributions</th>
-                <th className="py-3.5 px-4 min-w-[150px]">Classes / Matières</th>
-                <th className="py-3.5 px-4 min-w-[150px] text-center">Code d&apos;Authentification</th>
-                <th className="py-3.5 px-3 min-w-[100px] text-center">Statut</th>
-                <th className="py-3.5 px-4 min-w-[160px] text-center">Dernière Connexion</th>
-                <th className="py-3.5 px-4 min-w-[120px] text-right">Actions</th>
+                <th className="py-3 px-3.5">Membre & Contact</th>
+                <th className="py-3 px-2.5 text-center">Poste & Matricule</th>
+                <th className="py-3 px-2.5">Attributions & Matières</th>
+                <th className="py-3 px-2.5 text-center">Code d&apos;Authentification</th>
+                <th className="py-3 px-2 text-center">Statut d&apos;Accès</th>
+                <th className="py-3 px-2.5 text-center">Dernière Connexion</th>
+                <th className="py-3 px-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-sans">
-              {filteredStaff.map((member) => (
-                <tr key={member.id} className="hover:bg-emerald-50/40 transition-colors">
-                  
-                  {/* Nom et Contact */}
-                  <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-extrabold flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs">
-                        {member.fullName.slice(0, 2).toUpperCase()}
+              {filteredStaff.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-400">
+                    Aucun membre trouvé pour ces critères de recherche.
+                  </td>
+                </tr>
+              ) : (
+                filteredStaff.map((member) => (
+                  <tr key={member.id} className="hover:bg-emerald-50/40 transition-colors">
+                    
+                    {/* 1. Nom, Contact & Avatar */}
+                    <td className="py-3 px-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 font-extrabold flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs text-xs">
+                          {member.fullName.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <strong className="block text-slate-900 font-bold font-heading text-xs truncate max-w-[180px]">
+                            {member.fullName}
+                          </strong>
+                          <span className="text-[10.5px] text-slate-500 font-mono block truncate max-w-[180px]">
+                            {member.email}
+                          </span>
+                          <span className="text-[10.5px] text-emerald-800 font-mono font-medium block">
+                            {member.phone}
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <strong className="block text-slate-900 font-bold font-heading text-xs truncate">
-                          {member.fullName}
-                        </strong>
-                        <span className="text-[11px] text-slate-500 font-mono block truncate">
-                          {member.email}
-                        </span>
-                        <span className="text-[10.5px] text-emerald-800 font-mono font-medium block">
-                          {member.phone}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Matricule d'Embauche */}
-                  <td className="py-3.5 px-3 text-center">
-                    <span className="inline-block font-mono font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-xs whitespace-nowrap shadow-2xs">
-                      {member.matricule || `EMP-${member.authCode}`}
-                    </span>
-                  </td>
-
-                  {/* Poste & Rôle */}
-                  <td className="py-3.5 px-4">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap ${
-                      member.roleId === 'directeur'
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : member.roleId === 'assistant_direction'
-                        ? 'bg-teal-50 text-teal-800 border-teal-200'
-                        : member.roleId === 'fondateur'
-                        ? 'bg-amber-50 text-amber-900 border-amber-300'
-                        : member.roleId === 'educateur'
-                        ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                        : member.roleId === 'informaticien'
-                        ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
-                        : member.roleId === 'comptable'
-                        ? 'bg-blue-50 text-blue-800 border-blue-200'
-                        : member.roleId === 'secretaire'
-                        ? 'bg-purple-50 text-purple-800 border-purple-200'
-                        : member.roleId === 'parent'
-                        ? 'bg-rose-50 text-rose-800 border-rose-200'
-                        : 'bg-emerald-50/60 text-emerald-900 border-emerald-200/70'
-                    }`}>
-                      {member.roleId === 'directeur'
-                        ? '👑 Admin (Dir. Études)'
-                        : member.roleId === 'assistant_direction'
-                        ? '📋 Assistant(e) Dir.'
-                        : member.roleId === 'fondateur'
-                        ? '🏛️ Fondateur'
-                        : member.roleId === 'educateur'
-                        ? '🛡️ Éducateur'
-                        : member.roleId === 'informaticien'
-                        ? '💻 Informaticien'
-                        : member.roleId === 'comptable'
-                        ? '📊 Comptable'
-                        : member.roleId === 'secretaire'
-                        ? '📝 Secrétaire'
-                        : member.roleId === 'parent'
-                        ? '👨‍👩‍👧 Parent'
-                        : '📚 Enseignant'}
-                    </span>
-                    <span className="block text-[11px] text-slate-600 font-medium mt-1">
-                      {member.roleId === 'enseignant'
-                        ? member.subjectOrGrade || 'Toutes disciplines'
-                        : 'Pôle Direction & Administration'}
-                    </span>
-                  </td>
-
-                  {/* Classes / Attributions */}
-                  <td className="py-3.5 px-4">
-                    {member.roleId === 'enseignant' ? (
-                      <>
-                        <span className="font-bold text-slate-800 block text-xs">
-                          {member.assignedClasses || 'Toutes les classes'}
-                        </span>
-                        <span className="text-[11px] text-slate-500 truncate max-w-[160px] block mt-0.5">
-                          {member.diplomaOrExperience || 'Diplôme d’État & Certification'}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-bold text-slate-800 block text-xs">
-                          {member.phone || 'Ligne directe active'}
-                        </span>
-                        <span className="text-[11px] text-emerald-700 font-medium truncate max-w-[160px] block mt-0.5">
-                          {member.email}
-                        </span>
-                      </>
-                    )}
-                  </td>
-
-                  {/* Code d'authentification */}
-                  <td className="py-3.5 px-4 text-center">
-                    {member.roleId === 'directeur' || member.roleId === 'fondateur' ? (
-                      <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold px-3 py-1.5 rounded-xl text-xs shadow-2xs whitespace-nowrap">
-                        <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                        <span>👑 Accès Maître (Direct)</span>
+                    {/* 2. Poste & Matricule */}
+                    <td className="py-3 px-2.5 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap mb-1 ${
+                        member.roleId === 'enseignant'
+                          ? 'bg-emerald-50 text-emerald-900 border-emerald-200/80'
+                          : member.roleId === 'secretaire'
+                          ? 'bg-purple-50 text-purple-800 border-purple-200'
+                          : member.roleId === 'comptable'
+                          ? 'bg-blue-50 text-blue-800 border-blue-200'
+                          : member.roleId === 'assistant_direction'
+                          ? 'bg-teal-50 text-teal-800 border-teal-200'
+                          : member.roleId === 'educateur'
+                          ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                          : member.roleId === 'informaticien'
+                          ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                          : 'bg-slate-100 text-slate-800 border-slate-200'
+                      }`}>
+                        {member.roleId === 'enseignant'
+                          ? '👨‍🏫 Enseignant'
+                          : member.roleId === 'secretaire'
+                          ? '📝 Secrétaire'
+                          : member.roleId === 'comptable'
+                          ? '💼 Comptable'
+                          : member.roleId === 'assistant_direction'
+                          ? '📋 Assistante'
+                          : member.roleId === 'educateur'
+                          ? '🛡️ Éducateur'
+                          : member.roleId === 'informaticien'
+                          ? '💻 IT'
+                          : member.role}
                       </span>
-                    ) : (
-                      <div className="inline-flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
-                        <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
-                          {member.authCode}
+                      <span className="block font-mono font-bold text-slate-700 text-[10.5px]">
+                        {member.matricule || `EMP-${member.authCode}`}
+                      </span>
+                    </td>
+
+                    {/* 3. Attributions & Matières */}
+                    <td className="py-3 px-2.5">
+                      {member.roleId === 'enseignant' ? (
+                        <>
+                          <span className="font-bold text-emerald-900 block text-[11px] truncate max-w-[190px]">
+                            {member.subjectOrGrade || 'Toutes les matières'}
+                          </span>
+                          <span className="text-[10.5px] text-slate-500 font-medium block truncate max-w-[190px]">
+                            {member.assignedClasses || 'Toutes les classes'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold text-slate-800 block text-[11px] truncate max-w-[190px]">
+                            {member.role}
+                          </span>
+                          <span className="text-[10.5px] text-slate-500 block truncate max-w-[190px]">
+                            Ligne : {member.phone}
+                          </span>
+                        </>
+                      )}
+                    </td>
+
+                    {/* 4. Code d'authentification */}
+                    <td className="py-3 px-2.5 text-center">
+                      {member.roleId === 'directeur' || member.roleId === 'fondateur' ? (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold px-2 py-1 rounded-lg text-[11px] shadow-2xs whitespace-nowrap">
+                          <KeyRound className="w-3 h-3 text-amber-600" />
+                          <span>👑 Accès Maître</span>
                         </span>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
+                          <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
+                            {member.authCode}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyCode(member.authCode, member.id)}
+                            className="p-0.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                            title="Copier le code d'authentification"
+                          >
+                            {copiedId === member.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 5. Statut d'Accès */}
+                    <td className="py-3 px-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggleStatus(member)}
+                        className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold border transition-all hover:scale-105 cursor-pointer whitespace-nowrap ${
+                          member.status === 'Actif'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs'
+                        }`}
+                        title={member.status === 'Actif' ? 'Cliquez pour verrouiller et bloquer l’accès' : 'Cliquez pour réactiver le compte'}
+                      >
+                        {member.status === 'Actif' ? (
+                          <Unlock className="w-3 h-3 text-emerald-600" />
+                        ) : (
+                          <Lock className="w-3 h-3 text-rose-600" />
+                        )}
+                        <span>{member.status}</span>
+                      </button>
+                    </td>
+
+                    {/* 6. Dernière Connexion */}
+                    <td className="py-3 px-2.5 text-center whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-mono font-semibold text-slate-700">
+                        <span className={`w-1.5 h-1.5 rounded-full ${member.status === 'Actif' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                        <span>{member.lastLogin || '01/09/2026 à 11:05'}</span>
+                      </div>
+                    </td>
+
+                    {/* 7. Actions (Plus d'infos, WhatsApp, Modifier, Supprimer) */}
+                    <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1 justify-end">
+                        {/* Consulter fiche complète & Plus d'informations */}
                         <button
                           type="button"
-                          onClick={() => handleCopyCode(member.authCode, member.id)}
-                          className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
-                          title="Copier le code d'authentification"
+                          onClick={() => setSelectedStaffDetail(member)}
+                          className="p-1.5 text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Fiche & Plus d'informations (Détails complets)"
                         >
-                          {copiedId === member.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
-                      </div>
-                    )}
-                  </td>
 
-                  {/* Statut */}
-                  <td className="py-3.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => toggleStatus(member)}
-                      className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-transform hover:scale-105 cursor-pointer whitespace-nowrap ${
-                        member.status === 'Actif'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-rose-50 text-rose-700 border-rose-200'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${member.status === 'Actif' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                      <span>{member.status}</span>
-                    </button>
-                  </td>
-
-                  {/* Dernière Connexion */}
-                  <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono font-semibold text-slate-700">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
-                      <span>{member.lastLogin || '01/09/2026 à 11:05'}</span>
-                    </div>
-                  </td>
-
-                  {/* Actions Direction */}
-                  <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                    {member.roleId === 'directeur' ? (
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                        <span>👑 Compte Maître (Directeur)</span>
-                      </div>
-                    ) : member.roleId === 'fondateur' ? (
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs">
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                        <span>🏛️ Compte Fondateur (Maître)</span>
-                      </div>
-                    ) : (
-                      <div className="inline-flex items-center gap-1.5">
                         {/* Partager accès sur WhatsApp */}
                         <button
                           type="button"
                           onClick={() => handleShareWhatsApp(member)}
-                          className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer"
+                          className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer shadow-2xs"
                           title="Envoyer le code et le lien de connexion sur WhatsApp"
                         >
                           <Share2 className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Consulter fiche complète */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStaffDetail(member)}
-                          className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
-                          title="Consulter la fiche détaillée"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Modifier toutes les informations */}
+                        {/* Modifier les informations */}
                         <button
                           type="button"
                           onClick={() => openEditModal(member)}
-                          className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                          className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
                           title="Modifier les coordonnées, le matricule et le code"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
@@ -781,24 +681,24 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         <button
                           type="button"
                           onClick={() => handleDeleteStaff(member)}
-                          className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200 cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
                           title="Révoquer définitivement ce compte et son code d'accès"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    )}
-                  </td>
+                    </td>
 
-                </tr>
-              ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
       </div>
 
-      {/* ================= MODALE 1 : FICHE COMPLÈTE & INFORMATIONS PERSONNELLES / PROFESSIONNELLES ================= */}
+      {/* ================= MODALE 1 : FICHE COMPLÈTE & PLUS D'INFORMATIONS DU MEMBRE DU PERSONNEL ================= */}
       {selectedStaffDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
@@ -835,23 +735,23 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
                   <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                     <GraduationCap className="w-4 h-4 text-emerald-600" />
-                    <span>Informations Pédagogiques & Professionnelles</span>
+                    <span>Attributions Pédagogiques (Toutes Matières)</span>
                   </h4>
                   <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
                     <div>
-                      <span className="text-slate-400 text-[11px] block">Matière / Discipline :</span>
-                      <strong className="text-slate-900">{selectedStaffDetail.subjectOrGrade || 'Mathématiques & Sciences'}</strong>
+                      <span className="text-slate-400 text-[11px] block">Matières Enseignées :</span>
+                      <strong className="text-slate-900">{selectedStaffDetail.subjectOrGrade || 'Toutes les matières (Enseignant Polyvalent)'}</strong>
                     </div>
                     <div>
                       <span className="text-slate-400 text-[11px] block">Classes Assignées :</span>
-                      <strong className="text-slate-900">{selectedStaffDetail.assignedClasses || '6ème à 3ème'}</strong>
+                      <strong className="text-slate-900">{selectedStaffDetail.assignedClasses || 'Toutes les classes'}</strong>
                     </div>
                     <div className="col-span-2 pt-1 border-t border-slate-200/60">
                       <span className="text-slate-400 text-[11px] block">Diplôme & Expérience :</span>
                       <strong className="text-slate-900">{selectedStaffDetail.diplomaOrExperience || 'Diplôme d’État & Certification Pédagogique'}</strong>
                     </div>
                     <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Date d&apos;embauche :</span>
+                      <span className="text-slate-400 text-[11px]">Date de prise de fonction :</span>
                       <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
                     </div>
                   </div>
@@ -901,7 +801,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
-              {/* Code d'Authentification Sécurisé */}
+              {/* Code d'Authentification Sécurisé & Statut */}
               <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
                 <div>
                   <span className="text-[11px] font-bold text-emerald-900 block flex items-center gap-1.5">
@@ -912,14 +812,24 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     {selectedStaffDetail.authCode}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleCopyCode(selectedStaffDetail.authCode, selectedStaffDetail.id)}
-                  className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copier</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(selectedStaffDetail.authCode, selectedStaffDetail.id)}
+                    className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copier</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShareWhatsApp(selectedStaffDetail)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -930,7 +840,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 onClick={() => setSelectedStaffDetail(null)}
                 className="px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
               >
-                Fermer
+                Fermer la Fiche
               </button>
             </div>
 
@@ -938,7 +848,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         </div>
       )}
 
-      {/* ================= MODALE 2 : AJOUTER UN MEMBRE & ATTRIBUER UN CODE ================= */}
+      {/* ================= MODALE 2 : AJOUTER UN UTILISATEUR & ATTRIBUER UN CODE ================= */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
@@ -953,7 +863,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     Ajouter un Utilisateur & Définir son Code
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Attribuez le poste, les classes et le code d&apos;authentification officiel
+                    Attribuez le poste, les matières et le code d&apos;authentification officiel
                   </p>
                 </div>
               </div>
@@ -996,7 +906,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Poste / Fonction *</label>
+                  <label className="font-bold text-slate-700 block">Poste / Fonction (Code Requis) *</label>
                   <select
                     value={newRole}
                     onChange={(e) => {
@@ -1006,15 +916,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
-                    <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
+                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
                     <option value="secretaire">📝 Secrétaire de Direction</option>
                     <option value="comptable">💼 Comptable / Gestionnaire</option>
                     <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                     <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
                     <option value="informaticien">💻 Informaticien / Responsable IT</option>
-                    <option value="fondateur">👑 Fondateur (Supervision)</option>
-                    <option value="directeur">👑 Directeur (Admin)</option>
-                    <option value="parent">👨‍👩‍👧 Parent d&apos;Élève (Espace Famille)</option>
                   </select>
                 </div>
 
@@ -1061,17 +968,17 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 animate-in fade-in">
                   <div className="flex items-center gap-2 pb-1 border-b border-slate-200/60">
                     <BookOpen className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold text-slate-900 text-xs">Attributions Pédagogiques (Enseignant)</span>
+                    <span className="font-bold text-slate-900 text-xs">Attributions Pédagogiques (Enseignant Polyvalent / Titulaire)</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Matière / Discipline *</label>
+                      <label className="font-bold text-slate-700 block">Matières Enseignées *</label>
                       <input
                         type="text"
                         value={newSubject}
                         onChange={(e) => setNewSubject(e.target.value)}
-                        placeholder="Ex : Mathématiques / SVT"
+                        placeholder="Ex : Toutes les matières, Mathématiques, SVT..."
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                       />
                     </div>
@@ -1082,7 +989,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         type="text"
                         value={newClasses}
                         onChange={(e) => setNewClasses(e.target.value)}
-                        placeholder="Ex : 6ème A, 5ème B, CM2"
+                        placeholder="Ex : Toutes les classes, 6ème A, 5ème B..."
                         className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                       />
                     </div>
@@ -1094,7 +1001,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       type="text"
                       value={newDiploma}
                       onChange={(e) => setNewDiploma(e.target.value)}
-                      placeholder="Ex : CAPES Mathématiques (8 ans exp.)"
+                      placeholder="Ex : CAPES / Master Pédagogique (8 ans exp.)"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                     />
                   </div>
@@ -1125,7 +1032,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   className="w-full px-3.5 py-2 rounded-xl bg-white border border-emerald-300 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest"
                 />
                 <p className="text-[10px] text-emerald-800">
-                  Ce code sera requis pour que ce membre puisse ouvrir sa session.
+                  Ce code sera obligatoirement requis pour que ce membre puisse ouvrir sa session.
                 </p>
               </div>
 
@@ -1151,7 +1058,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         </div>
       )}
 
-      {/* ================= MODALE 3 : MODIFIER TOUTES LES INFORMATIONS DU MEMBRE DU PERSONNEL ================= */}
+      {/* ================= MODALE 3 : MODIFIER LES INFORMATIONS DU MEMBRE ================= */}
       {editingStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in overflow-y-auto">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-5 sm:p-7 space-y-4 my-8 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
@@ -1205,15 +1112,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     onChange={(e) => setEditRole(e.target.value as any)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
                   >
-                    <option value="directeur">Directeur des Études (Admin)</option>
-                    <option value="assistant_direction">Assistant(e) de Direction</option>
-                    <option value="fondateur">Fondateur (Supervision)</option>
-                    <option value="educateur">Éducateur / Vie Scolaire</option>
-                    <option value="informaticien">Informaticien / Responsable IT</option>
-                    <option value="comptable">Comptable / Gestionnaire</option>
-                    <option value="secretaire">Secrétaire de Direction</option>
-                    <option value="enseignant">Enseignant / Professeur</option>
-                    <option value="parent">Parent d&apos;Élève (Espace Famille)</option>
+                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
+                    <option value="secretaire">📝 Secrétaire de Direction</option>
+                    <option value="comptable">💼 Comptable / Gestionnaire</option>
+                    <option value="assistant_direction">📋 Assistant(e) de Direction</option>
+                    <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
+                    <option value="informaticien">💻 Informaticien / Responsable IT</option>
                   </select>
                 </div>
               </div>
@@ -1282,12 +1186,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Matière / Attribution *</label>
+                      <label className="font-bold text-slate-700 block">Matières Enseignées *</label>
                       <input
                         type="text"
                         value={editSubject}
                         onChange={(e) => setEditSubject(e.target.value)}
-                        placeholder="Ex : Mathématiques & SVT"
+                        placeholder="Ex : Toutes les matières, Mathématiques, SVT..."
                         className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                       />
                     </div>
@@ -1298,7 +1202,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         type="text"
                         value={editClasses}
                         onChange={(e) => setEditClasses(e.target.value)}
-                        placeholder="Ex : 6ème A, 5ème B, CM2"
+                        placeholder="Ex : Toutes les classes, 6ème A, 5ème B..."
                         className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                       />
                     </div>

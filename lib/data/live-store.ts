@@ -803,24 +803,32 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
   if (typeof window === 'undefined') return;
 
   try {
-    // 1. Mise à jour de l'élève
+    // 1. Sauvegarder dans la clé globale et la clé d'école
     const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
+    const studentWithSlug = {
+      ...student,
+      schoolSlug: schoolSlug || 'epc-manoi',
+      schoolId: schoolSlug || 'epc-manoi',
+    };
     const updatedStudents = [
-      student,
+      studentWithSlug,
       ...prevStudents.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
     ];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-      const updatedSchool = [
-        student,
-        ...prevSchool.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
-      ];
-      localStorage.setItem(schoolKey, JSON.stringify(updatedSchool));
+    const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug || 'epc-manoi'}`;
+    const rawSchool = localStorage.getItem(schoolKey);
+    const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+    const updatedSchool = [
+      studentWithSlug,
+      ...prevSchool.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
+    ];
+    localStorage.setItem(schoolKey, JSON.stringify(updatedSchool));
+
+    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedSchool));
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedSchool));
     }
 
     // 2. Mise à jour ou création de la facture correspondante
@@ -833,6 +841,8 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
 
     const updatedInvoice: Invoice = existingInv ? {
       ...existingInv,
+      schoolSlug: schoolSlug || 'epc-manoi',
+      schoolId: schoolSlug || 'epc-manoi',
       studentName: student.fullName,
       studentGrade: student.grade,
       studentGender: student.gender,
@@ -850,6 +860,8 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       id: `inv-${student.studentNumber.replace(/\D/g, '').padStart(3, '0')}`,
       invoiceNumber: student.studentNumber,
       studentId: student.id,
+      schoolSlug: schoolSlug || 'epc-manoi',
+      schoolId: schoolSlug || 'epc-manoi',
       studentName: student.fullName,
       studentAvatar: student.avatar,
       studentGrade: student.grade,
@@ -878,17 +890,20 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     ];
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-      const rawInvSchool = localStorage.getItem(invSchoolKey);
-      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-      const nextInvSchool = [
-        updatedInvoice,
-        ...prevInvSchool.filter(
-          (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
-        ),
-      ];
-      localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
+    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug || 'epc-manoi'}`;
+    const rawInvSchool = localStorage.getItem(invSchoolKey);
+    const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+    const nextInvSchool = [
+      updatedInvoice,
+      ...prevInvSchool.filter(
+        (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
+      ),
+    ];
+    localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
+
+    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(nextInvSchool));
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(nextInvSchool));
     }
 
     // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
@@ -1376,16 +1391,28 @@ export function verifyUserAuthCodeForLogin(
     };
   }
 
-  if (matchedStaff && matchedStaff.status === 'Verrouillé') {
+  const candidateStaff =
+    matchedStaff ||
+    staffForRole.find((s) => s.authCode.trim().toUpperCase() === cleanInputCode) ||
+    staffForRole[0];
+
+  if (candidateStaff && candidateStaff.status === 'Verrouillé') {
     return {
       isValid: false,
-      reason: `❌ Ce compte d'accès est temporairement verrouillé par la Direction de l'établissement.`,
+      reason: `❌ Accès refusé : Ce compte d'accès (${candidateStaff.fullName}) a été verrouillé et bloqué par la Direction de l'établissement.`,
+    };
+  }
+
+  if (candidateStaff && candidateStaff.status === 'En attente') {
+    return {
+      isValid: false,
+      reason: `❌ Accès refusé : Ce compte est actuellement en attente d'activation par la Direction.`,
     };
   }
 
   return {
     isValid: true,
-    staffUser: matchedStaff || staffForRole[0] || undefined,
+    staffUser: matchedStaff || candidateStaff || undefined,
   };
 }
 
