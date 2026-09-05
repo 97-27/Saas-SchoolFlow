@@ -231,7 +231,9 @@ export function CanteenView({
   const subscribers = useMemo(() => {
     return students
       .filter((stu, idx) => {
-        return customDietMap[stu.id] || idx % 4 !== 3;
+        if (customDietMap[stu.id]) return true;
+        if (typeof stu.isCanteen === 'boolean') return stu.isCanteen;
+        return idx % 4 !== 3;
       })
       .map((stu, idx) => {
         const custom = customDietMap[stu.id];

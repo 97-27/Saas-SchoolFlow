@@ -263,10 +263,13 @@ export function BoardingView({
       };
     });
 
-    // 2. Pensionnaires démo initiaux
+    // 2. Pensionnaires démo initiaux et élèves avec isBoarding
     const demoList = students
       .filter((s) => !customMap.has(s.id))
-      .filter((_, idx) => idx % 4 === 0)
+      .filter((s, idx) => {
+        if (typeof s.isBoarding === 'boolean') return s.isBoarding;
+        return idx % 4 === 0;
+      })
       .map((student, idx) => {
         const isFemale = student.gender === 'female' || (student.gender as any) === 'F';
         const pavilion = isFemale ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';

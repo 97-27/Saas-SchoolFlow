@@ -11,8 +11,8 @@ const DELETED_STUDENTS_STORAGE_KEY = 'schoolflow_deleted_student_ids_v1';
 const DELETED_SCHOOLS_KEY = 'schoolflow_deleted_schools_v1';
 const SCHOOL_STATUS_PREFIX = 'schoolflow_school_status_v1_';
 const STAFF_USERS_STORAGE_KEY = 'schoolflow_staff_users_v1';
-const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_bulletins_v1';
-const DOCS_STATUS_KEY = 'schoolflow_documents_status_v1';
+const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_class_bulletins_v1';
+export const DOCS_STATUS_KEY = 'schoolflow_documents_status_v5';
 export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
 export const REALTIME_SYNC_CHANNEL_NAME = 'schoolflow_realtime_sync_v2';
 
@@ -572,6 +572,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           uniqueInvoices.push(inv);
         }
       }
+    }
+
     // Auto-réconciliation réciproque : si des élèves existent sans facture associée, créer la facture correspondante
     for (const stu of localStudents) {
       if (!stu || !stu.studentNumber) continue;
@@ -670,6 +672,9 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       schoolId: slug,
       enrollmentType: student.enrollmentType || 'nouveau',
     };
+    const filteredStudents = prevStudents.filter(
+      (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+    );
     const updatedStudents = [studentWithSlug, ...filteredStudents];
     localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
 
@@ -711,11 +716,74 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
-    // 5. Synchronisation Supabase Cloud en arrière-plan
+    // 5. Synchronisation automatique des prestations (Internat, Cantine, Transport)
+    try {
+      // Internat
+      const BOARDING_KEY = 'schoolflow_boarding_subscriptions_v3';
+      const rawBoarding = localStorage.getItem(BOARDING_KEY);
+      const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
+      if (student.isBoarding) {
+        const existingIdx = prevBoarding.findIndex((b) => b.studentId === student.id || b.matricule === student.studentNumber);
+        const boardingRecord = {
+          studentId: student.id,
+          studentName: student.fullName,
+          matricule: student.matricule || student.studentNumber,
+          className: student.grade,
+          gender: student.gender === 'female' ? 'F' : 'M',
+          parentContact: student.whatsappPhone || student.guardianPhone,
+          pavilion: student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
+          roomNumber: 'Chambre 101',
+          monthlyRate: 50000,
+        };
+        if (existingIdx >= 0) {
+          prevBoarding[existingIdx] = boardingRecord;
+        } else {
+          prevBoarding.push(boardingRecord);
+        }
+        localStorage.setItem(BOARDING_KEY, JSON.stringify(prevBoarding));
+      } else {
+        const filteredBoarding = prevBoarding.filter((b) => b.studentId !== student.id && b.matricule !== student.studentNumber);
+        localStorage.setItem(BOARDING_KEY, JSON.stringify(filteredBoarding));
+      }
+
+      // Cantine
+      const CANTEEN_KEY = 'schoolflow_canteen_subscriptions_v3';
+      const rawCanteen = localStorage.getItem(CANTEEN_KEY);
+      const prevCanteen: Record<string, any> = rawCanteen ? JSON.parse(rawCanteen) : {};
+      if (student.isCanteen) {
+        prevCanteen[student.id] = {
+          diet: 'Standard (Sans allergie)',
+          rate: 25000,
+          discount: 0,
+        };
+      } else {
+        delete prevCanteen[student.id];
+      }
+      localStorage.setItem(CANTEEN_KEY, JSON.stringify(prevCanteen));
+
+      // Transport
+      const TRANSPORT_KEY = 'schoolflow_transport_subscriptions_v2';
+      const rawTransport = localStorage.getItem(TRANSPORT_KEY);
+      const prevTransport: Record<string, any> = rawTransport ? JSON.parse(rawTransport) : {};
+      if (student.isTransport) {
+        prevTransport[student.id] = {
+          stop: 'Riviera Bonoumin — Carrefour Jacques Prévert',
+          rate: 35000,
+          discount: 0,
+        };
+      } else {
+        delete prevTransport[student.id];
+      }
+      localStorage.setItem(TRANSPORT_KEY, JSON.stringify(prevTransport));
+    } catch (err) {
+      console.warn('Erreur sync prestations annexes:', err);
+    }
+
+    // 6. Synchronisation Supabase Cloud en arrière-plan
     saveStudentToSupabase(studentWithSlug, slug).catch(() => {});
     saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
 
-    // 6. Diffusion temps réel parallèle immédiate
+    // 7. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
       action: 'student_registered',
       student: studentWithSlug,
@@ -823,11 +891,77 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
     }
 
-    // Synchronisation en arrière-plan avec Supabase Cloud
+    // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
+    try {
+      if (typeof student.isBoarding === 'boolean') {
+        const BOARDING_KEY = 'schoolflow_boarding_subscriptions_v3';
+        const rawBoarding = localStorage.getItem(BOARDING_KEY);
+        const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
+        if (student.isBoarding) {
+          const existingIdx = prevBoarding.findIndex((b) => b.studentId === student.id || b.matricule === student.studentNumber);
+          const boardingRecord = {
+            studentId: student.id,
+            studentName: student.fullName,
+            matricule: student.matricule || student.studentNumber,
+            className: student.grade,
+            gender: student.gender === 'female' ? 'F' : 'M',
+            parentContact: student.whatsappPhone || student.guardianPhone,
+            pavilion: student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
+            roomNumber: 'Chambre 101',
+            monthlyRate: 50000,
+          };
+          if (existingIdx >= 0) {
+            prevBoarding[existingIdx] = boardingRecord;
+          } else {
+            prevBoarding.push(boardingRecord);
+          }
+          localStorage.setItem(BOARDING_KEY, JSON.stringify(prevBoarding));
+        } else {
+          const filteredBoarding = prevBoarding.filter((b) => b.studentId !== student.id && b.matricule !== student.studentNumber);
+          localStorage.setItem(BOARDING_KEY, JSON.stringify(filteredBoarding));
+        }
+      }
+
+      if (typeof student.isCanteen === 'boolean') {
+        const CANTEEN_KEY = 'schoolflow_canteen_subscriptions_v3';
+        const rawCanteen = localStorage.getItem(CANTEEN_KEY);
+        const prevCanteen: Record<string, any> = rawCanteen ? JSON.parse(rawCanteen) : {};
+        if (student.isCanteen) {
+          prevCanteen[student.id] = {
+            diet: 'Standard (Sans allergie)',
+            rate: 25000,
+            discount: 0,
+          };
+        } else {
+          delete prevCanteen[student.id];
+        }
+        localStorage.setItem(CANTEEN_KEY, JSON.stringify(prevCanteen));
+      }
+
+      if (typeof student.isTransport === 'boolean') {
+        const TRANSPORT_KEY = 'schoolflow_transport_subscriptions_v2';
+        const rawTransport = localStorage.getItem(TRANSPORT_KEY);
+        const prevTransport: Record<string, any> = rawTransport ? JSON.parse(rawTransport) : {};
+        if (student.isTransport) {
+          prevTransport[student.id] = {
+            stop: 'Riviera Bonoumin — Carrefour Jacques Prévert',
+            rate: 35000,
+            discount: 0,
+          };
+        } else {
+          delete prevTransport[student.id];
+        }
+        localStorage.setItem(TRANSPORT_KEY, JSON.stringify(prevTransport));
+      }
+    } catch (err) {
+      console.warn('Erreur update sync prestations annexes:', err);
+    }
+
+    // 4. Synchronisation en arrière-plan avec Supabase Cloud
     saveStudentToSupabase(student, schoolSlug).catch(() => {});
     saveInvoiceToSupabase(updatedInvoice, schoolSlug).catch(() => {});
 
-    // 3. Propagation globale de l'événement
+    // 5. Propagation globale de l'événement
     broadcastLiveUpdate({
       action: 'student_updated',
       student,
@@ -861,8 +995,6 @@ export interface StaffUser {
   lastLogin?: string;
   avatarUrl?: string;
 }
-
-const STAFF_USERS_STORAGE_KEY = 'schoolflow_registered_staff_v1';
 
 export const defaultStaffUsers: StaffUser[] = [
   {
@@ -1155,8 +1287,6 @@ export function verifyUserAuthCodeForLogin(
 // GESTION DES ABONNEMENTS, ÉTABLISSEMENTS ENREGISTRÉS & ACCÈS
 // ════════════════════════════════════════════════════════════════
 
-const DELETED_SCHOOLS_KEY = 'schoolflow_deleted_schools_v1';
-const SCHOOL_STATUS_PREFIX = 'schoolflow_school_status_v1_';
 const REGISTERED_SCHOOLS_KEY = 'schoolflow_registered_schools_v2';
 
 export interface SchoolSubscriptionStatus {
@@ -1574,8 +1704,6 @@ export function restoreSchoolAccount(slug: string = 'epc-manoi'): void {
   } catch (e) {}
 }
 
-const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_class_bulletins_v1';
-
 /**
  * Récupère les lauréats officiellement validés depuis les bulletins scolaires pour une classe et un trimestre
  */
@@ -1637,8 +1765,6 @@ export function clearValidatedClassRankings(grade: string, period: string): void
 // ═══════════════════════════════════════════════════════════════
 // GESTION RÉACTIVE & CENTRALISÉE DES DOCUMENTS SCOLAIRES
 // ═══════════════════════════════════════════════════════════════
-
-export const DOCS_STATUS_KEY = 'schoolflow_documents_status_v5';
 
 export interface OtherDocItem {
   id: string;

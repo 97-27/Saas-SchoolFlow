@@ -234,7 +234,9 @@ export function TransportView({
 
     return students
       .filter((stu, idx) => {
-        return customTransportMap[stu.id] || idx % 2 === 0;
+        if (customTransportMap[stu.id]) return true;
+        if (typeof stu.isTransport === 'boolean') return stu.isTransport;
+        return idx % 2 === 0;
       })
       .map((stu, idx) => {
         const custom = customTransportMap[stu.id];
