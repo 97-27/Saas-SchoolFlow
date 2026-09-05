@@ -186,7 +186,7 @@ export const defaultSchool = mockSchools['epc-manoi'] || mockSchools['college-ex
 
 export const mockKPIs: DashboardKPIs = {
   totalStudents: 3,
-  totalStudentsTrend: 8,
+  totalStudentsTrend: 0,
   totalStudentsGirls: 2,
   totalStudentsBoys: 1,
 

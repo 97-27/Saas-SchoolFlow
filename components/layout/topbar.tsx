@@ -40,7 +40,6 @@ export function Topbar({
 }: TopbarProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(defaultSchool);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(3);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +135,7 @@ export function Topbar({
       const updatedSchool = getLiveSchool(schoolSlug, defaultSchool);
       setCurrentSchool(updatedSchool);
       loadSession();
+      loadNotifications();
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -212,44 +212,83 @@ export function Topbar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isNotificationsOpen, isProfileOpen]);
 
-  const notifications = [
-    {
-      id: 'notif-1',
-      sender: 'M. Kouassi Jean',
-      role: 'Parent d\'Awa Kouassi (6ème A)',
-      type: 'absence',
-      message: 'Bonjour, Awa sera absente ce matin pour rendez-vous médical. Ci-joint le certificat.',
-      time: 'Il y a 15 min',
-      unread: true,
-      icon: ShieldAlert,
-      iconColor: 'text-amber-600 bg-amber-50',
-    },
-    {
-      id: 'notif-2',
-      sender: 'Mme Traoré Fatou',
-      role: 'Parent d\'Ibrahim Traoré (CM2)',
-      type: 'finance',
-      message: 'Demande de reçu officiel pour la 2ème tranche de scolarité versée par virement Wave.',
-      time: 'Il y a 45 min',
-      unread: true,
-      icon: CreditCard,
-      iconColor: 'text-emerald-600 bg-emerald-50',
-    },
-    {
-      id: 'notif-3',
-      sender: 'M. Bamba Souleymane',
-      role: 'Parent d\'Assétou Bamba (3ème B)',
-      type: 'info',
-      message: 'Confirmation d\'inscription aux cours de renforcement pédagogique pour le BEPC.',
-      time: 'Il y a 2h',
-      unread: true,
-      icon: UserCheck,
-      iconColor: 'text-blue-600 bg-blue-50',
-    },
-  ];
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadNotifications = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw =
+        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
+        localStorage.getItem('schoolflow_parent_messages_v1');
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        const real = parsed.filter(
+          (m) =>
+            m &&
+            !m.parentName?.includes('Mme Touré (Mère de Cheick)') &&
+            !m.parentName?.includes('M. Koffi (Père de Marie)') &&
+            !m.parentName?.includes('Mme Bamba (Mère de Seydou)') &&
+            !m.parentName?.includes('M. Diabaté (Père d’Awa)') &&
+            !m.parentName?.includes('Mme Koné (Mère de Jean)')
+        );
+        const mapped = real.map((m) => {
+          const isAbsence = m.category === 'absence';
+          const isFinance = m.category === 'finance';
+          const isDoc = m.category === 'document';
+          const icon = isAbsence ? ShieldAlert : isFinance ? CreditCard : isDoc ? FileText : UserCheck;
+          const iconColor = isAbsence
+            ? 'text-amber-600 bg-amber-50'
+            : isFinance
+            ? 'text-emerald-600 bg-emerald-50'
+            : isDoc
+            ? 'text-indigo-600 bg-indigo-50'
+            : 'text-blue-600 bg-blue-50';
+
+          return {
+            id: m.id || `msg-${Math.random()}`,
+            sender: m.parentName || "Parent d'élève",
+            role: m.studentName ? `Parent de ${m.studentName} (${m.studentGrade || ''})` : "Parent d'élève",
+            type: m.category || 'info',
+            message: m.message || m.subject || '',
+            time: m.timestamp ? (m.timestamp.includes('T') ? m.timestamp.split('T')[0] : m.timestamp) : "Récemment",
+            unread: m.status === 'new' || m.unread === true,
+            icon,
+            iconColor,
+          };
+        });
+        setNotifications(mapped);
+        const unread = mapped.filter((n) => n.unread).length;
+        setUnreadCount(unread);
+      } else {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
+    } catch (e) {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, [schoolSlug]);
 
   const handleMarkAllAsRead = () => {
     setUnreadCount(0);
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    try {
+      const raw =
+        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
+        localStorage.getItem('schoolflow_parent_messages_v1');
+      if (raw) {
+        const parsed: any[] = JSON.parse(raw);
+        const updated = parsed.map((m) => ({ ...m, status: 'resolved', unread: false }));
+        localStorage.setItem(`schoolflow_parent_messages_v1_${schoolSlug}`, JSON.stringify(updated));
+        localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify(updated));
+        broadcastLiveUpdate({ action: 'parent_messages_read', schoolSlug });
+      }
+    } catch (e) {}
   };
 
   const router = useRouter();
@@ -397,40 +436,54 @@ export function Topbar({
 
                 {/* List of Messages */}
                 <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 scrollbar-thin">
-                  {notifications.map((notif) => {
-                    const Icon = notif.icon;
-                    return (
-                      <div
-                        key={notif.id}
-                        className={`p-3.5 hover:bg-slate-50/80 transition-colors flex gap-3 cursor-pointer ${
-                          notif.unread && unreadCount > 0 ? 'bg-emerald-50/20' : ''
-                        }`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.iconColor}`}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-xs font-bold text-slate-900 truncate">
-                              {notif.sender}
-                            </span>
-                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0">
-                              <Clock className="w-2.5 h-2.5" />
-                              {notif.time}
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-semibold text-slate-500 block">
-                            {notif.role}
-                          </span>
-                          <p className="text-xs text-slate-700 leading-snug line-clamp-2">
-                            {notif.message}
-                          </p>
-                        </div>
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center space-y-2.5">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-2xs">
+                        <CheckCheck className="w-6 h-6" />
                       </div>
-                    );
-                  })}
+                      <p className="text-xs font-bold text-slate-800 font-heading">
+                        Aucune notification pour le moment
+                      </p>
+                      <p className="text-[11px] text-slate-400 max-w-xs mx-auto leading-relaxed">
+                        Tout est à jour. Les messages envoyés par les parents d’élèves apparaîtront ici en temps réel.
+                      </p>
+                    </div>
+                  ) : (
+                    notifications.map((notif) => {
+                      const Icon = notif.icon;
+                      return (
+                        <div
+                          key={notif.id}
+                          className={`p-3.5 hover:bg-slate-50/80 transition-colors flex gap-3 cursor-pointer ${
+                            notif.unread && unreadCount > 0 ? 'bg-emerald-50/20' : ''
+                          }`}
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${notif.iconColor}`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-xs font-bold text-slate-900 truncate">
+                                {notif.sender}
+                              </span>
+                              <span className="text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0">
+                                <Clock className="w-2.5 h-2.5" />
+                                {notif.time}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-semibold text-slate-500 block">
+                              {notif.role}
+                            </span>
+                            <p className="text-xs text-slate-700 leading-snug line-clamp-2">
+                              {notif.message}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
 
                 {/* Footer Link to Full Communication Module */}

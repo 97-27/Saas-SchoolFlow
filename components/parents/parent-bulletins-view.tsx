@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { defaultSchool, mockStudents } from '@/lib/data/mock-data';
-import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, broadcastLiveUpdate } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate, formatFCFA } from '@/lib/utils/formatters';
 import {
@@ -17,6 +17,7 @@ import {
   User,
   Users,
   MessageCircle,
+  MessageSquare,
   TrendingUp,
   ReceiptText,
   ChevronDown,
@@ -26,6 +27,9 @@ import {
   Share2,
   AlertTriangle,
   GraduationCap,
+  Send,
+  X,
+  Mail,
 } from 'lucide-react';
 
 // Matières et coefficients pour Collège et Lycée (Secondaire Général)
@@ -158,6 +162,68 @@ export function ParentBulletinsView({
   }, []);
 
   const isParentRole = activeSession?.roleId === 'parent';
+
+  // Messagerie Parent -> Direction (Génération de notifications réelles pour tout le personnel)
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [msgCategory, setMsgCategory] = useState<'absence' | 'finance' | 'document' | 'info'>('absence');
+  const [msgSubject, setMsgSubject] = useState('');
+  const [msgBody, setMsgBody] = useState('');
+  const [msgToast, setMsgToast] = useState<string | null>(null);
+
+  const handleSendParentMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msgSubject.trim() || !msgBody.trim()) {
+      alert('Veuillez renseigner l’objet et le message.');
+      return;
+    }
+
+    const parentName = activeSession?.fullName || activeFamily?.guardianName || 'Parent d’élève';
+    const parentPhone = activeFamily?.phone || activeFamily?.whatsapp || '+225 07 08 09 10 11';
+    const childName = activeChild ? `${activeChild.firstName} ${activeChild.lastName}` : 'Élève';
+    const childGrade = activeChild?.grade || 'Collège';
+
+    const newMsg = {
+      id: `msg-${Date.now()}`,
+      parentName,
+      studentName: childName,
+      studentGrade: childGrade,
+      parentPhone,
+      subject: msgSubject.trim(),
+      message: msgBody.trim(),
+      category: msgCategory,
+      timestamp: new Date().toISOString(),
+      status: 'new',
+      unread: true,
+    };
+
+    try {
+      const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
+      const keySchool = `${PARENT_MESSAGES_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(keySchool);
+      const prevSchool = rawSchool ? JSON.parse(rawSchool) : [];
+      const updatedSchool = [newMsg, ...prevSchool];
+      localStorage.setItem(keySchool, JSON.stringify(updatedSchool));
+
+      const rawGlobal = localStorage.getItem(PARENT_MESSAGES_KEY);
+      const prevGlobal = rawGlobal ? JSON.parse(rawGlobal) : [];
+      const updatedGlobal = [newMsg, ...prevGlobal];
+      localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(updatedGlobal));
+
+      broadcastLiveUpdate({
+        action: 'parent_message_sent',
+        message: newMsg,
+        schoolSlug,
+      });
+
+      setMsgToast('✓ Votre message a été transmis en direct à la Direction de l’école !');
+      setIsMessageModalOpen(false);
+      setMsgSubject('');
+      setMsgBody('');
+      setTimeout(() => setMsgToast(null), 5000);
+    } catch (err) {
+      console.error('Erreur envoi message parent:', err);
+    }
+  };
 
   // Élèves du Secondaire & Lycée uniquement (de la 6ème à la Terminale)
   const secondaryStudents = useMemo(() => {
@@ -615,8 +681,17 @@ export function ParentBulletinsView({
           </p>
         </div>
 
-        {/* Bouton Unique d'Impression Format Paysage A4 */}
-        <div className="flex items-center gap-2.5">
+        {/* Boutons d'Action : Écrire à la Direction + Impression Format Paysage A4 */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsMessageModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>✍️ Écrire à la Direction</span>
+          </button>
+
           <button
             type="button"
             onClick={handlePrintLandscape}
@@ -987,6 +1062,142 @@ export function ParentBulletinsView({
           </div>
         </div>
       </div>
+
+      {/* BANNIÈRE TOAST DE CONFIRMATION D'ENVOI */}
+      {msgToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-emerald-900 text-white shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 max-w-md">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <p className="text-xs font-bold leading-snug">{msgToast}</p>
+        </div>
+      )}
+
+      {/* MODALE D'ENVOI DE MESSAGE PARENT -> DIRECTION */}
+      {isMessageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            {/* Header Modale */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 font-heading">
+                    Écrire à la Direction de l’École
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Transmettre une demande, un justificatif ou une information
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMessageModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Formulaire */}
+            <form onSubmit={handleSendParentMessage} className="space-y-4">
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Élève concerné(e) :</span>
+                  <strong className="text-slate-900 font-heading">
+                    {activeChild?.firstName} {activeChild?.lastName} ({activeChild?.grade})
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Parent expéditeur :</span>
+                  <span className="font-semibold text-slate-800">
+                    {activeSession?.fullName || activeFamily?.guardianName || 'Parent'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Catégorie */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Motif / Catégorie du message *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'absence', label: 'Absence', icon: '🩺' },
+                    { id: 'finance', label: 'Finances / Reçu', icon: '💳' },
+                    { id: 'document', label: 'Document', icon: '📄' },
+                    { id: 'info', label: 'Information', icon: 'ℹ️' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setMsgCategory(cat.id as any)}
+                      className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                        msgCategory === cat.id
+                          ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-extrabold ring-1 ring-emerald-500'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-base">{cat.icon}</span>
+                      <span className="text-[11px]">{cat.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Objet */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Objet du message *
+                </label>
+                <input
+                  type="text"
+                  value={msgSubject}
+                  onChange={(e) => setMsgSubject(e.target.value)}
+                  placeholder="Ex : Justificatif d'absence médicale de ce jeudi..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-800"
+                  required
+                />
+              </div>
+
+              {/* Contenu */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Votre message à la Direction *
+                </label>
+                <textarea
+                  value={msgBody}
+                  onChange={(e) => setMsgBody(e.target.value)}
+                  rows={4}
+                  placeholder="Expliquez votre situation ou formulez votre demande avec précision..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-800 resize-none"
+                  required
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsMessageModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Envoyer à la Direction</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -53,23 +53,19 @@ export function StudentTable({
   school = mockSchools['college-excellence'],
 }: StudentTableProps) {
   const router = useRouter();
-  const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [currentSchool, setCurrentSchool] = useState<School>(
-    school || mockSchools[schoolSlug] || mockSchools['college-excellence']
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
+  const [currentSchool, setCurrentSchool] = useState<School>(() =>
+    getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
   );
 
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents, schoolSlug));
-    setCurrentSchool(
-      getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
-    );
-
     const handleUpdate = () => {
       setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(
         getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
       );
     };
+    handleUpdate();
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);

@@ -222,11 +222,9 @@ export function BoardingView({
     }
   };
 
-  // Construction de la liste des pensionnaires inscrits (STRICTEMENT reliée aux élèves actifs non supprimés)
+  // Construction de la liste des pensionnaires inscrits (STRICTEMENT reliée aux souscriptions confirmées)
   const boarders = useMemo(() => {
-    const customMap = new Map(customSubscriptions.map((cs) => [cs.studentId, cs]));
-
-    // 1. Les pensionnaires issus des customSubscriptions (UNIQUEMENT si l'élève existe réellement dans la liste des élèves actifs)
+    // Les pensionnaires issus des customSubscriptions (UNIQUEMENT si l'élève existe réellement dans la liste des élèves actifs)
     const customList = customSubscriptions
       .map((cs) => {
         const foundStudent = students.find(
@@ -255,37 +253,8 @@ export function BoardingView({
       })
       .filter((b): b is NonNullable<typeof b> => b !== null);
 
-    // 2. Élèves actifs ayant l'option isBoarding cochée
-    const directBoarders = students
-      .filter((s) => !customMap.has(s.id) && s.isBoarding === true)
-      .map((student, idx) => {
-        const isFemale = student.gender === 'female' || (student.gender as any) === 'F';
-        const pavilion = isFemale ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
-        const roomNumber = `Chambre ${101 + (idx % 20)}`;
-        const monthlyRate = 50000;
-
-        const studentMonths = monthlyPayments[student.id] || {};
-        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const totalPaid = paidMonthsCount * monthlyRate;
-        const totalDue = monthlyRate * 9;
-        const remainingBalance = Math.max(0, totalDue - totalPaid);
-
-        return {
-          student,
-          isBoarder: true,
-          pavilion,
-          roomNumber,
-          monthlyRate,
-          paidMonthsCount,
-          totalPaid,
-          totalDue,
-          remainingBalance,
-          isUpToDate: remainingBalance === 0,
-        };
-      });
-
-    return [...customList, ...directBoarders];
-  }, [students, customSubscriptions, monthlyPayments, schoolSlug]);
+    return customList;
+  }, [students, customSubscriptions, monthlyPayments]);
 
   // Filtrage pour la recherche et la navigation
   const filteredBoarders = useMemo(() => {

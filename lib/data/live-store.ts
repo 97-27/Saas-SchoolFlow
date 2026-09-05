@@ -758,74 +758,11 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
-    // 5. Synchronisation automatique des prestations (Internat, Cantine, Transport)
-    try {
-      // Internat
-      const BOARDING_KEY = 'schoolflow_boarding_subscriptions_v3';
-      const rawBoarding = localStorage.getItem(BOARDING_KEY);
-      const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
-      if (student.isBoarding) {
-        const existingIdx = prevBoarding.findIndex((b) => b.studentId === student.id || b.matricule === student.studentNumber);
-        const boardingRecord = {
-          studentId: student.id,
-          studentName: student.fullName,
-          matricule: student.matricule || student.studentNumber,
-          className: student.grade,
-          gender: student.gender === 'female' ? 'F' : 'M',
-          parentContact: student.whatsappPhone || student.guardianPhone,
-          pavilion: student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
-          roomNumber: 'Chambre 101',
-          monthlyRate: 50000,
-        };
-        if (existingIdx >= 0) {
-          prevBoarding[existingIdx] = boardingRecord;
-        } else {
-          prevBoarding.push(boardingRecord);
-        }
-        localStorage.setItem(BOARDING_KEY, JSON.stringify(prevBoarding));
-      } else {
-        const filteredBoarding = prevBoarding.filter((b) => b.studentId !== student.id && b.matricule !== student.studentNumber);
-        localStorage.setItem(BOARDING_KEY, JSON.stringify(filteredBoarding));
-      }
-
-      // Cantine
-      const CANTEEN_KEY = 'schoolflow_canteen_subscriptions_v3';
-      const rawCanteen = localStorage.getItem(CANTEEN_KEY);
-      const prevCanteen: Record<string, any> = rawCanteen ? JSON.parse(rawCanteen) : {};
-      if (student.isCanteen) {
-        prevCanteen[student.id] = {
-          diet: 'Standard (Sans allergie)',
-          rate: 25000,
-          discount: 0,
-        };
-      } else {
-        delete prevCanteen[student.id];
-      }
-      localStorage.setItem(CANTEEN_KEY, JSON.stringify(prevCanteen));
-
-      // Transport
-      const TRANSPORT_KEY = 'schoolflow_transport_subscriptions_v2';
-      const rawTransport = localStorage.getItem(TRANSPORT_KEY);
-      const prevTransport: Record<string, any> = rawTransport ? JSON.parse(rawTransport) : {};
-      if (student.isTransport) {
-        prevTransport[student.id] = {
-          stop: 'Riviera Bonoumin — Carrefour Jacques Prévert',
-          rate: 35000,
-          discount: 0,
-        };
-      } else {
-        delete prevTransport[student.id];
-      }
-      localStorage.setItem(TRANSPORT_KEY, JSON.stringify(prevTransport));
-    } catch (err) {
-      console.warn('Erreur sync prestations annexes:', err);
-    }
-
-    // 6. Synchronisation Supabase Cloud en arrière-plan
+    // 5. Synchronisation Supabase Cloud en arrière-plan
     saveStudentToSupabase(studentWithSlug, slug).catch(() => {});
     saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
 
-    // 7. Diffusion temps réel parallèle immédiate
+    // 6. Diffusion temps réel parallèle immédiate à toutes les interfaces
     broadcastLiveUpdate({
       action: 'student_registered',
       student: studentWithSlug,

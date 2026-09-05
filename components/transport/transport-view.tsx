@@ -233,10 +233,7 @@ export function TransportView({
     ];
 
     return students
-      .filter((stu) => {
-        if (customTransportMap[stu.id]) return true;
-        return stu.isTransport === true;
-      })
+      .filter((stu) => Boolean(customTransportMap[stu.id]))
       .map((stu, idx) => {
         const custom = customTransportMap[stu.id];
         const stop = custom?.stop || defaultStops[idx % defaultStops.length];
@@ -244,8 +241,8 @@ export function TransportView({
         const discountAmount = custom?.discount || 0;
 
         const monthsState = monthlyPayments[stu.id] || {
-          Septembre: true,
-          Octobre: true,
+          Septembre: false,
+          Octobre: false,
           Novembre: false,
           Décembre: false,
           Janvier: false,

@@ -234,7 +234,7 @@ export function FrenchDateInput({
 
       {/* POPUP DU CALENDRIER STYLE CAPTURE */}
       {isOpen && (
-        <div className="absolute left-0 mt-1.5 z-50 w-72 sm:w-76 p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800">
+        <div className="absolute right-0 sm:right-auto left-auto sm:left-0 mt-2 z-50 w-80 max-w-[calc(100vw-32px)] p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800">
           {/* Header Calendrier: < Month Year > */}
           <div className="flex items-center justify-between px-1 mb-3">
             <button
@@ -261,22 +261,22 @@ export function FrenchDateInput({
           </div>
 
           {/* En-tête des Jours: Mo Tu We Th Fr Sa Su -> Lu Ma Me Je Ve Sa Di */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
             {WEEKDAYS_FR.map((wd) => (
-              <span key={wd} className="text-[11px] font-semibold text-slate-400 py-0.5">
+              <span key={wd} className="text-[11px] font-bold text-slate-400 py-0.5">
                 {wd}
               </span>
             ))}
           </div>
 
-          {/* Grille des Jours avec Cercle Noir (style capture utilisateur) */}
+          {/* Grille des Jours avec Cercle Noir (style officiel) */}
           <div className="grid grid-cols-7 gap-1 text-center">
             {calendarGrid.map((c, idx) => (
               <div key={idx} className="flex flex-col items-center justify-center p-0.5">
                 <button
                   type="button"
                   onClick={() => handleSelectDay(c.day, c.month, c.year)}
-                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs transition-all relative cursor-pointer ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all relative cursor-pointer ${
                     c.isSelected
                       ? 'bg-slate-900 text-white font-bold shadow-sm scale-105'
                       : c.isCurrentMonth
@@ -303,14 +303,14 @@ export function FrenchDateInput({
             <button
               type="button"
               onClick={handleSetToday}
-              className="px-2 py-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold transition-colors cursor-pointer"
             >
               Aujourd&apos;hui
             </button>
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="px-2 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
             >
               Fermer
             </button>

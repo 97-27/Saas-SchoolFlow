@@ -227,14 +227,11 @@ export function CanteenView({
     return students.find((s) => s.id === newSubStudentId) || null;
   }, [students, newSubStudentId]);
 
-  // Liste des abonnés cantine adaptée aux données réelles non supprimées
+  // Liste des abonnés cantine adaptée aux données réelles enregistrées dans le module
   const subscribers = useMemo(() => {
     return students
-      .filter((stu) => {
-        if (customDietMap[stu.id]) return true;
-        return stu.isCanteen === true;
-      })
-      .map((stu, idx) => {
+      .filter((stu) => Boolean(customDietMap[stu.id]))
+      .map((stu) => {
         const custom = customDietMap[stu.id];
         const defaultDiet = 'Standard (Sans restriction)';
 
@@ -243,8 +240,8 @@ export function CanteenView({
         const diet = custom?.diet || defaultDiet;
 
         const monthsState = monthlyPayments[stu.id] || {
-          Septembre: true,
-          Octobre: true,
+          Septembre: false,
+          Octobre: false,
           Novembre: false,
           Décembre: false,
           Janvier: false,

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { formatFCFA } from '@/lib/utils/formatters';
 import { Invoice, Student } from '@/lib/data/types';
 import { TrendingUp, PieChart, CheckCircle2, Calendar } from 'lucide-react';
+import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 
 interface RevenueSummaryProps {
   academicYear?: string;
@@ -16,6 +17,16 @@ export function RevenueSummary({
   invoices = [],
   students = [],
 }: RevenueSummaryProps) {
+  const [serviceVersion, setServiceVersion] = useState(0);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setServiceVersion((v) => v + 1);
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
+  }, []);
+
   // Calcul dynamique de la structure des encaissements réels
   const breakdownData = useMemo(() => {
     if (students.length === 0 && invoices.length === 0) {
@@ -51,26 +62,65 @@ export function RevenueSummary({
       };
     }
 
-    // 1. Droits d'Inscription & Réinscription (25 000 FCFA par élève inscrit ou montant saisi)
+    // 1. Droits d'Inscription & Réinscription (par élève inscrit ou montant saisi)
     const inscriptionAmount = students.reduce((acc, stu) => {
-      const fee = stu.registrationFee !== undefined ? stu.registrationFee : 25000;
+      const fee = stu.registrationFee !== undefined ? stu.registrationFee : (stu.paidAmount > 0 ? 25000 : 0);
       return acc + (stu.paidAmount > 0 || stu.tuitionAmount > 0 ? fee : 0);
     }, 0);
 
-    // 2. Cantine & Transport scolaires (sommes directes liées aux souscriptions élèves)
-    const canteenAmount = students.reduce((acc, stu) => {
-      if (stu.isCanteen) {
-        return acc + 250000; // 25 000 FCFA / mois x 10 mois
-      }
-      return acc;
-    }, 0);
+    // 2. Cantine & Transport scolaires (sommes directes liées aux souscriptions et paiements effectifs enregistrés)
+    let canteenAmount = 0;
+    let transportAmount = 0;
 
-    const transportAmount = students.reduce((acc, stu) => {
-      if (stu.isTransport) {
-        return acc + 200000; // 20 000 FCFA / mois x 10 mois
-      }
-      return acc;
-    }, 0);
+    if (typeof window !== 'undefined') {
+      try {
+        const rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
+        const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
+        if (rawCanteenSubs) {
+          const customDietMap: Record<string, { diet: string; rate: number; discount?: number }> = JSON.parse(rawCanteenSubs);
+          const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
+
+          Object.keys(customDietMap).forEach((stuId) => {
+            const stuExists = students.some((s) => s.id === stuId || s.studentNumber === stuId);
+            if (stuExists) {
+              const custom = customDietMap[stuId];
+              const rate = custom?.rate || 25000;
+              const discount = custom?.discount || 0;
+              const months = monthlyPayments[stuId] || {};
+              const paidCount = Object.values(months).filter(Boolean).length;
+              if (paidCount > 0) {
+                const total = Math.max(0, paidCount * rate - discount);
+                canteenAmount += total;
+              }
+            }
+          });
+        }
+      } catch (e) {}
+
+      try {
+        const rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2');
+        const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
+        if (rawTransportSubs) {
+          const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = JSON.parse(rawTransportSubs);
+          const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
+
+          Object.keys(customTransportMap).forEach((stuId) => {
+            const stuExists = students.some((s) => s.id === stuId || s.studentNumber === stuId);
+            if (stuExists) {
+              const custom = customTransportMap[stuId];
+              const rate = custom?.rate || 35000;
+              const discount = custom?.discount || 0;
+              const months = monthlyPayments[stuId] || {};
+              const paidCount = Object.values(months).filter(Boolean).length;
+              if (paidCount > 0) {
+                const total = Math.max(0, paidCount * rate - discount);
+                transportAmount += total;
+              }
+            }
+          });
+        }
+      } catch (e) {}
+    }
 
     const totalCollected = inscriptionAmount + canteenAmount + transportAmount;
 
@@ -106,7 +156,7 @@ export function RevenueSummary({
       totalCollected,
       targetAnnual: totalCollected + (students.reduce((acc, s) => acc + (s.balanceRemaining || 0), 0)),
     };
-  }, [students, invoices]);
+  }, [students, invoices, serviceVersion]);
 
   // Recouvrement des 5 Échéances (commençant par Octobre sans répéter les droits d'inscription)
   const monthlyData = useMemo(() => {

@@ -39,22 +39,19 @@ export function DashboardView({
   initialInvoices,
   initialKPIs,
 }: DashboardViewProps) {
-  const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [schoolState, setSchoolState] = useState<School>(school);
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
+  const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, schoolSlug));
+  const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(schoolSlug, school));
 
   // Synchronisation en direct avec le stockage local & événements
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents, schoolSlug));
-    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
-    setSchoolState(getLiveSchool(schoolSlug, school));
-
     const handleUpdate = () => {
       setStudents(getLiveStudents(initialStudents, schoolSlug));
       setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
       setSchoolState(getLiveSchool(schoolSlug, school));
     };
 
+    handleUpdate();
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, initialInvoices, schoolSlug, school]);
@@ -204,8 +201,8 @@ export function DashboardView({
           title="Total Élèves Inscrits"
           value={metrics.totalCount.toLocaleString('fr-FR')}
           icon={Users}
-          trend={initialKPIs.totalStudentsTrend || 8}
-          trendText="confirmés"
+          trend={initialKPIs.totalStudentsTrend !== undefined ? initialKPIs.totalStudentsTrend : 0}
+          trendText={metrics.totalCount > 0 ? "confirmés" : "inscrits"}
           genderBreakdown={{
             girls: metrics.girlsCount,
             boys: metrics.boysCount,

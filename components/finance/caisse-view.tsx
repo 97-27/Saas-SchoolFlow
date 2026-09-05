@@ -38,17 +38,15 @@ export function CaisseView({
   school,
   schoolSlug,
 }: CaisseViewProps) {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [currentSchool, setCurrentSchool] = useState<School>(school);
+  const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, schoolSlug));
+  const [currentSchool, setCurrentSchool] = useState<School>(() => getLiveSchool(schoolSlug, school));
 
   useEffect(() => {
-    setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
-    setCurrentSchool(getLiveSchool(schoolSlug, school));
-
     const handleUpdate = () => {
       setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
+    handleUpdate();
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialInvoices, schoolSlug, school]);

@@ -198,7 +198,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     dateFilterMode === 'all_dates';
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden space-y-0">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs space-y-0 relative">
       {/* 1. Header section with title and date picker */}
       <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -223,9 +223,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         {/* Global actions: Date picker */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Sélecteur de date du journal avec design calendrier officiel SchoolFlow */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 text-xs shadow-2xs">
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 text-xs shadow-2xs relative">
             <span className="font-bold text-slate-700 hidden sm:inline ml-1 text-xs">Date :</span>
-            <div className="w-36">
+            <div className="w-36 sm:w-40 relative">
               <FrenchDateInput
                 value={selectedJournalDate}
                 onChange={(val) => {
