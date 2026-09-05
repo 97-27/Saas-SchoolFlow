@@ -121,7 +121,7 @@ export function ClassesView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
 
-  // Définition des 5 Blocs de Cycles (avec "Toutes les Classes" en 1er bloc)
+  // Définition des 4 Blocs de Cycles (Toutes les Classes, Maternelle, Primaire, Collège)
   const cyclesConfig = useMemo(() => {
     return {
       all: {
@@ -143,15 +143,6 @@ export function ClassesView({
           '5ème',
           '4ème',
           '3ème',
-          '2nde A',
-          '2nde C',
-          '2nde D',
-          '1ère A',
-          '1ère C',
-          '1ère D',
-          'Terminale A',
-          'Terminale C',
-          'Terminale D',
         ],
       },
       maternelle: {
@@ -172,26 +163,10 @@ export function ClassesView({
         icon: Building2,
         classes: ['6ème', '5ème', '4ème', '3ème'],
       },
-      lycee: {
-        label: 'Cycle Lycée',
-        sub: '2nde, 1ère et Terminale',
-        icon: Layers,
-        classes: [
-          '2nde A',
-          '2nde C',
-          '2nde D',
-          '1ère A',
-          '1ère C',
-          '1ère D',
-          'Terminale A',
-          'Terminale C',
-          'Terminale D',
-        ],
-      },
     };
   }, []);
 
-  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee') => {
+  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college') => {
     setSelectedCycle(cycle);
     setSelectedClass(cyclesConfig[cycle].classes[0]);
   };
@@ -405,8 +380,8 @@ export function ClassesView({
         }
       `}</style>
 
-      {/* 2. LES 5 BLOCS DU HAUT (Toutes les Classes, Maternelle, Primaire, Collège, Lycée) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 print:hidden">
+      {/* 2. LES 4 BLOCS DU HAUT (Toutes les Classes, Maternelle, Primaire, Collège) */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
         {(Object.keys(cyclesConfig) as Array<keyof typeof cyclesConfig>).map((cycKey) => {
           const cyc = cyclesConfig[cycKey];
           const Icon = cyc.icon;

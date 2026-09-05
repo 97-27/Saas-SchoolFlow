@@ -324,46 +324,16 @@ export function GradesView({
   const cyclesConfig = useMemo(() => {
     return {
       college: {
-        label: 'Cycle Collège (6ème à 3ème)',
+        label: 'Cycle Secondaire / Collège (6ème à 3ème)',
         sub: 'Saisie & gestion des notes trimestrielles',
         icon: Building2,
         classes: ['6ème', '5ème', '4ème', '3ème'],
-      },
-      lycee: {
-        label: 'Cycle Lycée (2nde à Terminale)',
-        sub: 'Saisie & gestion des notes du Secondaire Général',
-        icon: Layers,
-        classes: [
-          '2nde A',
-          '2nde C',
-          '2nde D',
-          '1ère A',
-          '1ère C',
-          '1ère D',
-          'Terminale A',
-          'Terminale C',
-          'Terminale D',
-        ],
       },
       pedagogie: {
         label: 'Pédagogie & Fiches de Cours',
         sub: 'Fiches de préparation, leçons & ressources MENA',
         icon: BookOpen,
-        classes: [
-          '6ème',
-          '5ème',
-          '4ème',
-          '3ème',
-          '2nde A',
-          '2nde C',
-          '2nde D',
-          '1ère A',
-          '1ère C',
-          '1ère D',
-          'Terminale A',
-          'Terminale C',
-          'Terminale D',
-        ],
+        classes: ['6ème', '5ème', '4ème', '3ème'],
       },
     };
   }, []);
@@ -663,7 +633,7 @@ export function GradesView({
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
             {activeTab === 'pedagogie'
               ? 'Fiches de préparation, plans de cours et ressources pédagogiques officielles MENA pour toutes les classes'
-              : `Saisie des 5 interrogations, 2 devoirs et compositions du Secondaire (Collège & Lycée) — ${currentSchool.name}`}
+              : `Saisie des 5 interrogations, 2 devoirs et compositions du Secondaire (Collège : 6ème à 3ème) — ${currentSchool.name}`}
           </p>
         </div>
 
@@ -827,8 +797,8 @@ export function GradesView({
         </div>
       )}
 
-      {/* 2. LES 3 BLOCS DU HAUT (Collège, Lycée & Pédagogie Fiches de Cours) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      {/* 2. LES 2 BLOCS DU HAUT (Collège & Pédagogie Fiches de Cours) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
         {(Object.keys(cyclesConfig) as Array<keyof typeof cyclesConfig>).map((tabKey) => {
           const cfg = cyclesConfig[tabKey];
           const Icon = cfg.icon;
@@ -904,7 +874,7 @@ export function GradesView({
                 1. Filtrer par Niveau / Classe :
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
-                {['all', '6ème', '5ème', '4ème', '3ème', '2nde A', '2nde C', '1ère A', '1ère D', 'Terminale A', 'Terminale C'].map((cls) => (
+                {['all', '6ème', '5ème', '4ème', '3ème'].map((cls) => (
                   <button
                     key={cls}
                     type="button"

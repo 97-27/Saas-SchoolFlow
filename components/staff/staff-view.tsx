@@ -41,7 +41,7 @@ export interface TeacherRecord {
   whatsappPhone: string;
   email: string;
   address: string;
-  cycle: 'Maternelle' | 'Primaire' | 'Collège' | 'Lycée' | 'Administration';
+  cycle: 'Maternelle' | 'Primaire' | 'Collège' | 'Administration';
   grades: string[];
   subject: string;
   qualification: string;
@@ -69,8 +69,8 @@ const initialTeachers: TeacherRecord[] = [
     whatsappPhone: '+225 07 48 12 34 56',
     email: 'koffi.kouame@epc-manoi.ci',
     address: 'Cocody Angré 8ème Tranche, Cité Soleil 2',
-    cycle: 'Lycée',
-    grades: ['2nde C', '1ère C', 'Terminale C', 'Terminale D'],
+    cycle: 'Collège',
+    grades: ['6ème', '5ème', '4ème', '3ème'],
     subject: 'Mathématiques & Sciences Physiques',
     qualification: 'Master 2 Mathématiques • CAPES',
     employmentType: 'Titulaire',
@@ -173,10 +173,10 @@ const initialTeachers: TeacherRecord[] = [
     whatsappPhone: '+225 05 99 88 77 66',
     email: 'sylvain.nguessan@epc-manoi.ci',
     address: 'Yopougon Maroc, Carrefour Antenne',
-    cycle: 'Lycée',
-    grades: ['2nde A', '1ère A', 'Terminale A'],
-    subject: 'Philosophie & Histoire-Géographie',
-    qualification: 'Master Philosophie • CAPES',
+    cycle: 'Collège',
+    grades: ['6ème', '5ème', '4ème', '3ème'],
+    subject: 'Histoire-Géographie & Éducation Civique',
+    qualification: 'Master Histoire-Géo • CAPES',
     employmentType: 'Titulaire',
     hireDate: '2022-09-01',
     documents: {
@@ -200,7 +200,7 @@ const initialTeachers: TeacherRecord[] = [
     email: 'fanta.diomande@epc-manoi.ci',
     address: 'Cocody Danga, Boulevard de France',
     cycle: 'Collège',
-    grades: ['4ème', '3ème', '2nde D'],
+    grades: ['5ème', '4ème', '3ème'],
     subject: 'Sciences de la Vie et de la Terre (SVT)',
     qualification: 'Licence Biologie • En cours MENA',
     employmentType: 'Contractuel',
@@ -274,7 +274,7 @@ interface StaffViewProps {
   schoolSlug: string;
 }
 
-const TEACHERS_STORAGE_KEY = 'schoolflow_teachers_data_v2';
+const TEACHERS_STORAGE_KEY = 'schoolflow_teachers_data_v3';
 
 export function StaffView({ school, schoolSlug }: StaffViewProps) {
   const getInitialTeachers = (): TeacherRecord[] => {
@@ -288,8 +288,20 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
           localStorage.getItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`) ||
           localStorage.getItem(TEACHERS_STORAGE_KEY);
         if (saved) {
-          const parsed = JSON.parse(saved);
-          return parsed;
+          const parsed: TeacherRecord[] = JSON.parse(saved);
+          // Nettoyer automatiquement toute ancienne donnée comportant le Lycée
+          const sanitized = parsed
+            .filter((t) => (t.cycle as string) !== 'Lycée')
+            .map((t) => ({
+              ...t,
+              grades: t.grades.filter(
+                (g) =>
+                  !g.toLowerCase().includes('2nde') &&
+                  !g.toLowerCase().includes('1ère') &&
+                  !g.toLowerCase().includes('terminale')
+              ),
+            }));
+          return sanitized.length > 0 ? sanitized : initialTeachers;
         }
         // Pour les nouveaux établissements ou après reset, liste vierge
         if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
@@ -345,7 +357,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
   const [formGender, setFormGender] = useState<'male' | 'female'>('male');
   const [formPhone, setFormPhone] = useState('+225 ');
   const [formAddress, setFormAddress] = useState('');
-  const [formCycle, setFormCycle] = useState<'Maternelle' | 'Primaire' | 'Collège' | 'Lycée'>('Collège');
+  const [formCycle, setFormCycle] = useState<'Maternelle' | 'Primaire' | 'Collège'>('Collège');
   const [formSubject, setFormSubject] = useState('');
   const [formGrades, setFormGrades] = useState('6ème');
   const [formQualification, setFormQualification] = useState('');
@@ -425,7 +437,8 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
       },
     };
 
-    setTeachers((prev) => [newRecord, ...prev]);
+    const updated = [newRecord, ...teachers];
+    saveTeachersToStorage(updated);
     setShowAddModal(false);
     setToastMessage(`✓ Enseignant(e) ${newRecord.lastName} ${newRecord.firstName} ajouté(e) avec succès !`);
     setTimeout(() => setToastMessage(null), 5000);
@@ -635,7 +648,6 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
               <option value="Maternelle">Cycle Maternelle</option>
               <option value="Primaire">Cycle Primaire</option>
               <option value="Collège">Cycle Collège</option>
-              <option value="Lycée">Cycle Lycée</option>
             </select>
 
             <select
@@ -979,7 +991,6 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
                     <option value="Maternelle">Maternelle</option>
                     <option value="Primaire">Primaire</option>
                     <option value="Collège">Collège</option>
-                    <option value="Lycée">Lycée</option>
                   </select>
                 </div>
                 <div>
@@ -995,8 +1006,8 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
                 </div>
               </div>
 
-              {/* Matière enseignée (Uniquement pour Collège et Lycée) */}
-              {(formCycle === 'Collège' || formCycle === 'Lycée') ? (
+              {/* Matière enseignée (Uniquement pour Collège) */}
+              {formCycle === 'Collège' ? (
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">Matière enseignée *</label>
                   <input

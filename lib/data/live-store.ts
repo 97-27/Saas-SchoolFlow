@@ -10,7 +10,7 @@ const SCHOOL_SETTINGS_PREFIX = 'schoolflow_school_settings_v1_';
 const DELETED_STUDENTS_STORAGE_KEY = 'schoolflow_deleted_student_ids_v1';
 const DELETED_SCHOOLS_KEY = 'schoolflow_deleted_schools_v1';
 const SCHOOL_STATUS_PREFIX = 'schoolflow_school_status_v1_';
-const STAFF_USERS_STORAGE_KEY = 'schoolflow_staff_users_v1';
+const STAFF_USERS_STORAGE_KEY = 'schoolflow_staff_users_v2';
 const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_class_bulletins_v1';
 export const DOCS_STATUS_KEY = 'schoolflow_documents_status_v5';
 export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
@@ -1159,59 +1159,59 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       raw = localStorage.getItem(STAFF_USERS_STORAGE_KEY);
     }
 
-    if (raw) {
-      const list: StaffUser[] = JSON.parse(raw);
-      // S'assurer que le Fondateur et le Directeur figurent toujours dans la liste
-      const hasFounder = list.some((u) => u.roleId === 'fondateur');
-      const hasDirector = list.some((u) => u.roleId === 'directeur');
-      let updated = list;
-      if (!hasFounder) {
-        updated = [defaultStaffUsers[0], ...updated];
+    // Migration depuis v1 si v2 n'existe pas encore
+    if (!raw) {
+      const oldRaw =
+        localStorage.getItem(`schoolflow_staff_users_v1_${schoolSlug}`) ||
+        localStorage.getItem('schoolflow_staff_users_v1');
+      if (oldRaw) {
+        raw = oldRaw;
       }
-      if (!hasDirector) {
-        updated = [defaultStaffUsers[1], ...updated];
-      }
-      return updated;
     }
 
-    const school = getLiveSchool(schoolSlug);
-    const initialStaff: StaffUser[] = [
-      {
-        id: 'staff-founder',
-        fullName: school.founderName || 'LAWANI MOUHAMED (Fondateur)',
-        role: 'Fondateur / Promotrice (Admin)',
-        roleId: 'fondateur',
-        matricule: 'EMP-FND-001',
-        subjectOrGrade: 'Présidence & Conseil d’Administration',
-        assignedClasses: 'Toutes les classes',
-        diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
-        address: school.city || 'Abidjan',
-        joinDate: '01/09/2026',
-        email: `fondateur@${schoolSlug}.ci`,
-        phone: school.phone || '+225 07 48 92 11 00',
-        authCode: 'FND-2026',
-        status: 'Actif',
-        lastLogin: 'En ligne',
-      },
-      {
-        id: 'staff-001',
-        fullName: school.directorName || 'Dr. Jean-Marc Kouassi (Direction)',
-        role: 'Directeur Général (Admin)',
-        roleId: 'directeur',
-        matricule: 'EMP-DIR-001',
-        subjectOrGrade: 'Direction & Pédagogie',
-        assignedClasses: 'Toutes les classes',
-        diplomaOrExperience: 'Direction d’Établissement Scolaire',
-        address: school.city || 'Abidjan',
-        joinDate: '01/09/2026',
-        email: school.email || `direction@${schoolSlug}.ci`,
-        phone: school.phone || '+225 07 45 67 89 01',
-        authCode: 'DIR-2026',
-        status: 'Actif',
-        lastLogin: 'En ligne',
-      },
-    ];
+    if (raw) {
+      const list: StaffUser[] = JSON.parse(raw);
+      // S'assurer que tous les rôles administratifs essentiels sont présents
+      const codeMap = new Map<string, StaffUser>();
+      // 1. Initialiser avec les 8 comptes clés par défaut
+      for (const d of defaultStaffUsers) {
+        codeMap.set(d.authCode, d);
+      }
+      // 2. Fusionner avec la liste locale (en préservant les modifications de mot de passe, statut et ajouts)
+      for (const u of list) {
+        if (!u || !u.authCode) continue;
+        if (codeMap.has(u.authCode)) {
+          const def = codeMap.get(u.authCode)!;
+          codeMap.set(u.authCode, {
+            ...def,
+            ...u,
+            fullName: u.fullName || def.fullName,
+            role: u.role || def.role,
+            roleId: u.roleId || def.roleId,
+            status: u.status || def.status,
+            authCode: u.authCode || def.authCode,
+          });
+        } else {
+          // Nouvel utilisateur ajouté par l'admin
+          codeMap.set(u.authCode || u.id, u);
+        }
+      }
+
+      const mergedList = Array.from(codeMap.values());
+      // Sauvegarder dans v2 pour stabiliser le cache du navigateur
+      localStorage.setItem(storageKey, JSON.stringify(mergedList));
+      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(mergedList));
+      }
+      return mergedList;
+    }
+
+    // Premier chargement : liste standard des 8 postes officiels
+    const initialStaff = defaultStaffUsers;
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
+    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(initialStaff));
+    }
     return initialStaff;
   } catch (e) {
     return defaultStaffUsers;

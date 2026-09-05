@@ -389,34 +389,13 @@ export function BulletinsView({
   const imgElementRef = useRef<HTMLImageElement>(null);
 
   const availableClassesForCycle = useMemo(() => {
-    switch (selectedCycle) {
-      case 'college':
-        return ['6ème', '5ème', '4ème', '3ème'];
-      case 'lycee':
-        return [
-          '2nde A',
-          '2nde C',
-          '2nde D',
-          '1ère A',
-          '1ère C',
-          '1ère D',
-          'Terminale A',
-          'Terminale C',
-          'Terminale D',
-        ];
-      default:
-        return ['6ème', '5ème', '4ème', '3ème'];
-    }
-  }, [selectedCycle]);
+    return ['6ème', '5ème', '4ème', '3ème'];
+  }, []);
 
-  // Synchroniser la classe sélectionnée lorsqu'on change de cycle
-  const handleCycleChange = (cycle: 'college' | 'lycee') => {
+  // Synchroniser la classe sélectionnée
+  const handleCycleChange = (cycle: 'college') => {
     setSelectedCycle(cycle);
-    if (cycle === 'college') {
-      setSelectedClass('6ème');
-    } else {
-      setSelectedClass('2nde A');
-    }
+    setSelectedClass('6ème');
   };
 
   const subjectsList = useMemo(() => {
@@ -781,39 +760,28 @@ export function BulletinsView({
         </div>
       </div>
 
-      {/* 2. Sélecteur de Cycles (Collège & Lycée uniquement) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 print:hidden">
+      {/* 2. Sélecteur de Cycles (Collège : 6ème à 3ème) */}
+      <div className="grid grid-cols-1 gap-3 print:hidden">
         {[
-          { id: 'college' as const, label: 'Cycle Collège (6ème à 3ème)', icon: Building2 },
-          { id: 'lycee' as const, label: 'Secondaire Général / Lycée (2nde à Terminale)', icon: Layers },
+          { id: 'college' as const, label: 'Cycle Secondaire / Collège (6ème à 3ème)', icon: Building2 },
         ].map((c) => {
           const Icon = c.icon;
-          const isActive = selectedCycle === c.id;
+          const isActive = true;
           return (
-            <button
+            <div
               key={c.id}
-              type="button"
-              onClick={() => handleCycleChange(c.id)}
-              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3.5 ${
-                isActive
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-emerald-500/20'
-                  : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-50'
-              }`}
+              className="p-4 rounded-2xl border text-left flex items-center gap-3.5 bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-emerald-500/20"
             >
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                  isActive ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'
-                }`}
-              >
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-emerald-600 text-white">
                 <Icon className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-xs sm:text-sm font-bold font-heading">{c.label}</h3>
-                <p className={`text-[11px] ${isActive ? 'text-slate-300' : 'text-slate-400'}`}>
-                  Génération & impression des bulletins officiels sur 1 page paysage
+                <p className="text-[11px] text-slate-300">
+                  Génération & impression des bulletins officiels sur 1 page paysage (6ème, 5ème, 4ème, 3ème)
                 </p>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>

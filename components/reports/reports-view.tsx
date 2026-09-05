@@ -167,7 +167,6 @@ export function ReportsView({
       { name: 'Maternelle (P.S. à G.S.)', check: isMaternelle, icon: Sparkles, color: 'emerald' },
       { name: 'Primaire (CP1 à CM2)', check: isPrimaire, icon: GraduationCap, color: 'blue' },
       { name: 'Collège (6ème à 3ème)', check: isCollege, icon: Building2, color: 'amber' },
-      { name: 'Lycée (2nde à Terminale)', check: isLycee, icon: Layers, color: 'purple' },
     ].map((c) => {
       const cycStus = students.filter((s) => c.check(s.grade));
       
@@ -406,7 +405,6 @@ export function ReportsView({
             { id: 'maternelle', label: 'Maternelle' },
             { id: 'primaire', label: 'Primaire' },
             { id: 'college', label: 'Collège' },
-            { id: 'lycee', label: 'Lycée' },
           ].map((c) => (
             <button
               key={c.id}

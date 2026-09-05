@@ -32,22 +32,11 @@ interface AttendanceViewProps {
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
 
-const collegeAndLyceeClasses = [
-  // Collège
+const secondaryClasses = [
   '6ème',
   '5ème',
   '4ème',
   '3ème',
-  // Lycée
-  '2nde A',
-  '2nde C',
-  '2nde D',
-  '1ère A',
-  '1ère C',
-  '1ère D',
-  'Terminale A',
-  'Terminale C',
-  'Terminale D',
 ];
 
 const timeSlots = [
@@ -107,16 +96,10 @@ export function AttendanceView({
     }
   }, [lockKey]);
 
-  // Classes filtrées selon le cycle choisi
+  // Classes du Collège (6ème à 3ème)
   const displayedClasses = useMemo(() => {
-    if (selectedCycleTab === 'college') {
-      return ['6ème', '5ème', '4ème', '3ème'];
-    }
-    if (selectedCycleTab === 'lycee') {
-      return ['2nde A', '2nde C', '2nde D', '1ère A', '1ère C', '1ère D', 'Terminale A', 'Terminale C', 'Terminale D'];
-    }
-    return collegeAndLyceeClasses;
-  }, [selectedCycleTab]);
+    return secondaryClasses;
+  }, []);
 
   // Élèves de la classe choisie
   const classStudents = useMemo(() => {
@@ -409,33 +392,20 @@ export function AttendanceView({
 
       {/* 3. Sélection du Cycle & de la Classe */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-4">
-        {/* Cycle Tabs */}
+        {/* Cycle Header */}
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
           {[
-            { id: 'college', label: 'Cycle Collège (6ème à 3ème)', icon: Building2 },
-            { id: 'lycee', label: 'Cycle Lycée (2nde à Terminale)', icon: Layers },
-            { id: 'all', label: 'Toutes les Classes Secondaires', icon: Users },
+            { id: 'college', label: 'Cycle Secondaire / Collège (6ème à 3ème)', icon: Building2 },
           ].map((tab) => {
             const Icon = tab.icon;
-            const isTabActive = selectedCycleTab === tab.id;
             return (
-              <button
+              <div
                 key={tab.id}
-                type="button"
-                onClick={() => {
-                  setSelectedCycleTab(tab.id as any);
-                  if (tab.id === 'college') setSelectedClass('6ème');
-                  if (tab.id === 'lycee') setSelectedClass('2nde A');
-                }}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                  isTabActive
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-emerald-600 text-white shadow-2xs"
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span>{tab.label}</span>
-              </button>
+              </div>
             );
           })}
         </div>

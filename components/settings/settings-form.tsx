@@ -853,21 +853,27 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   </label>
 
                   {/* Lycée */}
-                  <label className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between cursor-pointer">
+                  <label className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer ${
+                    (school.hasLycee ?? false) ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/60'
+                  }`}>
                     <div className="flex items-center gap-2.5">
                       <input
                         type="checkbox"
-                        checked={school.hasLycee ?? true}
+                        checked={school.hasLycee ?? false}
                         onChange={(e) => handleInputChange('hasLycee', e.target.checked)}
                         className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                       />
                       <div>
                         <p className="text-xs font-bold text-slate-900">Cycle Lycée</p>
-                        <p className="text-[11px] text-slate-500">2nde, 1ère, Tle (A, C, D)</p>
+                        <p className="text-[11px] text-slate-500">2nde, 1ère, Tle (Optionnel)</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                      Actif
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                      (school.hasLycee ?? false)
+                        ? 'text-emerald-700 bg-white border-emerald-200'
+                        : 'text-slate-500 bg-slate-100 border-slate-200'
+                    }`}>
+                      {(school.hasLycee ?? false) ? 'Actif' : 'Non actif'}
                     </span>
                   </label>
                 </div>

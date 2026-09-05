@@ -90,8 +90,6 @@ export function DistinctionsView({
         return ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'];
       case 'college':
         return ['6ème', '5ème', '4ème', '3ème'];
-      case 'lycee':
-        return ['2nde A', '2nde C', '1ère A', '1ère D', 'Terminale A', 'Terminale D'];
       case 'all':
       default:
         return [
@@ -108,22 +106,15 @@ export function DistinctionsView({
           '5ème',
           '4ème',
           '3ème',
-          '2nde A',
-          '2nde C',
-          '1ère A',
-          '1ère D',
-          'Terminale A',
-          'Terminale D',
         ];
     }
   }, [selectedCycle]);
 
-  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee') => {
+  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college') => {
     setSelectedCycle(cycle);
     if (cycle === 'maternelle') setSelectedClass('Maternelle (G.S.)');
     else if (cycle === 'primaire') setSelectedClass('CM2');
     else if (cycle === 'college') setSelectedClass('6ème');
-    else if (cycle === 'lycee') setSelectedClass('2nde A');
     else setSelectedClass('6ème');
   };
 
@@ -506,13 +497,12 @@ export function DistinctionsView({
       {/* ================= SECTION PRINCIPALE : TABLEAU D'HONNEUR & LAURÉATS ================= */}
       <div className="space-y-6 animate-in fade-in">
         {/* Sélecteur de Cycles */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5 print:hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 print:hidden">
           {[
             { id: 'all' as const, label: 'Tous les Cycles', icon: Layers },
             { id: 'maternelle' as const, label: 'Maternelle (P.S. à G.S.)', icon: Baby },
             { id: 'primaire' as const, label: 'Primaire (CP1 à CM2)', icon: BookOpen },
             { id: 'college' as const, label: 'Collège (6ème à 3ème)', icon: Building2 },
-            { id: 'lycee' as const, label: 'Lycée (2nde à Tle)', icon: GraduationCap },
           ].map((c) => {
             const Icon = c.icon;
             const isActive = selectedCycle === c.id;

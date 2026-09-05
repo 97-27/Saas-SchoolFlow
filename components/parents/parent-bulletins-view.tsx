@@ -546,14 +546,14 @@ export function ParentBulletinsView({
         <div className="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
           <Lock className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-black text-slate-900 font-heading">
-          Accès Sécurisé : Aucun Élève du Secondaire / Lycée Rattaché
+        <h2 className="text-base font-extrabold text-slate-900 font-heading">
+          Accès Sécurisé : Aucun Élève du Collège (6ème à 3ème) Rattaché
         </h2>
         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-          Les bulletins scolaires numériques en ligne sont réservés aux élèves scolarisés de la <strong>6ème jusqu&apos;en Terminale</strong>. Pour les classes de Maternelle et Primaire, les livrets de notes sont remis physiquement en main propre par la Direction.
+          Les bulletins scolaires numériques en ligne sont réservés aux élèves scolarisés du <strong>Collège (de la 6ème à la 3ème)</strong>. Pour les classes de Maternelle et Primaire, les livrets de notes sont remis physiquement en main propre par la Direction.
         </p>
         <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 text-left">
-          <strong>Directives :</strong> Si votre enfant est bien au Collège ou Lycée, veuillez contacter le secrétariat de{' '}
+          <strong>Directives :</strong> Si votre enfant est bien au Collège (6ème à 3ème), veuillez contacter le secrétariat de{' '}
           <strong>{currentSchool.name}</strong> avec vos reçus officiels pour synchroniser votre dossier.
         </div>
       </div>
@@ -603,7 +603,7 @@ export function ParentBulletinsView({
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
             <GraduationCap className="w-3.5 h-3.5" />
-            <span>Portail Secondaire & Lycée (6ème à Terminale) • Année {currentSchool.academicYear || '2026-2027'}</span>
+            <span>Portail Collège (6ème à 3ème) • Année {currentSchool.academicYear || '2026-2027'}</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight">
             {isParentRole ? 'Suivi des Notes & Bulletins de vos Enfants' : 'Notes & Bulletins Parents — Direction & Admin'}
@@ -611,7 +611,7 @@ export function ParentBulletinsView({
           <p className="text-xs text-emerald-100 max-w-2xl leading-relaxed">
             {isParentRole
               ? 'Consultez les moyennes trimestrielles certifiées et imprimez le bulletin officiel au format Paysage A4 (1 page nette).'
-              : 'Visualisez les bulletins des élèves du Collège au Lycée, certifiés avec le cachet officiel de l’établissement.'}
+              : 'Visualisez les bulletins des élèves du Collège (6ème à 3ème), certifiés avec le cachet officiel de l’établissement.'}
           </p>
         </div>
 
@@ -628,7 +628,7 @@ export function ParentBulletinsView({
         </div>
       </div>
 
-      {/* ═══════════════ SÉLECTION DU PARENT POUR L'ADMIN / DIRECTION (6ème à Terminale) ═══════════════ */}
+      {/* ═══════════════ SÉLECTION DU PARENT POUR L'ADMIN / DIRECTION (6ème à 3ème) ═══════════════ */}
       {!isParentRole && (
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4 print:hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -638,10 +638,10 @@ export function ParentBulletinsView({
               </div>
               <div>
                 <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading">
-                  Familles & Tuteurs du Secondaire / Lycée (6ème à Terminale)
+                  Familles & Tuteurs du Collège (6ème à 3ème)
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  {allParentFamilies.length} familles répertoriées avec élèves au Collège ou Lycée
+                  {allParentFamilies.length} familles répertoriées avec élèves au Collège (6ème à 3ème)
                 </p>
               </div>
             </div>
