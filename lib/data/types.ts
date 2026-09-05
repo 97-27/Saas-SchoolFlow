@@ -71,6 +71,8 @@ export interface Student {
   installments?: StudentInstallments;
   notes?: string;
   isBoarding?: boolean;
+  isCanteen?: boolean;
+  isTransport?: boolean;
 }
 
 export interface DashboardKPIs {
