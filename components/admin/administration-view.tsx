@@ -40,7 +40,7 @@ interface AdministrationViewProps {
 }
 
 export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
+  const [staffList, setStaffList] = useState<StaffUser[]>(() => getLiveStaffUsers(schoolSlug));
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'enseignants' | 'administration'>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
