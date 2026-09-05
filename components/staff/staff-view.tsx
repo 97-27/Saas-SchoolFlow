@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { School } from '@/lib/data/types';
 import { availableClasses } from '@/lib/data/mock-data';
-import { getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveSchool, getSchoolSubscription, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import {
   UserCheck,
   Users,
@@ -274,18 +274,35 @@ interface StaffViewProps {
   schoolSlug: string;
 }
 
+const TEACHERS_STORAGE_KEY = 'schoolflow_teachers_data_v2';
+
 export function StaffView({ school, schoolSlug }: StaffViewProps) {
-  const [teachers, setTeachers] = useState<TeacherRecord[]>(() => {
+  const getInitialTeachers = (): TeacherRecord[] => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('schoolflow_teachers_data_v2');
-        if (saved) return JSON.parse(saved);
+        const sub = getSchoolSubscription(schoolSlug);
+        if (sub?.isDataReset) {
+          return [];
+        }
+        const saved =
+          localStorage.getItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`) ||
+          localStorage.getItem(TEACHERS_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return parsed;
+        }
+        // Pour les nouveaux établissements ou après reset, liste vierge
+        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+          return [];
+        }
       } catch (e) {
         // ignore
       }
     }
     return initialTeachers;
-  });
+  };
+
+  const [teachers, setTeachers] = useState<TeacherRecord[]>(getInitialTeachers);
 
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -297,9 +314,11 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
 
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
+    setTeachers(getInitialTeachers());
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setTeachers(getInitialTeachers());
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -310,7 +329,10 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
     setTeachers(updatedList);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('schoolflow_teachers_data_v2', JSON.stringify(updatedList));
+        localStorage.setItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(updatedList));
+        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+          localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(updatedList));
+        }
       } catch (e) {
         // ignore
       }
@@ -506,11 +528,11 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
               {teachers.length}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              100% Déclarés
+              {teachers.length > 0 ? '100% Déclarés' : '0 Déclaré'}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 font-medium">
-            Corps professoral & maîtres d&apos;école
+            {teachers.length > 0 ? 'Corps professoral & maîtres d’école' : 'Aucun enseignant enregistré'}
           </p>
         </div>
 
@@ -526,14 +548,16 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
-              {teachers.filter((t) => t.documents.teachingAuthorization).length} / {teachers.length}
+              {teachers.length > 0
+                ? `${teachers.filter((t) => t.documents.teachingAuthorization).length} / ${teachers.length}`
+                : '0 / 0'}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
               Conformité
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 font-medium">
-            Agréments ministériels validés
+            {teachers.length > 0 ? 'Agréments ministériels validés' : 'Aucun dossier en cours'}
           </p>
         </div>
 
@@ -549,14 +573,16 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
-              4 Cycles
+              {new Set(teachers.map((t) => t.cycle).filter(Boolean)).size} {new Set(teachers.map((t) => t.cycle).filter(Boolean)).size > 1 ? 'Cycles' : 'Cycle'}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
-              Actifs
+              {teachers.length > 0 ? 'Actifs' : 'Inactifs'}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 font-medium">
-            Maternelle, Primaire, Collège, Lycée
+            {teachers.length > 0
+              ? Array.from(new Set(teachers.map((t) => t.cycle).filter(Boolean))).join(', ')
+              : 'Aucun cycle assigné'}
           </p>
         </div>
 
@@ -579,7 +605,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2 font-medium">
-            Extrait, Casier, Résidence, Diplômes
+            {teachers.length > 0 ? 'Extrait, Casier, Résidence, Diplômes' : 'Aucun dossier actif'}
           </p>
         </div>
       </div>
