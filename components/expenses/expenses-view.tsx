@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { School } from '@/lib/data/types';
+import { School, Invoice } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
-import { getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveSchool, getLiveInvoices, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   TrendingDown,
@@ -129,6 +129,14 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     return [];
   });
 
+  // Factures / Recettes pour la balance nette
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getLiveInvoices([], schoolSlug);
+    }
+    return [];
+  });
+
   // Filtres & Recherche
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Toutes les catégories');
@@ -160,6 +168,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     const loadAndSanitize = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setInvoices(getLiveInvoices([], schoolSlug));
       if (typeof window !== 'undefined') {
         try {
           const saved =
@@ -216,7 +225,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     });
   }, [expenses, searchQuery, categoryFilter, methodFilter]);
 
-  // Statistiques Financières Clés
+  // Statistiques Financières Clés (100% dynamiques et liées aux encaissements réels)
   const stats = useMemo(() => {
     const totalExpenses = expenses.reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
     const salaryExpenses = expenses
@@ -224,18 +233,19 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
       .reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
     const operatingExpenses = totalExpenses - salaryExpenses;
 
-    // Recettes estimées de scolarité pour le calcul de la balance nette
-    const estimatedRevenues = 84250000; // Recettes réelles de scolarité en caisse
-    const netBalance = estimatedRevenues - totalExpenses;
+    // Recettes réelles de scolarité en caisse
+    const totalRevenues = invoices.reduce((acc, inv) => acc + (Number(inv.paidAmount) || 0), 0);
+    const netBalance = totalRevenues - totalExpenses;
 
     return {
       totalExpenses,
       salaryExpenses,
       operatingExpenses,
+      totalRevenues,
       netBalance,
       expensesCount: expenses.length,
     };
-  }, [expenses]);
+  }, [expenses, invoices]);
 
   // Ouvrir modale d'ajout
   const handleOpenAddModal = () => {
@@ -443,13 +453,15 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
                 {formatFCFA(stats.salaryExpenses)}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                {Math.round((stats.salaryExpenses / (stats.totalExpenses || 1)) * 100)}% du total
+                {stats.totalExpenses > 0 ? Math.round((stats.salaryExpenses / stats.totalExpenses) * 100) : 0}% du total
               </span>
             </div>
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
             <span>Enseignants & Personnel</span>
-            <span className="font-bold text-blue-700">À jour ✓</span>
+            <span className={`font-bold ${stats.salaryExpenses > 0 ? 'text-blue-700' : 'text-slate-500'}`}>
+              {stats.salaryExpenses > 0 ? 'À jour ✓' : '0 décaissé'}
+            </span>
           </div>
         </div>
 
@@ -469,13 +481,13 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
                 {formatFCFA(stats.operatingExpenses)}
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Fonctionnement
+                {stats.operatingExpenses > 0 ? 'Fonctionnement' : '0 charge'}
               </span>
             </div>
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
             <span>Eau, Élec, Cantine, Bus</span>
-            <span className="font-semibold text-slate-700">Contrôlé</span>
+            <span className="font-semibold text-slate-700">{stats.operatingExpenses > 0 ? 'Contrôlé' : '0 FCFA'}</span>
           </div>
         </div>
 
@@ -483,7 +495,9 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-xs">
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${
+                stats.netBalance > 0 ? 'bg-emerald-50 text-emerald-600' : stats.netBalance < 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-600'
+              } flex items-center justify-center shrink-0 shadow-xs`}>
                 <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 font-sans truncate">
@@ -491,17 +505,29 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-1 flex-wrap">
-              <span className="text-xl sm:text-2xl font-extrabold text-emerald-700 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(stats.netBalance)}
+              <span className={`text-xl sm:text-2xl font-extrabold ${
+                stats.netBalance > 0 ? 'text-emerald-700' : stats.netBalance < 0 ? 'text-rose-700' : 'text-slate-900'
+              } tracking-tight font-heading whitespace-nowrap`}>
+                {stats.netBalance < 0 ? `-${formatFCFA(Math.abs(stats.netBalance))}` : formatFCFA(stats.netBalance)}
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Excédent +
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                stats.netBalance > 0
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : stats.netBalance < 0
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+              }`}>
+                {stats.netBalance > 0 ? 'Excédent +' : stats.netBalance < 0 ? 'Déficit' : 'Équilibré'}
               </span>
             </div>
           </div>
-          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-emerald-700 font-medium flex items-center justify-between">
-            <span>Trésorerie globale</span>
-            <span className="font-extrabold">Excellente</span>
+          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] flex items-center justify-between">
+            <span className="text-slate-400">Trésorerie globale</span>
+            <span className={`font-extrabold ${
+              stats.netBalance > 0 ? 'text-emerald-700' : stats.netBalance < 0 ? 'text-rose-700' : 'text-slate-600'
+            }`}>
+              {stats.netBalance > 0 ? 'Excellente' : stats.netBalance < 0 ? 'Déficitaire' : 'Neutre (0 FCFA)'}
+            </span>
           </div>
         </div>
       </div>

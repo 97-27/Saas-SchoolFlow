@@ -573,9 +573,11 @@ export function CommunicationView({
             </h3>
           </div>
           <span className="text-2xl font-extrabold text-blue-900 font-heading">
-            {broadcasts.length + 142} envois
+            {broadcasts.length} {broadcasts.length > 1 ? 'envois' : 'envoi'}
           </span>
-          <p className="text-[11px] text-slate-500 mt-1">Circulaires et avis d&apos;échéances</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            {broadcasts.length > 0 ? 'Circulaires et avis d’échéances' : 'Aucune diffusion envoyée'}
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs flex flex-col justify-between">
@@ -588,9 +590,13 @@ export function CommunicationView({
             </h3>
           </div>
           <span className="text-2xl font-extrabold text-emerald-700 font-heading">
-            98.5%
+            {messages.length > 0
+              ? `${Math.round((messages.filter((m) => m.status === 'resolved').length / messages.length) * 100)}%`
+              : '0%'}
           </span>
-          <p className="text-[11px] text-slate-500 mt-1">Délai moyen &lt; 2 heures</p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            {messages.length > 0 ? 'Délai moyen < 2 heures' : 'Aucun message actif'}
+          </p>
         </div>
       </div>
 

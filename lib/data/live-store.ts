@@ -1529,6 +1529,12 @@ export function resetSchoolData(
     localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
     localStorage.setItem(`schoolflow_broadcast_records_v1_${slug}`, JSON.stringify([]));
 
+    // Enseignants & Personnel Pédagogique
+    localStorage.setItem('schoolflow_teachers_data_v2', JSON.stringify([]));
+    localStorage.setItem(`schoolflow_teachers_data_v2_${slug}`, JSON.stringify([]));
+    localStorage.removeItem('schoolflow_teachers_v1');
+    localStorage.removeItem('schoolflow_teachers_v2');
+
     // Cantine, Transport & Internat
     localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
     localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
@@ -1657,7 +1663,10 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`);
-    localStorage.removeItem('schoolflow_active_school_settings_v1');
+    localStorage.removeItem('schoolflow_teachers_data_v2');
+    localStorage.removeItem(`schoolflow_teachers_data_v2_${slug}`);
+    localStorage.removeItem('schoolflow_teachers_v1');
+    localStorage.removeItem('schoolflow_teachers_v2');
     localStorage.removeItem(`${STAFF_USERS_STORAGE_KEY}_${slug}`);
     localStorage.removeItem(STAFF_USERS_STORAGE_KEY);
 
