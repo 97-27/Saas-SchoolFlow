@@ -282,10 +282,10 @@ export function RevenueSummary({
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Total annuel prévisionnel</span>
-          <span className="font-bold text-slate-900 text-sm">
-            {formatFCFA(breakdownData.targetAnnual)}
+        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+          <span className="text-slate-500 font-medium">Total des encaissements perçus :</span>
+          <span className="font-extrabold font-heading text-emerald-700 text-sm sm:text-base">
+            {formatFCFA(breakdownData.totalCollected)}
           </span>
         </div>
       </div>

@@ -651,18 +651,33 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         : '📚 Enseignant'}
                     </span>
                     <span className="block text-[11px] text-slate-600 font-medium mt-1">
-                      {member.subjectOrGrade || 'Direction / Scolarité'}
+                      {member.roleId === 'enseignant'
+                        ? member.subjectOrGrade || 'Toutes disciplines'
+                        : 'Pôle Direction & Administration'}
                     </span>
                   </td>
 
-                  {/* Classes / Matières */}
+                  {/* Classes / Attributions */}
                   <td className="py-3.5 px-4">
-                    <span className="font-bold text-slate-800 block text-xs">
-                      {member.assignedClasses || 'Toutes les classes'}
-                    </span>
-                    <span className="text-[11px] text-slate-500 truncate max-w-[160px] block mt-0.5">
-                      {member.diplomaOrExperience || 'Diplôme d’État'}
-                    </span>
+                    {member.roleId === 'enseignant' ? (
+                      <>
+                        <span className="font-bold text-slate-800 block text-xs">
+                          {member.assignedClasses || 'Toutes les classes'}
+                        </span>
+                        <span className="text-[11px] text-slate-500 truncate max-w-[160px] block mt-0.5">
+                          {member.diplomaOrExperience || 'Diplôme d’État & Certification'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-bold text-slate-800 block text-xs">
+                          {member.phone || 'Ligne directe active'}
+                        </span>
+                        <span className="text-[11px] text-emerald-700 font-medium truncate max-w-[160px] block mt-0.5">
+                          {member.email}
+                        </span>
+                      </>
+                    )}
                   </td>
 
                   {/* Code d'authentification */}
@@ -815,31 +830,54 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             {/* Corps de la fiche */}
             <div className="space-y-3 text-xs">
               
-              {/* Informations Professionnelles */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                  <GraduationCap className="w-4 h-4 text-emerald-600" />
-                  <span>Informations Pédagogiques & Professionnelles</span>
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
-                  <div>
-                    <span className="text-slate-400 text-[11px] block">Matière / Discipline :</span>
-                    <strong className="text-slate-900">{selectedStaffDetail.subjectOrGrade || 'Toutes disciplines'}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 text-[11px] block">Classes Assignées :</span>
-                    <strong className="text-slate-900">{selectedStaffDetail.assignedClasses || 'Maternelle à 3ème'}</strong>
-                  </div>
-                  <div className="col-span-2 pt-1 border-t border-slate-200/60">
-                    <span className="text-slate-400 text-[11px] block">Diplôme & Expérience :</span>
-                    <strong className="text-slate-900">{selectedStaffDetail.diplomaOrExperience || 'Diplôme d’État & Certification Pédagogique'}</strong>
-                  </div>
-                  <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px]">Date d&apos;embauche :</span>
-                    <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2021'}</strong>
+              {/* Informations Pédagogiques (Enseignant) ou Informations Administratives (Autres Rôles) */}
+              {selectedStaffDetail.roleId === 'enseignant' ? (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4 text-emerald-600" />
+                    <span>Informations Pédagogiques & Professionnelles</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">Matière / Discipline :</span>
+                      <strong className="text-slate-900">{selectedStaffDetail.subjectOrGrade || 'Mathématiques & Sciences'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">Classes Assignées :</span>
+                      <strong className="text-slate-900">{selectedStaffDetail.assignedClasses || '6ème à 3ème'}</strong>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-slate-200/60">
+                      <span className="text-slate-400 text-[11px] block">Diplôme & Expérience :</span>
+                      <strong className="text-slate-900">{selectedStaffDetail.diplomaOrExperience || 'Diplôme d’État & Certification Pédagogique'}</strong>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">Date d&apos;embauche :</span>
+                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Informations Administratives du Poste</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">Fonction / Rôle :</span>
+                      <strong className="text-slate-900">{selectedStaffDetail.role}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">Matricule d&apos;Embauche :</span>
+                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.matricule || `EMP-${selectedStaffDetail.authCode}`}</strong>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">Date de prise de fonction :</span>
+                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Contacts & Coordonnées */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
@@ -956,7 +994,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Poste / Fonction *</label>
                   <select
@@ -968,55 +1006,18 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
-                    <option value="enseignant">Enseignant / Professeur</option>
-                    <option value="assistant_direction">Assistant(e) de Direction</option>
-                    <option value="educateur">Éducateur / Vie Scolaire</option>
-                    <option value="informaticien">Informaticien / Responsable IT</option>
-                    <option value="comptable">Comptable / Gestionnaire</option>
-                    <option value="secretaire">Secrétaire de Direction</option>
-                    <option value="fondateur">Fondateur (Supervision)</option>
-                    <option value="directeur">Directeur (Admin)</option>
-                    <option value="parent">Parent d&apos;Élève (Espace Famille)</option>
+                    <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
+                    <option value="secretaire">📝 Secrétaire de Direction</option>
+                    <option value="comptable">💼 Comptable / Gestionnaire</option>
+                    <option value="assistant_direction">📋 Assistant(e) de Direction</option>
+                    <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
+                    <option value="informaticien">💻 Informaticien / Responsable IT</option>
+                    <option value="fondateur">👑 Fondateur (Supervision)</option>
+                    <option value="directeur">👑 Directeur (Admin)</option>
+                    <option value="parent">👨‍👩‍👧 Parent d&apos;Élève (Espace Famille)</option>
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Matière / Discipline</label>
-                  <input
-                    type="text"
-                    value={newSubject}
-                    onChange={(e) => setNewSubject(e.target.value)}
-                    placeholder="Ex : Mathématiques / SVT"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Classes Assignées</label>
-                  <input
-                    type="text"
-                    value={newClasses}
-                    onChange={(e) => setNewClasses(e.target.value)}
-                    placeholder="Ex : 6ème A, 5ème B, CM2"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Diplôme & Expérience</label>
-                  <input
-                    type="text"
-                    value={newDiploma}
-                    onChange={(e) => setNewDiploma(e.target.value)}
-                    placeholder="Ex : CAPES Mathématiques (8 ans)"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Email Professionnel *</label>
                   <input
@@ -1024,22 +1025,81 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     required
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="prof.ngoran@ecole.com"
+                    placeholder="email@etablissement.ci"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Ligne Professionnelle / Numéro Téléphone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="+225 07 12 34 56 78"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Numéro Téléphone</label>
+                  <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
                   <input
-                    type="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="+225 07 12 34 56 78"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono text-slate-900 focus:border-emerald-600"
+                    type="text"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    placeholder="Ex : Abidjan, Cocody"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
               </div>
+
+              {/* Informations Pédagogiques STRICTEMENT réservées au profil Enseignant */}
+              {newRole === 'enseignant' && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 animate-in fade-in">
+                  <div className="flex items-center gap-2 pb-1 border-b border-slate-200/60">
+                    <BookOpen className="w-4 h-4 text-emerald-600" />
+                    <span className="font-bold text-slate-900 text-xs">Attributions Pédagogiques (Enseignant)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Matière / Discipline *</label>
+                      <input
+                        type="text"
+                        value={newSubject}
+                        onChange={(e) => setNewSubject(e.target.value)}
+                        placeholder="Ex : Mathématiques / SVT"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Classes Assignées *</label>
+                      <input
+                        type="text"
+                        value={newClasses}
+                        onChange={(e) => setNewClasses(e.target.value)}
+                        placeholder="Ex : 6ème A, 5ème B, CM2"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 block">Diplôme & Expérience Pédagogique</label>
+                    <input
+                      type="text"
+                      value={newDiploma}
+                      onChange={(e) => setNewDiploma(e.target.value)}
+                      placeholder="Ex : CAPES Mathématiques (8 ans exp.)"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Code d'authentification généré */}
               <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1.5">
@@ -1158,7 +1218,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
-              {/* Matricule & Matière */}
+              {/* Matricule & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">
@@ -1174,45 +1234,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Matière / Attribution</label>
-                  <input
-                    type="text"
-                    value={editSubject}
-                    onChange={(e) => setEditSubject(e.target.value)}
-                    placeholder="Ex : Mathématiques & SVT"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Classes & Diplôme */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Classes Assignées</label>
-                  <input
-                    type="text"
-                    value={editClasses}
-                    onChange={(e) => setEditClasses(e.target.value)}
-                    placeholder="Ex : 6ème A, 5ème B, CM2"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Diplôme & Expérience</label>
-                  <input
-                    type="text"
-                    value={editDiploma}
-                    onChange={(e) => setEditDiploma(e.target.value)}
-                    placeholder="Ex : Master / CAPES (10 ans exp.)"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              {/* Email & Téléphone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Email Professionnel *</label>
                   <input
                     type="email"
@@ -1223,18 +1244,78 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
+              </div>
 
+              {/* Ligne Professionnelle / Téléphone & Adresse */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Contact Direct / WhatsApp</label>
+                  <label className="font-bold text-slate-700 block">Ligne Professionnelle / Contact *</label>
                   <input
                     type="tel"
+                    required
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                     placeholder="+225 07 00 00 00 00"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:border-emerald-600"
                   />
                 </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
+                  <input
+                    type="text"
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    placeholder="Ex : Abidjan, Côte d'Ivoire"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
               </div>
+
+              {/* Attributions Pédagogiques STRICTEMENT réservées au profil Enseignant */}
+              {editRole === 'enseignant' && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 animate-in fade-in">
+                  <div className="flex items-center gap-2 pb-1 border-b border-slate-200/60">
+                    <BookOpen className="w-4 h-4 text-emerald-600" />
+                    <span className="font-bold text-slate-900 text-xs">Attributions Pédagogiques (Enseignant)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Matière / Attribution *</label>
+                      <input
+                        type="text"
+                        value={editSubject}
+                        onChange={(e) => setEditSubject(e.target.value)}
+                        placeholder="Ex : Mathématiques & SVT"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-700 block">Classes Assignées *</label>
+                      <input
+                        type="text"
+                        value={editClasses}
+                        onChange={(e) => setEditClasses(e.target.value)}
+                        placeholder="Ex : 6ème A, 5ème B, CM2"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 block">Diplôme & Expérience</label>
+                    <input
+                      type="text"
+                      value={editDiploma}
+                      onChange={(e) => setEditDiploma(e.target.value)}
+                      placeholder="Ex : Master / CAPES (10 ans exp.)"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Statut & Code */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

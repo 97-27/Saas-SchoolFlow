@@ -211,6 +211,7 @@ export function LoginView({
   const [userName, setUserName] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [parentPhone, setParentPhone] = useState('');
+  const [authCodeInput, setAuthCodeInput] = useState('');
 
   // Formulaire de Nouveau Compte & Abonnement
   const [signupResponsableName, setSignupResponsableName] = useState('');
@@ -372,7 +373,35 @@ export function LoginView({
       parent: 'PAR-2026',
     };
 
-    const cleanAuthCode = defaultCodeMap[selectedRole] || 'STAFF-AUTH';
+    // Validation du Code d'Authentification pour les utilisateurs (Secrétaire, Comptable, Enseignant, etc.)
+    // Seuls le Fondateur et le Directeur bénéficient d'un accès direct sans code d'authentification
+    if (selectedRole !== 'fondateur' && selectedRole !== 'directeur') {
+      if (selectedRole !== 'parent' && !authCodeInput.trim()) {
+        setErrorMessage(`Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`);
+        return;
+      }
+
+      const authCheck = verifyUserAuthCodeForLogin(
+        selectedRole,
+        authCodeInput,
+        trimmedName,
+        schoolSlug,
+        parentPhone
+      );
+
+      if (!authCheck.isValid) {
+        setErrorMessage(
+          authCheck.reason ||
+            `❌ Code d'authentification invalide pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
+        );
+        return;
+      }
+    }
+
+    const cleanAuthCode =
+      authCodeInput.trim().toUpperCase() ||
+      defaultCodeMap[selectedRole] ||
+      'STAFF-AUTH';
 
     setIsLoading(true);
 
@@ -887,13 +916,59 @@ export function LoginView({
                   </div>
                 )}
 
-                {/* Note explicative Connexion Instantanée */}
-                <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-900 shadow-2xs">
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span className="text-[11px] font-medium leading-tight">
-                    Accès automatique sécurisé : la souscription active de votre établissement valide instantanément votre entrée.
-                  </span>
-                </div>
+                {/* 4. Code d'Authentification Officiel (Requis pour Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) */}
+                {selectedRole !== 'fondateur' && selectedRole !== 'directeur' && selectedRole !== 'parent' && (
+                  <div className="space-y-1.5 animate-in fade-in">
+                    <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>4. Code d&apos;Authentification Sécurisé *</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        Attribué par la Direction
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        autoComplete="off"
+                        value={authCodeInput}
+                        onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
+                        placeholder={
+                          selectedRole === 'secretaire'
+                            ? 'Ex : SEC-2026 ou votre code attribué'
+                            : selectedRole === 'comptable'
+                            ? 'Ex : CPT-2026 ou votre code attribué'
+                            : selectedRole === 'enseignant'
+                            ? 'Ex : ENS-2026 ou votre code attribué'
+                            : selectedRole === 'assistant_direction'
+                            ? 'Ex : AST-2026 ou votre code attribué'
+                            : selectedRole === 'educateur'
+                            ? 'Ex : EDU-2026 ou votre code attribué'
+                            : selectedRole === 'informaticien'
+                            ? 'Ex : INF-2026 ou votre code attribué'
+                            : 'Ex : CODE-AUTH'
+                        }
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
+                      />
+                    </div>
+                    <p className="text-[10.5px] text-slate-500">
+                      Entrez le code d&apos;accès configuré par la Direction dans la page Administration.
+                    </p>
+                  </div>
+                )}
+
+                {/* Information Accès Maître Fondateur / Directeur */}
+                {(selectedRole === 'fondateur' || selectedRole === 'directeur') && (
+                  <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-900 shadow-2xs">
+                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span className="text-[11px] font-medium leading-tight">
+                      👑 Accès Administrateur Principal direct activé pour le {selectedRole === 'fondateur' ? 'Fondateur' : 'Directeur'}.
+                    </span>
+                  </div>
+                )}
 
                 {/* Bouton de Connexion */}
                 <button
