@@ -5,6 +5,7 @@ import { Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, formatDateFrenchLong } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
+import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   Search,
   Filter,
@@ -221,26 +222,26 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
         {/* Global actions: Date picker */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Sélecteur de date du journal */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1.5" />
-            <span className="font-semibold text-slate-600 hidden sm:inline">Date :</span>
-            <input
-              type="date"
-              value={selectedJournalDate}
-              onChange={(e) => {
-                setSelectedJournalDate(e.target.value);
-                setDateFilterMode('day_only');
-              }}
-              className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-            />
+          {/* Sélecteur de date du journal avec design calendrier officiel SchoolFlow */}
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 text-xs shadow-2xs">
+            <span className="font-bold text-slate-700 hidden sm:inline ml-1 text-xs">Date :</span>
+            <div className="w-36">
+              <FrenchDateInput
+                value={selectedJournalDate}
+                onChange={(val) => {
+                  setSelectedJournalDate(val);
+                  setDateFilterMode('day_only');
+                }}
+              />
+            </div>
             <button
               type="button"
               onClick={() => {
-                setSelectedJournalDate(new Date().toISOString().split('T')[0]);
+                const today = new Date().toISOString().split('T')[0];
+                setSelectedJournalDate(today);
                 setDateFilterMode('day_only');
               }}
-              className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 transition-colors cursor-pointer"
               title="Revenir à la date du jour active"
             >
               Aujourd&apos;hui
@@ -249,7 +250,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               <button
                 type="button"
                 onClick={() => setDateFilterMode('all_dates')}
-                className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Toutes les dates
               </button>
@@ -264,30 +265,30 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           {/* Card Bilan 1 : Total Encaissé ce jour */}
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10 flex items-center justify-between">
             <div>
-              <span className="text-[10px] uppercase font-bold text-emerald-300 block tracking-wider">
+              <span className="text-[10px] uppercase font-bold text-emerald-300 block tracking-wider mb-0.5">
                 Recettes du Jour ({formatDateFrenchLong(selectedJournalDate)})
               </span>
-              <span className="text-lg sm:text-xl font-extrabold font-heading text-white tracking-tight">
+              <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
                 {formatFCFA(dayMetrics.totalAmount)}
               </span>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <Coins className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <Coins className="w-5 h-5" />
             </div>
           </div>
 
           {/* Card Bilan 2 : Élèves Encaissés */}
           <div className="bg-white/10 backdrop-blur-xs p-3 rounded-2xl border border-white/10 flex items-center justify-between">
             <div>
-              <span className="text-[10px] uppercase font-bold text-slate-300 block tracking-wider">
+              <span className="text-[10px] uppercase font-bold text-slate-300 block tracking-wider mb-0.5">
                 Élèves Encaissés Aujourd&apos;hui
               </span>
-              <span className="text-lg sm:text-xl font-extrabold font-heading text-white tracking-tight">
+              <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
                 {dayMetrics.totalCount} règlements
               </span>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
-              <Users className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
             </div>
           </div>
 

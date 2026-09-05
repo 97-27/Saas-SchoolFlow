@@ -171,7 +171,15 @@ export function BoardingView({
           const savedPayments = localStorage.getItem(BOARDING_PAYMENTS_KEY);
           if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
           const savedSubs = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
-          if (savedSubs) setCustomSubscriptions(JSON.parse(savedSubs));
+          if (savedSubs) {
+            const parsed: any[] = JSON.parse(savedSubs);
+            const liveStudentIds = new Set(updatedStudents.map((s) => s.id));
+            const liveMatricules = new Set(updatedStudents.map((s) => s.studentNumber || s.matricule));
+            const validSubs = parsed.filter(
+              (cs) => liveStudentIds.has(cs.studentId) || (cs.matricule && liveMatricules.has(cs.matricule))
+            );
+            setCustomSubscriptions(validSubs);
+          }
         } catch (e) {}
       }
     };
@@ -214,62 +222,42 @@ export function BoardingView({
     }
   };
 
-  // Construction de la liste des pensionnaires inscrits
+  // Construction de la liste des pensionnaires inscrits (STRICTEMENT reliée aux élèves actifs non supprimés)
   const boarders = useMemo(() => {
     const customMap = new Map(customSubscriptions.map((cs) => [cs.studentId, cs]));
 
-    // 1. Les pensionnaires issus des customSubscriptions
-    const customList = customSubscriptions.map((cs) => {
-      const foundStudent = students.find((s) => s.id === cs.studentId || s.studentNumber === cs.matricule);
-      const studentObj: Student = foundStudent || {
-        id: cs.studentId,
-        studentNumber: cs.matricule || `MAT-INT-${cs.studentId.slice(-4)}`,
-        matricule: cs.matricule || `MAT-INT-${cs.studentId.slice(-4)}`,
-        firstName: cs.studentName?.split(' ')[0] || 'Élève',
-        lastName: cs.studentName?.split(' ').slice(1).join(' ') || 'Pensionnaire',
-        fullName: cs.studentName || 'Élève Pensionnaire',
-        avatar: '',
-        gender: (cs.gender === 'F' || (cs.gender as any) === 'female') ? 'female' : 'male',
-        grade: cs.className || '6ème',
-        address: 'Abidjan, Côte d\'Ivoire',
-        guardianName: 'Parent / Tuteur',
-        guardianPhone: cs.parentContact || '+225 07 00 00 00 00',
-        whatsappPhone: cs.parentContact || '+225 07 00 00 00 00',
-        tuitionAmount: 0,
-        paidAmount: 0,
-        paymentDate: '01/09/2026',
-        attendanceRate: 100,
-        status: 'active',
-        tuitionStatus: 'paid',
-      };
+    // 1. Les pensionnaires issus des customSubscriptions (UNIQUEMENT si l'élève existe réellement dans la liste des élèves actifs)
+    const customList = customSubscriptions
+      .map((cs) => {
+        const foundStudent = students.find(
+          (s) => s.id === cs.studentId || s.studentNumber === cs.matricule || s.matricule === cs.matricule
+        );
+        if (!foundStudent) return null; // Ne JAMAIS créer de pensionnaire fantôme si l'élève a été supprimé !
 
-      const studentMonths = monthlyPayments[cs.studentId] || {};
-      const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-      const totalPaid = paidMonthsCount * cs.monthlyRate;
-      const totalDue = cs.monthlyRate * 9; // 9 mois stricts
-      const remainingBalance = Math.max(0, totalDue - totalPaid);
+        const studentMonths = monthlyPayments[cs.studentId] || {};
+        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
+        const totalPaid = paidMonthsCount * cs.monthlyRate;
+        const totalDue = cs.monthlyRate * 9; // 9 mois stricts
+        const remainingBalance = Math.max(0, totalDue - totalPaid);
 
-      return {
-        student: studentObj,
-        isBoarder: true,
-        pavilion: cs.pavilion,
-        roomNumber: cs.roomNumber,
-        monthlyRate: cs.monthlyRate,
-        paidMonthsCount,
-        totalPaid,
-        totalDue,
-        remainingBalance,
-        isUpToDate: remainingBalance === 0,
-      };
-    });
-
-    // 2. Pensionnaires démo initiaux et élèves avec isBoarding
-    const demoList = students
-      .filter((s) => !customMap.has(s.id))
-      .filter((s, idx) => {
-        if (typeof s.isBoarding === 'boolean') return s.isBoarding;
-        return idx % 4 === 0;
+        return {
+          student: foundStudent,
+          isBoarder: true,
+          pavilion: cs.pavilion,
+          roomNumber: cs.roomNumber,
+          monthlyRate: cs.monthlyRate,
+          paidMonthsCount,
+          totalPaid,
+          totalDue,
+          remainingBalance,
+          isUpToDate: remainingBalance === 0,
+        };
       })
+      .filter((b): b is NonNullable<typeof b> => b !== null);
+
+    // 2. Élèves actifs ayant l'option isBoarding cochée
+    const directBoarders = students
+      .filter((s) => !customMap.has(s.id) && s.isBoarding === true)
       .map((student, idx) => {
         const isFemale = student.gender === 'female' || (student.gender as any) === 'F';
         const pavilion = isFemale ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)';
@@ -296,7 +284,7 @@ export function BoardingView({
         };
       });
 
-    return [...customList, ...demoList];
+    return [...customList, ...directBoarders];
   }, [students, customSubscriptions, monthlyPayments, schoolSlug]);
 
   // Filtrage pour la recherche et la navigation
@@ -877,7 +865,7 @@ export function BoardingView({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading">
+            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
               {formatFCFA(totalCollected)}
             </span>
           </div>

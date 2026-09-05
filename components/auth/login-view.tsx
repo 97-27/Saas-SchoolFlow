@@ -936,21 +936,7 @@ export function LoginView({
                         autoComplete="off"
                         value={authCodeInput}
                         onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
-                        placeholder={
-                          selectedRole === 'secretaire'
-                            ? 'Ex : SEC-2026 ou votre code attribué'
-                            : selectedRole === 'comptable'
-                            ? 'Ex : CPT-2026 ou votre code attribué'
-                            : selectedRole === 'enseignant'
-                            ? 'Ex : ENS-2026 ou votre code attribué'
-                            : selectedRole === 'assistant_direction'
-                            ? 'Ex : AST-2026 ou votre code attribué'
-                            : selectedRole === 'educateur'
-                            ? 'Ex : EDU-2026 ou votre code attribué'
-                            : selectedRole === 'informaticien'
-                            ? 'Ex : INF-2026 ou votre code attribué'
-                            : 'Ex : CODE-AUTH'
-                        }
+                        placeholder="Entrez votre code d'accès attribué"
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
                     </div>

@@ -274,7 +274,7 @@ export function CaisseView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
+              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
                 {formatFCFA(totalEspeces)}
               </span>
             </div>
@@ -300,7 +300,7 @@ export function CaisseView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
+              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
                 {formatFCFA(totalEnLigneEtVirement)}
               </span>
             </div>
@@ -326,7 +326,7 @@ export function CaisseView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl font-extrabold text-rose-900 tracking-tight font-heading whitespace-nowrap">
+              <span className="text-2xl sm:text-3xl font-extrabold text-rose-900 tracking-tight font-heading whitespace-nowrap">
                 {formatFCFA(totalScolariteEnRetard)}
               </span>
             </div>

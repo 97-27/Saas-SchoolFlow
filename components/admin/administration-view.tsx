@@ -588,10 +588,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                     {/* 4. Code d'authentification */}
                     <td className="py-3 px-2.5 text-center">
-                      {member.roleId === 'directeur' || member.roleId === 'fondateur' ? (
-                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold px-2 py-1 rounded-lg text-[11px] shadow-2xs whitespace-nowrap">
-                          <KeyRound className="w-3 h-3 text-amber-600" />
-                          <span>👑 Accès Maître</span>
+                      {member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001' ? (
+                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200/80 font-mono font-bold px-2.5 py-1 rounded-lg text-[11px] shadow-2xs whitespace-nowrap">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>👑 Accès Direct (Admin)</span>
                         </span>
                       ) : (
                         <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
@@ -617,23 +617,30 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                     {/* 5. Statut d'Accès */}
                     <td className="py-3 px-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleStatus(member)}
-                        className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold border transition-all hover:scale-105 cursor-pointer whitespace-nowrap ${
-                          member.status === 'Actif'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs'
-                        }`}
-                        title={member.status === 'Actif' ? 'Cliquez pour verrouiller et bloquer l’accès' : 'Cliquez pour réactiver le compte'}
-                      >
-                        {member.status === 'Actif' ? (
-                          <Unlock className="w-3 h-3 text-emerald-600" />
-                        ) : (
-                          <Lock className="w-3 h-3 text-rose-600" />
-                        )}
-                        <span>{member.status}</span>
-                      </button>
+                      {member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001' ? (
+                        <span className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-emerald-100/80 text-emerald-800 border border-emerald-300 shadow-2xs whitespace-nowrap">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                          <span>👑 Permanent</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(member)}
+                          className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold border transition-all hover:scale-105 cursor-pointer whitespace-nowrap ${
+                            member.status === 'Actif'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs'
+                          }`}
+                          title={member.status === 'Actif' ? 'Cliquez pour verrouiller et bloquer l’accès' : 'Cliquez pour réactiver le compte'}
+                        >
+                          {member.status === 'Actif' ? (
+                            <Unlock className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Lock className="w-3 h-3 text-rose-600" />
+                          )}
+                          <span>{member.status}</span>
+                        </button>
+                      )}
                     </td>
 
                     {/* 6. Dernière Connexion */}
@@ -657,35 +664,39 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Partager accès sur WhatsApp */}
-                        <button
-                          type="button"
-                          onClick={() => handleShareWhatsApp(member)}
-                          className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer shadow-2xs"
-                          title="Envoyer le code et le lien de connexion sur WhatsApp"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Partager accès sur WhatsApp (si membre avec code) */}
+                        {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
+                          <button
+                            type="button"
+                            onClick={() => handleShareWhatsApp(member)}
+                            className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer shadow-2xs"
+                            title="Envoyer le code et le lien de connexion sur WhatsApp"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
                         {/* Modifier les informations */}
                         <button
                           type="button"
                           onClick={() => openEditModal(member)}
                           className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Modifier les coordonnées, le matricule et le code"
+                          title="Modifier les coordonnées et informations"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Révoquer / Supprimer */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteStaff(member)}
-                          className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Révoquer définitivement ce compte et son code d'accès"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Révoquer / Supprimer (Uniquement pour le personnel ajouté, jamais les Admins Suprêmes) */}
+                        {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStaff(member)}
+                            className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
+                            title="Révoquer définitivement ce compte et son code d'accès"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
 

@@ -50,7 +50,7 @@ export function StatCard({
 
         {/* Value + Trend Badge */}
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <span className="text-xl sm:text-2xl xl:text-[24px] font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
+          <span className="text-2xl sm:text-3xl xl:text-[28px] font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
             {value}
           </span>
           {trend !== undefined && (

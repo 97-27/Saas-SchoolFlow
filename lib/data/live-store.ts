@@ -151,6 +151,48 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       }
     }
 
+    // Nettoyer Internat, Cantine et Transport des élèves supprimés
+    try {
+      const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+      if (rawBoarding) {
+        const list: any[] = JSON.parse(rawBoarding);
+        const filtered = list.filter((b) => !deleteSet.has(b.studentId) && !deleteSet.has(b.matricule));
+        localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(filtered));
+      }
+      const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+      if (rawBoardingPay) {
+        const map: Record<string, any> = JSON.parse(rawBoardingPay);
+        idsToDelete.forEach((id) => delete map[id]);
+        localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(map));
+      }
+      const rawCanteen = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
+      if (rawCanteen) {
+        const map: Record<string, any> = JSON.parse(rawCanteen);
+        idsToDelete.forEach((id) => delete map[id]);
+        localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(map));
+      }
+      const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
+      if (rawCanteenPay) {
+        const map: Record<string, any> = JSON.parse(rawCanteenPay);
+        idsToDelete.forEach((id) => delete map[id]);
+        localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(map));
+      }
+      const rawTransport = localStorage.getItem('schoolflow_transport_subscriptions_v2');
+      if (rawTransport) {
+        const map: Record<string, any> = JSON.parse(rawTransport);
+        idsToDelete.forEach((id) => delete map[id]);
+        localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(map));
+      }
+      const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
+      if (rawTransportPay) {
+        const map: Record<string, any> = JSON.parse(rawTransportPay);
+        idsToDelete.forEach((id) => delete map[id]);
+        localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(map));
+      }
+    } catch (e) {
+      console.warn('Erreur nettoyage souscriptions prestations:', e);
+    }
+
     // Déclencher la diffusion temps réel parallèle
     broadcastLiveUpdate({
       action: 'students_deleted',
@@ -1023,8 +1065,8 @@ export const defaultStaffUsers: StaffUser[] = [
     diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
     address: 'Abidjan',
     joinDate: '01/09/2026',
-    email: 'fondateur@epc-manoi.ci',
-    phone: '+225 07 48 92 11 00',
+    email: 'direction@epc-manoi.ci',
+    phone: '',
     authCode: 'FND-2026',
     status: 'Actif',
     lastLogin: 'En ligne',
@@ -1041,112 +1083,10 @@ export const defaultStaffUsers: StaffUser[] = [
     address: 'Abidjan',
     joinDate: '01/09/2026',
     email: 'direction@epc-manoi.ci',
-    phone: '+225 07 45 67 89 01',
+    phone: '',
     authCode: 'DIR-2026',
     status: 'Actif',
     lastLogin: 'En ligne',
-  },
-  {
-    id: 'staff-sec',
-    fullName: 'Mme Fatou Traoré',
-    role: 'Secrétaire de Direction',
-    roleId: 'secretaire',
-    matricule: 'EMP-SEC-001',
-    subjectOrGrade: 'Secrétariat & Accueil',
-    assignedClasses: 'Administration',
-    diplomaOrExperience: 'BTS Secrétariat de Direction (6 ans exp.)',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'secretaire@epc-manoi.ci',
-    phone: '+225 07 58 12 34 56',
-    authCode: 'SEC-2026',
-    status: 'Actif',
-    lastLogin: '05/09/2026 à 08:30',
-  },
-  {
-    id: 'staff-cpt',
-    fullName: 'M. Amadou Diallo',
-    role: 'Comptable / Gestionnaire',
-    roleId: 'comptable',
-    matricule: 'EMP-CPT-001',
-    subjectOrGrade: 'Comptabilité & Caisse',
-    assignedClasses: 'Gestion Financière',
-    diplomaOrExperience: 'Master Finance & Comptabilité (8 ans exp.)',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'comptable@epc-manoi.ci',
-    phone: '+225 05 44 22 11 00',
-    authCode: 'CPT-2026',
-    status: 'Actif',
-    lastLogin: '05/09/2026 à 09:15',
-  },
-  {
-    id: 'staff-ast',
-    fullName: 'M. Soro Ibrahim',
-    role: 'Assistant(e) de Direction',
-    roleId: 'assistant_direction',
-    matricule: 'EMP-AST-001',
-    subjectOrGrade: 'Direction Adjointe',
-    assignedClasses: 'Administration',
-    diplomaOrExperience: 'Licence Administration Publique',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'assistant@epc-manoi.ci',
-    phone: '+225 07 11 22 33 44',
-    authCode: 'AST-2026',
-    status: 'Actif',
-    lastLogin: '04/09/2026 à 16:40',
-  },
-  {
-    id: 'staff-edu',
-    fullName: 'M. Kouamé Yao',
-    role: 'Éducateur / Conseiller d’Éducation',
-    roleId: 'educateur',
-    matricule: 'EMP-EDU-001',
-    subjectOrGrade: 'Vie Scolaire & Discipline',
-    assignedClasses: 'Collège (6ème à 3ème)',
-    diplomaOrExperience: 'Certificat d’Éducateur Spécialisé',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'educateur@epc-manoi.ci',
-    phone: '+225 01 02 03 04 05',
-    authCode: 'EDU-2026',
-    status: 'Actif',
-    lastLogin: '05/09/2026 à 07:45',
-  },
-  {
-    id: 'staff-inf',
-    fullName: 'Ing. Franck N’Guessan',
-    role: 'Informaticien / Responsable IT',
-    roleId: 'informaticien',
-    matricule: 'EMP-INF-001',
-    subjectOrGrade: 'Systèmes & Réseau',
-    assignedClasses: 'Infrastructure & SI',
-    diplomaOrExperience: 'Ingénieur Télécoms & Réseaux',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'informatique@epc-manoi.ci',
-    phone: '+225 07 99 88 77 66',
-    authCode: 'INF-2026',
-    status: 'Actif',
-    lastLogin: '05/09/2026 à 10:00',
-  },
-  {
-    id: 'staff-ens',
-    fullName: 'M. Paul Koffi',
-    role: 'Enseignant / Professeur',
-    roleId: 'enseignant',
-    matricule: 'EMP-ENS-001',
-    subjectOrGrade: 'Mathématiques & Sciences',
-    assignedClasses: '6ème, 5ème, 4ème, 3ème',
-    diplomaOrExperience: 'CAPES Mathématiques (10 ans exp.)',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'enseignant@epc-manoi.ci',
-    phone: '+225 07 00 11 22 33',
-    authCode: 'ENS-2026',
-    status: 'Actif',
-    lastLogin: '05/09/2026 à 10:30',
   },
 ];
 
@@ -1159,25 +1099,14 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       raw = localStorage.getItem(STAFF_USERS_STORAGE_KEY);
     }
 
-    // Migration depuis v1 si v2 n'existe pas encore
-    if (!raw) {
-      const oldRaw =
-        localStorage.getItem(`schoolflow_staff_users_v1_${schoolSlug}`) ||
-        localStorage.getItem('schoolflow_staff_users_v1');
-      if (oldRaw) {
-        raw = oldRaw;
-      }
-    }
-
     if (raw) {
       const list: StaffUser[] = JSON.parse(raw);
-      // S'assurer que tous les rôles administratifs essentiels sont présents
       const codeMap = new Map<string, StaffUser>();
-      // 1. Initialiser avec les 8 comptes clés par défaut
+      // 1. Initialiser avec les 2 comptes administrateurs direct (Fondateur + Directeur)
       for (const d of defaultStaffUsers) {
         codeMap.set(d.authCode, d);
       }
-      // 2. Fusionner avec la liste locale (en préservant les modifications de mot de passe, statut et ajouts)
+      // 2. Fusionner avec la liste locale (en préservant les modifications et ajouts réels)
       for (const u of list) {
         if (!u || !u.authCode) continue;
         if (codeMap.has(u.authCode)) {
@@ -1192,13 +1121,12 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
             authCode: u.authCode || def.authCode,
           });
         } else {
-          // Nouvel utilisateur ajouté par l'admin
+          // Nouvel utilisateur ajouté dynamiquement par l'admin
           codeMap.set(u.authCode || u.id, u);
         }
       }
 
       const mergedList = Array.from(codeMap.values());
-      // Sauvegarder dans v2 pour stabiliser le cache du navigateur
       localStorage.setItem(storageKey, JSON.stringify(mergedList));
       if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
         localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(mergedList));
@@ -1206,7 +1134,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       return mergedList;
     }
 
-    // Premier chargement : liste standard des 8 postes officiels
+    // Premier chargement : uniquement Fondateur et Directeur
     const initialStaff = defaultStaffUsers;
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
@@ -1629,115 +1557,185 @@ export function isSchoolDeleted(slug?: string): boolean {
   }
 }
 
+export interface ResetScopeOptions {
+  students?: boolean;        // Registre des élèves & Dossiers d'inscriptions
+  invoices?: boolean;        // Scolarité, Caisse, Recettes & Dépenses
+  boarding?: boolean;        // Internat & Hébergement
+  canteen?: boolean;         // Cantine scolaire & Menus
+  transport?: boolean;       // Transport & Lignes de bus
+  grades?: boolean;          // Notes, Évaluations & Bulletins
+  attendance?: boolean;      // Présences & Discipline
+  documents?: boolean;       // Documents scolaires & Certificats
+  salaries?: boolean;        // Salaires & Bulletins de paie du personnel
+  specialDiscounts?: boolean;// Réductions accordées
+  messages?: boolean;        // Messages WhatsApp & Historique de diffusion
+  staff?: boolean;           // Comptes personnel ajoutés (conserve Directeur & Fondateur)
+}
+
 /**
- * Réinitialise à ZÉRO toutes les données de toutes les pages de l'établissement (élèves, finances, scolarité, cantine, transport, etc.)
+ * Réinitialise à ZÉRO les données sélectionnées ou toutes les données de l'établissement
  * et diffuse instantanément la remise à zéro sur TOUTES les interfaces ouvertes.
  */
 export function resetSchoolData(
-  slug: string = 'epc-manoi'
+  slug: string = 'epc-manoi',
+  options?: ResetScopeOptions
 ): void {
   if (typeof window === 'undefined') return;
   try {
     const school = getLiveSchool(slug);
     const storageStaffKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
 
-    // 1. Vider le registre des élèves et factures (Scolarités, Caisse, Inscriptions)
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
-    localStorage.setItem(`${STUDENTS_STORAGE_KEY}_${slug}`, JSON.stringify([]));
-    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
-    localStorage.setItem(`${INVOICES_STORAGE_KEY}_${slug}`, JSON.stringify([]));
-    localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
+    // Par défaut, si aucune option n'est fournie, réinitialiser tout
+    const doAll = !options;
+    const opt: ResetScopeOptions = options || {
+      students: true,
+      invoices: true,
+      boarding: true,
+      canteen: true,
+      transport: true,
+      grades: true,
+      attendance: true,
+      documents: true,
+      salaries: true,
+      specialDiscounts: true,
+      messages: true,
+      staff: true,
+    };
 
-    // Dépenses
-    localStorage.setItem('schoolflow_school_expenses_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_school_expenses_v1_${slug}`, JSON.stringify([]));
-    localStorage.removeItem('schoolflow_expenses_v1');
-
-    // Réductions spéciales
-    localStorage.setItem('schoolflow_special_discounts_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_special_discounts_v1_${slug}`, JSON.stringify([]));
-
-    // Salaires du personnel
-    localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_staff_salaries_v1_${slug}`, JSON.stringify([]));
-
-    // Notes diverses
-    localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_diverse_notes_v1_${slug}`, JSON.stringify([]));
-    localStorage.removeItem('schoolflow_notes_diverses_v1');
-
-    // Messagerie & Diffusion
-    localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_parent_messages_v1_${slug}`, JSON.stringify([]));
-    localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_broadcast_records_v1_${slug}`, JSON.stringify([]));
-
-    // Enseignants & Personnel Pédagogique
-    localStorage.setItem('schoolflow_teachers_data_v2', JSON.stringify([]));
-    localStorage.setItem(`schoolflow_teachers_data_v2_${slug}`, JSON.stringify([]));
-    localStorage.removeItem('schoolflow_teachers_v1');
-    localStorage.removeItem('schoolflow_teachers_v2');
-
-    // Cantine, Transport & Internat
-    localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
-    localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
-    localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
-    localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
-    localStorage.removeItem('schoolflow_canteen_meals_history_v2');
-
-    localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify({}));
-    localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify({}));
-
-    localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify([]));
-    localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify({}));
-    localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
-
-    // Présences, Bulletins & Documents
-    localStorage.removeItem('schoolflow_attendance_v1');
-    localStorage.removeItem(VALIDATED_BULLETINS_KEY);
-    localStorage.removeItem(DOCS_STATUS_KEY);
-    localStorage.removeItem('schoolflow_documents_status_v2');
-    localStorage.removeItem('schoolflow_documents_status_v3');
-    localStorage.removeItem('schoolflow_documents_status_v5');
-
-    // Nettoyer les clés dynamiques de notes par classe
-    try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key.startsWith('schoolflow_grades_') || key.startsWith('schoolflow_doc_'))) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-    } catch (e) {}
-
-    // 2. Réinitialiser la liste du personnel : SEUL LE COMPTE FONDATEUR / DIRECTEUR EST CONSERVÉ
-    const onlyDirector: StaffUser[] = [
-      {
-        id: 'staff-001',
-        fullName: school.directorName || school.founderName || 'Directeur Général (Admin)',
-        role: 'Directeur Général (Admin)',
-        roleId: 'directeur',
-        matricule: 'EMP-DIR-001',
-        subjectOrGrade: 'Direction & Pédagogie',
-        assignedClasses: 'Toutes les classes',
-        diplomaOrExperience: 'Direction d’Établissement Scolaire',
-        address: school.city || 'Abidjan',
-        joinDate: '01/09/2026',
-        email: school.email || `direction@${slug}.ci`,
-        phone: school.phone || '+225 07 45 67 89 01',
-        authCode: 'DIR-2026',
-        status: 'Actif',
-        lastLogin: 'En ligne',
-      },
-    ];
-    localStorage.setItem(storageStaffKey, JSON.stringify(onlyDirector));
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
-      localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(onlyDirector));
+    // 1. Vider le registre des élèves (Inscriptions & Dossiers)
+    if (doAll || opt.students) {
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_${slug}`, JSON.stringify([]));
+      localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     }
 
-    // 3. Enregistrer le statut de remise à zéro
+    // 2. Factures, Scolarités, Caisse & Dépenses
+    if (doAll || opt.invoices) {
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_${slug}`, JSON.stringify([]));
+      localStorage.setItem('schoolflow_school_expenses_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_school_expenses_v1_${slug}`, JSON.stringify([]));
+      localStorage.removeItem('schoolflow_expenses_v1');
+    }
+
+    // 3. Réductions spéciales
+    if (doAll || opt.specialDiscounts) {
+      localStorage.setItem('schoolflow_special_discounts_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_special_discounts_v1_${slug}`, JSON.stringify([]));
+    }
+
+    // 4. Salaires du personnel
+    if (doAll || opt.salaries) {
+      localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_staff_salaries_v1_${slug}`, JSON.stringify([]));
+    }
+
+    // 5. Notes, Bulletins & Pédagogie
+    if (doAll || opt.grades) {
+      localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_diverse_notes_v1_${slug}`, JSON.stringify([]));
+      localStorage.removeItem('schoolflow_notes_diverses_v1');
+      localStorage.removeItem(VALIDATED_BULLETINS_KEY);
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('schoolflow_grades_') || key.startsWith('schoolflow_doc_'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {}
+    }
+
+    // 6. Présences & Assiduité
+    if (doAll || opt.attendance) {
+      localStorage.removeItem('schoolflow_attendance_v1');
+    }
+
+    // 7. Documents scolaires & Certificats
+    if (doAll || opt.documents) {
+      localStorage.removeItem(DOCS_STATUS_KEY);
+      localStorage.removeItem('schoolflow_documents_status_v2');
+      localStorage.removeItem('schoolflow_documents_status_v3');
+      localStorage.removeItem('schoolflow_documents_status_v5');
+    }
+
+    // 8. Messagerie & Diffusion
+    if (doAll || opt.messages) {
+      localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_parent_messages_v1_${slug}`, JSON.stringify([]));
+      localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_broadcast_records_v1_${slug}`, JSON.stringify([]));
+    }
+
+    // 9. Cantine scolaire
+    if (doAll || opt.canteen) {
+      localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
+      localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
+      localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
+      localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
+      localStorage.removeItem('schoolflow_canteen_meals_history_v2');
+    }
+
+    // 10. Transport scolaire
+    if (doAll || opt.transport) {
+      localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify({}));
+      localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify({}));
+    }
+
+    // 11. Internat & Hébergement
+    if (doAll || opt.boarding) {
+      localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify([]));
+      localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify({}));
+      localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
+    }
+
+    // 12. Comptes personnel : SEULS LES COMPTES FONDATEUR & DIRECTEUR SONT CONSERVÉS
+    if (doAll || opt.staff) {
+      const onlyAdminStaff: StaffUser[] = [
+        {
+          id: 'staff-founder',
+          fullName: school.founderName || 'LAWANI MOUHAMED (Fondateur)',
+          role: 'Fondateur / Promotrice (Admin)',
+          roleId: 'fondateur',
+          matricule: 'EMP-FND-001',
+          subjectOrGrade: 'Présidence & Conseil d’Administration',
+          assignedClasses: 'Toutes les classes',
+          diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
+          address: school.city || 'Abidjan',
+          joinDate: '01/09/2026',
+          email: school.email || `direction@${slug}.ci`,
+          phone: '',
+          authCode: 'FND-2026',
+          status: 'Actif',
+          lastLogin: 'En ligne',
+        },
+        {
+          id: 'staff-001',
+          fullName: school.directorName || 'Dr. Jean-Marc Kouassi (Direction Pédagogique)',
+          role: 'Directeur Général (Admin)',
+          roleId: 'directeur',
+          matricule: 'EMP-DIR-001',
+          subjectOrGrade: 'Direction des Études & Pédagogie',
+          assignedClasses: 'Toutes les classes',
+          diplomaOrExperience: 'Direction d’Établissement Scolaire',
+          address: school.city || 'Abidjan',
+          joinDate: '01/09/2026',
+          email: school.email || `direction@${slug}.ci`,
+          phone: '',
+          authCode: 'DIR-2026',
+          status: 'Actif',
+          lastLogin: 'En ligne',
+        },
+      ];
+      localStorage.setItem(storageStaffKey, JSON.stringify(onlyAdminStaff));
+      if (slug === 'epc-manoi' || slug === 'college-excellence') {
+        localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(onlyAdminStaff));
+      }
+    }
+
+    // 13. Enregistrer le statut de remise à zéro
     const status = getSchoolSubscription(slug);
     status.isDataReset = true;
     status.lastResetAt = new Date().toISOString();
@@ -1745,10 +1743,11 @@ export function resetSchoolData(
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
-    // 4. Diffusion temps réel parallèle immédiate
+    // 14. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
       action: 'data_reset',
       slug,
+      options: opt,
       timestamp: Date.now(),
     });
   } catch (e) {

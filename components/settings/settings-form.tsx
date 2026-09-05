@@ -9,8 +9,10 @@ import {
   resetSchoolData,
   getSchoolSubscription,
   SchoolSubscriptionStatus,
+  ResetScopeOptions,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
+import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   Building2,
   MapPin,
@@ -57,8 +59,22 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     getSchoolSubscription(initialSchool.slug || 'epc-manoi')
   );
 
-  // Modales de sécurité
+  // Modales de sécurité & Sélection granulaire des portées de réinitialisation
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetScopes, setResetScopes] = useState<ResetScopeOptions>({
+    students: true,
+    invoices: true,
+    boarding: true,
+    canteen: true,
+    transport: true,
+    grades: true,
+    attendance: true,
+    documents: true,
+    salaries: true,
+    specialDiscounts: true,
+    messages: true,
+    staff: true,
+  });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -189,9 +205,9 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   };
 
   const handleConfirmReset = () => {
-    resetSchoolData(school.slug || 'epc-manoi');
+    resetSchoolData(school.slug || 'epc-manoi', resetScopes);
     setIsResetModalOpen(false);
-    setActionFeedback('✓ Toutes les données scolaires (élèves, factures, notes, salaires) ont été réinitialisées à zéro avec succès.');
+    setActionFeedback('✓ Les données des modules sélectionnés ont été réinitialisées à zéro avec succès.');
     setTimeout(() => {
       window.location.reload();
     }, 1000);
@@ -746,11 +762,9 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   <label className="text-xs font-bold text-slate-700">
                     Date de rentrée des classes
                   </label>
-                  <input
-                    type="date"
+                  <FrenchDateInput
                     value={school.openingDate || '2026-09-07'}
-                    onChange={(e) => handleInputChange('openingDate', e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+                    onChange={(val) => handleInputChange('openingDate', val)}
                   />
                 </div>
 
@@ -758,11 +772,9 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   <label className="text-xs font-bold text-slate-700">
                     Date de clôture de l&apos;année
                   </label>
-                  <input
-                    type="date"
+                  <FrenchDateInput
                     value={school.closingDate || '2027-06-30'}
-                    onChange={(e) => handleInputChange('closingDate', e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+                    onChange={(val) => handleInputChange('closingDate', val)}
                   />
                 </div>
               </div>
@@ -1304,109 +1316,160 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
               Sélectionnez les interfaces et modules que vous souhaitez réinitialiser à zéro pour l&apos;établissement <strong>{school.name}</strong> :
             </p>
 
-            {/* Sélecteur de portée */}
-            <div className="space-y-2.5 pt-1">
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-                <label className="flex items-start gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Interface Comptable & Caisse
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Scolarités, droits d&apos;inscription, factures, dépenses et salaires
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Interface Secrétaire & Scolarité
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Registre des élèves, dossiers d&apos;inscriptions, fiches et documents scolaires
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Interface Fondateur & Supervision
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Statistiques consolidées, KPIs et bilans de trésorerie
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Interface Enseignants & Pédagogie
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Notes saisies, évaluations, appréciations et fiches de cours
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Interface Parents d&apos;Élèves
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Bulletins numériques, reçus de paiement et messageries WhatsApp
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 cursor-pointer pt-2 border-t border-slate-200/60">
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                  />
-                  <div>
-                    <span className="text-xs font-extrabold text-slate-900 block">
-                      Comptes Personnel (Ne garder que le Directeur)
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Supprime les accès temporaires. Les membres se reconnecteront avec leur code de poste.
-                    </span>
-                  </div>
-                </label>
+            {/* Contrôles de sélection globale */}
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs font-bold text-slate-800">
+                Modules à réinitialiser :
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setResetScopes({
+                      students: true,
+                      invoices: true,
+                      boarding: true,
+                      canteen: true,
+                      transport: true,
+                      grades: true,
+                      attendance: true,
+                      documents: true,
+                      salaries: true,
+                      specialDiscounts: true,
+                      messages: true,
+                      staff: true,
+                    })
+                  }
+                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+                >
+                  Tout cocher
+                </button>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setResetScopes({
+                      students: false,
+                      invoices: false,
+                      boarding: false,
+                      canteen: false,
+                      transport: false,
+                      grades: false,
+                      attendance: false,
+                      documents: false,
+                      salaries: false,
+                      specialDiscounts: false,
+                      messages: false,
+                      staff: false,
+                    })
+                  }
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                >
+                  Tout décocher
+                </button>
               </div>
             </div>
 
+            {/* Sélecteur de portée granulaire */}
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {[
+                {
+                  key: 'students',
+                  label: '🎓 Inscriptions & Registre des Élèves',
+                  desc: 'Fiches complètes des élèves, matricules et dossiers d’admissions',
+                },
+                {
+                  key: 'invoices',
+                  label: '💰 Scolarité, Caisse & Règlements FCFA',
+                  desc: 'Factures, encaissements, journal de caisse et dépenses de l’école',
+                },
+                {
+                  key: 'boarding',
+                  label: '🏢 Internat & Hébergement',
+                  desc: 'Pensionnaires inscrits, affectations de chambres et paiements dortoirs',
+                },
+                {
+                  key: 'canteen',
+                  label: '🍲 Cantine Scolaire',
+                  desc: 'Demi-pensionnaires, régimes alimentaires et mensualités restauration',
+                },
+                {
+                  key: 'transport',
+                  label: '🚌 Transport Scolaire',
+                  desc: 'Lignes de bus, abonnés aux circuits et mensualités de transport',
+                },
+                {
+                  key: 'grades',
+                  label: '📊 Notes, Évaluations & Bulletins',
+                  desc: 'Saisie de notes, moyennes, rangs et validation des bulletins trimestriels',
+                },
+                {
+                  key: 'attendance',
+                  label: '📋 Présences & Assiduité Quotidienne',
+                  desc: 'Registre journalier des présences, retards et absences justifiées',
+                },
+                {
+                  key: 'documents',
+                  label: '📁 Documents & Fiches Scolaires',
+                  desc: 'Extraits de naissance, certificats de scolarité et fiches archivées',
+                },
+                {
+                  key: 'salaries',
+                  label: '💼 Salaires & Paie du Personnel',
+                  desc: 'Bulletins de paie du personnel, primes, acomptes et cotisations',
+                },
+                {
+                  key: 'specialDiscounts',
+                  label: '🏷️ Réductions Spéciales',
+                  desc: 'Exonérations, bourses et remises accordées aux familles',
+                },
+                {
+                  key: 'messages',
+                  label: '💬 Messages WhatsApp & Diffusion',
+                  desc: 'Historique des campagnes d’alertes WhatsApp et notifications parents',
+                },
+                {
+                  key: 'staff',
+                  label: '👥 Personnel Ajouté (Conserve Fondateur & Directeur)',
+                  desc: 'Supprime les accès temporaires créés. Fondateur et Directeur restent permanents.',
+                },
+              ].map((item) => {
+                const isChecked = !!(resetScopes as any)[item.key];
+                return (
+                  <label
+                    key={item.key}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                      isChecked
+                        ? 'bg-amber-50/60 border-amber-300 text-slate-900'
+                        : 'bg-slate-50 border-slate-200/80 text-slate-400 opacity-60'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() =>
+                        setResetScopes((prev) => ({
+                          ...prev,
+                          [item.key]: !prev[item.key as keyof ResetScopeOptions],
+                        }))
+                      }
+                      className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-slate-900 block truncate">
+                        {item.label}
+                      </span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                        {item.desc}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-              ⚡ <strong>Remise à zéro immédiate</strong> : toutes les pages reviendront à 0 FCFA et les compteurs d&apos;ID recommenceront à <strong>ID-001</strong>.
+              ⚡ <strong>Prise d&apos;effet immédiate</strong> : les modules cochés seront remis à zéro instantanément sur toutes les interfaces ouvertes.
             </div>
 
             <div className="flex items-center gap-3 pt-2">

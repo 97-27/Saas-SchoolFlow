@@ -1506,11 +1506,9 @@ export function SpecialDiscountsView({
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
+                      <FrenchDateInput
                         value={inst.paymentDate}
-                        onChange={(e) => handleUpdateInstallment(inst.id, 'paymentDate', e.target.value)}
-                        className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[11px] font-mono"
+                        onChange={(val) => handleUpdateInstallment(inst.id, 'paymentDate', val)}
                       />
                       <select
                         value={inst.paymentMethod}

@@ -227,21 +227,16 @@ export function CanteenView({
     return students.find((s) => s.id === newSubStudentId) || null;
   }, [students, newSubStudentId]);
 
-  // Liste des abonnés cantine adaptée aux données réelles
+  // Liste des abonnés cantine adaptée aux données réelles non supprimées
   const subscribers = useMemo(() => {
     return students
-      .filter((stu, idx) => {
+      .filter((stu) => {
         if (customDietMap[stu.id]) return true;
-        if (typeof stu.isCanteen === 'boolean') return stu.isCanteen;
-        return idx % 4 !== 3;
+        return stu.isCanteen === true;
       })
       .map((stu, idx) => {
         const custom = customDietMap[stu.id];
-        let defaultDiet = 'Standard (Sans restriction)';
-        if (idx === 2) defaultDiet = 'Allergie aux arachides';
-        else if (idx === 7) defaultDiet = 'Intolérance au lactose';
-        else if (idx === 14) defaultDiet = 'Régime sans gluten';
-        else if (idx === 21) defaultDiet = 'Régime végétarien';
+        const defaultDiet = 'Standard (Sans restriction)';
 
         const monthlyRate = custom?.rate || 25000;
         const discountAmount = custom?.discount || 0;
@@ -250,8 +245,8 @@ export function CanteenView({
         const monthsState = monthlyPayments[stu.id] || {
           Septembre: true,
           Octobre: true,
-          Novembre: idx % 3 !== 0,
-          Décembre: idx % 2 === 0,
+          Novembre: false,
+          Décembre: false,
           Janvier: false,
           Février: false,
           Mars: false,

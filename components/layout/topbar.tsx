@@ -56,7 +56,7 @@ export function Topbar({
   }>({
     fullName: 'LAWANI MOUHAMED',
     email: 'direction@epc-manoi.ci',
-    phone: '+225 07 48 92 11 00',
+    phone: '',
     role: 'Fondateur / Promotrice',
     roleId: 'fondateur',
     roleBadge: '👑 Fondateur (Admin)',
@@ -85,7 +85,7 @@ export function Topbar({
             setActiveSession({
               fullName: parsed.fullName,
               email: parsed.email || live.email || 'direction@epc-manoi.ci',
-              phone: parsed.phone || live.whatsappPhone || '+225 07 48 92 11 00',
+              phone: parsed.phone || '',
               role: isFounder
                 ? 'Fondateur / Promotrice'
                 : isDirector
@@ -121,7 +121,7 @@ export function Topbar({
       setActiveSession({
         fullName: live.founderName || live.directorName || 'LAWANI MOUHAMED',
         email: live.email || 'direction@epc-manoi.ci',
-        phone: live.whatsappPhone || '+225 07 48 92 11 00',
+        phone: '',
         role: 'Fondateur / Promotrice',
         roleId: 'fondateur',
         roleBadge: '👑 Fondateur (Admin)',
@@ -617,10 +617,9 @@ export function Topbar({
                         </label>
                         <input
                           type="text"
-                          required
                           value={editPhone}
                           onChange={(e) => setEditPhone(e.target.value)}
-                          placeholder="+225 07 00 00 00 00"
+                          placeholder="Ex : +225 07 00 00 00 00"
                           className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500"
                         />
                       </div>
@@ -652,8 +651,12 @@ export function Topbar({
 
                       <div className="flex items-center justify-between text-slate-600">
                         <span className="text-slate-400 text-[11px]">Contact Direct :</span>
-                        <span className="font-mono font-bold text-emerald-800">
-                          {activeSession.phone}
+                        <span className="font-mono font-bold text-emerald-800 text-[11px]">
+                          {activeSession.phone || (
+                            <span className="italic text-slate-400 font-sans font-normal text-[10.5px]">
+                              Non renseigné
+                            </span>
+                          )}
                         </span>
                       </div>
 
