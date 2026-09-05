@@ -317,3 +317,81 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
     return false;
   }
 }
+
+// 4. GESTION DU PERSONNEL (STAFF USERS)
+export async function saveStaffUserToSupabase(staff: {
+  fullName: string;
+  email: string;
+  phone: string;
+  roleId: string;
+  role: string;
+  authCode: string;
+  status: string;
+  avatarUrl?: string;
+  matricule?: string;
+}, schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) return false;
+
+    const payload = {
+      school_id: school.id,
+      full_name: staff.fullName,
+      email: staff.email,
+      phone: staff.phone,
+      role_id: staff.roleId,
+      role_title: staff.role,
+      auth_code: staff.authCode,
+      avatar_url: staff.avatarUrl || null,
+      is_active: staff.status === 'Actif',
+    };
+
+    const { error } = await supabase
+      .from('staff_users')
+      .upsert(payload, { onConflict: 'school_id,auth_code' });
+
+    if (error) {
+      console.warn('saveStaffUserToSupabase warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveStaffUserToSupabase catch:', err);
+    return false;
+  }
+}
+
+export async function deleteStaffUserFromSupabase(authCode: string, schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) return false;
+
+    const { error } = await supabase
+      .from('staff_users')
+      .delete()
+      .eq('school_id', school.id)
+      .eq('auth_code', authCode);
+
+    if (error) {
+      console.warn('deleteStaffUserFromSupabase warning:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('deleteStaffUserFromSupabase catch:', err);
+    return false;
+  }
+}
+

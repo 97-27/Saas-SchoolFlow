@@ -2,7 +2,7 @@
 
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools } from '@/lib/data/mock-data';
-import { saveSchoolToSupabase, saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
+import { saveSchoolToSupabase, saveStudentToSupabase, saveInvoiceToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '@/lib/supabase/services';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -1226,6 +1226,12 @@ export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
     }
+
+    // Synchronisation en arrière-plan avec Supabase Cloud
+    for (const u of users) {
+      saveStaffUserToSupabase(u, schoolSlug).catch(() => {});
+    }
+
     broadcastLiveUpdate({
       action: 'staff_users_updated',
       staffUsers: users,
@@ -1248,6 +1254,10 @@ export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string =
 
 export function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): void {
   const users = getLiveStaffUsers(schoolSlug);
+  const userToDelete = users.find((u) => u.id === staffId);
+  if (userToDelete) {
+    deleteStaffUserFromSupabase(userToDelete.authCode, schoolSlug).catch(() => {});
+  }
   const filtered = users.filter((u) => u.id !== staffId);
   saveLiveStaffUsers(filtered, schoolSlug);
 }
