@@ -36,6 +36,17 @@ Pour toute création ou modification de page (Élèves, Scolarité, Comptabilit�
 
 ---
 
+# Protocole Obligatoire : Test, Vérification & Déploiement Tripartite (GitHub, Supabase, Vercel)
+
+À chaque modification demandée par Mouhamed, l'agent DOIT scrupuleusement appliquer et consulter le protocole défini dans [verification-and-deployment-protocol.md](file:///c:/LOGICIEL%20EPC%20MANOI/.agents/rules/verification-and-deployment-protocol.md) :
+
+1. **Compilation & Test Local** : Toujours exécuter `npm run build` pour garantir 0 erreur TypeScript, 0 régression et 0 ReferenceError.
+2. **Déploiement GitHub** : Pousser tous les fichiers modifiés vers la branche `main` du dépôt `97-27/Saas-SchoolFlow` via `node scripts/github-api-push.mjs`.
+3. **Synchronisation Supabase** : S'assurer que les enregistrements et structures sont synchronisés en direct avec Supabase.
+4. **Vérification Vercel & Multi-Modules** : Vérifier que le déploiement sur `https://saas-school-flow-12xh.vercel.app` est actif et que les actions (inscriptions, modifications) se répercutent instantanément sur tous les modules (Tableau de bord, Élèves, Scolarité, Internat, Cantine, Transport).
+
+---
+
 # Interaction & Préférences Utilisateur
 
 - **Utilisateur** : Mouhamed.
