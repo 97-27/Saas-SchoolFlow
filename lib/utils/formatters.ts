@@ -43,16 +43,68 @@ export function formatDate(dateInput: string | Date): string {
 
 /**
  * Formats date into a short human-readable French format
- * Example: "2025-01-26" -> "26 janv. 2025"
+ * Example: "2026-08-27" -> "27 août 2026"
  */
 export function formatDateReadable(dateInput: string | Date): string {
-  if (!dateInput) return '';
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-  if (isNaN(date.getTime())) return String(dateInput);
+  return formatDateFrenchLong(dateInput);
+}
 
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
+/**
+ * Formats date into full French format: "Jour Mois Année"
+ * Example: "2026-08-27" -> "27 août 2026"
+ */
+export function formatDateFrenchLong(dateInput: string | Date): string {
+  if (!dateInput) return '';
+  let d: Date;
+  if (typeof dateInput === 'string') {
+    const trimmed = dateInput.trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split('/');
+      d = new Date(Number(year), Number(month) - 1, Number(day));
+    } else if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('T')[0].split('-');
+      d = new Date(Number(year), Number(month) - 1, Number(day));
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = dateInput;
+  }
+  if (isNaN(d.getTime())) return String(dateInput);
+
+  const MONTHS_FR = [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+  ];
+  return `${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Formats date with weekday in French: "Jeudi 27 août 2026"
+ */
+export function formatDateWithWeekday(dateInput: string | Date): string {
+  if (!dateInput) return '';
+  let d: Date;
+  if (typeof dateInput === 'string') {
+    const trimmed = dateInput.trim();
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split('/');
+      d = new Date(Number(year), Number(month) - 1, Number(day));
+    } else if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      const [year, month, day] = trimmed.split('T')[0].split('-');
+      d = new Date(Number(year), Number(month) - 1, Number(day));
+    } else {
+      d = new Date(trimmed);
+    }
+  } else {
+    d = dateInput;
+  }
+  if (isNaN(d.getTime())) return String(dateInput);
+
+  const DAYS_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const MONTHS_FR = [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+  ];
+  return `${DAYS_FR[d.getDay()]} ${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
 }

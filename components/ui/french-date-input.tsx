@@ -40,9 +40,10 @@ export function FrenchDateInput({
 
   // Parse existing value
   const parsed = useMemo(() => {
-    let y = 2026;
-    let m = 8; // 1-12 (Août)
-    let d = 29;
+    const now = new Date();
+    let y = now.getFullYear();
+    let m = now.getMonth() + 1;
+    let d = now.getDate();
 
     if (value) {
       if (value.includes('-')) {
