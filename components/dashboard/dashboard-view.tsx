@@ -263,9 +263,9 @@ export function DashboardView({
           iconColor="text-purple-600"
         />
 
-        {/* Card 5: Scolarités & Impayés (FCFA) */}
+        {/* Card 5: Reste à Percevoir (FCFA) */}
         <StatCard
-          title="Scolarités & Impayés"
+          title="Reste à Percevoir (FCFA)"
           value={formatFCFA(metrics.totalOverdue)}
           icon={AlertTriangle}
           trend={-parseFloat((100 - parseFloat(metrics.collectionRate)).toFixed(1))}

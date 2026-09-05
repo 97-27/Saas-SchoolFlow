@@ -61,11 +61,57 @@ export function ReportsView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, initialInvoices, schoolSlug, school]);
 
-  // Classification par cycles
-  const isMaternelle = (grade: string) => grade.toLowerCase().includes('maternelle') || grade.includes('P.S.') || grade.includes('M.S.') || grade.includes('G.S.');
-  const isPrimaire = (grade: string) => ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'].includes(grade);
-  const isCollege = (grade: string) => ['6ème', '5ème', '4ème', '3ème'].includes(grade);
-  const isLycee = (grade: string) => grade.includes('2nde') || grade.includes('1ère') || grade.includes('Terminale') || grade.includes('Tle');
+  // Classification par cycles (Maternelle jusqu'au Lycée)
+  const isMaternelle = (grade: string) => {
+    if (!grade) return false;
+    const g = grade.toLowerCase();
+    return (
+      g.includes('maternelle') ||
+      g.includes('p.s.') ||
+      g.includes('m.s.') ||
+      g.includes('g.s.') ||
+      g.includes('petite') ||
+      g.includes('moyenne') ||
+      g.includes('grande')
+    );
+  };
+
+  const isPrimaire = (grade: string) => {
+    if (!grade) return false;
+    const g = grade.toUpperCase();
+    return ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'].some((p) => g.includes(p));
+  };
+
+  const isCollege = (grade: string) => {
+    if (!grade) return false;
+    const g = grade.toLowerCase();
+    return (
+      g.includes('6ème') ||
+      g.includes('6eme') ||
+      g.includes('6e') ||
+      g.includes('5ème') ||
+      g.includes('5eme') ||
+      g.includes('5e') ||
+      g.includes('4ème') ||
+      g.includes('4eme') ||
+      g.includes('4e') ||
+      g.includes('3ème') ||
+      g.includes('3eme') ||
+      g.includes('3e')
+    );
+  };
+
+  const isLycee = (grade: string) => {
+    if (!grade) return false;
+    const g = grade.toLowerCase();
+    return (
+      g.includes('2nde') ||
+      g.includes('1ère') ||
+      g.includes('1ere') ||
+      g.includes('terminale') ||
+      g.includes('tle')
+    );
+  };
 
   // Filtrage des données
   const filteredStudents = useMemo(() => {
@@ -234,51 +280,6 @@ export function ReportsView({
       cyclesData,
     };
   }, [filteredStudents, filteredInvoices, students, invoices, selectedPeriod]);
-
-  const handleExportExcel = () => {
-    const headers = [
-      "Cycle d'Enseignement",
-      'Effectif Total',
-      'Filles (F)',
-      'Garçons (M)',
-      'Montant Exigible (FCFA)',
-      'Montant Encaissé (FCFA)',
-      'Reste à Recouvrer (FCFA)',
-      'Taux de Recouvrement (%)',
-    ];
-
-    const rows = stats.cyclesData.map((c) => [
-      `"${c.name}"`,
-      c.studentsCount,
-      c.girls,
-      c.boys,
-      c.exigible,
-      c.collected,
-      c.remaining,
-      `"${c.rate}%"`,
-    ]);
-
-    rows.push([
-      '"TOTAL GÉNÉRAL ÉTABLISSEMENT"',
-      stats.totalStudents,
-      stats.girlsCount,
-      stats.boysCount,
-      stats.totalExigible,
-      stats.totalCollected,
-      stats.totalOverdue,
-      `"${stats.rate}%"`,
-    ]);
-
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `SchoolFlow_Rapport_Financier_${schoolState.academicYear.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -457,15 +458,6 @@ export function ReportsView({
             <Printer className="w-3.5 h-3.5 text-emerald-600" />
             <span>Imprimer le Bilan</span>
           </button>
-
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Exporter Excel / CSV</span>
-          </button>
         </div>
       </div>
 
@@ -528,7 +520,7 @@ export function ReportsView({
       </div>
 
       {/* 3. Cartes KPI Principales (Pandhowan Style) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Total Scolarités Exigibles */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex items-center gap-3 mb-3">
@@ -576,29 +568,6 @@ export function ReportsView({
               <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300">
                 {stats.rate}%
               </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Reste à Recouvrer */}
-        <div className="bg-white rounded-2xl p-5 border border-rose-200/80 shadow-xs flex flex-col justify-between bg-gradient-to-b from-white to-rose-50/20">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 shadow-2xs">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-rose-900 font-sans">
-                Reste à Recouvrer
-              </h3>
-              <p className="text-[11px] text-rose-700">Soldes en attente</p>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <span className="text-xl sm:text-2xl font-extrabold text-rose-900 font-heading">
-              {formatFCFA(stats.totalOverdue)}
-            </span>
-            <div className="text-[11px] text-rose-600 font-medium">
-              {(100 - parseFloat(stats.rate)).toFixed(1)}% du budget à percevoir
             </div>
           </div>
         </div>

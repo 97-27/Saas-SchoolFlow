@@ -83,6 +83,7 @@ export function StudentTable({
   const [selectedEnrollmentType, setSelectedEnrollmentType] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [actionMenuStudent, setActionMenuStudent] = useState<Student | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -309,16 +310,6 @@ export function StudentTable({
                 <span>Par numéro ID (001...)</span>
               </>
             )}
-          </button>
-
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-            onClick={() => window.print()}
-            title="Exporter et Imprimer le répertoire nominatif officiel au format PDF"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Exporter en PDF</span>
           </button>
         </div>
       </div>
@@ -581,83 +572,17 @@ export function StudentTable({
                         </span>
                       </td>
 
-                      {/* Actions avec modale personnalisée */}
-                      <td className="py-3.5 pr-5 pl-3 text-right relative">
+                      {/* Actions avec modale personnalisée sans coupure */}
+                      <td className="py-3.5 pr-5 pl-3 text-right">
                         <button
                           type="button"
-                          onClick={() =>
-                            setOpenActionId(
-                              openActionId === student.id ? null : student.id
-                            )
-                          }
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                          aria-label="Options"
+                          onClick={() => setActionMenuStudent(student)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 border border-slate-200 transition-all cursor-pointer shadow-2xs"
+                          title="Ouvrir les options pour cet élève"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          <MoreHorizontal className="w-4 h-4 text-slate-600" />
+                          <span className="font-semibold">Action</span>
                         </button>
-
-                        {openActionId === student.id && (
-                          <div className="absolute right-5 top-10 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-30 text-left animate-in fade-in zoom-in-95 duration-150">
-                            {/* En-tête de menu avec bouton Croix pour fermer */}
-                            <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Actions Élève
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setOpenActionId(null)}
-                                className="w-5 h-5 rounded-md hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                                title="Fermer le menu"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionId(null);
-                                setViewingStudent(student);
-                              }}
-                              className="w-full px-3.5 py-2.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2.5 cursor-pointer font-medium whitespace-nowrap transition-colors"
-                            >
-                              <Eye className="w-4 h-4 text-emerald-600 shrink-0" />
-                              <span className="whitespace-nowrap">Consulter le dossier scolaire</span>
-                            </button>
-
-                            <a
-                              href={`https://wa.me/${student.whatsappPhone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full px-3.5 py-2.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2.5 cursor-pointer font-medium whitespace-nowrap transition-colors"
-                              onClick={() => setOpenActionId(null)}
-                            >
-                              <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                              <span className="whitespace-nowrap">Message WhatsApp</span>
-                            </a>
-
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(student)}
-                              className="w-full px-3.5 py-2.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-blue-700 flex items-center gap-2.5 border-t border-slate-100 cursor-pointer font-medium whitespace-nowrap transition-colors"
-                            >
-                              <Edit className="w-4 h-4 text-blue-600 shrink-0" />
-                              <span className="whitespace-nowrap">Modifier les coordonnées</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionId(null);
-                                setStudentToDelete([student]);
-                              }}
-                              className="w-full px-3.5 py-2.5 text-xs text-rose-700 hover:bg-rose-50 flex items-center gap-2.5 border-t border-slate-100 cursor-pointer font-bold whitespace-nowrap transition-colors"
-                            >
-                              <Trash2 className="w-4 h-4 text-rose-600 shrink-0" />
-                              <span className="whitespace-nowrap">Supprimer du registre</span>
-                            </button>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   );
@@ -684,6 +609,146 @@ export function StudentTable({
           </span>
         </div>
       </div>
+
+      {/* ================= MODALE PERSONNALISÉE : ACTIONS ÉLÈVE (SANS AUCUNE COUPURE) ================= */}
+      {actionMenuStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-extrabold text-base font-heading shrink-0 shadow-xs">
+                  {actionMenuStudent.lastName.charAt(0)}{actionMenuStudent.firstName.charAt(0)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-slate-900 font-heading">
+                      {actionMenuStudent.fullName}
+                    </h3>
+                    <GenderBadge gender={actionMenuStudent.gender} />
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                    <span className="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                      {actionMenuStudent.studentNumber}
+                    </span>
+                    <span>• Classe : <strong>{actionMenuStudent.grade}</strong></span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActionMenuStudent(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                title="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Liste des actions */}
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = actionMenuStudent;
+                  setActionMenuStudent(null);
+                  setViewingStudent(target);
+                }}
+                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 flex items-center gap-3 transition-all cursor-pointer text-left group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-900">
+                    Consulter le dossier complet
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Scolarité, versements, quittances et statut d&apos;inscription
+                  </p>
+                </div>
+              </button>
+
+              <a
+                href={`https://wa.me/${actionMenuStudent.whatsappPhone.replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setActionMenuStudent(null)}
+                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 flex items-center gap-3 transition-all cursor-pointer text-left group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 flex items-center gap-1.5">
+                    <span>Message WhatsApp Parent</span>
+                    <span className="font-mono text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                      {actionMenuStudent.whatsappPhone}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Ouvrir la conversation directe avec le parent
+                  </p>
+                </div>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = actionMenuStudent;
+                  setActionMenuStudent(null);
+                  handleOpenEdit(target);
+                }}
+                className="w-full p-3 rounded-2xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 flex items-center gap-3 transition-all cursor-pointer text-left group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Edit className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-900">
+                    Modifier les coordonnées
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Nom, prénom, classe, téléphone, tuteur et adresse
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = actionMenuStudent;
+                  setActionMenuStudent(null);
+                  setStudentToDelete([target]);
+                }}
+                className="w-full p-3 rounded-2xl border border-rose-200 hover:border-rose-400 hover:bg-rose-50/60 flex items-center gap-3 transition-all cursor-pointer text-left group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-rose-900">
+                    Supprimer du registre scolaire
+                  </h4>
+                  <p className="text-[11px] text-rose-600">
+                    Retirer définitivement cet élève de l&apos;école
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setActionMenuStudent(null)}
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-all text-center cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODALE PERSONNALISÉE : MODIFIER L'ÉLÈVE ================= */}
       {editingStudent && (

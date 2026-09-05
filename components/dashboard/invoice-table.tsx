@@ -41,8 +41,17 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialInvoices, schoolSlug]);
 
-  // Date active du journal (par défaut 2026-08-27)
-  const [selectedJournalDate, setSelectedJournalDate] = useState<string>('2026-08-27');
+  // Helper pour obtenir la date du jour (format YYYY-MM-DD)
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Date active du journal (par défaut la date du jour en direct)
+  const [selectedJournalDate, setSelectedJournalDate] = useState<string>(getTodayDateStr());
   const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('all_dates');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,8 +59,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedEnrollmentType, setSelectedEnrollmentType] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(20);
 
   // Synchroniser la date du journal avec les factures enregistrées si une plus récente apparaît
   useEffect(() => {
@@ -132,27 +139,16 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     });
   }, [invoices, dateFilterMode, selectedJournalDate, searchQuery, selectedClass, selectedStatus, selectedEnrollmentType]);
 
-  // Total pages
-  const effectivePageSize = pageSize === 999 ? Math.max(1, filteredInvoices.length) : pageSize;
-  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / effectivePageSize));
-
-  // Current page slice
-  const paginatedInvoices = useMemo(() => {
-    if (pageSize === 999) return filteredInvoices;
-    const start = (currentPage - 1) * effectivePageSize;
-    return filteredInvoices.slice(start, start + effectivePageSize);
-  }, [filteredInvoices, currentPage, effectivePageSize, pageSize]);
-
-  // Select all toggle for current page
+  // Select all toggle
   const isAllSelected =
-    paginatedInvoices.length > 0 &&
-    paginatedInvoices.every((inv) => selectedIds.includes(inv.id));
+    filteredInvoices.length > 0 &&
+    filteredInvoices.every((inv) => selectedIds.includes(inv.id));
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(paginatedInvoices.map((inv) => inv.id));
+      setSelectedIds(filteredInvoices.map((inv) => inv.id));
     }
   };
 
@@ -167,8 +163,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     setSelectedClass('Toutes les classes');
     setSelectedStatus('all');
     setSelectedEnrollmentType('all');
-    setDateFilterMode('day_only');
-    setCurrentPage(1);
+    setDateFilterMode('all_dates');
   };
 
   const hasActiveFilters =
@@ -201,7 +196,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           </div>
         </div>
 
-        {/* Global actions: Date picker + Exporter */}
+        {/* Global actions: Date picker */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Sélecteur de date du journal */}
           <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs">
@@ -213,32 +208,30 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               onChange={(e) => {
                 setSelectedJournalDate(e.target.value);
                 setDateFilterMode('day_only');
-                setCurrentPage(1);
               }}
               className="bg-white px-2 py-1 rounded-lg border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
             />
             <button
               type="button"
               onClick={() => {
-                setSelectedJournalDate('2026-08-27');
+                setSelectedJournalDate(new Date().toISOString().split('T')[0]);
                 setDateFilterMode('day_only');
-                setCurrentPage(1);
               }}
               className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
               title="Revenir à la date du jour active"
             >
               Aujourd&apos;hui
             </button>
+            {dateFilterMode === 'day_only' && (
+              <button
+                type="button"
+                onClick={() => setDateFilterMode('all_dates')}
+                className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Toutes les dates
+              </button>
+            )}
           </div>
-
-          <button
-            type="button"
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-            onClick={() => alert(`Export du journal du ${formatDate(selectedJournalDate)} au format Excel/PDF`)}
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Exporter</span>
-          </button>
         </div>
       </div>
 
@@ -404,10 +397,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         <div className="relative flex-1 sm:flex-none min-w-[130px]">
           <select
             value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value);
-              setCurrentPage(1);
-            }}
+            onChange={(e) => setSelectedStatus(e.target.value)}
             className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
           >
             <option value="all">Paiement : Tous</option>
@@ -422,34 +412,12 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         <div className="relative flex-1 sm:flex-none min-w-[135px]">
           <select
             value={selectedEnrollmentType}
-            onChange={(e) => {
-              setSelectedEnrollmentType(e.target.value);
-              setCurrentPage(1);
-            }}
+            onChange={(e) => setSelectedEnrollmentType(e.target.value)}
             className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
           >
             <option value="all">Élèves : Tous</option>
             <option value="nouveau">🌟 Nouveaux</option>
             <option value="ancien">🔄 Anciens</option>
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Nombre d'éléments par page (10, 20, 30, 50, Tout) */}
-        <div className="relative flex-1 sm:flex-none min-w-[110px]">
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(parseInt(e.target.value, 10));
-              setCurrentPage(1);
-            }}
-            className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-bold rounded-xl bg-white border border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
-          >
-            <option value={10}>10 lignes</option>
-            <option value={20}>20 lignes</option>
-            <option value={30}>30 lignes</option>
-            <option value={50}>50 lignes</option>
-            <option value={999}>Tout afficher ({filteredInvoices.length})</option>
           </select>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
@@ -493,33 +461,35 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         </div>
       )}
 
-      {/* Main Table Responsive Container */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              <th className="py-3.5 pl-5 pr-3 w-10">
+      {/* Table Content */}
+      <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+        <table className="w-full text-left border-collapse min-w-[850px]">
+          <thead className="sticky top-0 z-10 bg-slate-50">
+            <tr className="border-b border-slate-200/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <th className="py-3 pl-5 pr-3 w-10">
                 <input
                   type="checkbox"
-                  checked={isAllSelected}
+                  checked={
+                    filteredInvoices.length > 0 &&
+                    selectedIds.length === filteredInvoices.length
+                  }
                   onChange={toggleSelectAll}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                  aria-label="Sélectionner tous les élèves de la page"
                 />
               </th>
-              <th className="py-3.5 px-3 whitespace-nowrap">ID Élève</th>
-              <th className="py-3.5 px-3 whitespace-nowrap">Matricule</th>
-              <th className="py-3.5 px-3 min-w-[160px] whitespace-nowrap">Élève</th>
-              <th className="py-3.5 px-3 text-center whitespace-nowrap">Classe</th>
-              <th className="py-3.5 px-3 text-center whitespace-nowrap">Statut Élève</th>
-              <th className="py-3.5 px-3 text-center whitespace-nowrap">Genre</th>
-              <th className="py-3.5 px-3 whitespace-nowrap">Type de frais</th>
-              <th className="py-3.5 px-3 whitespace-nowrap">Date du jour</th>
-              <th className="py-3.5 pr-5 px-3 text-right whitespace-nowrap">Montant (FCFA)</th>
+              <th className="py-3 px-3">ID Quittance</th>
+              <th className="py-3 px-3">Matricule</th>
+              <th className="py-3 px-3">Nom & Prénoms de l&apos;Élève</th>
+              <th className="py-3 px-3 text-center">Classe</th>
+              <th className="py-3 px-3 text-center">Statut Élève</th>
+              <th className="py-3 px-3 text-center">Genre</th>
+              <th className="py-3 px-3">Prestation / Motif</th>
+              <th className="py-3 px-3">Date de Paiement</th>
+              <th className="py-3 pr-5 px-3 text-right">Montant Versé</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
-            {paginatedInvoices.length === 0 ? (
+            {filteredInvoices.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
@@ -528,13 +498,13 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       Aucun encaissement enregistré pour la date du {formatDate(selectedJournalDate)}.
                     </p>
                     <p className="text-xs text-slate-400">
-                      Modifiez la date ou cliquez sur « Tous les règlements » pour consulter l&apos;historique complet.
+                      Modifiez la date ou cliquez sur « Toutes les dates » pour consulter l&apos;historique complet.
                     </p>
                   </div>
                 </td>
               </tr>
             ) : (
-              paginatedInvoices.map((invoice) => {
+              filteredInvoices.map((invoice) => {
                 const isSelected = selectedIds.includes(invoice.id);
                 const numVal = parseInt(invoice.invoiceNumber.replace(/\D/g, '') || '1', 10);
                 const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
@@ -626,52 +596,17 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         </table>
       </div>
 
-      {/* Footer: Pagination & Compteur interactif */}
+      {/* Footer: Défilement & Compteur interactif sans pagination */}
       <div className="p-4 px-4 sm:px-6 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>
-            Affichage de <strong className="text-slate-900 font-bold">{paginatedInvoices.length}</strong> sur <strong className="text-slate-900 font-bold">{filteredInvoices.length}</strong> encaissements ({dateFilterMode === 'day_only' ? `du ${formatDate(selectedJournalDate)}` : 'toutes dates confondues'})
+            Affichage de <strong className="text-slate-900 font-bold">{filteredInvoices.length}</strong> encaissement{filteredInvoices.length > 1 ? 's' : ''} ({dateFilterMode === 'day_only' ? `du ${formatDate(selectedJournalDate)}` : 'toutes dates confondues'}) • Défilement vertical direct
           </span>
         </div>
-
-        {/* Pagination interactive */}
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pg) => (
-              <button
-                key={pg}
-                type="button"
-                onClick={() => setCurrentPage(pg)}
-                className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  currentPage === pg
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                {pg}
-              </button>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <span className="text-[11px] text-slate-400 font-medium">
+          Glissez de haut en bas pour visualiser tous les élèves sans limitation de page
+        </span>
       </div>
     </div>
   );

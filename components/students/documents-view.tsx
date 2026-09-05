@@ -383,72 +383,7 @@ export function DocumentsView({
     }
   };
 
-  // Export Excel CSV
-  const handleExportExcel = () => {
-    const studentsToExport =
-      selectedStudentIds.length > 0
-        ? students.filter((s) => selectedStudentIds.includes(s.id))
-        : filteredStudents;
 
-    const header = [
-      'ID Élève',
-      'Matricule MENA',
-      'Nom',
-      'Prénoms',
-      'Classe',
-      'Genre',
-      'Extrait de Naissance',
-      'Bulletin Scolaire',
-      'Fiche Scolaire',
-      'Autres Documents',
-      'Statut Global Dossier',
-      'Dernière Mise à Jour',
-    ].join(';');
-
-    const rows = studentsToExport.map((stu) => {
-      const doc = docRecords[stu.id] || {
-        hasBirthCertificate: false,
-        hasReportCard: false,
-        hasRegistrationForm: false,
-        otherDocs: [],
-        lastUpdated: '2026-08-28',
-      };
-      const isComplete = doc.hasBirthCertificate && doc.hasReportCard && doc.hasRegistrationForm;
-
-      return [
-        stu.studentNumber,
-        stu.matricule,
-        stu.lastName,
-        stu.firstName,
-        stu.grade,
-        stu.gender === 'female' ? 'Féminin' : 'Masculin',
-        doc.hasBirthCertificate ? 'Numérisé' : 'En attente',
-        doc.hasReportCard ? 'Récupéré' : 'En attente',
-        doc.hasRegistrationForm ? 'Complète' : 'Incomplète',
-        `${doc.otherDocs?.length || 0} document(s)`,
-        isComplete ? 'Complet (100%)' : 'Incomplet',
-        doc.lastUpdated,
-      ].join(';');
-    });
-
-    const csvContent = '\uFEFF' + [header, ...rows].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute(
-      'download',
-      `SchoolFlow_Documents_Scolaires_${school.shortName || 'EPC'}_2026-2027.csv`
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setUploadSuccessToast(
-      `✓ Fichier Excel / CSV exporté avec succès (${studentsToExport.length} dossiers inclus) !`
-    );
-    setTimeout(() => setUploadSuccessToast(null), 5000);
-  };
 
   return (
     <div className="space-y-6 pb-12">
@@ -470,15 +405,6 @@ export function DocumentsView({
 
         {/* Actions en haut */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Exporter Excel</span>
-          </button>
-
           <button
             type="button"
             onClick={handleOpenAddModalGlobal}

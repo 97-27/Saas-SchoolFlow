@@ -108,34 +108,43 @@ export function InscriptionsView({
   const [fraisAnnexesPaid, setFraisAnnexesPaid] = useState<boolean>(false);
   const [tenueCousuePaid, setTenueCousuePaid] = useState<boolean>(false);
 
+  // Helper pour obtenir la date du jour (format YYYY-MM-DD)
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Saisie Libre Financière (Toutes les cases vides à 0 F par défaut — Aucune somme prédéterminée)
   const [tuitionAmount, setTuitionAmount] = useState<number>(0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [remainingAmount, setRemainingAmount] = useState<number>(0);
 
-  // 5 Versements fractionnés (Cases vides à 0 F par défaut)
+  // 5 Versements fractionnés (Cases vides à 0 F par défaut - Date par défaut = Date du Jour)
   const [versement1Amount, setVersement1Amount] = useState<number>(0);
   const [versement1Method, setVersement1Method] = useState<string>('Espèces');
-  const [versement1Date, setVersement1Date] = useState<string>('2026-08-29');
+  const [versement1Date, setVersement1Date] = useState<string>(getTodayDateStr());
 
   const [versement2Amount, setVersement2Amount] = useState<number>(0);
   const [versement2Method, setVersement2Method] = useState<string>('Paiement en ligne (Wave)');
-  const [versement2Date, setVersement2Date] = useState<string>('2026-08-29');
+  const [versement2Date, setVersement2Date] = useState<string>(getTodayDateStr());
 
   const [versement3Amount, setVersement3Amount] = useState<number>(0);
   const [versement3Method, setVersement3Method] = useState<string>('Virement bancaire');
-  const [versement3Date, setVersement3Date] = useState<string>('2026-08-29');
+  const [versement3Date, setVersement3Date] = useState<string>(getTodayDateStr());
 
   const [versement4Amount, setVersement4Amount] = useState<number>(0);
   const [versement4Method, setVersement4Method] = useState<string>('Espèces');
-  const [versement4Date, setVersement4Date] = useState<string>('2026-08-29');
+  const [versement4Date, setVersement4Date] = useState<string>(getTodayDateStr());
 
   const [versement5Amount, setVersement5Amount] = useState<number>(0);
   const [versement5Method, setVersement5Method] = useState<string>('Orange Money');
-  const [versement5Date, setVersement5Date] = useState<string>('2026-08-29');
+  const [versement5Date, setVersement5Date] = useState<string>(getTodayDateStr());
 
-  const [paymentDate, setPaymentDate] = useState('2026-08-29');
+  const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr());
   const [paymentMethod, setPaymentMethod] = useState<'especes' | 'virement' | 'en_ligne'>('especes');
   const [onlineOperator, setOnlineOperator] = useState<'mtn' | 'moov' | 'orange' | 'wave'>('orange');
 
@@ -255,36 +264,37 @@ export function InscriptionsView({
       ? stu.balanceRemaining
       : Math.max(0, (stu.netAmount || stu.tuitionAmount) - (stu.paidAmount || 0));
     setRemainingAmount(rem);
-    setPaymentDate(stu.paymentDate || '2026-08-27');
+    setPaymentDate(stu.paymentDate || getTodayDateStr());
 
     // Charger les 5 versements de l'élève
     const inst = stu.installments;
     const p = stu.paidAmount || 0;
-    const v1 = inst?.versement1 || (p > 0 ? { amount: Math.min(p, 100000), paymentMethod: stu.paymentMethod || 'Espèces', date: stu.paymentDate || '2026-08-27' } : { amount: 0, paymentMethod: 'Espèces', date: '2026-08-27' });
-    const v2 = inst?.versement2 || (p > 100000 ? { amount: Math.min(p - 100000, 50000), paymentMethod: 'Paiement en ligne (Wave)', date: stu.paymentDate || '2026-08-27' } : { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: '2026-08-27' });
-    const v3 = inst?.versement3 || (p > 150000 ? { amount: Math.min(p - 150000, 50000), paymentMethod: 'Virement bancaire', date: stu.paymentDate || '2026-08-27' } : { amount: 0, paymentMethod: 'Virement bancaire', date: '2026-08-27' });
-    const v4 = inst?.versement4 || (p > 200000 ? { amount: Math.min(p - 200000, 50000), paymentMethod: 'Espèces', date: stu.paymentDate || '2026-08-27' } : { amount: 0, paymentMethod: 'Espèces', date: '2026-08-27' });
-    const v5 = inst?.versement5 || (p > 250000 ? { amount: p - 250000, paymentMethod: 'Orange Money', date: stu.paymentDate || '2026-08-27' } : { amount: 0, paymentMethod: 'Orange Money', date: '2026-08-27' });
+    const defaultDate = stu.paymentDate || getTodayDateStr();
+    const v1 = inst?.versement1 || (p > 0 ? { amount: Math.min(p, 100000), paymentMethod: stu.paymentMethod || 'Espèces', date: defaultDate } : { amount: 0, paymentMethod: 'Espèces', date: defaultDate });
+    const v2 = inst?.versement2 || (p > 100000 ? { amount: Math.min(p - 100000, 50000), paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate } : { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate });
+    const v3 = inst?.versement3 || (p > 150000 ? { amount: Math.min(p - 150000, 50000), paymentMethod: 'Virement bancaire', date: defaultDate } : { amount: 0, paymentMethod: 'Virement bancaire', date: defaultDate });
+    const v4 = inst?.versement4 || (p > 200000 ? { amount: Math.min(p - 200000, 50000), paymentMethod: 'Espèces', date: defaultDate } : { amount: 0, paymentMethod: 'Espèces', date: defaultDate });
+    const v5 = inst?.versement5 || (p > 250000 ? { amount: p - 250000, paymentMethod: 'Orange Money', date: defaultDate } : { amount: 0, paymentMethod: 'Orange Money', date: defaultDate });
 
     setVersement1Amount(v1.amount);
     setVersement1Method(v1.paymentMethod || 'Espèces');
-    setVersement1Date(v1.date || '2026-08-27');
+    setVersement1Date(v1.date || defaultDate);
 
     setVersement2Amount(v2.amount);
     setVersement2Method(v2.paymentMethod || 'Paiement en ligne (Wave)');
-    setVersement2Date(v2.date || '2026-08-27');
+    setVersement2Date(v2.date || defaultDate);
 
     setVersement3Amount(v3.amount);
     setVersement3Method(v3.paymentMethod || 'Virement bancaire');
-    setVersement3Date(v3.date || '2026-08-27');
+    setVersement3Date(v3.date || defaultDate);
 
     setVersement4Amount(v4.amount);
     setVersement4Method(v4.paymentMethod || 'Espèces');
-    setVersement4Date(v4.date || '2026-08-27');
+    setVersement4Date(v4.date || defaultDate);
 
     setVersement5Amount(v5.amount);
     setVersement5Method(v5.paymentMethod || 'Orange Money');
-    setVersement5Date(v5.date || '2026-08-27');
+    setVersement5Date(v5.date || defaultDate);
 
     setIsBoarding(Boolean(stu.isBoarding));
     setIsCanteen(typeof stu.isCanteen === 'boolean' ? stu.isCanteen : (stu.notes?.includes('Cantine (Oui') ?? false));
@@ -299,6 +309,7 @@ export function InscriptionsView({
 
   // Réinitialiser le formulaire pour créer un Nouveau Reçu (mode nouvelle inscription)
   const handleStartNewReceipt = () => {
+    const today = getTodayDateStr();
     setSelectedStudentId(null);
     setLastName('');
     setFirstName('');
@@ -317,20 +328,20 @@ export function InscriptionsView({
     setRemainingAmount(0);
     setVersement1Amount(0);
     setVersement1Method('Espèces');
-    setVersement1Date('2026-08-29');
+    setVersement1Date(today);
     setVersement2Amount(0);
     setVersement2Method('Paiement en ligne (Wave)');
-    setVersement2Date('2026-08-29');
+    setVersement2Date(today);
     setVersement3Amount(0);
     setVersement3Method('Virement bancaire');
-    setVersement3Date('2026-08-29');
+    setVersement3Date(today);
     setVersement4Amount(0);
     setVersement4Method('Espèces');
-    setVersement4Date('2026-08-29');
+    setVersement4Date(today);
     setVersement5Amount(0);
     setVersement5Method('Orange Money');
-    setVersement5Date('2026-08-29');
-    setPaymentDate('2026-08-29');
+    setVersement5Date(today);
+    setPaymentDate(today);
     setPaymentMethod('especes');
     setFraisAnnexesPaid(false);
     setTenueCousuePaid(false);
