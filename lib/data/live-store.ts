@@ -621,6 +621,11 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       if (!stu || !stu.studentNumber) continue;
       if (deletedIds.has(stu.id) || deletedIds.has(stu.studentNumber)) continue;
 
+      // NE PAS créer de fausse facture de scolarité pour un élève qui n'a été enregistré qu'à l'internat
+      if (stu.isBoarding && (!stu.registrationFee || stu.registrationFee === 0) && (!stu.installments || !stu.installments.versement1?.amount)) {
+        continue;
+      }
+
       const idKey = stu.id || stu.studentNumber;
       const numKey = stu.studentNumber || stu.id;
       if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
@@ -667,6 +672,14 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           if (!b || !b.studentId) continue;
           if (deletedIds.has(b.studentId) || (b.matricule && deletedIds.has(b.matricule))) continue;
 
+          // Si une facture pour cet élève en 'Internat & Pensionnat' existe déjà dans uniqueInvoices, ne pas dupliquer
+          const alreadyExists = uniqueInvoices.some(
+            (inv) =>
+              (inv.studentId === b.studentId || (b.matricule && inv.invoiceNumber?.includes(b.matricule))) &&
+              inv.feeType === 'Internat & Pensionnat'
+          );
+          if (alreadyExists) continue;
+
           const boardInvId = `inv-boarding-${b.studentId}`;
           const boardInvNum = b.matricule ? `INT-${b.matricule.replace(/\D/g, '').slice(-4) || '2026'}` : `INT-${b.studentId.slice(-4)}`;
 
@@ -675,6 +688,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
             const paidCount = Object.values(months).filter(Boolean).length;
             const rate = b.monthlyRate || 0;
             const totalPaid = paidCount * rate;
+            if (totalPaid <= 0) continue; // Pas de versement -> ne pas encombrer le journal de caisse
+
             const totalDue = rate * 9;
             const matchingStu = studentMap.get(b.studentId) || (b.matricule ? studentMap.get(b.matricule) : undefined);
 

@@ -41,6 +41,7 @@ import {
   Eye,
   ExternalLink,
   Smartphone,
+  Lock,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -426,9 +427,68 @@ export function BoardingView({
     setActiveMonthsChecked({});
   };
 
+  // Détection des modifications du formulaire et des versements
+  const isFormDirty = useMemo(() => {
+    if (isCreatingNew) {
+      return formStudentName.trim().length > 0 && Number(formMonthlyRate) > 0;
+    }
+    if (!activeBoarder) return false;
+
+    const initialName = `${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim();
+    const initialMatricule = activeBoarder.student.studentNumber || activeBoarder.student.matricule || '';
+    const initialClass = activeBoarder.student.grade || (activeBoarder.student as any).className || '6ème';
+    const initialGender = activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M';
+    const initialPavilion = activeBoarder.pavilion || 'Pavillon A (Garçons)';
+    const initialRoom = activeBoarder.roomNumber || '';
+    const initialContact = activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00';
+    const initialRate = activeBoarder.monthlyRate || 0;
+    const initialMethod = activeBoarder.student.paymentMethod || 'Espèces';
+
+    const initialMonths = monthlyPayments[activeBoarder.student.id] || {};
+
+    const nameChanged = formStudentName.trim() !== initialName;
+    const matChanged = formMatricule.trim() !== initialMatricule;
+    const classChanged = formClassName !== initialClass;
+    const genderChanged = formGender !== initialGender;
+    const pavChanged = formPavilion !== initialPavilion;
+    const roomChanged = formRoom.trim() !== initialRoom;
+    const contactChanged = formParentContact.trim() !== initialContact;
+    const rateChanged = Number(formMonthlyRate) !== initialRate;
+    const methodChanged = formPaymentMethod !== initialMethod;
+
+    const monthsChanged = MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
+
+    return nameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || monthsChanged;
+  }, [
+    isCreatingNew,
+    activeBoarder,
+    formStudentName,
+    formMatricule,
+    formClassName,
+    formGender,
+    formPavilion,
+    formRoom,
+    formParentContact,
+    formMonthlyRate,
+    formPaymentMethod,
+    activeMonthsChecked,
+    monthlyPayments,
+  ]);
+
+  const hasPaymentChange = useMemo(() => {
+    if (isCreatingNew) return activePaidMonthsCount > 0 && activeTotalCollected > 0;
+    if (!activeBoarder) return false;
+    const initialMonths = monthlyPayments[activeBoarder.student.id] || {};
+    return MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
+  }, [isCreatingNew, activeBoarder, activeMonthsChecked, monthlyPayments, activePaidMonthsCount, activeTotalCollected]);
+
   // 1. Déclenchement de la modale de confirmation
   const handleOpenConfirmModal = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    if (!isFormDirty) {
+      return;
+    }
 
     if (!formStudentName.trim()) {
       alert('Veuillez saisir le nom et prénom de l’élève.');
@@ -437,6 +497,12 @@ export function BoardingView({
 
     if (!Number(formMonthlyRate) || Number(formMonthlyRate) <= 0) {
       alert('Veuillez renseigner le tarif mensuel de l’internat.');
+      return;
+    }
+
+    // Si seulement modification des coordonnées sans nouveau versement et sans paiement, sauvegarder directement
+    if (!isCreatingNew && !hasPaymentChange && activeTotalCollected === 0) {
+      executeFinalSaveReceipt();
       return;
     }
 
@@ -480,7 +546,7 @@ export function BoardingView({
     }
     saveSubscriptionsToStorage(updatedSubs);
 
-    // 3. Enregistrer l'élève dans le registre persistant multi-clés et Supabase
+    // 3. Enregistrer l'élève dans le registre persistant multi-clés et Supabase (SANS fausse scolarité)
     const nameParts = formStudentName.trim().split(' ');
     const studentObj: Student = {
       id: targetStudentId,
@@ -496,13 +562,14 @@ export function BoardingView({
       guardianName: 'Parent / Tuteur',
       guardianPhone: formParentContact.trim(),
       whatsappPhone: formParentContact.trim(),
-      tuitionAmount: rate * 9,
-      paidAmount: activeTotalCollected,
+      tuitionAmount: 0,
+      paidAmount: 0,
+      registrationFee: 0,
       paymentDate: formPaymentDate || getTodayFrenchDateStr(),
       paymentMethod: formPaymentMethod,
       attendanceRate: 100,
       status: 'active',
-      tuitionStatus: activePaidMonthsCount === 9 ? 'paid' : activePaidMonthsCount > 0 ? 'partial' : 'unpaid',
+      tuitionStatus: 'unpaid',
       isBoarding: true,
       enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
     };
@@ -533,50 +600,76 @@ export function BoardingView({
     // Mise à jour immédiate de l'état local students pour que les 3 blocs KPI se recalculent sur-le-champ
     setStudents((prev) => [studentObj, ...prev.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())]);
 
-    // 4. Créer et enregistrer la Facture / Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
+    // 4. Gérer la Facture / Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
     const invoiceNumber = `INT-${formMatricule.replace(/\D/g, '').slice(-4) || Date.now().toString().slice(-4)}`;
-    const boardingInvoice: Invoice = {
-      id: `inv-boarding-${targetStudentId}`,
-      invoiceNumber,
-      studentId: targetStudentId,
-      studentName: formStudentName.trim(),
-      studentGrade: formClassName,
-      studentGender: formGender === 'F' ? 'female' : 'male',
-      guardianName: 'Parent / Tuteur',
-      guardianPhone: formParentContact.trim(),
-      feeType: 'Internat & Pensionnat',
-      amount: activeTotalAnnualExigible,
-      discountAmount: 0,
-      netAmount: activeTotalAnnualExigible,
-      paidAmount: activeTotalCollected,
-      balanceRemaining: activeRemainingBalance,
-      paymentMethod: formPaymentMethod,
-      enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
-      issueDate: formPaymentDate || getTodayFrenchDateStr(),
-      dueDate: formPaymentDate || getTodayFrenchDateStr(),
-      status: activeRemainingBalance === 0 ? 'paid' : activeTotalCollected > 0 ? 'partial' : 'sent',
-    };
+    const invoiceId = `inv-boarding-${targetStudentId}`;
 
-    try {
-      const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-      const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
-      const updatedInvoices = [boardingInvoice, ...prevInvoices.filter((i) => i.id !== boardingInvoice.id && i.invoiceNumber !== invoiceNumber)];
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+    if (activeTotalCollected > 0) {
+      const boardingInvoice: Invoice = {
+        id: invoiceId,
+        invoiceNumber,
+        studentId: targetStudentId,
+        studentName: formStudentName.trim(),
+        studentGrade: formClassName,
+        studentGender: formGender === 'F' ? 'female' : 'male',
+        guardianName: 'Parent / Tuteur',
+        guardianPhone: formParentContact.trim(),
+        feeType: 'Internat & Pensionnat',
+        amount: activeTotalAnnualExigible,
+        discountAmount: 0,
+        netAmount: activeTotalAnnualExigible,
+        paidAmount: activeTotalCollected,
+        balanceRemaining: activeRemainingBalance,
+        paymentMethod: formPaymentMethod,
+        enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
+        issueDate: formPaymentDate || getTodayFrenchDateStr(),
+        dueDate: formPaymentDate || getTodayFrenchDateStr(),
+        status: activeRemainingBalance === 0 ? 'paid' : 'partial',
+      };
 
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-      const rawInvSchool = localStorage.getItem(invSchoolKey);
-      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-      const updatedInvSchool = [boardingInvoice, ...prevInvSchool.filter((i) => i.id !== boardingInvoice.id && i.invoiceNumber !== invoiceNumber)];
-      localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
+      try {
+        const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+        const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
+        const updatedInvoices = [
+          boardingInvoice,
+          ...prevInvoices.filter((i) => i.id !== invoiceId && i.studentId !== targetStudentId && i.invoiceNumber !== invoiceNumber),
+        ];
+        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
 
-      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
-        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
-        localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
-      }
+        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+        const rawInvSchool = localStorage.getItem(invSchoolKey);
+        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+        const updatedInvSchool = [
+          boardingInvoice,
+          ...prevInvSchool.filter((i) => i.id !== invoiceId && i.studentId !== targetStudentId && i.invoiceNumber !== invoiceNumber),
+        ];
+        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
 
-      // Synchronisation Supabase de la facture
-      saveInvoiceToSupabase(boardingInvoice, schoolSlug).catch(() => {});
-    } catch (err) {}
+        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
+          localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
+        }
+
+        saveInvoiceToSupabase(boardingInvoice, schoolSlug).catch(() => {});
+      } catch (err) {}
+    } else {
+      // Aucun versement d'internat -> nettoyer toute facture résiduelle à zéro franc
+      try {
+        const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+        if (rawInvoices) {
+          const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
+          const cleaned = prevInvoices.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType === 'Internat & Pensionnat')));
+          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(cleaned));
+        }
+        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+        const rawInvSchool = localStorage.getItem(invSchoolKey);
+        if (rawInvSchool) {
+          const prevInvSchool: Invoice[] = JSON.parse(rawInvSchool);
+          const cleaned = prevInvSchool.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType === 'Internat & Pensionnat')));
+          localStorage.setItem(invSchoolKey, JSON.stringify(cleaned));
+        }
+      } catch (e) {}
+    }
 
     // 5. Diffusion globale de l'événement en temps réel
     broadcastLiveUpdate({
@@ -588,7 +681,11 @@ export function BoardingView({
     setIsConfirmModalOpen(false);
     setIsCreatingNew(false);
     setActiveBoarderIndex(0);
-    setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount}/9 mois réglés pour ${formStudentName}).`);
+    if (activeTotalCollected > 0) {
+      setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount}/9 mois réglés pour ${formStudentName}).`);
+    } else {
+      setToastMessage(`✓ Modifications des coordonnées du pensionnaire enregistrées avec succès (${formStudentName}).`);
+    }
     setTimeout(() => setToastMessage(null), 5000);
   };
 
@@ -1550,16 +1647,32 @@ export function BoardingView({
             </div>
 
             {/* Boutons d'Action & Sauvegarde */}
-            <div className="pt-2 flex items-center gap-3">
+            <div className="pt-2 flex flex-col gap-2">
               <button
                 type="submit"
-                className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all cursor-pointer transform hover:-translate-y-0.5"
+                disabled={!isFormDirty}
+                className={`w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  isFormDirty
+                    ? 'text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 cursor-pointer transform hover:-translate-y-0.5'
+                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                }`}
               >
-                <Save className="w-4 h-4" />
+                {isFormDirty ? <Save className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                 <span>
-                  {isCreatingNew ? 'Valider la Nouvelle Souscription' : 'Enregistrer & Actualiser la Quittance'}
+                  {isCreatingNew
+                    ? 'Valider la Nouvelle Souscription'
+                    : hasPaymentChange
+                    ? 'Enregistrer le Paiement & Actualiser la Quittance'
+                    : isFormDirty
+                    ? 'Enregistrer les Modifications du Dossier'
+                    : '🔒 Aucune modification ni nouveau versement'}
                 </span>
               </button>
+              {!isFormDirty && !isCreatingNew && (
+                <p className="text-[10.5px] text-slate-400 text-center font-medium">
+                  Modifiez une coordonnée ou cochez un mois pour enregistrer.
+                </p>
+              )}
             </div>
           </form>
         </div>
