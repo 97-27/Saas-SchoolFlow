@@ -252,6 +252,17 @@ export function syncSchoolDataWithServer(slug: string): void {
           }
         }
 
+        if (data.staffUsers && Array.isArray(data.staffUsers) && data.staffUsers.length > 0) {
+          const staffSchoolKey = `${STAFF_STORAGE_KEY}_${slug}`;
+          const local = localStorage.getItem(staffSchoolKey);
+          const localCount = local ? JSON.parse(local).length : 0;
+          if (!local || localCount < data.staffUsers.length) {
+            localStorage.setItem(staffSchoolKey, JSON.stringify(data.staffUsers));
+            localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(data.staffUsers));
+            hasChanges = true;
+          }
+        }
+
         if (hasChanges) {
           broadcastLiveUpdate({ action: 'server_hydrated', slug });
         }

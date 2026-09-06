@@ -200,9 +200,21 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    const { data: existing } = await supabase
       .from('students')
-      .upsert(payload, { onConflict: 'school_id,student_number' });
+      .select('id')
+      .eq('school_id', school.id)
+      .eq('student_number', student.studentNumber)
+      .maybeSingle();
+
+    let error = null;
+    if (existing) {
+      const res = await supabase.from('students').update(payload).eq('id', existing.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('students').insert(payload);
+      error = res.error;
+    }
 
     if (error) {
       console.error('Erreur saveStudentToSupabase:', error.message);
@@ -303,9 +315,21 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    const { data: existing } = await supabase
       .from('invoices')
-      .upsert(payload, { onConflict: 'school_id,invoice_number' });
+      .select('id')
+      .eq('school_id', school.id)
+      .eq('invoice_number', invoice.invoiceNumber)
+      .maybeSingle();
+
+    let error = null;
+    if (existing) {
+      const res = await supabase.from('invoices').update(payload).eq('id', existing.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('invoices').insert(payload);
+      error = res.error;
+    }
 
     if (error) {
       console.warn('saveInvoiceToSupabase warning:', error.message);
@@ -319,6 +343,48 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 }
 
 // 4. GESTION DU PERSONNEL (STAFF USERS)
+export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) return [];
+
+    const { data, error } = await supabase
+      .from('staff_users')
+      .select('*')
+      .eq('school_id', school.id)
+      .order('created_at', { ascending: true });
+
+    if (error || !data) return [];
+
+    return data.map((d: any) => ({
+      id: d.id,
+      fullName: d.full_name,
+      email: d.email || '',
+      phone: d.phone || '',
+      roleId: d.role_id,
+      role: d.role_title,
+      authCode: d.auth_code,
+      status: d.is_active ? 'Actif' : 'Verrouillé',
+      avatarUrl: d.avatar_url,
+      matricule: d.matricule || `EMP-${d.auth_code}`,
+      subjectOrGrade: d.subject_or_grade || 'Administration',
+      assignedClasses: d.assigned_classes || 'Toutes',
+      address: d.address || 'Abidjan, Côte d’Ivoire',
+      joinDate: '01/09/2026',
+      lastLogin: 'Récemment',
+    }));
+  } catch (err) {
+    console.error('Erreur getStaffUsersFromSupabase:', err);
+    return [];
+  }
+}
+
 export async function saveStaffUserToSupabase(staff: {
   fullName: string;
   email: string;
@@ -352,9 +418,21 @@ export async function saveStaffUserToSupabase(staff: {
       is_active: staff.status === 'Actif',
     };
 
-    const { error } = await supabase
+    const { data: existing } = await supabase
       .from('staff_users')
-      .upsert(payload, { onConflict: 'school_id,auth_code' });
+      .select('id')
+      .eq('school_id', school.id)
+      .eq('auth_code', staff.authCode)
+      .maybeSingle();
+
+    let error = null;
+    if (existing) {
+      const res = await supabase.from('staff_users').update(payload).eq('id', existing.id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('staff_users').insert(payload);
+      error = res.error;
+    }
 
     if (error) {
       console.warn('saveStaffUserToSupabase warning:', error.message);
