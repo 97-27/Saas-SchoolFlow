@@ -655,6 +655,61 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       }
     }
 
+    // Auto-consolidation des souscriptions d'internat pour le journal des encaissements
+    try {
+      const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+      const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+      if (rawBoarding) {
+        const boardingSubs: any[] = JSON.parse(rawBoarding);
+        const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
+
+        for (const b of boardingSubs) {
+          if (!b || !b.studentId) continue;
+          if (deletedIds.has(b.studentId) || (b.matricule && deletedIds.has(b.matricule))) continue;
+
+          const boardInvId = `inv-boarding-${b.studentId}`;
+          const boardInvNum = b.matricule ? `INT-${b.matricule.replace(/\D/g, '').slice(-4) || '2026'}` : `INT-${b.studentId.slice(-4)}`;
+
+          if (!seenIds.has(boardInvId) && !seenNumbers.has(boardInvNum)) {
+            const months = monthlyPayments[b.studentId] || {};
+            const paidCount = Object.values(months).filter(Boolean).length;
+            const rate = b.monthlyRate || 0;
+            const totalPaid = paidCount * rate;
+            const totalDue = rate * 9;
+            const matchingStu = studentMap.get(b.studentId) || (b.matricule ? studentMap.get(b.matricule) : undefined);
+
+            const d = new Date();
+            const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+            seenIds.add(boardInvId);
+            seenNumbers.add(boardInvNum);
+            uniqueInvoices.push({
+              id: boardInvId,
+              invoiceNumber: boardInvNum,
+              studentId: b.studentId,
+              studentName: b.studentName || (matchingStu?.fullName || 'Pensionnaire'),
+              studentAvatar: matchingStu?.avatar || '',
+              studentGrade: b.className || matchingStu?.grade || '6ème',
+              studentGender: b.gender === 'F' ? 'female' : (b.gender === 'M' ? 'male' : (matchingStu?.gender || 'male')),
+              guardianName: matchingStu?.guardianName || 'Parent / Tuteur',
+              guardianPhone: b.parentContact || matchingStu?.guardianPhone || '+225 00 00 00 00',
+              feeType: 'Internat & Pensionnat',
+              amount: totalDue > 0 ? totalDue : totalPaid,
+              discountAmount: 0,
+              netAmount: totalDue > 0 ? totalDue : totalPaid,
+              paidAmount: totalPaid,
+              balanceRemaining: Math.max(0, totalDue - totalPaid),
+              paymentMethod: 'Espèces en caisse',
+              enrollmentType: matchingStu?.enrollmentType || 'nouveau',
+              issueDate: b.paymentDate || matchingStu?.paymentDate || todayStr,
+              dueDate: b.paymentDate || matchingStu?.paymentDate || todayStr,
+              status: totalDue > 0 && totalPaid >= totalDue ? 'paid' : totalPaid > 0 ? 'partial' : 'sent',
+            });
+          }
+        }
+      }
+    } catch (e) {}
+
     // Fallback aux factures initiales uniquement si aucune facture locale n'existe pour la démo
     if (uniqueInvoices.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
       const status = getSchoolSubscription('epc-manoi');

@@ -29,50 +29,47 @@ export function RevenueSummary({
 
   // Calcul dynamique de la structure des encaissements réels
   const breakdownData = useMemo(() => {
-    if (students.length === 0 && invoices.length === 0) {
-      return {
-        items: [
-          {
-            category: "Droits d'Inscription & Réinscription",
-            description: 'Frais de dossier, cartes scolaires et réinscriptions',
-            amount: 0,
-            percentage: '0.0',
-            color: '#10b981',
-            bgColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-          },
-          {
-            category: 'Cantine Scolaire & Restauration',
-            description: 'Formules demi-pension et déjeuners',
-            amount: 0,
-            percentage: '0.0',
-            color: '#f59e0b',
-            bgColor: 'bg-amber-50 text-amber-700 border-amber-200',
-          },
-          {
-            category: 'Transport Scolaire & Bus',
-            description: 'Abonnements aux circuits de ramassage',
-            amount: 0,
-            percentage: '0.0',
-            color: '#3b82f6',
-            bgColor: 'bg-blue-50 text-blue-700 border-blue-200',
-          },
-        ],
-        totalCollected: 0,
-        targetAnnual: 0,
-      };
-    }
-
     // 1. Droits d'Inscription & Réinscription : calculé strictement sur la somme des frais d'inscription réels perçus par l'école
     const inscriptionAmount = students.reduce((acc, stu) => {
       const fee = typeof stu.registrationFee === 'number' ? stu.registrationFee : 0;
       return acc + fee;
     }, 0);
 
-    // 2. Cantine & Transport scolaires (sommes directes liées aux souscriptions et paiements effectifs enregistrés)
+    // 2. Internat & Pensionnat : calculé sur les souscriptions et paiements effectifs d'internat
+    let boardingAmount = 0;
+    let boardingStudentsCount = 0;
+
+    // 3. Cantine & Transport scolaires
     let canteenAmount = 0;
+    let canteenStudentsCount = 0;
     let transportAmount = 0;
+    let transportStudentsCount = 0;
 
     if (typeof window !== 'undefined') {
+      // Calcul Internat
+      try {
+        const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+        const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+        if (rawBoardingSubs) {
+          const boardingList: Array<{ studentId: string; matricule?: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
+          const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
+
+          boardingList.forEach((sub) => {
+            const stuExists = students.some((s) => s.id === sub.studentId || s.studentNumber === sub.matricule || s.matricule === sub.matricule);
+            if (stuExists || sub.studentId) {
+              const rate = sub.monthlyRate || 0;
+              const months = monthlyPayments[sub.studentId] || {};
+              const paidCount = Object.values(months).filter(Boolean).length;
+              if (paidCount > 0) {
+                boardingAmount += paidCount * rate;
+                boardingStudentsCount += 1;
+              }
+            }
+          });
+        }
+      } catch (e) {}
+
+      // Calcul Cantine
       try {
         const rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
         const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
@@ -91,12 +88,14 @@ export function RevenueSummary({
               if (paidCount > 0) {
                 const total = Math.max(0, paidCount * rate - discount);
                 canteenAmount += total;
+                canteenStudentsCount += 1;
               }
             }
           });
         }
       } catch (e) {}
 
+      // Calcul Transport
       try {
         const rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2');
         const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
@@ -115,6 +114,7 @@ export function RevenueSummary({
               if (paidCount > 0) {
                 const total = Math.max(0, paidCount * rate - discount);
                 transportAmount += total;
+                transportStudentsCount += 1;
               }
             }
           });
@@ -122,22 +122,43 @@ export function RevenueSummary({
       } catch (e) {}
     }
 
-    const totalCollected = inscriptionAmount + canteenAmount + transportAmount;
+    const totalCollected = inscriptionAmount + boardingAmount + canteenAmount + transportAmount;
+
+    // Calcul précis et équilibré des pourcentages (somme stricte 100.0%)
+    const rawPcts = [
+      totalCollected > 0 ? (inscriptionAmount / totalCollected) * 100 : 0,
+      totalCollected > 0 ? (boardingAmount / totalCollected) * 100 : 0,
+      totalCollected > 0 ? (canteenAmount / totalCollected) * 100 : 0,
+      totalCollected > 0 ? (transportAmount / totalCollected) * 100 : 0,
+    ];
+
+    const formattedPcts = rawPcts.map((p) => p.toFixed(1));
 
     const items = [
       {
         category: "Droits d'Inscription & Réinscription",
         description: 'Frais de dossier, cartes scolaires et admissions',
         amount: inscriptionAmount,
-        percentage: totalCollected > 0 ? ((inscriptionAmount / totalCollected) * 100).toFixed(1) : '0.0',
+        countText: `${students.length} élève${students.length > 1 ? 's' : ''}`,
+        percentage: formattedPcts[0],
         color: '#10b981', // emerald-500
         bgColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      },
+      {
+        category: 'Internat & Pensionnat',
+        description: 'Hébergement dortoirs (Pavillon A Garçons & B Filles)',
+        amount: boardingAmount,
+        countText: `${boardingStudentsCount} pensionnaire${boardingStudentsCount > 1 ? 's' : ''}`,
+        percentage: formattedPcts[1],
+        color: '#8b5cf6', // purple-500
+        bgColor: 'bg-purple-50 text-purple-700 border-purple-200',
       },
       {
         category: 'Cantine Scolaire & Restauration',
         description: 'Formules demi-pension et déjeuners',
         amount: canteenAmount,
-        percentage: totalCollected > 0 ? ((canteenAmount / totalCollected) * 100).toFixed(1) : '0.0',
+        countText: `${canteenStudentsCount} abonné${canteenStudentsCount > 1 ? 's' : ''}`,
+        percentage: formattedPcts[2],
         color: '#f59e0b', // amber-500
         bgColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
@@ -145,7 +166,8 @@ export function RevenueSummary({
         category: 'Transport Scolaire & Bus',
         description: 'Abonnements aux circuits de ramassage',
         amount: transportAmount,
-        percentage: totalCollected > 0 ? ((transportAmount / totalCollected) * 100).toFixed(1) : '0.0',
+        countText: `${transportStudentsCount} abonné${transportStudentsCount > 1 ? 's' : ''}`,
+        percentage: formattedPcts[3],
         color: '#3b82f6', // blue-500
         bgColor: 'bg-blue-50 text-blue-700 border-blue-200',
       },
@@ -315,7 +337,23 @@ export function RevenueSummary({
             </div>
           </div>
 
-          <div className="space-y-3">
+          {/* Barre proportionnelle segmentée des encaissements */}
+          <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden flex mb-3.5 border border-slate-200/60 shadow-2xs">
+            {breakdownData.items.map((fee) => {
+              const pctNum = parseFloat(fee.percentage) || 0;
+              if (pctNum <= 0) return null;
+              return (
+                <div
+                  key={fee.category}
+                  style={{ width: `${pctNum}%`, backgroundColor: fee.color }}
+                  className="h-full transition-all duration-500 hover:opacity-90"
+                  title={`${fee.category}: ${fee.percentage}% (${formatFCFA(fee.amount)})`}
+                />
+              );
+            })}
+          </div>
+
+          <div className="space-y-2.5">
             {breakdownData.items.map((fee) => (
               <div
                 key={fee.category}
@@ -327,15 +365,22 @@ export function RevenueSummary({
                     style={{ backgroundColor: fee.color }}
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-800 truncate">
-                      {fee.category}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-slate-800 truncate">
+                        {fee.category}
+                      </p>
+                      {fee.countText && (
+                        <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                          ({fee.countText})
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-slate-500 font-medium">
                       {formatFCFA(fee.amount)}
                     </p>
                   </div>
                 </div>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border shrink-0 ${fee.bgColor}`}>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border shrink-0 font-mono ${fee.bgColor}`}>
                   {fee.percentage}%
                 </span>
               </div>

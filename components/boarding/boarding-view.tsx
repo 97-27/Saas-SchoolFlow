@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Student, School } from '@/lib/data/types';
+import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   BedDouble,
@@ -48,6 +49,15 @@ interface BoardingViewProps {
   schoolSlug: string;
 }
 
+// Helper date du jour au format strict JJ/MM/AAAA
+const getTodayFrenchDateStr = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 // 9 Mois scolaires officiels (Septembre à Mai)
 const MONTHS_LIST = [
   'Septembre',
@@ -64,6 +74,7 @@ const MONTHS_LIST = [
 const BOARDING_PAYMENTS_KEY = 'schoolflow_boarding_monthly_payments_v3';
 const BOARDING_SUBSCRIPTIONS_KEY = 'schoolflow_boarding_subscriptions_v3';
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
+const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
 
 export function BoardingView({
   school,
@@ -75,6 +86,9 @@ export function BoardingView({
   const [selectedPavilionFilter, setSelectedPavilionFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
+  // Modale de Confirmation de Souscription d'Internat
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
   // Modale d'Aperçu & Partage Image HD (WhatsApp)
   const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
@@ -117,6 +131,7 @@ export function BoardingView({
       pavilion: string;
       roomNumber: string;
       monthlyRate: number;
+      paymentDate?: string;
     }>
   >(() => {
     if (typeof window !== 'undefined') {
@@ -173,10 +188,9 @@ export function BoardingView({
           const savedSubs = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
           if (savedSubs) {
             const parsed: any[] = JSON.parse(savedSubs);
-            const liveStudentIds = new Set(updatedStudents.map((s) => s.id));
-            const liveMatricules = new Set(updatedStudents.map((s) => s.studentNumber || s.matricule));
+            const deletedIds = getDeletedStudentIds();
             const validSubs = parsed.filter(
-              (cs) => liveStudentIds.has(cs.studentId) || (cs.matricule && liveMatricules.has(cs.matricule))
+              (cs) => !deletedIds.has(cs.studentId) && !(cs.matricule && deletedIds.has(cs.matricule))
             );
             setCustomSubscriptions(validSubs);
           }
@@ -211,6 +225,7 @@ export function BoardingView({
       pavilion: string;
       roomNumber: string;
       monthlyRate: number;
+      paymentDate?: string;
     }>
   ) => {
     setCustomSubscriptions(updatedSubs);
@@ -224,13 +239,41 @@ export function BoardingView({
 
   // Construction de la liste des pensionnaires inscrits (STRICTEMENT reliée aux souscriptions confirmées)
   const boarders = useMemo(() => {
-    // Les pensionnaires issus des customSubscriptions (UNIQUEMENT si l'élève existe réellement dans la liste des élèves actifs)
+    // Les pensionnaires issus des customSubscriptions
     const customList = customSubscriptions
       .map((cs) => {
-        const foundStudent = students.find(
+        let foundStudent = students.find(
           (s) => s.id === cs.studentId || s.studentNumber === cs.matricule || s.matricule === cs.matricule
         );
-        if (!foundStudent) return null; // Ne JAMAIS créer de pensionnaire fantôme si l'élève a été supprimé !
+
+        // Sécurité anti-disparition : si l'élève n'est pas encore dans l'état local students, reconstruction directe depuis cs
+        if (!foundStudent && cs.studentName) {
+          const nameParts = cs.studentName.trim().split(' ');
+          foundStudent = {
+            id: cs.studentId,
+            studentNumber: cs.matricule || `MAT-${cs.studentId.slice(-4)}`,
+            matricule: cs.matricule || `MAT-${cs.studentId.slice(-4)}`,
+            firstName: nameParts[0] || 'Élève',
+            lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
+            fullName: cs.studentName.trim(),
+            avatar: '',
+            gender: cs.gender === 'F' ? 'female' : 'male',
+            grade: cs.className || '6ème',
+            address: 'Abidjan, Côte d\'Ivoire',
+            guardianName: 'Parent / Tuteur',
+            guardianPhone: cs.parentContact || '+225 07 00 00 00 00',
+            whatsappPhone: cs.parentContact || '+225 07 00 00 00 00',
+            tuitionAmount: (cs.monthlyRate || 0) * 9,
+            paidAmount: 0,
+            paymentDate: cs.paymentDate || getTodayFrenchDateStr(),
+            attendanceRate: 100,
+            status: 'active',
+            tuitionStatus: 'partial',
+            isBoarding: true,
+          };
+        }
+
+        if (!foundStudent) return null;
 
         const studentMonths = monthlyPayments[cs.studentId] || {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
@@ -295,7 +338,7 @@ export function BoardingView({
   const [formRoom, setFormRoom] = useState('');
   const [formParentContact, setFormParentContact] = useState('');
   const [formMonthlyRate, setFormMonthlyRate] = useState<number>(0);
-  const [formPaymentDate, setFormPaymentDate] = useState('03/09/2026');
+  const [formPaymentDate, setFormPaymentDate] = useState(getTodayFrenchDateStr());
   const [formPaymentMethod, setFormPaymentMethod] = useState('Espèces');
   const [activeMonthsChecked, setActiveMonthsChecked] = useState<Record<string, boolean>>({});
 
@@ -328,7 +371,7 @@ export function BoardingView({
     setFormRoom('');
     setFormParentContact('');
     setFormMonthlyRate(0); // Coordonnées et montants à 0
-    setFormPaymentDate('03/09/2026');
+    setFormPaymentDate(getTodayFrenchDateStr());
     setFormPaymentMethod('Espèces');
     setActiveMonthsChecked({}); // Aucun mois coché
 
@@ -383,8 +426,8 @@ export function BoardingView({
     setActiveMonthsChecked({});
   };
 
-  // Enregistrement & validation (Création ou Mise à jour)
-  const handleSaveReceipt = (e?: React.FormEvent) => {
+  // 1. Déclenchement de la modale de confirmation
+  const handleOpenConfirmModal = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     if (!formStudentName.trim()) {
@@ -392,6 +435,16 @@ export function BoardingView({
       return;
     }
 
+    if (!Number(formMonthlyRate) || Number(formMonthlyRate) <= 0) {
+      alert('Veuillez renseigner le tarif mensuel de l’internat.');
+      return;
+    }
+
+    setIsConfirmModalOpen(true);
+  };
+
+  // 2. Exécution finale de l'enregistrement et persistance totale
+  const executeFinalSaveReceipt = () => {
     const rate = Number(formMonthlyRate) || 0;
     const targetStudentId = isCreatingNew
       ? `stud-int-${Date.now()}`
@@ -417,6 +470,7 @@ export function BoardingView({
       pavilion: formPavilion,
       roomNumber: formRoom.trim() || 'Chambre 101',
       monthlyRate: rate,
+      paymentDate: formPaymentDate || getTodayFrenchDateStr(),
     };
 
     if (existingIndex >= 0) {
@@ -426,38 +480,112 @@ export function BoardingView({
     }
     saveSubscriptionsToStorage(updatedSubs);
 
-    // 3. Si création d'un nouvel élève, l'ajouter aussi au registre global des élèves
-    if (isCreatingNew) {
-      try {
-        const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-        const currentList: Student[] = raw ? JSON.parse(raw) : [];
-        const nameParts = formStudentName.trim().split(' ');
-        const newStudentObj: Student = {
-          id: targetStudentId,
-          studentNumber: formMatricule.trim(),
-          matricule: formMatricule.trim(),
-          firstName: nameParts[0] || 'Élève',
-          lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
-          fullName: formStudentName.trim(),
-          avatar: '',
-          gender: formGender === 'F' ? 'female' : 'male',
-          grade: formClassName,
-          address: 'Abidjan, Côte d\'Ivoire',
-          guardianName: 'Parent / Tuteur',
-          guardianPhone: formParentContact.trim(),
-          whatsappPhone: formParentContact.trim(),
-          tuitionAmount: rate * 9,
-          paidAmount: activeTotalCollected,
-          paymentDate: formPaymentDate || '03/09/2026',
-          attendanceRate: 100,
-          status: 'active',
-          tuitionStatus: activePaidMonthsCount === 9 ? 'paid' : activePaidMonthsCount > 0 ? 'partial' : 'unpaid',
-        };
-        const updatedStudentList = [newStudentObj, ...currentList.filter((s) => s.id !== targetStudentId)];
-        localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudentList));
-      } catch (err) {}
-    }
+    // 3. Enregistrer l'élève dans le registre persistant multi-clés et Supabase
+    const nameParts = formStudentName.trim().split(' ');
+    const studentObj: Student = {
+      id: targetStudentId,
+      studentNumber: formMatricule.trim(),
+      matricule: formMatricule.trim(),
+      firstName: nameParts[0] || 'Élève',
+      lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
+      fullName: formStudentName.trim(),
+      avatar: '',
+      gender: formGender === 'F' ? 'female' : 'male',
+      grade: formClassName,
+      address: 'Abidjan, Côte d\'Ivoire',
+      guardianName: 'Parent / Tuteur',
+      guardianPhone: formParentContact.trim(),
+      whatsappPhone: formParentContact.trim(),
+      tuitionAmount: rate * 9,
+      paidAmount: activeTotalCollected,
+      paymentDate: formPaymentDate || getTodayFrenchDateStr(),
+      paymentMethod: formPaymentMethod,
+      attendanceRate: 100,
+      status: 'active',
+      tuitionStatus: activePaidMonthsCount === 9 ? 'paid' : activePaidMonthsCount > 0 ? 'partial' : 'unpaid',
+      isBoarding: true,
+      enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
+    };
 
+    try {
+      // Clé globale
+      const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
+      const currentList: Student[] = raw ? JSON.parse(raw) : [];
+      const updatedStudentList = [studentObj, ...currentList.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())];
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudentList));
+
+      // Clé école spécifique
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      const currentSchoolList: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+      const updatedSchoolList = [studentObj, ...currentSchoolList.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())];
+      localStorage.setItem(schoolKey, JSON.stringify(updatedSchoolList));
+
+      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedSchoolList));
+        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedSchoolList));
+      }
+
+      // Synchronisation Supabase de l'élève
+      saveStudentToSupabase(studentObj, schoolSlug).catch(() => {});
+    } catch (err) {}
+
+    // Mise à jour immédiate de l'état local students pour que les 3 blocs KPI se recalculent sur-le-champ
+    setStudents((prev) => [studentObj, ...prev.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())]);
+
+    // 4. Créer et enregistrer la Facture / Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
+    const invoiceNumber = `INT-${formMatricule.replace(/\D/g, '').slice(-4) || Date.now().toString().slice(-4)}`;
+    const boardingInvoice: Invoice = {
+      id: `inv-boarding-${targetStudentId}`,
+      invoiceNumber,
+      studentId: targetStudentId,
+      studentName: formStudentName.trim(),
+      studentGrade: formClassName,
+      studentGender: formGender === 'F' ? 'female' : 'male',
+      guardianName: 'Parent / Tuteur',
+      guardianPhone: formParentContact.trim(),
+      feeType: 'Internat & Pensionnat',
+      amount: activeTotalAnnualExigible,
+      discountAmount: 0,
+      netAmount: activeTotalAnnualExigible,
+      paidAmount: activeTotalCollected,
+      balanceRemaining: activeRemainingBalance,
+      paymentMethod: formPaymentMethod,
+      enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
+      issueDate: formPaymentDate || getTodayFrenchDateStr(),
+      dueDate: formPaymentDate || getTodayFrenchDateStr(),
+      status: activeRemainingBalance === 0 ? 'paid' : activeTotalCollected > 0 ? 'partial' : 'sent',
+    };
+
+    try {
+      const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+      const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
+      const updatedInvoices = [boardingInvoice, ...prevInvoices.filter((i) => i.id !== boardingInvoice.id && i.invoiceNumber !== invoiceNumber)];
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+      const rawInvSchool = localStorage.getItem(invSchoolKey);
+      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+      const updatedInvSchool = [boardingInvoice, ...prevInvSchool.filter((i) => i.id !== boardingInvoice.id && i.invoiceNumber !== invoiceNumber)];
+      localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
+
+      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
+        localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
+      }
+
+      // Synchronisation Supabase de la facture
+      saveInvoiceToSupabase(boardingInvoice, schoolSlug).catch(() => {});
+    } catch (err) {}
+
+    // 5. Diffusion globale de l'événement en temps réel
+    broadcastLiveUpdate({
+      action: 'boarding_subscription_updated',
+      studentId: targetStudentId,
+      schoolSlug,
+    });
+
+    setIsConfirmModalOpen(false);
     setIsCreatingNew(false);
     setActiveBoarderIndex(0);
     setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount}/9 mois réglés pour ${formStudentName}).`);
@@ -766,6 +894,118 @@ export function BoardingView({
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODALE DE CONFIRMATION DE SOUSCRIPTION / QUITTANCE INTERNAT
+          ═══════════════════════════════════════════════════════════════ */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center shadow-xs">
+                  <BedDouble className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading">
+                    Confirmer la Quittance d&apos;Internat
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Vérification des coordonnées avant validation officielle
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Récapitulatif Éléve & Hébergement */}
+            <div className="space-y-3 flex-1 overflow-y-auto">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Élève Pensionnaire :</span>
+                  <span className="text-xs font-extrabold text-slate-900">{formStudentName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Matricule :</span>
+                  <span className="text-xs font-mono font-bold text-slate-700">{formMatricule}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Classe & Genre :</span>
+                  <span className="text-xs font-semibold text-slate-800">
+                    {formClassName} • {formGender === 'F' ? '♀ Fille' : '♂ Garçon'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                  <span className="text-xs text-slate-500 font-medium">Pavillon & Chambre :</span>
+                  <span className="text-xs font-bold text-purple-800 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200">
+                    {formPavilion} — {formRoom.trim() || 'Chambre 101'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Récapitulatif Financier */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-900 font-medium">Tarif Mensuel :</span>
+                  <span className="text-xs font-extrabold text-emerald-950 font-mono">{formatFCFA(formMonthlyRate)} / mois</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-900 font-medium">Mois Réglés :</span>
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">
+                    {activePaidMonthsCount} / 9 mois pris en compte
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-900 font-medium">Total Encaissé Ce Jour :</span>
+                  <span className="text-sm font-black text-emerald-900 font-mono font-heading">{formatFCFA(activeTotalCollected)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-emerald-900 font-medium">Reste Exigible Annuel :</span>
+                  <span className="text-xs font-bold text-slate-700 font-mono">{formatFCFA(activeRemainingBalance)}</span>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-emerald-200/60">
+                  <span className="text-xs text-emerald-900 font-medium">Mode & Date de Paiement :</span>
+                  <span className="text-xs font-bold text-emerald-950">
+                    {formPaymentMethod} • {formPaymentDate}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-[11px] text-slate-600 flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  La confirmation enregistrera la quittance officielle, actualisera immédiatement les 3 compteurs KPI (effectif, dortoirs, recouvrement) et alimentera le journal des encaissements sur le tableau de bord.
+                </span>
+              </div>
+            </div>
+
+            {/* Boutons d'Action */}
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsConfirmModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer text-center"
+              >
+                Annuler / Modifier
+              </button>
+              <button
+                type="button"
+                onClick={executeFinalSaveReceipt}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirmer & Enregistrer</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ═══════════════════════════════════════════════════════════════
           EN-TÊTE DE PAGE AVEC ANNÉE SCOLAIRE SUR LA MÊME LIGNE
           ═══════════════════════════════════════════════════════════════ */}
@@ -803,7 +1043,7 @@ export function BoardingView({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+            <span suppressHydrationWarning className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
               {totalBoarders}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -834,7 +1074,7 @@ export function BoardingView({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+            <span suppressHydrationWarning className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
               {formatFCFA(totalCollected)}
             </span>
           </div>
@@ -1083,7 +1323,7 @@ export function BoardingView({
             </span>
           </div>
 
-          <form onSubmit={handleSaveReceipt} className="space-y-4">
+          <form onSubmit={handleOpenConfirmModal} className="space-y-4">
             {/* 1. Coordonnées de l'élève */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1 sm:col-span-2">
@@ -1185,8 +1425,6 @@ export function BoardingView({
                 >
                   <option value="Pavillon A (Garçons)">Pavillon A (Garçons)</option>
                   <option value="Pavillon B (Filles)">Pavillon B (Filles)</option>
-                  <option value="Pavillon Junior">Pavillon Junior (Maternelle/Primaire)</option>
-                  <option value="Pavillon Honneur">Pavillon Honneur (Collège 3ème)</option>
                 </select>
               </div>
 

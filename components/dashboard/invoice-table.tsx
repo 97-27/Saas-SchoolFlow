@@ -51,7 +51,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return `${year}-${month}-${day}`;
   };
 
-  // Date active du journal (par défaut la date du jour en direct)
+  // Date active du journal (strictement la date du jour en direct)
   const [selectedJournalDate, setSelectedJournalDate] = useState<string>(getTodayDateStr());
   const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('all_dates');
 
@@ -60,20 +60,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedEnrollmentType, setSelectedEnrollmentType] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  // Synchroniser la date du journal avec les factures enregistrées si une plus récente apparaît
-  useEffect(() => {
-    if (invoices.length > 0) {
-      const dates = invoices.map((i) => i.issueDate).filter(Boolean);
-      if (dates.length > 0) {
-        const sortedDates = [...dates].sort().reverse();
-        const latest = sortedDates[0];
-        if (latest && latest !== selectedJournalDate) {
-          setSelectedJournalDate(latest);
-        }
-      }
-    }
-  }, [invoices.length]);
 
   // Helper pour comparer 2 dates de manière robuste (gère JJ/MM/AAAA et YYYY-MM-DD)
   const isMatchingDate = (inv: Invoice, targetDate: string) => {
@@ -590,9 +576,29 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       <GenderBadge gender={invoice.studentGender} />
                     </td>
 
-                    {/* Fee Type */}
-                    <td className="py-3.5 px-3 font-medium text-slate-700 whitespace-nowrap">
-                      {invoice.feeType}
+                    {/* Prestation / Motif */}
+                    <td className="py-3.5 px-3 whitespace-nowrap">
+                      {invoice.feeType?.toLowerCase().includes('internat') ? (
+                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 shadow-2xs">
+                          🏠 Internat & Pensionnat
+                        </span>
+                      ) : invoice.feeType?.toLowerCase().includes('cantine') ? (
+                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                          🍽️ Cantine Scolaire
+                        </span>
+                      ) : invoice.feeType?.toLowerCase().includes('transport') ? (
+                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs">
+                          🚌 Transport Scolaire
+                        </span>
+                      ) : invoice.feeType?.toLowerCase().includes('inscription') ? (
+                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                          📝 Droits d&apos;Inscription
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+                          🎓 {invoice.feeType || 'Frais de Scolarité'}
+                        </span>
+                      )}
                     </td>
 
                     {/* Today's Date */}

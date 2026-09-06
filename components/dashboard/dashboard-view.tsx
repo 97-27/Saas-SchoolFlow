@@ -78,7 +78,27 @@ export function DashboardView({
     const returningBoys = returningStudentsList.filter((s) => s.gender === 'male').length;
     const returningPct = totalCount > 0 ? ((returningCount / totalCount) * 100).toFixed(1) : '0';
 
-    const boardingList = students.filter((s) => s.isBoarding);
+    let boardingSubsSet = new Set<string>();
+    if (typeof window !== 'undefined') {
+      try {
+        const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+        if (rawBoarding) {
+          const subs: any[] = JSON.parse(rawBoarding);
+          subs.forEach((b) => {
+            if (b.studentId) boardingSubsSet.add(b.studentId);
+            if (b.matricule) boardingSubsSet.add(b.matricule);
+          });
+        }
+      } catch (e) {}
+    }
+
+    const boardingList = students.filter(
+      (s) =>
+        s.isBoarding ||
+        boardingSubsSet.has(s.id) ||
+        (s.studentNumber && boardingSubsSet.has(s.studentNumber)) ||
+        (s.matricule && boardingSubsSet.has(s.matricule))
+    );
     const boardingCount = boardingList.length;
     const boardingGirls = boardingList.filter((s) => s.gender === 'female').length;
     const boardingBoys = boardingList.filter((s) => s.gender === 'male').length;
@@ -143,7 +163,7 @@ export function DashboardView({
               {schoolState.academicYear}
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
+          <p suppressHydrationWarning className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
             Suivi des effectifs réels ({metrics.totalCount} élèves inscrits), scolarités en FCFA et factures — {schoolState.name}
           </p>
         </div>
