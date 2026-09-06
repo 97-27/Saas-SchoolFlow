@@ -62,10 +62,10 @@ export function RevenueSummary({
       };
     }
 
-    // 1. Droits d'Inscription & Réinscription (par élève inscrit ou montant saisi)
+    // 1. Droits d'Inscription & Réinscription : 25 000 FCFA par élève inscrit ou montant personnalisé saisi
     const inscriptionAmount = students.reduce((acc, stu) => {
-      const fee = stu.registrationFee !== undefined ? stu.registrationFee : (stu.paidAmount > 0 ? 25000 : 0);
-      return acc + (stu.paidAmount > 0 || stu.tuitionAmount > 0 ? fee : 0);
+      const fee = stu.registrationFee !== undefined && stu.registrationFee > 0 ? stu.registrationFee : 25000;
+      return acc + fee;
     }, 0);
 
     // 2. Cantine & Transport scolaires (sommes directes liées aux souscriptions et paiements effectifs enregistrés)
@@ -158,22 +158,33 @@ export function RevenueSummary({
     };
   }, [students, invoices, serviceVersion]);
 
-  // Recouvrement des 5 Échéances (commençant par Octobre sans répéter les droits d'inscription)
+  // Recouvrement des 5 Échéances lié STRICTEMENT aux 5 Versements (Indépendant du mois calendaire de saisie)
+  // 1er Versement -> Octobre 2026
+  // 2ème Versement -> Novembre 2026
+  // 3ème Versement -> Janvier 2027
+  // 4ème Versement -> Mars 2027
+  // 5ème Versement -> Mai 2027
   const monthlyData = useMemo(() => {
     const isEmpty = students.length === 0 && invoices.length === 0;
 
-    // Calcul direct par cumul des versements enregistrés sur les reçus des élèves
     let v1 = 0, v2 = 0, v3 = 0, v4 = 0, v5 = 0;
 
     students.forEach((stu) => {
       const inst = stu.installments;
       const paid = stu.paidAmount || 0;
 
-      const p1 = inst?.versement1?.amount !== undefined ? inst.versement1.amount : (paid > 0 ? Math.min(paid, 100000) : 0);
-      const p2 = inst?.versement2?.amount !== undefined ? inst.versement2.amount : (paid > 100000 ? Math.min(paid - 100000, 50000) : 0);
-      const p3 = inst?.versement3?.amount !== undefined ? inst.versement3.amount : (paid > 150000 ? Math.min(paid - 150000, 40000) : 0);
-      const p4 = inst?.versement4?.amount !== undefined ? inst.versement4.amount : (paid > 190000 ? Math.min(paid - 190000, 35000) : 0);
-      const p5 = inst?.versement5?.amount !== undefined ? inst.versement5.amount : (paid > 225000 ? Math.min(paid - 225000, 25000) : 0);
+      let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
+
+      if (inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5)) {
+        p1 = inst.versement1?.amount || 0;
+        p2 = inst.versement2?.amount || 0;
+        p3 = inst.versement3?.amount || 0;
+        p4 = inst.versement4?.amount || 0;
+        p5 = inst.versement5?.amount || 0;
+      } else if (paid > 0) {
+        // Versement global sans échéancier détaillé -> affecté au 1er versement
+        p1 = paid;
+      }
 
       v1 += p1;
       v2 += p2;
@@ -185,31 +196,31 @@ export function RevenueSummary({
     return [
       {
         month: 'Octobre 2026',
-        label: '1ère Échéance Scolarité',
+        label: '1ère Échéance (1er Versement)',
         collected: isEmpty ? 0 : v1,
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Novembre 2026',
-        label: '2ème Échéance Scolarité',
+        label: '2ème Échéance (2ème Versement)',
         collected: isEmpty ? 0 : v2,
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Janvier 2027',
-        label: '3ème Échéance Scolarité',
+        label: '3ème Échéance (3ème Versement)',
         collected: isEmpty ? 0 : v3,
         badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       },
       {
         month: 'Mars 2027',
-        label: '4ème Échéance Scolarité',
+        label: '4ème Échéance (4ème Versement)',
         collected: isEmpty ? 0 : v4,
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },
       {
         month: 'Mai 2027',
-        label: '5ème Échéance (Solde Fin d’Année)',
+        label: '5ème Échéance (5ème Versement)',
         collected: isEmpty ? 0 : v5,
         badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
       },

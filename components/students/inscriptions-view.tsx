@@ -117,7 +117,8 @@ export function InscriptionsView({
     return `${year}-${month}-${day}`;
   };
 
-  // Saisie Libre Financière (Toutes les cases vides à 0 F par défaut — Aucune somme prédéterminée)
+  // Saisie Libre Financière (Frais d'inscription fixés à 25 000 FCFA par défaut)
+  const [registrationFee, setRegistrationFee] = useState<number>(25000);
   const [tuitionAmount, setTuitionAmount] = useState<number>(0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
@@ -148,32 +149,60 @@ export function InscriptionsView({
   const [paymentMethod, setPaymentMethod] = useState<'especes' | 'virement' | 'en_ligne'>('especes');
   const [onlineOperator, setOnlineOperator] = useState<'mtn' | 'moov' | 'orange' | 'wave'>('orange');
 
-  // Mise à jour 100% manuelle et libre de chaque versement (sans calcul imposé)
+  // Mise à jour de chaque versement avec synchronisation automatique du total versé et du reste
   const handleUpdateVersement = (
     index: 1 | 2 | 3 | 4 | 5,
     field: 'amount' | 'method' | 'date',
     value: string | number
   ) => {
+    let newV1 = versement1Amount;
+    let newV2 = versement2Amount;
+    let newV3 = versement3Amount;
+    let newV4 = versement4Amount;
+    let newV5 = versement5Amount;
+
     if (index === 1) {
-      if (field === 'amount') setVersement1Amount(parseInt(value as string, 10) || 0);
+      if (field === 'amount') {
+        newV1 = parseInt(value as string, 10) || 0;
+        setVersement1Amount(newV1);
+      }
       if (field === 'method') setVersement1Method(value as string);
       if (field === 'date') setVersement1Date(value as string);
     } else if (index === 2) {
-      if (field === 'amount') setVersement2Amount(parseInt(value as string, 10) || 0);
+      if (field === 'amount') {
+        newV2 = parseInt(value as string, 10) || 0;
+        setVersement2Amount(newV2);
+      }
       if (field === 'method') setVersement2Method(value as string);
       if (field === 'date') setVersement2Date(value as string);
     } else if (index === 3) {
-      if (field === 'amount') setVersement3Amount(parseInt(value as string, 10) || 0);
+      if (field === 'amount') {
+        newV3 = parseInt(value as string, 10) || 0;
+        setVersement3Amount(newV3);
+      }
       if (field === 'method') setVersement3Method(value as string);
       if (field === 'date') setVersement3Date(value as string);
     } else if (index === 4) {
-      if (field === 'amount') setVersement4Amount(parseInt(value as string, 10) || 0);
+      if (field === 'amount') {
+        newV4 = parseInt(value as string, 10) || 0;
+        setVersement4Amount(newV4);
+      }
       if (field === 'method') setVersement4Method(value as string);
       if (field === 'date') setVersement4Date(value as string);
     } else if (index === 5) {
-      if (field === 'amount') setVersement5Amount(parseInt(value as string, 10) || 0);
+      if (field === 'amount') {
+        newV5 = parseInt(value as string, 10) || 0;
+        setVersement5Amount(newV5);
+      }
       if (field === 'method') setVersement5Method(value as string);
       if (field === 'date') setVersement5Date(value as string);
+    }
+
+    if (field === 'amount') {
+      const totalPaid = newV1 + newV2 + newV3 + newV4 + newV5;
+      setPaidAmount(totalPaid);
+      const net = Math.max(0, tuitionAmount - discountAmount);
+      setRemainingAmount(Math.max(0, net - totalPaid));
     }
   };
 
@@ -257,6 +286,7 @@ export function InscriptionsView({
     setAddress(stu.address || `${schoolState.city}`);
     setGuardianName(stu.guardianName || '');
     setWhatsappPhone(stu.whatsappPhone || stu.guardianPhone || '');
+    setRegistrationFee(stu.registrationFee !== undefined ? stu.registrationFee : 25000);
     setTuitionAmount(stu.tuitionAmount || 250000);
     setDiscountAmount(stu.discountAmount || 0);
     setPaidAmount(stu.paidAmount || 0);
@@ -296,14 +326,12 @@ export function InscriptionsView({
     setVersement5Method(v5.paymentMethod || 'Orange Money');
     setVersement5Date(v5.date || defaultDate);
 
-    setIsBoarding(Boolean(stu.isBoarding));
-    setIsCanteen(typeof stu.isCanteen === 'boolean' ? stu.isCanteen : (stu.notes?.includes('Cantine (Oui') ?? false));
-    setIsTransport(typeof stu.isTransport === 'boolean' ? stu.isTransport : (stu.notes?.includes('Transport (Oui') ?? false));
-
-    if (stu.notes) {
-      setFraisAnnexesPaid(stu.notes.includes('Frais Annexes (Payé'));
-      setTenueCousuePaid(stu.notes.includes('Tenue tout cousue (Payé'));
-    }
+    setPaymentMethod(stu.paymentMethod === 'Virement bancaire' ? 'virement' : (stu.paymentMethod?.includes('Paiement en ligne') ? 'en_ligne' : 'especes'));
+    setIsBoarding(!!stu.isBoarding);
+    setIsCanteen(!!stu.isCanteen);
+    setIsTransport(!!stu.isTransport);
+    setFraisAnnexesPaid(stu.notes?.includes('Frais Annexes (Payé)') || false);
+    setTenueCousuePaid(stu.notes?.includes('Tenue tout cousue (Payé)') || false);
     setIsIdPickerOpen(false);
   };
 
@@ -322,6 +350,7 @@ export function InscriptionsView({
     setIsBoarding(false);
     setIsCanteen(false);
     setIsTransport(false);
+    setRegistrationFee(25000);
     setTuitionAmount(0);
     setDiscountAmount(0);
     setPaidAmount(0);
@@ -381,6 +410,8 @@ export function InscriptionsView({
   // Quick discount handler
   const handleApplyQuickDiscount = (amount: number) => {
     setDiscountAmount(amount);
+    const net = Math.max(0, tuitionAmount - amount);
+    setRemainingAmount(Math.max(0, net - paidAmount));
   };
 
   // Form submit handler -> Open Confirmation Modal
@@ -434,6 +465,7 @@ export function InscriptionsView({
       attendanceRate: currentSelectedStudent?.attendanceRate || 95,
       status: 'active',
       enrollmentType: enrollmentType,
+      registrationFee: registrationFee,
       tuitionAmount: tuitionAmount,
       discountAmount: discountAmount,
       netAmount: netAmount,
@@ -785,7 +817,8 @@ export function InscriptionsView({
       y += 48;
     };
 
-    drawRow("Frais d'inscription / Scolarité annuelle", formatFCFA(tuitionAmount));
+    drawRow("Frais d'inscription (Droits)", formatFCFA(registrationFee));
+    drawRow("Scolarité annuelle", formatFCFA(tuitionAmount));
     if (discountAmount > 0) {
       drawRow('Réduction / Bourse accordée', `-${formatFCFA(discountAmount)}`);
     }
@@ -2076,38 +2109,67 @@ export function InscriptionsView({
                 </span>
               </div>
 
-              {/* Ligne 1 : Frais d'inscription + Réduction */}
+              {/* Ligne 1 : Frais d'inscription (25 000 FCFA standard) + Scolarité Annuelle */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>Frais d&apos;inscription (FCFA) *</span>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      Standard : 25 000 FCFA
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={registrationFee === 0 ? '' : registrationFee}
+                    onChange={(e) => setRegistrationFee(parseInt(e.target.value, 10) || 0)}
+                    placeholder="25000"
+                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-extrabold text-emerald-900 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700">
-                    Frais d&apos;inscription (FCFA) *
+                    Scolarité Annuelle (FCFA) *
                   </label>
                   <input
                     type="number"
                     min="0"
                     step="1000"
                     value={tuitionAmount === 0 ? '' : tuitionAmount}
-                    onChange={(e) => setTuitionAmount(parseInt(e.target.value, 10) || 0)}
-                    placeholder="0"
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 0;
+                      setTuitionAmount(val);
+                      const net = Math.max(0, val - discountAmount);
+                      setRemainingAmount(Math.max(0, net - paidAmount));
+                    }}
+                    placeholder="250000"
                     className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold text-slate-900 transition-all"
                   />
                 </div>
+              </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Réduction / Bourse (FCFA)</span>
-                    <span className="text-[10px] text-amber-600 font-normal">Optionnel</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1000"
-                    value={discountAmount === 0 ? '' : discountAmount}
-                    onChange={(e) => setDiscountAmount(parseInt(e.target.value, 10) || 0)}
-                    placeholder="0"
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-semibold text-slate-700 transition-all"
-                  />
-                </div>
+              {/* Ligne 1.b : Réduction / Bourse */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Réduction / Bourse Scolaire (FCFA)</span>
+                  <span className="text-[10px] text-amber-600 font-normal">Optionnel</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={discountAmount === 0 ? '' : discountAmount}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 0;
+                    setDiscountAmount(val);
+                    const net = Math.max(0, tuitionAmount - val);
+                    setRemainingAmount(Math.max(0, net - paidAmount));
+                  }}
+                  placeholder="0"
+                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-semibold text-slate-700 transition-all"
+                />
               </div>
 
               {/* Raccourcis réductions rapides */}

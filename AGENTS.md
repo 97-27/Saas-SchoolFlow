@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # SchoolFlow — Règles Fondamentales de Développement & Design System ("Vert, Blanc, Noir")
 
-Pour toute création ou modification de page (Élèves, Scolarité, Comptabilité, Classes, Notes, Présences, etc.), l'agent DOIT scrupuleusement appliquer les règles définies dans [schoolflow-design-system.md](file:///c:/LOGICIEL%20EPC%20MANOI/.agents/rules/schoolflow-design-system.md) :
+Pour toute création ou modification de page (Élèves, Scolarité, Comptabilité, Classes, Notes, Présences, etc.), l'agent DOIT scrupuleusement appliquer les règles définies dans [.agents/rules/schoolflow-design-system.md](file:///c:/BUSINESS%20SAAS%20AFRIQUE/SaaS%20SchoolFlow/.agents/rules/schoolflow-design-system.md) :
 
 1. **Palette "Vert, Blanc, Noir"** :
    - Vert émeraude (`#10b981`, `#059669`, `#064e3b`) pour les actions principales et badges positifs.
@@ -22,7 +22,7 @@ Pour toute création ou modification de page (Élèves, Scolarité, Comptabilit�
    - Titres & Chiffres Clés : police **Outfit** (`font-heading`, `font-extrabold`).
    - Corps de texte, Tableaux & Données : police **Inter** (`font-sans`).
    - Identifiants : police **font-mono** (`ID-001`, etc.).
-3. **Données & Métier (Afrique Francophone)** :
+3. **Données & Métier (Afrique Francophone & Anglophone)** :
    - Monnaie : **STRICTEMENT en FCFA** (`formatFCFA(montant)`).
    - Dates : **STRICTEMENT en JJ/MM/AAAA** (`formatDate(date)`).
    - Année scolaire active : **2026-2027**.
@@ -36,19 +36,19 @@ Pour toute création ou modification de page (Élèves, Scolarité, Comptabilit�
 
 ---
 
-# Protocole Obligatoire : Test, Vérification & Déploiement Tripartite (GitHub, Supabase, Vercel)
+# Protocole Obligatoire : Test Navigateur Réel, Vérification & Déploiement Tripartite
 
-À chaque modification demandée par Mouhamed, l'agent DOIT scrupuleusement appliquer et consulter le protocole défini dans [verification-and-deployment-protocol.md](file:///c:/LOGICIEL%20EPC%20MANOI/.agents/rules/verification-and-deployment-protocol.md) :
+À chaque modification demandée par le **Directeur Lawani Mouhamed**, l'agent DOIT scrupuleusement appliquer le protocole défini dans [.agents/rules/verification-and-deployment-protocol.md](file:///c:/BUSINESS%20SAAS%20AFRIQUE/SaaS%20SchoolFlow/.agents/rules/verification-and-deployment-protocol.md) :
 
 1. **Compilation & Test Local** : Toujours exécuter `npm run build` pour garantir 0 erreur TypeScript, 0 régression et 0 ReferenceError.
-2. **Déploiement GitHub** : Pousser tous les fichiers modifiés vers la branche `main` du dépôt `97-27/Saas-SchoolFlow` via `node scripts/github-api-push.mjs`.
-3. **Synchronisation Supabase** : S'assurer que les enregistrements et structures sont synchronisés en direct avec Supabase.
-4. **Vérification Vercel & Multi-Modules** : Vérifier que le déploiement sur `https://saas-school-flow-12xh.vercel.app` est actif et que les actions (inscriptions, modifications) se répercutent instantanément sur tous les modules (Tableau de bord, Élèves, Scolarité, Internat, Cantine, Transport).
+2. **Test Navigateur Réel Obligatoire** : Ouvrir le navigateur (via `browser_subagent` ou prévisualisation) pour interagir directement avec l'application, tester visuellement les interfaces et vérifier la persistance effective dans **Supabase** et dans le store local réactif.
+3. **Déploiement GitHub & Vercel** : Pousser tous les fichiers modifiés vers la branche `main` du dépôt `97-27/Saas-SchoolFlow`.
+4. **Vérification Vercel Production** : Vérifier que le déploiement sur `https://saas-school-flow-12xh.vercel.app` est actif avec `state: success`.
 
 ---
 
 # Interaction & Préférences Utilisateur
 
-- **Utilisateur** : Mouhamed.
-- **Salutation Obligatoire** : À chaque fois que Mouhamed salue, TOUJOURS lui répondre d'abord par : **« Waaleikoum salam Mouhamed »**.
-
+- **Utilisateur & Titre** : Directeur Lawani Mouhamed.
+- **Salutation Obligatoire** : Lorsque le Directeur salue (et uniquement lorsqu'il salue), TOUJOURS lui répondre d'abord par :
+  > **« Wa alaykum salam Directeur Lawani Mouhamed »**

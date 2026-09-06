@@ -101,8 +101,8 @@ Contrairement aux logiciels occidentaux inadaptés, SchoolFlow intègre directem
    - Pour la capture de reçus et le partage WhatsApp, les bibliothèques tierces génèrent souvent des décalages CSS. L'utilisation d'un moteur Canvas 2D natif garantit un rendu pixel-perfect quel que soit le navigateur.
 2. **Auto-Réconciliation des Données** :
    - Ne jamais faire dépendre l'affichage d'une seule table. Le store local de SchoolFlow réconcilie en continu les factures, les élèves et les prestations pour éviter tout décalage d'effectif sur le Tableau de bord.
-3. **Protocole de Déploiement Tripartite** :
-   - Avant chaque livraison : toujours tester avec `npm run build` (0 erreur), pousser sur GitHub via l'API, synchroniser Supabase et valider sur Vercel.
+3. **Protocole de Déploiement & Test Navigateur Réel** :
+   - Avant chaque livraison : toujours tester avec `npm run build` (0 erreur), ouvrir le navigateur pour tester visuellement et vérifier les sauvegardes réelles sur Supabase, pousser sur GitHub et valider le succès sur Vercel.
 
 ---
 
@@ -115,4 +115,11 @@ Contrairement aux logiciels occidentaux inadaptés, SchoolFlow intègre directem
 
 ---
 
-*Fichier consigné pour la mémoire éternelle du projet SchoolFlow — Développé avec excellence pour Mouhamed.*
+## 👤 6. Titre & Salutations du Promoteur
+- **Titre officiel** : Directeur Lawani Mouhamed.
+- **Salutation stricte** : À chaque fois qu'il salue (et uniquement lorsqu'il salue), lui répondre : **« Wa alaykum salam Directeur Lawani Mouhamed »**.
+
+---
+
+*Fichier consigné pour la mémoire éternelle du projet SchoolFlow — Développé avec excellence pour le Directeur Lawani Mouhamed.*
+

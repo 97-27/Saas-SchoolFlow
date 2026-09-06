@@ -204,10 +204,47 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
-  const handleConfirmReset = () => {
-    resetSchoolData(school.slug || 'epc-manoi', resetScopes);
+  const [resetModalTab, setResetModalTab] = useState<'modules' | 'interfaces'>('modules');
+
+  const handleConfirmReset = (target?: 'modules' | 'interfaces' | 'all') => {
+    let scopesToApply: ResetScopeOptions;
+    if (target === 'modules') {
+      scopesToApply = {
+        students: !!resetScopes.students,
+        invoices: !!resetScopes.invoices,
+        grades: !!resetScopes.grades,
+        attendance: !!resetScopes.attendance,
+        documents: !!resetScopes.documents,
+        salaries: !!resetScopes.salaries,
+        specialDiscounts: !!resetScopes.specialDiscounts,
+        messages: !!resetScopes.messages,
+        staff: !!resetScopes.staff,
+        boarding: false,
+        canteen: false,
+        transport: false,
+      };
+    } else if (target === 'interfaces') {
+      scopesToApply = {
+        students: false,
+        invoices: false,
+        grades: false,
+        attendance: false,
+        documents: false,
+        salaries: false,
+        specialDiscounts: false,
+        messages: false,
+        staff: false,
+        boarding: !!resetScopes.boarding,
+        canteen: !!resetScopes.canteen,
+        transport: !!resetScopes.transport,
+      };
+    } else {
+      scopesToApply = resetScopes;
+    }
+
+    resetSchoolData(school.slug || 'epc-manoi', scopesToApply);
     setIsResetModalOpen(false);
-    setActionFeedback('✓ Les données des modules sélectionnés ont été réinitialisées à zéro avec succès.');
+    setActionFeedback('✓ Les données sélectionnées ont été réinitialisées à zéro avec succès.');
     setTimeout(() => {
       window.location.reload();
     }, 1000);
@@ -1292,200 +1329,373 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         )}
       </form>
 
-      {/* ═══════════════ MODALE SÉCURITÉ 1 : RÉINITIALISATION DES DONNÉES ═══════════════ */}
+      {/* ═══════════════ MODALE SÉCURITÉ 1 : RÉINITIALISATION DES DONNÉES & INTERFACES ═══════════════ */}
       {isResetModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 space-y-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+            {/* Entête Modale */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5 text-amber-600">
                 <AlertTriangle className="w-5 h-5" />
                 <h3 className="font-extrabold text-sm sm:text-base text-slate-900 font-heading">
-                  Réinitialisation des Données & Interfaces
+                  Réinitialisation : Modules & Interfaces
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsResetModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Sélectionnez les interfaces et modules que vous souhaitez réinitialiser à zéro pour l&apos;établissement <strong>{school.name}</strong> :
+              Sélectionnez les <strong>modules métier</strong> ou les <strong>interfaces</strong> que vous souhaitez remettre à zéro pour l&apos;établissement <strong>{school.name}</strong> :
             </p>
 
-            {/* Contrôles de sélection globale */}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs font-bold text-slate-800">
-                Modules à réinitialiser :
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setResetScopes({
-                      students: true,
-                      invoices: true,
-                      boarding: true,
-                      canteen: true,
-                      transport: true,
-                      grades: true,
-                      attendance: true,
-                      documents: true,
-                      salaries: true,
-                      specialDiscounts: true,
-                      messages: true,
-                      staff: true,
-                    })
+            {/* Sélecteur des 2 Parties : Modules vs Interfaces */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/80 rounded-2xl border border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => setResetModalTab('modules')}
+                className={`py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  resetModalTab === 'modules'
+                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/90'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>📦 1. Modules Métier</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                  {
+                    [
+                      resetScopes.students,
+                      resetScopes.invoices,
+                      resetScopes.salaries,
+                      resetScopes.grades,
+                      resetScopes.attendance,
+                      resetScopes.documents,
+                      resetScopes.specialDiscounts,
+                      resetScopes.messages,
+                      resetScopes.staff,
+                    ].filter(Boolean).length
                   }
-                  className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
-                >
-                  Tout cocher
-                </button>
-                <span className="text-slate-300">•</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setResetScopes({
-                      students: false,
-                      invoices: false,
-                      boarding: false,
-                      canteen: false,
-                      transport: false,
-                      grades: false,
-                      attendance: false,
-                      documents: false,
-                      salaries: false,
-                      specialDiscounts: false,
-                      messages: false,
-                      staff: false,
-                    })
+                  /9
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResetModalTab('interfaces')}
+                className={`py-2 px-3 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  resetModalTab === 'interfaces'
+                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/90'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>🖥️ 2. Interfaces & Services</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
+                  {
+                    [
+                      resetScopes.boarding,
+                      resetScopes.canteen,
+                      resetScopes.transport,
+                    ].filter(Boolean).length
                   }
-                  className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
-                >
-                  Tout décocher
-                </button>
-              </div>
+                  /3
+                </span>
+              </button>
             </div>
 
-            {/* Sélecteur de portée granulaire */}
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {[
-                {
-                  key: 'students',
-                  label: '🎓 Inscriptions & Registre des Élèves',
-                  desc: 'Fiches complètes des élèves, matricules et dossiers d’admissions',
-                },
-                {
-                  key: 'invoices',
-                  label: '💰 Scolarité, Caisse & Règlements FCFA',
-                  desc: 'Factures, encaissements, journal de caisse et dépenses de l’école',
-                },
-                {
-                  key: 'boarding',
-                  label: '🏢 Internat & Hébergement',
-                  desc: 'Pensionnaires inscrits, affectations de chambres et paiements dortoirs',
-                },
-                {
-                  key: 'canteen',
-                  label: '🍲 Cantine Scolaire',
-                  desc: 'Demi-pensionnaires, régimes alimentaires et mensualités restauration',
-                },
-                {
-                  key: 'transport',
-                  label: '🚌 Transport Scolaire',
-                  desc: 'Lignes de bus, abonnés aux circuits et mensualités de transport',
-                },
-                {
-                  key: 'grades',
-                  label: '📊 Notes, Évaluations & Bulletins',
-                  desc: 'Saisie de notes, moyennes, rangs et validation des bulletins trimestriels',
-                },
-                {
-                  key: 'attendance',
-                  label: '📋 Présences & Assiduité Quotidienne',
-                  desc: 'Registre journalier des présences, retards et absences justifiées',
-                },
-                {
-                  key: 'documents',
-                  label: '📁 Documents & Fiches Scolaires',
-                  desc: 'Extraits de naissance, certificats de scolarité et fiches archivées',
-                },
-                {
-                  key: 'salaries',
-                  label: '💼 Salaires & Paie du Personnel',
-                  desc: 'Bulletins de paie du personnel, primes, acomptes et cotisations',
-                },
-                {
-                  key: 'specialDiscounts',
-                  label: '🏷️ Réductions Spéciales',
-                  desc: 'Exonérations, bourses et remises accordées aux familles',
-                },
-                {
-                  key: 'messages',
-                  label: '💬 Messages WhatsApp & Diffusion',
-                  desc: 'Historique des campagnes d’alertes WhatsApp et notifications parents',
-                },
-                {
-                  key: 'staff',
-                  label: '👥 Personnel Ajouté (Conserve Fondateur & Directeur)',
-                  desc: 'Supprime les accès temporaires créés. Fondateur et Directeur restent permanents.',
-                },
-              ].map((item) => {
-                const isChecked = !!(resetScopes as any)[item.key];
-                return (
-                  <label
-                    key={item.key}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                      isChecked
-                        ? 'bg-amber-50/60 border-amber-300 text-slate-900'
-                        : 'bg-slate-50 border-slate-200/80 text-slate-400 opacity-60'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() =>
+            {/* CONTENU PARTIE 1 : MODULES MÉTIER */}
+            {resetModalTab === 'modules' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs font-bold text-slate-800">
+                    Sélection des modules métier à supprimer :
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
                         setResetScopes((prev) => ({
                           ...prev,
-                          [item.key]: !prev[item.key as keyof ResetScopeOptions],
+                          students: true,
+                          invoices: true,
+                          salaries: true,
+                          grades: true,
+                          attendance: true,
+                          documents: true,
+                          specialDiscounts: true,
+                          messages: true,
+                          staff: true,
                         }))
                       }
-                      className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
-                    />
-                    <div className="min-w-0">
-                      <span className="text-xs font-bold text-slate-900 block truncate">
-                        {item.label}
-                      </span>
-                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
-                        {item.desc}
-                      </span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+                    >
+                      Tout cocher
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setResetScopes((prev) => ({
+                          ...prev,
+                          students: false,
+                          invoices: false,
+                          salaries: false,
+                          grades: false,
+                          attendance: false,
+                          documents: false,
+                          specialDiscounts: false,
+                          messages: false,
+                          staff: false,
+                        }))
+                      }
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      Tout décocher
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {[
+                    {
+                      key: 'students',
+                      label: '🎓 Inscriptions & Registre des Élèves',
+                      desc: 'Fiches complètes des élèves, matricules et dossiers d’admissions',
+                    },
+                    {
+                      key: 'invoices',
+                      label: '💰 Scolarité, Caisse & Règlements FCFA',
+                      desc: 'Factures, encaissements, journal de caisse et dépenses de l’école',
+                    },
+                    {
+                      key: 'salaries',
+                      label: '💼 Salaires & Paie du Personnel',
+                      desc: 'Bulletins de paie du personnel, primes, acomptes et cotisations',
+                    },
+                    {
+                      key: 'grades',
+                      label: '📊 Notes, Évaluations & Bulletins',
+                      desc: 'Saisie de notes, moyennes, rangs et validation des bulletins trimestriels',
+                    },
+                    {
+                      key: 'attendance',
+                      label: '📋 Présences & Assiduité Quotidienne',
+                      desc: 'Registre journalier des présences, retards et absences justifiées',
+                    },
+                    {
+                      key: 'documents',
+                      label: '📁 Documents & Fiches Scolaires',
+                      desc: 'Extraits de naissance, certificats de scolarité et fiches archivées',
+                    },
+                    {
+                      key: 'specialDiscounts',
+                      label: '🏷️ Réductions Spéciales',
+                      desc: 'Exonérations, bourses et remises accordées aux familles',
+                    },
+                    {
+                      key: 'messages',
+                      label: '💬 Messages WhatsApp & Diffusion',
+                      desc: 'Historique des campagnes d’alertes WhatsApp et notifications parents',
+                    },
+                    {
+                      key: 'staff',
+                      label: '👥 Personnel Ajouté (Conserve Fondateur & Directeur)',
+                      desc: 'Supprime les accès temporaires créés. Fondateur et Directeur restent permanents.',
+                    },
+                  ].map((item) => {
+                    const isChecked = !!(resetScopes as any)[item.key];
+                    return (
+                      <label
+                        key={item.key}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-amber-50/70 border-amber-300 text-slate-900'
+                            : 'bg-slate-50 border-slate-200/80 text-slate-400 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            setResetScopes((prev) => ({
+                              ...prev,
+                              [item.key]: !prev[item.key as keyof ResetScopeOptions],
+                            }))
+                          }
+                          className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-900 block truncate">
+                            {item.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                            {item.desc}
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    Action dédiée sur la partie modules
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmReset('modules')}
+                    className="py-2 px-4 rounded-xl text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-sm shadow-amber-600/30 cursor-pointer"
+                  >
+                    Supprimer les modules sélectionnés
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* CONTENU PARTIE 2 : INTERFACES DE PRESTATIONS & SERVICES */}
+            {resetModalTab === 'interfaces' && (
+              <div className="space-y-3 animate-in fade-in">
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs font-bold text-slate-800">
+                    Sélection des interfaces à réinitialiser :
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setResetScopes((prev) => ({
+                          ...prev,
+                          boarding: true,
+                          canteen: true,
+                          transport: true,
+                        }))
+                      }
+                      className="text-[11px] font-bold text-blue-700 hover:text-blue-800 underline cursor-pointer"
+                    >
+                      Tout cocher
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setResetScopes((prev) => ({
+                          ...prev,
+                          boarding: false,
+                          canteen: false,
+                          transport: false,
+                        }))
+                      }
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      Tout décocher
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {[
+                    {
+                      key: 'boarding',
+                      label: '🏢 Interface Internat & Hébergement',
+                      desc: 'Supprime les affectations de chambres, dortoirs et règlements pensionnat.',
+                    },
+                    {
+                      key: 'canteen',
+                      label: '🍲 Interface Cantine Scolaire',
+                      desc: 'Supprime les abonnements restauration, régimes et paiements de cantine.',
+                    },
+                    {
+                      key: 'transport',
+                      label: '🚌 Interface Transport Scolaire',
+                      desc: 'Supprime les lignes de bus, circuits de ramassage et abonnements transport.',
+                    },
+                  ].map((item) => {
+                    const isChecked = !!(resetScopes as any)[item.key];
+                    return (
+                      <label
+                        key={item.key}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isChecked
+                            ? 'bg-blue-50/70 border-blue-300 text-slate-900'
+                            : 'bg-slate-50 border-slate-200/80 text-slate-400 opacity-60'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            setResetScopes((prev) => ({
+                              ...prev,
+                              [item.key]: !prev[item.key as keyof ResetScopeOptions],
+                            }))
+                          }
+                          className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-900 block truncate">
+                            {item.label}
+                          </span>
+                          <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                            {item.desc}
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetScopes((prev) => ({
+                        ...prev,
+                        boarding: true,
+                        canteen: true,
+                        transport: true,
+                      }));
+                      handleConfirmReset('interfaces');
+                    }}
+                    className="w-full sm:w-auto py-2 px-3.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer"
+                  >
+                    Supprimer TOUTES les interfaces
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmReset('interfaces')}
+                    className="w-full sm:w-auto py-2 px-4 rounded-xl text-xs font-extrabold text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-sm shadow-blue-600/30 cursor-pointer"
+                  >
+                    Supprimer les interfaces sélectionnées
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-              ⚡ <strong>Prise d&apos;effet immédiate</strong> : les modules cochés seront remis à zéro instantanément sur toutes les interfaces ouvertes.
+              ⚡ <strong>Prise d&apos;effet immédiate</strong> : les éléments supprimés seront remis à zéro instantanément sur toutes les interfaces ouvertes.
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            {/* Pied de Modale Général */}
+            <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsResetModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
+                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
               >
                 Annuler
               </button>
+
               <button
                 type="button"
-                onClick={handleConfirmReset}
-                className="flex-1 py-2.5 rounded-xl text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-md shadow-amber-600/30 cursor-pointer"
+                onClick={() => handleConfirmReset('all')}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-md shadow-rose-600/30 cursor-pointer"
               >
-                Confirmer la remise à zéro
+                Tout réinitialiser (Modules + Interfaces)
               </button>
             </div>
           </div>

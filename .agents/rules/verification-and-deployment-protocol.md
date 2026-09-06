@@ -1,75 +1,68 @@
-# SchoolFlow — Règle Impérative : Protocole de Test, Vérification & Déploiement Tripartite (GitHub, Supabase, Vercel)
+# SchoolFlow — Règle Impérative : Protocole de Test, Vérification Réelle dans le Navigateur & Déploiement Tripartite
 
-Cette règle définit le **protocole obligatoire** que l'agent d'IA DOIT impérativement exécuter et respecter à chaque demande de modification par **Mouhamed**, avant de formuler ou de finaliser toute réponse.
+Cette règle définit le **protocole obligatoire et non négociable** que l'agent d'IA DOIT impérativement exécuter à chaque demande de modification par le **Directeur Lawani Mouhamed**, avant de formuler ou de finaliser toute réponse.
 
 ---
 
-## 1. Principe Fondamental : "Tester, Valider & Déployer avant de Répondre"
+## 1. Principe Fondamental : "Tester Réellement dans le Navigateur, Valider & Déployer avant de Répondre"
 
-L'agent ne doit **JAMAIS** affirmer qu'une fonctionnalité ou un correctif est terminé sans avoir lui-même validé les 4 étapes strictes du protocole ci-dessous :
+L'agent ne doit **JAMAIS** affirmer qu'une fonctionnalité ou un correctif est terminé sans avoir lui-même validé les étapes strictes du protocole ci-dessous.
+
+> [!IMPORTANT]
+> **Application d'envergure internationale** : SchoolFlow est conçu pour être utilisé par des milliers d'utilisateurs afro-anglophones et francophones (directeurs, comptables, fondateurs, parents, enseignants). Aucune régression, aucun bug visuel et aucune promesse non testée ne sont tolérés.
 
 ```mermaid
-flowchart LR
+flowchart TD
     A[1. Modification du Code] --> B[2. Test & Build Local npm run build]
-    B --> C[3. Déploiement GitHub & Vercel node scripts/github-api-push.mjs]
-    C --> D[4. Surveillance & Validation Vercel State: success]
-    D --> E[5. Réponse à Mouhamed avec Liens de Production]
+    B --> C[3. Test Navigateur Réel via browser_subagent / Localhost / Vercel]
+    C --> D[4. Vérification de la Persistance Supabase & Local Store]
+    D --> E[5. Déploiement GitHub main & Vercel Production]
+    E --> F[6. Contrôle Final & Réponse au Directeur Lawani Mouhamed]
 ```
 
 ---
 
-## 2. Les 4 Piliers Obligatoires du Protocole
+## 2. Les Piliers Obligatoires du Protocole
 
-### Étape 1 : Vérification & Compilation Locale (`npm run build`)
-1. **Compilation Stricte** : Toujours exécuter ou vérifier la compilation locale via `npm run build` pour garantir :
+### Étape 1 : Vérification & Compilation Locale Stricte (`npm run build`)
+1. Toujours exécuter ou vérifier la compilation locale via `npm run build` pour garantir :
    - 0 erreur TypeScript,
    - 0 variable non déclarée (`ReferenceError`),
    - 0 balise ou parenthèse manquante,
    - 0 régression sur les pages statiques ou dynamiques Next.js 16 (Turbopack).
 2. **Logique Métier & Calculs** :
-   - Les calculs de montants doivent être strictement en **FCFA** (`formatFCFA`),
+   - Les montants doivent être strictement en **FCFA** (`formatFCFA`),
    - Les dates strictement au format **JJ/MM/AAAA** (`formatDate`),
    - Les statuts `🌟 Nouveau` et `🔄 Ancien` doivent être explicitement gérés,
-   - Les prestations (Internat, Cantine, Transport) doivent être automatiquement synchronisées avec les élèves existants non supprimés.
+   - Prestations (Internat, Cantine, Transport) synchronisées avec les élèves existants non supprimés.
 
 ---
 
-### Étape 2 : Déploiement Automatique vers GitHub (`main`) via API
-1. Tout fichier créé ou modifié doit impérativement être synchronisé et poussé vers le dépôt GitHub officiel :
-   - **Commande** : `node scripts/github-api-push.mjs`
-   - **Dépôt** : `97-27/Saas-SchoolFlow` (Branche `main`)
-2. **Mécanisme Intelligent de Déploiement** :
-   - Utilisation de `scripts/github-api-push.mjs` avec hachage SHA-1 Git local et comparaison avec l'arbre distant pour ne téléverser que les blobs modifiés.
-   - Exclusion stricte des scripts locaux, secrets de service et fichiers sensibles pour éviter tout blocage par le secret scanner de GitHub.
-   - Configuration permissive dans `eslint.config.mjs` (`globalIgnores` et règles de warning) pour éviter tout blocage lors de la compilation Vercel Cloud.
+### Étape 2 : Test Navigateur Réel & Validation Visuelle Obligatoire
+1. **Ouverture du Navigateur par l'Agent** :
+   - L'agent **DOIT ouvrir son navigateur** (via `browser_subagent` ou environnement de prévisualisation) pour interagir directement avec l'application.
+   - Cliquer sur les boutons, remplir les formulaires, vérifier les modals et inspecter le rendu visuel.
+2. **Vérification de la Sauvegarde & Synchronisation** :
+   - Vérifier que les créations ou modifications sont réellement persistées dans **Supabase** et dans le store local réactif (`live-store.ts`).
+   - S'assurer de la répercussion instantanée entre les modules (Tableau de bord, Élèves, Scolarité, Internat, Cantine, Transport).
+   - Contrôler l'absence totale de débordement horizontal sur mobile et desktop.
 
 ---
 
-### Étape 3 : Synchronisation Cloud Supabase & Résilience Locale
-1. Vérifier que les tables et services Supabase (`schools`, `students`, `invoices`, `staff_users`, etc.) sont correctement reliés :
-   - Les opérations d'enregistrement (`saveStudentToSupabase`, `saveInvoiceToSupabase`, `saveSchoolToSupabase`) s'exécutent de façon asynchrone et résiliente.
-   - Le store local (`live-store.ts`) combiné à `BroadcastChannel` assure la synchronisation instantanée inter-onglets et inter-rôles sans rechargement.
-   - À la suppression d'un élève, purger immédiatement ses prestations associées (Internat, Cantine, Transport).
+### Étape 3 : Déploiement Automatique vers GitHub (`main`) & Vercel
+1. Tout fichier créé ou modifié doit être synchronisé vers le dépôt GitHub officiel :
+   - **Dépôt** : `97-27/Saas-SchoolFlow` (Branche `main`).
+2. **Vérification Vercel Cloud** :
+   - **Lien de Production Officiel** : `https://saas-school-flow-12xh.vercel.app`
+   - Vérifier que l'état du déploiement est à `state: success`.
 
 ---
 
-### Étape 4 : Validation du Déploiement Vercel Cloud & Vérification en Direct
-1. **Surveillance Vercel** :
-   - `scripts/github-api-push.mjs` interroge automatiquement l'API GitHub Deployments pour surveiller le webhook Vercel.
-   - Le déploiement est validé uniquement lorsque l'état passe à **`state: 'success'`** (`Deployment has completed`).
-2. **URL Officielle de Production** :
-   - **Lien de Production** : `https://saas-school-flow-12xh.vercel.app`
-3. **Contrôles Visuels & Fonctionnels** :
-   - Vérifier la connexion des profils (Fondateur, Directeur, Personnel avec code secret, Parents avec matricule + WhatsApp),
-   - Vérifier l'absence de débordement horizontal sur le tableau de bord,
-   - Vérifier la cohérence stricte des cycles : Maternelle (P.S. à G.S.), Primaire (CP1 à CM2), Collège (6ème à 3ème) — Aucun Lycée.
+## 3. Checklist de Clôture avant de Répondre au Directeur
 
----
-
-## 3. Checklist de Clôture avant de Répondre à Mouhamed
-
-- [x] Le code a-t-il été testé sans aucune erreur ?
-- [x] Le push GitHub a-t-il été validé avec commit sur `main` ?
-- [x] Le déploiement Vercel a-t-il affiché `State: success` ?
-- [x] La salutation obligatoire **« Waaleikoum salam Mouhamed »** a-t-elle été respectée si Mouhamed a salué ?
+- [x] Le code compile-t-il avec `npm run build` avec 0 erreur ?
+- [x] L'agent a-t-il ouvert le navigateur pour tester visuellement et fonctionnellement les modifications ?
+- [x] Les données sont-elles réellement sauvegardées dans Supabase et le store local ?
+- [x] Le push GitHub et le déploiement Vercel ont-ils été validés ?
+- [x] La salutation obligatoire **« Wa alaykum salam Directeur Lawani Mouhamed »** a-t-elle été respectée si le Directeur a salué ?
 - [x] Le lien de production Vercel est-il fourni ?
