@@ -70,6 +70,12 @@ export function Sidebar({
   const [currentSchool, setCurrentSchool] = useState<School>(() =>
     getLiveSchool(schoolSlug, mockSchools[schoolSlug] || defaultSchool)
   );
+  const [currentSearch, setCurrentSearch] = useState('');
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentSearch(window.location.search);
+    }
+  }, [pathname]);
   const [activeSession, setActiveSession] = useState<{
     roleId?: string;
     roleBadge?: string;
@@ -491,10 +497,31 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'parent') {
-    // 👨‍👩‍👧 PARENT : Notes & Bulletins Enfants, Communication Parents
+    // 👨‍👩‍👧 PARENT : Notes & Bulletins Enfants, Scolarité & Prestations, Communication Établissement
+    const isScolarite = pathname.includes('/bulletins-parents') && currentSearch.includes('tab=scolarite');
+    const isBulletins = pathname.includes('/bulletins-parents') && !currentSearch.includes('tab=scolarite');
     navItems = [
-      { key: 'bulletins_parents', title: 'Notes & Bulletins Enfants', href: `${baseUrl}/bulletins-parents`, icon: Award, active: pathname.includes('/bulletins-parents') },
-      { key: 'communication', title: 'Communication Établissement', href: `${baseUrl}/communication`, icon: MessageSquare, active: pathname.includes('/communication') },
+      {
+        key: 'bulletins_parents',
+        title: 'Notes & Bulletins Enfants',
+        href: `${baseUrl}/bulletins-parents?tab=bulletin`,
+        icon: Award,
+        active: isBulletins,
+      },
+      {
+        key: 'scolarite_parent',
+        title: 'Scolarité & Prestations',
+        href: `${baseUrl}/bulletins-parents?tab=scolarite`,
+        icon: Wallet,
+        active: isScolarite,
+      },
+      {
+        key: 'communication',
+        title: 'Communication Établissement',
+        href: `${baseUrl}/communication`,
+        icon: MessageSquare,
+        active: pathname.includes('/communication'),
+      },
     ];
   } else {
     // Fallback standard

@@ -598,9 +598,21 @@ export function Topbar({
                 {/* Détails épurés sans répétition */}
                 <div className="p-4 space-y-2 text-xs bg-slate-50/50 border-b border-slate-100">
                   <div className="flex items-center justify-between text-slate-600">
-                    <span className="text-slate-400 text-[11px]">Matricule Officiel :</span>
+                    <span className="text-slate-400 text-[11px]">
+                      {activeSession.roleId === 'parent' ? 'Identifiant Famille :' : 'Matricule Officiel :'}
+                    </span>
                     <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                      {activeSession.roleId === 'fondateur' ? 'FND-2026-001' : activeSession.roleId === 'directeur' ? 'DIR-2026-001' : activeSession.roleId === 'comptable' ? 'CPT-2026-003' : activeSession.roleId === 'enseignant' ? 'ENS-2026-012' : 'SEC-2026-005'}
+                      {activeSession.roleId === 'parent'
+                        ? (activeSession.authCode || 'PAR-FAMILLE')
+                        : activeSession.roleId === 'fondateur'
+                        ? 'FND-2026-001'
+                        : activeSession.roleId === 'directeur'
+                        ? 'DIR-2026-001'
+                        : activeSession.roleId === 'comptable'
+                        ? 'CPT-2026-003'
+                        : activeSession.roleId === 'enseignant'
+                        ? 'ENS-2026-012'
+                        : 'SEC-2026-005'}
                     </span>
                   </div>
 
@@ -618,17 +630,21 @@ export function Topbar({
                     </span>
                   </div>
 
-                  {/* Coordonnées Professionnelles Officielles Certifiées (Lecture Seule) */}
+                  {/* Coordonnées Officielles Renseignées (Lecture Seule) */}
                   <div className="space-y-2 pt-2 border-t border-slate-200/80">
                     <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-slate-400 text-[11px]">Email Pro :</span>
+                      <span className="text-slate-400 text-[11px]">
+                        {activeSession.roleId === 'parent' ? 'Email de Contact :' : 'Email Pro :'}
+                      </span>
                       <span className="font-mono font-semibold text-emerald-900 text-[11px] truncate max-w-[170px]" title={activeSession.email}>
                         {activeSession.email}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-slate-600">
-                      <span className="text-slate-400 text-[11px]">Contact Direct :</span>
+                      <span className="text-slate-400 text-[11px]">
+                        {activeSession.roleId === 'parent' ? 'Numéro Parent / Tuteur :' : 'Contact Direct :'}
+                      </span>
                       <span className="font-mono font-bold text-emerald-900 text-[11px]">
                         {activeSession.phone || (
                           <span className="italic text-slate-400 font-sans font-normal text-[10.5px]">
@@ -640,7 +656,11 @@ export function Topbar({
 
                     <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[10px] text-slate-500 flex items-center gap-1.5 mt-1">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Coordonnées certifiées conformes par la Direction de l&apos;école.</span>
+                      <span>
+                        {activeSession.roleId === 'parent'
+                          ? "Coordonnées officielles enregistrées lors de l'inscription de votre enfant."
+                          : "Coordonnées certifiées conformes par la Direction de l'école."}
+                      </span>
                     </div>
                   </div>
                 </div>

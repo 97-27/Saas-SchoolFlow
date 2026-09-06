@@ -30,7 +30,9 @@ import {
   Send,
   X,
   Mail,
+  Wallet,
 } from 'lucide-react';
+import { ParentScolariteTab } from '@/components/parents/parent-scolarite-tab';
 
 // Matières et coefficients pour Collège et Lycée (Secondaire Général)
 function getBulletinSubjectsForClass(grade: string): { name: string; coef: number; prof: string }[] {
@@ -138,6 +140,28 @@ export function ParentBulletinsView({
   const [parentSearchQuery, setParentSearchQuery] = useState<string>('');
   const [selectedChildId, setSelectedChildId] = useState<string>('');
   const [selectedTerm, setSelectedTerm] = useState<'Trimestre 1' | 'Trimestre 2' | 'Trimestre 3'>('Trimestre 1');
+  const [activeViewTab, setActiveViewTab] = useState<'bulletins' | 'scolarite'>('bulletins');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'scolarite') {
+        setActiveViewTab('scolarite');
+      } else if (tabParam === 'bulletin' || tabParam === 'bulletins') {
+        setActiveViewTab('bulletins');
+      }
+    }
+  }, []);
+
+  const handleTabSwitch = (tab: 'bulletins' | 'scolarite') => {
+    setActiveViewTab(tab);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
 
   useEffect(() => {
     const updateSchool = () => {
@@ -230,11 +254,11 @@ export function ParentBulletinsView({
     return allStudents.filter((stu) => isSecondaryOrLyceeGrade(stu.grade));
   }, [allStudents]);
 
-  // Répertoire complet des familles ayant des enfants du Collège au Lycée (6ème à Terminale)
+  // Répertoire complet de toutes les familles répertoriées dans l'école (tous cycles)
   const allParentFamilies = useMemo(() => {
     const map = new Map<string, { key: string; guardianName: string; phone: string; whatsapp: string; children: Student[] }>();
 
-    secondaryStudents.forEach((stu) => {
+    allStudents.forEach((stu) => {
       const gName = (stu.guardianName || `${stu.lastName} Famille`).trim();
       const key = gName.toLowerCase();
       if (!map.has(key)) {
@@ -250,7 +274,7 @@ export function ParentBulletinsView({
     });
 
     return Array.from(map.values());
-  }, [secondaryStudents]);
+  }, [allStudents]);
 
   // Filtrage des familles pour l'admin / direction
   const filteredFamilies = useMemo(() => {
@@ -275,25 +299,40 @@ export function ParentBulletinsView({
   const activeFamily = useMemo(() => {
     if (isParentRole) {
       if (activeSession?.matchedChildrenIds && activeSession.matchedChildrenIds.length > 0) {
-        // Filtrer les enfants de la session pour ne garder que ceux de la 6ème à la Terminale
-        const matched = secondaryStudents.filter((s) => activeSession.matchedChildrenIds.includes(s.id));
+        // Tous les enfants rattachés au compte du parent
+        const matched = allStudents.filter((s) => activeSession.matchedChildrenIds.includes(s.id));
         if (matched.length > 0) {
           return {
             key: 'parent_session',
             guardianName: activeSession.fullName || matched[0].guardianName || 'Parent d\'élève',
-            phone: matched[0].guardianPhone || '+225 07 08 09 10 11',
-            whatsapp: matched[0].whatsappPhone || '+225 07 08 09 10 11',
+            phone: matched[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
+            whatsapp: matched[0].whatsappPhone || activeSession.phone || '+225 07 08 09 10 11',
             children: matched,
           };
         }
       }
       if (activeSession?.fullName) {
+        const normName = activeSession.fullName.toLowerCase().trim();
         const found = allParentFamilies.find((f) =>
-          f.guardianName.toLowerCase().includes(activeSession.fullName.toLowerCase())
+          f.guardianName.toLowerCase().includes(normName) || normName.includes(f.guardianName.toLowerCase())
         );
         if (found) return found;
+
+        const directMatch = allStudents.filter((s) => {
+          const g = (s.guardianName || '').toLowerCase().trim();
+          return g && (g.includes(normName) || normName.includes(g));
+        });
+        if (directMatch.length > 0) {
+          return {
+            key: 'parent_direct',
+            guardianName: directMatch[0].guardianName,
+            phone: directMatch[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
+            whatsapp: directMatch[0].whatsappPhone || activeSession.phone || '+225 07 08 09 10 11',
+            children: directMatch,
+          };
+        }
       }
-      return null;
+      return allParentFamilies[0] || null;
     }
 
     if (selectedParentKey) {
@@ -302,7 +341,7 @@ export function ParentBulletinsView({
     }
 
     return allParentFamilies[0] || null;
-  }, [isParentRole, activeSession, secondaryStudents, selectedParentKey, allParentFamilies]);
+  }, [isParentRole, activeSession, allStudents, selectedParentKey, allParentFamilies]);
 
   const familyChildren = useMemo(() => {
     if (!activeFamily) return [];
@@ -606,21 +645,21 @@ export function ParentBulletinsView({
   }
 
   // Sécurité d'accès pour les parents
-  if (isParentRole && !activeFamily) {
+  if (isParentRole && (!activeFamily || familyChildren.length === 0)) {
     return (
       <div className="max-w-2xl mx-auto p-6 bg-white rounded-3xl border-2 border-rose-200 shadow-xl text-center space-y-4 my-12">
         <div className="w-16 h-16 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
           <Lock className="w-8 h-8" />
         </div>
         <h2 className="text-base font-extrabold text-slate-900 font-heading">
-          Accès Sécurisé : Aucun Élève du Collège (6ème à 3ème) Rattaché
+          Accès Sécurisé : Aucun Élève Rattaché à ce Dossier Parent
         </h2>
         <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-          Les bulletins scolaires numériques en ligne sont réservés aux élèves scolarisés du <strong>Collège (de la 6ème à la 3ème)</strong>. Pour les classes de Maternelle et Primaire, les livrets de notes sont remis physiquement en main propre par la Direction.
+          Pour des raisons de sécurité et de confidentialité, votre compte parent doit être rattaché à au moins un élève inscrit dans l&apos;établissement pour consulter les notes, bulletins et règlements de scolarité.
         </p>
         <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 text-left">
-          <strong>Directives :</strong> Si votre enfant est bien au Collège (6ème à 3ème), veuillez contacter le secrétariat de{' '}
-          <strong>{currentSchool.name}</strong> avec vos reçus officiels pour synchroniser votre dossier.
+          <strong>Directives :</strong> Si vous êtes parent d&apos;élève de{' '}
+          <strong>{currentSchool.name}</strong>, veuillez contacter le secrétariat ou la direction avec votre reçu d&apos;inscription pour synchroniser votre numéro de téléphone ou nom de tuteur légal.
         </div>
       </div>
     );
@@ -668,20 +707,33 @@ export function ParentBulletinsView({
       <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-5 print:hidden">
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>Portail Collège (6ème à 3ème) • Année {currentSchool.academicYear || '2026-2027'}</span>
+            {activeViewTab === 'scolarite' ? (
+              <>
+                <Wallet className="w-3.5 h-3.5" />
+                <span>Portail Scolarité & Prestations • Année {currentSchool.academicYear || '2026-2027'}</span>
+              </>
+            ) : (
+              <>
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Portail Pédagogique & Bulletins • Année {currentSchool.academicYear || '2026-2027'}</span>
+              </>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight">
-            {isParentRole ? 'Suivi des Notes & Bulletins de vos Enfants' : 'Notes & Bulletins Parents — Direction & Admin'}
+            {activeViewTab === 'scolarite'
+              ? (isParentRole ? 'Scolarité, Prestations & Règlements de vos Enfants' : 'Scolarité & Prestations des Élèves')
+              : (isParentRole ? 'Suivi des Notes & Bulletins de vos Enfants' : 'Notes & Bulletins Parents — Direction & Admin')}
           </h1>
           <p className="text-xs text-emerald-100 max-w-2xl leading-relaxed">
-            {isParentRole
+            {activeViewTab === 'scolarite'
+              ? 'Consultez la somme restante de votre enfant, les montants déjà versés, ainsi que la cantine, le transport scolaire et l’internat.'
+              : isParentRole
               ? 'Consultez les moyennes trimestrielles certifiées et imprimez le bulletin officiel au format Paysage A4 (1 page nette).'
               : 'Visualisez les bulletins des élèves du Collège (6ème à 3ème), certifiés avec le cachet officiel de l’établissement.'}
           </p>
         </div>
 
-        {/* Boutons d'Action : Écrire à la Direction + Impression Format Paysage A4 */}
+        {/* Boutons d'Action : Écrire à la Direction + Impression */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
@@ -692,17 +744,69 @@ export function ParentBulletinsView({
             <span>✍️ Écrire à la Direction</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handlePrintLandscape}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-slate-950" />
-            <span>🖨️ Imprimer le Bulletin (Format Paysage A4)</span>
-          </button>
+          {activeViewTab === 'scolarite' ? (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-slate-950" />
+              <span>🖨️ Imprimer le Relevé de Scolarité</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePrintLandscape}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-slate-950" />
+              <span>🖨️ Imprimer le Bulletin (Format Paysage A4)</span>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ═══════════════ BARRE D'ONGLETS : BULLETINS vs SCOLARITÉ ═══════════════ */}
+      <div className="flex items-center gap-2 p-1.5 bg-slate-200/80 rounded-2xl w-full sm:w-fit print:hidden shadow-2xs">
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('bulletins')}
+          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeViewTab === 'bulletins'
+              ? 'bg-white text-emerald-800 shadow-sm shadow-slate-900/10'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Award className="w-4 h-4 text-emerald-600" />
+          <span>🎓 Notes & Bulletins Officiels</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('scolarite')}
+          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeViewTab === 'scolarite'
+              ? 'bg-white text-emerald-800 shadow-sm shadow-slate-900/10'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Wallet className="w-4 h-4 text-emerald-600" />
+          <span>💳 Scolarité, Prestations & Règlements</span>
+        </button>
+      </div>
+
+      {/* ═══════════════ CONTENU ONGLET 1 : SCOLARITÉ & PRESTATIONS ═══════════════ */}
+      {activeViewTab === 'scolarite' ? (
+        <ParentScolariteTab
+          schoolSlug={schoolSlug}
+          currentSchool={currentSchool}
+          activeChild={activeChild}
+          allFamilyChildren={familyChildren}
+          onSelectChild={(id) => setSelectedChildId(id)}
+          activeFamily={activeFamily}
+        />
+      ) : (
+        <>
       {/* ═══════════════ SÉLECTION DU PARENT POUR L'ADMIN / DIRECTION (6ème à 3ème) ═══════════════ */}
       {!isParentRole && (
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4 print:hidden">
@@ -827,11 +931,34 @@ export function ParentBulletinsView({
         </div>
       </div>
 
-      {/* ═══════════════ BULLETIN SCOLAIRE OFFICIEL (CALIBRÉ STRICTEMENT EN FORMAT PAYSAGE A4 - 1 PAGE) ═══════════════ */}
-      <div
-        id="official-bulletin-print"
-        className="bulletin-a4-sheet bg-white rounded-3xl border-2 border-slate-900 shadow-xl overflow-hidden p-3.5 sm:p-5 space-y-2.5"
-      >
+      {/* ═══════════════ BULLETIN SCOLAIRE OFFICIEL ═══════════════ */}
+      {!isSecondaryOrLyceeGrade(activeChild?.grade) ? (
+        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200 text-center space-y-4 shadow-xs my-4 print:hidden">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
+            <GraduationCap className="w-7 h-7" />
+          </div>
+          <h3 className="text-base sm:text-lg font-black text-slate-900 font-heading">
+            Livret d&apos;Évaluation Primaire — {activeChild?.firstName} {activeChild?.lastName} ({activeChild?.grade})
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
+            Les bulletins trimestriels numériques avec calcul des coefficients sont configurés pour le cycle Secondaire (Collège & Lycée). Pour l&apos;enseignement Primaire ({activeChild?.grade}), les carnets d&apos;évaluation sont remis physiquement en main propre par les enseignants. Vous pouvez consulter l&apos;état des règlements de scolarité et des prestations (cantine, transport, internat) en cliquant ci-dessous.
+          </p>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('scolarite')}
+              className="px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs shadow-md shadow-emerald-700/20 cursor-pointer transition-all inline-flex items-center gap-2"
+            >
+              <Wallet className="w-4 h-4" />
+              <span>Consulter la Scolarité & Prestations de l&apos;élève</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          id="official-bulletin-print"
+          className="bulletin-a4-sheet bg-white rounded-3xl border-2 border-slate-900 shadow-xl overflow-hidden p-3.5 sm:p-5 space-y-2.5"
+        >
         {/* 1. EN-TÊTE OFFICIEL CALQUÉ SUR LE REÇU */}
         <div className="relative z-10 border-2 border-slate-900 rounded-xl bg-white shadow-2xs p-2 sm:p-2.5">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1062,6 +1189,9 @@ export function ParentBulletinsView({
           </div>
         </div>
       </div>
+      )}
+      </>
+      )}
 
       {/* BANNIÈRE TOAST DE CONFIRMATION D'ENVOI */}
       {msgToast && (

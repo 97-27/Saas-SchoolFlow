@@ -337,28 +337,35 @@ export function LoginView({
 
     let matchedParentStudents: Student[] = [];
 
-    // Validation spécifique pour les parents
+    // Validation spécifique et stricte pour les parents d'élèves
     if (selectedRole === 'parent') {
-      const cleanPhone = parentPhone.replace(/[^0-9]/g, '');
-      const allLiveStudents = getLiveStudents(mockStudents, schoolSlug);
-      matchedParentStudents = allLiveStudents.filter((student) => {
-        const guardian = (student.guardianName || '').toLowerCase();
-        const guardianPhoneClean = (student.guardianPhone || '').replace(/\D/g, '');
-        const whatsappPhoneClean = (student.whatsappPhone || '').replace(/\D/g, '');
+      if (!trimmedName || trimmedName.length < 2) {
+        setErrorMessage("Veuillez renseigner votre Nom et Prénoms de parent / tuteur légal.");
+        return;
+      }
+      const cleanPhone = parentPhone.replace(/\D/g, '');
+      if (!cleanPhone || cleanPhone.length < 8) {
+        setErrorMessage("Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant.");
+        return;
+      }
 
-        return (
-          guardian.includes(trimmedName.toLowerCase()) ||
-          (cleanPhone.length >= 8 && guardianPhoneClean.includes(cleanPhone)) ||
-          (cleanPhone.length >= 8 && whatsappPhoneClean.includes(cleanPhone))
-        );
-      });
+      const authCheck = verifyUserAuthCodeForLogin(
+        'parent',
+        '',
+        trimmedName,
+        schoolSlug,
+        parentPhone
+      );
 
-      if (matchedParentStudents.length === 0 && cleanPhone.length > 0) {
+      if (!authCheck.isValid) {
         setErrorMessage(
-          "❌ Accès refusé : Vos coordonnées ne correspondent à aucun dossier d'élève enregistré dans cet établissement."
+          authCheck.reason ||
+            "❌ Accès refusé : Vos coordonnées ne figurent pas dans la base des élèves enregistrés de l'établissement."
         );
         return;
       }
+
+      matchedParentStudents = (authCheck as any).matchedStudents || [];
     }
 
     // Validation du Code d'Authentification pour les utilisateurs (Secrétaire, Comptable, Enseignant, etc.)
@@ -370,22 +377,24 @@ export function LoginView({
         return;
       }
 
-      const authCheck = verifyUserAuthCodeForLogin(
-        selectedRole,
-        authCodeInput,
-        trimmedName,
-        schoolSlug,
-        parentPhone
-      );
-
-      if (!authCheck.isValid) {
-        setErrorMessage(
-          authCheck.reason ||
-            `❌ Code d'authentification invalide pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
+      if (selectedRole !== 'parent') {
+        const authCheck = verifyUserAuthCodeForLogin(
+          selectedRole,
+          authCodeInput,
+          trimmedName,
+          schoolSlug,
+          parentPhone
         );
-        return;
+
+        if (!authCheck.isValid) {
+          setErrorMessage(
+            authCheck.reason ||
+              `❌ Code d'authentification invalide pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
+          );
+          return;
+        }
+        verifiedStaffUser = authCheck.staffUser;
       }
-      verifiedStaffUser = authCheck.staffUser;
     }
 
     const cleanAuthCode =
@@ -396,9 +405,25 @@ export function LoginView({
 
     setTimeout(() => {
       const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'directeur';
-      const finalFullName = verifiedStaffUser?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel'));
-      const finalEmail = verifiedStaffUser?.email || cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`;
-      const finalPhone = verifiedStaffUser?.phone || (selectedRole === 'parent' ? parentPhone : (isSupremeAdmin ? '' : '+225 07 48 92 11 00'));
+      const isParent = selectedRole === 'parent';
+      const firstChild = matchedParentStudents[0];
+
+      // Pour les parents : profil alimenté par le numéro officiel renseigné à l'inscription et son email de connexion
+      const officialParentName = firstChild?.guardianName || (trimmedName ? `${civility} ${trimmedName}` : 'Parent d’Élève');
+      const officialParentPhone = firstChild?.whatsappPhone || firstChild?.guardianPhone || parentPhone;
+      const officialParentEmail = cleanEmail || loginEmail;
+
+      const finalFullName = isParent
+        ? officialParentName
+        : (verifiedStaffUser?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel')));
+
+      const finalEmail = isParent
+        ? officialParentEmail
+        : (verifiedStaffUser?.email || cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`);
+
+      const finalPhone = isParent
+        ? officialParentPhone
+        : (verifiedStaffUser?.phone || (isSupremeAdmin ? '' : '+225 07 48 92 11 00'));
       const roleBadge =
         selectedRole === 'fondateur'
           ? '👑 Fondateur (Admin)'
@@ -777,24 +802,9 @@ export function LoginView({
 
             {/* Message d'erreur */}
             {errorMessage && (
-              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-in fade-in shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                  <span className="font-semibold leading-relaxed">{errorMessage}</span>
-                </div>
-                {(errorMessage.toLowerCase().includes('abonnement') || errorMessage.toLowerCase().includes('aucun')) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('signup');
-                      setErrorMessage('');
-                    }}
-                    className="shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-extrabold text-[11px] shadow-sm shadow-emerald-600/30 cursor-pointer transition-all flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Prendre un abonnement</span>
-                  </button>
-                )}
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5 animate-in fade-in shadow-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <span className="font-semibold leading-relaxed">{errorMessage}</span>
               </div>
             )}
 

@@ -1254,7 +1254,7 @@ export function verifyUserAuthCodeForLogin(
   fullName: string,
   schoolSlug: string = 'epc-manoi',
   parentPhone?: string
-): { isValid: boolean; staffUser?: StaffUser; reason?: string } {
+): { isValid: boolean; staffUser?: StaffUser; matchedStudents?: Student[]; reason?: string } {
   if (typeof window === 'undefined') return { isValid: true };
 
   const cleanInputCode = (authCodeOrPassword || '').trim().toUpperCase();
@@ -1266,31 +1266,117 @@ export function verifyUserAuthCodeForLogin(
   }
 
   // 2. Profil Parent d'Élève :
-  // Vérification que le parent ou son enfant figure bien dans la liste officielle des élèves de l'école
+  // Vérification stricte : le nom du parent/tuteur DOIT obligatoirement figurer dans la base des élèves enregistrés
   if (roleId === 'parent') {
     const cleanPhone = (parentPhone || '').replace(/\D/g, '');
+
+    if (!cleanName || cleanName.length < 2) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner votre Nom et Prénoms de parent / tuteur légal.",
+      };
+    }
+
+    if (!cleanPhone || cleanPhone.length < 8) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant.",
+      };
+    }
+
     const liveStudents = getLiveStudents([], schoolSlug);
-    const matchedStudents = liveStudents.filter((stu) => {
-      const gPhone = (stu.guardianPhone || '').replace(/\D/g, '');
-      const wPhone = (stu.whatsappPhone || '').replace(/\D/g, '');
-      const gName = (stu.guardianName || '').toLowerCase();
-      const sNum = (stu.studentNumber || '').toUpperCase();
-      const sMat = (stu.matricule || '').toUpperCase();
-      return (
-        (cleanPhone.length >= 8 && (gPhone.includes(cleanPhone) || wPhone.includes(cleanPhone))) ||
-        (cleanName.length >= 3 && gName.includes(cleanName)) ||
-        (cleanInputCode.length >= 3 && (sNum.includes(cleanInputCode) || sMat.includes(cleanInputCode)))
+
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    const HONORIFICS = new Set([
+      'm',
+      'mr',
+      'mme',
+      'mlle',
+      'madame',
+      'monsieur',
+      'dr',
+      'docteur',
+      'pasteur',
+      'imam',
+      'maitre',
+      'prof',
+      'professeur',
+      'famille',
+      'pere',
+      'mere',
+      'tuteur',
+      'tutrice',
+      'de',
+      'du',
+      'la',
+      'le',
+      'des',
+    ]);
+
+    const normInputName = normalize(fullName);
+    const nameTokens = normInputName
+      .split(/[\s,.-]+/)
+      .filter((t) => t.length >= 3 && !HONORIFICS.has(t));
+
+    // Étape 1 : Analyser si le nom du parent figure dans la liste des tuteurs / parents enregistrés de l'école
+    const nameMatchedStudents = liveStudents.filter((stu) => {
+      const rawGName = (stu.guardianName || '').trim();
+      if (!rawGName) return false;
+      const normGName = normalize(rawGName);
+
+      // Correspondance exacte ou inclusion globale sans civilité
+      if (normGName === normInputName || normGName.includes(normInputName) || normInputName.includes(normGName)) {
+        return true;
+      }
+
+      // Correspondance par jetons significatifs (au moins un nom de famille ou prénom clé)
+      const gTokens = normGName
+        .split(/[\s,.-]+/)
+        .filter((t) => t.length >= 3 && !HONORIFICS.has(t));
+
+      return nameTokens.some(
+        (token) => gTokens.includes(token) || gTokens.some((gt) => gt === token || gt.startsWith(token) || token.startsWith(gt))
       );
     });
 
-    if (matchedStudents.length > 0) {
-      return { isValid: true };
+    if (nameMatchedStudents.length === 0) {
+      return {
+        isValid: false,
+        reason: `❌ Accès strictement bloqué : Le nom « ${fullName.trim()} » ne figure pas parmi les parents ou tuteurs enregistrés dans cet établissement. Tant que votre nom n'est pas associé à un élève inscrit dans l'école, la connexion reste bloquée.`,
+      };
+    }
+
+    // Étape 2 : Vérifier que le numéro de téléphone correspond aux coordonnées du tuteur de cet élève
+    const phoneAndNameMatches = nameMatchedStudents.filter((stu) => {
+      const gPhone = (stu.guardianPhone || '').replace(/\D/g, '');
+      const wPhone = (stu.whatsappPhone || '').replace(/\D/g, '');
+      const pLast8 = cleanPhone.slice(-8);
+      return (
+        cleanPhone.length >= 8 &&
+        (gPhone.includes(cleanPhone) ||
+          wPhone.includes(cleanPhone) ||
+          cleanPhone.includes(gPhone) ||
+          cleanPhone.includes(wPhone) ||
+          (pLast8 && (gPhone.endsWith(pLast8) || wPhone.endsWith(pLast8))))
+      );
+    });
+
+    if (phoneAndNameMatches.length === 0) {
+      return {
+        isValid: false,
+        reason: `❌ Accès refusé : Le numéro de téléphone saisi ne correspond pas aux coordonnées enregistrées pour le parent de cet élève. Veuillez saisir le numéro exact renseigné à l'inscription.`,
+      };
     }
 
     return {
-      isValid: false,
-      reason:
-        "❌ Accès refusé : Vos coordonnées ou le dossier de votre enfant ne figurent pas dans la base des élèves enregistrés de l'établissement. Veuillez contacter le secrétariat de l'école.",
+      isValid: true,
+      matchedStudents: phoneAndNameMatches,
     };
   }
 
