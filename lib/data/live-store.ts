@@ -230,37 +230,28 @@ export function syncSchoolDataWithServer(slug: string): void {
           }
         }
 
-        if (data.students && Array.isArray(data.students) && data.students.length > 0) {
+        if (data.students && Array.isArray(data.students)) {
           const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
-          const local = localStorage.getItem(schoolKey);
-          const localCount = local ? JSON.parse(local).length : 0;
-          if (!local || localCount < data.students.length) {
-            localStorage.setItem(schoolKey, JSON.stringify(data.students));
-            localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(data.students));
-            hasChanges = true;
-          }
+          localStorage.setItem(schoolKey, JSON.stringify(data.students));
+          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(data.students));
+          hasChanges = true;
         }
 
-        if (data.invoices && Array.isArray(data.invoices) && data.invoices.length > 0) {
+        if (data.invoices && Array.isArray(data.invoices)) {
           const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
-          const local = localStorage.getItem(invSchoolKey);
-          const localCount = local ? JSON.parse(local).length : 0;
-          if (!local || localCount < data.invoices.length) {
-            localStorage.setItem(invSchoolKey, JSON.stringify(data.invoices));
-            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(data.invoices));
-            hasChanges = true;
-          }
+          localStorage.setItem(invSchoolKey, JSON.stringify(data.invoices));
+          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(data.invoices));
+          hasChanges = true;
         }
 
-        if (data.staffUsers && Array.isArray(data.staffUsers) && data.staffUsers.length > 0) {
-          const staffSchoolKey = `${STAFF_STORAGE_KEY}_${slug}`;
-          const local = localStorage.getItem(staffSchoolKey);
-          const localCount = local ? JSON.parse(local).length : 0;
-          if (!local || localCount < data.staffUsers.length) {
-            localStorage.setItem(staffSchoolKey, JSON.stringify(data.staffUsers));
-            localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(data.staffUsers));
-            hasChanges = true;
-          }
+        if (data.staffUsers && Array.isArray(data.staffUsers)) {
+          const filteredStaff = data.staffUsers.filter(
+            (u: any) => !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode)
+          );
+          const staffSchoolKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
+          localStorage.setItem(staffSchoolKey, JSON.stringify(filteredStaff));
+          localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(filteredStaff));
+          hasChanges = true;
         }
 
         if (hasChanges) {
@@ -1199,94 +1190,13 @@ export const defaultStaffUsers: StaffUser[] = [
     status: 'Actif',
     lastLogin: 'En ligne',
   },
-  {
-    id: 'staff-comptable',
-    fullName: 'Service Comptabilité & Caisse',
-    role: 'Comptable / Gestionnaire',
-    roleId: 'comptable',
-    matricule: 'CPT-001',
-    subjectOrGrade: 'Comptabilité, Finances & Recouvrement',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Finance & Gestion d’Établissement',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: '',
-    phone: '',
-    authCode: 'CPT-2026',
-    status: 'Actif',
-    lastLogin: 'En attente de connexion',
-  },
-  {
-    id: 'staff-secretaire',
-    fullName: 'Secrétariat Général de Direction',
-    role: 'Secrétaire de Direction',
-    roleId: 'secretaire',
-    matricule: 'SEC-001',
-    subjectOrGrade: 'Inscriptions, Scolarités & Dossiers Élèves',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Secrétariat Bureautique & Accueil',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: '',
-    phone: '',
-    authCode: 'SEC-2026',
-    status: 'Actif',
-    lastLogin: 'En attente de connexion',
-  },
-  {
-    id: 'staff-assistant',
-    fullName: 'Assistant(e) de Direction',
-    role: 'Assistant(e) de Direction',
-    roleId: 'assistant_direction',
-    matricule: 'ASS-001',
-    subjectOrGrade: 'Administration & Coordination Générale',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Administration Scolaire',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: '',
-    phone: '',
-    authCode: 'ASS-2026',
-    status: 'Actif',
-    lastLogin: 'En attente de connexion',
-  },
-  {
-    id: 'staff-educateur',
-    fullName: 'Éducateur de Vie Scolaire',
-    role: 'Éducateur / Conseiller d’Éducation',
-    roleId: 'educateur',
-    matricule: 'EDU-001',
-    subjectOrGrade: 'Discipline, Présences & Vie Scolaire',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Encadrement Pédagogique',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: '',
-    phone: '',
-    authCode: 'EDU-2026',
-    status: 'Actif',
-    lastLogin: 'En attente de connexion',
-  },
-  {
-    id: 'staff-enseignant',
-    fullName: 'Corps Enseignant Titulaire',
-    role: 'Enseignant / Professeur',
-    roleId: 'enseignant',
-    matricule: 'ENS-001',
-    subjectOrGrade: 'Toutes les matières (Enseignant Titulaire)',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Diplôme d’État & Pédagogie',
-    address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: '',
-    phone: '',
-    authCode: 'ENS-2026',
-    status: 'Actif',
-    lastLogin: 'En attente de connexion',
-  },
 ];
 
-const LEGACY_MOCK_STAFF_IDS = new Set(['staff-002', 'staff-003', 'staff-004', 'staff-005', 'staff-006']);
+const LEGACY_MOCK_STAFF_IDS = new Set([
+  'staff-002', 'staff-003', 'staff-004', 'staff-005', 'staff-006',
+  'staff-comptable', 'staff-secretaire', 'staff-assistant', 'staff-educateur', 'staff-enseignant',
+  'CPT-2026', 'SEC-2026', 'ASS-2026', 'EDU-2026', 'ENS-2026', 'INF-2026', 'AST-2026',
+]);
 
 export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): StaffUser[] {
   if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
@@ -1331,74 +1241,6 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
       status: 'Actif',
       lastLogin: 'En ligne',
     },
-    {
-      id: 'staff-comptable',
-      fullName: 'Service Comptabilité & Caisse',
-      role: 'Comptable / Gestionnaire',
-      roleId: 'comptable',
-      matricule: 'CPT-001',
-      subjectOrGrade: 'Comptabilité, Finances & Recouvrement',
-      assignedClasses: 'Toutes les classes',
-      diplomaOrExperience: 'Finance & Gestion d’Établissement',
-      address: school.city || 'Abidjan',
-      joinDate: '01/09/2026',
-      email: '',
-      phone: '',
-      authCode: 'CPT-2026',
-      status: 'Actif',
-      lastLogin: 'En attente de connexion',
-    },
-    {
-      id: 'staff-secretaire',
-      fullName: 'Secrétariat Général de Direction',
-      role: 'Secrétaire de Direction',
-      roleId: 'secretaire',
-      matricule: 'SEC-001',
-      subjectOrGrade: 'Inscriptions, Scolarités & Dossiers Élèves',
-      assignedClasses: 'Toutes les classes',
-      diplomaOrExperience: 'Secrétariat Bureautique & Accueil',
-      address: school.city || 'Abidjan',
-      joinDate: '01/09/2026',
-      email: '',
-      phone: '',
-      authCode: 'SEC-2026',
-      status: 'Actif',
-      lastLogin: 'En attente de connexion',
-    },
-    {
-      id: 'staff-assistant',
-      fullName: 'Assistant(e) de Direction',
-      role: 'Assistant(e) de Direction',
-      roleId: 'assistant_direction',
-      matricule: 'ASS-001',
-      subjectOrGrade: 'Administration & Coordination Générale',
-      assignedClasses: 'Toutes les classes',
-      diplomaOrExperience: 'Administration Scolaire',
-      address: school.city || 'Abidjan',
-      joinDate: '01/09/2026',
-      email: '',
-      phone: '',
-      authCode: 'ASS-2026',
-      status: 'Actif',
-      lastLogin: 'En attente de connexion',
-    },
-    {
-      id: 'staff-enseignant',
-      fullName: 'Corps Enseignant Titulaire',
-      role: 'Enseignant / Professeur',
-      roleId: 'enseignant',
-      matricule: 'ENS-001',
-      subjectOrGrade: 'Toutes les matières (Enseignant Titulaire)',
-      assignedClasses: 'Toutes les classes',
-      diplomaOrExperience: 'Diplôme d’État & Pédagogie',
-      address: school.city || 'Abidjan',
-      joinDate: '01/09/2026',
-      email: '',
-      phone: '',
-      authCode: 'ENS-2026',
-      status: 'Actif',
-      lastLogin: 'En attente de connexion',
-    },
   ];
 }
 
@@ -1419,10 +1261,10 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       for (const d of baseDefaults) {
         codeMap.set(d.authCode, d);
       }
-      // 2. Fusionner avec la liste locale (en excluant les anciens comptes fictifs par défaut pour forcer la création par l'admin)
+      // 2. Fusionner avec la liste locale (en purgeant strictement tous les faux membres de démonstration)
       for (const u of list) {
         if (!u || !u.authCode) continue;
-        if (LEGACY_MOCK_STAFF_IDS.has(u.id)) continue; // Purger les mocks par défaut
+        if (LEGACY_MOCK_STAFF_IDS.has(u.id) || LEGACY_MOCK_STAFF_IDS.has(u.authCode)) continue; // Purger les mocks par défaut
         
         // Purger les adresses email génériques/fictives antérieures
         let sanitizedEmail = u.email;

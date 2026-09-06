@@ -605,50 +605,54 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                     {/* 2. Poste & Matricule */}
                     <td className="py-3 px-2.5 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap mb-1 ${
-                        member.roleId === 'fondateur'
-                          ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs font-extrabold'
-                          : member.roleId === 'directeur'
-                          ? 'bg-emerald-50 text-emerald-950 border-emerald-300 shadow-2xs font-extrabold'
-                          : member.roleId === 'enseignant'
-                          ? 'bg-emerald-50 text-emerald-900 border-emerald-200/80'
-                          : member.roleId === 'secretaire'
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : member.roleId === 'comptable'
-                          ? 'bg-blue-50 text-blue-800 border-blue-200'
-                          : member.roleId === 'assistant_direction'
-                          ? 'bg-teal-50 text-teal-800 border-teal-200'
-                          : member.roleId === 'educateur'
-                          ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                          : member.roleId === 'informaticien'
-                          ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
-                          : 'bg-slate-100 text-slate-800 border-slate-200'
-                      }`}>
-                        {member.roleId === 'fondateur'
-                          ? '👑 Fondateur'
-                          : member.roleId === 'directeur'
-                          ? '👑 Directeur des Études'
-                          : member.roleId === 'enseignant'
-                          ? '👨‍🏫 Enseignant'
-                          : member.roleId === 'secretaire'
-                          ? '📝 Secrétaire'
-                          : member.roleId === 'comptable'
-                          ? '💼 Comptable'
-                          : member.roleId === 'assistant_direction'
-                          ? '📋 Assistante'
-                          : member.roleId === 'educateur'
-                          ? '🛡️ Éducateur'
-                          : member.roleId === 'informaticien'
-                          ? '💻 IT'
-                          : member.role}
-                      </span>
-                      <span className="block font-mono font-bold text-slate-700 text-[10.5px]">
-                        {member.roleId === 'fondateur'
-                          ? 'FND-001 • Promoteur Légal'
-                          : member.roleId === 'directeur'
-                          ? `${member.matricule || 'DIR-001'} • Direction Générale`
-                          : (member.matricule || `EMP-${member.authCode}`)}
-                      </span>
+                      <div className="inline-flex items-center justify-center">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap shadow-2xs ${
+                          member.roleId === 'fondateur'
+                            ? 'bg-amber-50 text-amber-900 border-amber-300 font-extrabold'
+                            : member.roleId === 'directeur'
+                            ? 'bg-emerald-50 text-emerald-950 border-emerald-300 font-extrabold'
+                            : member.roleId === 'enseignant'
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-200/80'
+                            : member.roleId === 'secretaire'
+                            ? 'bg-purple-50 text-purple-800 border-purple-200'
+                            : member.roleId === 'comptable'
+                            ? 'bg-blue-50 text-blue-800 border-blue-200'
+                            : member.roleId === 'assistant_direction'
+                            ? 'bg-teal-50 text-teal-800 border-teal-200'
+                            : member.roleId === 'educateur'
+                            ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                            : member.roleId === 'informaticien'
+                            ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
+                            : 'bg-slate-100 text-slate-800 border-slate-200'
+                        }`}>
+                          <span>
+                            {member.roleId === 'fondateur'
+                              ? '👑 Fondateur'
+                              : member.roleId === 'directeur'
+                              ? '👑 Directeur des Études'
+                              : member.roleId === 'enseignant'
+                              ? '👨‍🏫 Enseignant'
+                              : member.roleId === 'secretaire'
+                              ? '📝 Secrétaire'
+                              : member.roleId === 'comptable'
+                              ? '💼 Comptable'
+                              : member.roleId === 'assistant_direction'
+                              ? '📋 Assistante'
+                              : member.roleId === 'educateur'
+                              ? '🛡️ Éducateur'
+                              : member.roleId === 'informaticien'
+                              ? '💻 IT'
+                              : member.role}
+                          </span>
+                          <span className="font-mono text-[10px] opacity-75 border-l border-current/30 pl-1.5">
+                            {member.roleId === 'fondateur'
+                              ? 'FND-001'
+                              : member.roleId === 'directeur'
+                              ? (member.matricule || 'DIR-001')
+                              : (member.matricule || `EMP-${member.authCode}`)}
+                          </span>
+                        </span>
+                      </div>
                     </td>
 
                     {/* 3. Attributions & Matières */}
