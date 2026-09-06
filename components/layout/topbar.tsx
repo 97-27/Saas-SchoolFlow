@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { School } from '@/lib/data/types';
+import { defaultSchool } from '@/lib/data/mock-data';
 import {
   getLiveSchool,
   getLiveStaffUsers,
