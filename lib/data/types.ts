@@ -27,6 +27,7 @@ export interface Invoice {
   guardianName: string;
   guardianPhone: string;
   feeType: string;
+  registrationFee?: number; // Droits d'inscription distincts en FCFA
   amount: number; // in FCFA (Frais d'inscription / initial)
   paidAmount: number;
   discountAmount?: number;

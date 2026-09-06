@@ -361,20 +361,9 @@ export function LoginView({
       }
     }
 
-    const defaultCodeMap: Record<string, string> = {
-      fondateur: 'FND-2026',
-      directeur: 'DIR-2026',
-      assistant_direction: 'AST-2026',
-      educateur: 'EDU-2026',
-      informaticien: 'INF-2026',
-      comptable: 'CPT-2026',
-      secretaire: 'SEC-2026',
-      enseignant: 'ENS-2026',
-      parent: 'PAR-2026',
-    };
-
     // Validation du Code d'Authentification pour les utilisateurs (Secrétaire, Comptable, Enseignant, etc.)
     // Seuls le Fondateur et le Directeur bénéficient d'un accès direct sans code d'authentification
+    let verifiedStaffUser: any = null;
     if (selectedRole !== 'fondateur' && selectedRole !== 'directeur') {
       if (selectedRole !== 'parent' && !authCodeInput.trim()) {
         setErrorMessage(`Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`);
@@ -396,13 +385,12 @@ export function LoginView({
         );
         return;
       }
-      var verifiedStaffUser = authCheck.staffUser;
+      verifiedStaffUser = authCheck.staffUser;
     }
 
     const cleanAuthCode =
       authCodeInput.trim().toUpperCase() ||
-      defaultCodeMap[selectedRole] ||
-      'STAFF-AUTH';
+      (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
 
     setIsLoading(true);
 

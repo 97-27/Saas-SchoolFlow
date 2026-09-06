@@ -1095,92 +1095,9 @@ export const defaultStaffUsers: StaffUser[] = [
     status: 'Actif',
     lastLogin: 'En ligne',
   },
-  {
-    id: 'staff-002',
-    fullName: 'Mme Fatou Traoré',
-    role: 'Secrétaire de Direction',
-    roleId: 'secretaire',
-    matricule: 'EMP-SEC-002',
-    subjectOrGrade: 'Accueil & Documents Scolaires',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'BTS Secrétariat & Bureautique',
-    address: 'Cocody Riviera, Abidjan',
-    joinDate: '01/09/2026',
-    email: 'secretaire@epc-manoi.ci',
-    phone: '+225 07 11 22 33 44',
-    authCode: 'SEC-2026',
-    status: 'Actif',
-    lastLogin: '06/09/2026 à 08:30',
-  },
-  {
-    id: 'staff-003',
-    fullName: 'M. Ibrahim Koné',
-    role: 'Comptable / Gestionnaire',
-    roleId: 'comptable',
-    matricule: 'EMP-CPT-003',
-    subjectOrGrade: 'Gestion Financière & Recouvrement',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Licence Finance & Comptabilité',
-    address: 'Yopougon, Abidjan',
-    joinDate: '01/09/2026',
-    email: 'comptable@epc-manoi.ci',
-    phone: '+225 05 44 55 66 77',
-    authCode: 'CPT-2026',
-    status: 'Actif',
-    lastLogin: '06/09/2026 à 08:45',
-  },
-  {
-    id: 'staff-004',
-    fullName: 'M. Paul Koffi',
-    role: 'Enseignant / Professeur',
-    roleId: 'enseignant',
-    matricule: 'EMP-ENS-004',
-    subjectOrGrade: 'Mathématiques & Sciences',
-    assignedClasses: '6ème, 5ème, 4ème, 3ème',
-    diplomaOrExperience: 'CAPES Mathématiques (8 ans exp.)',
-    address: 'Abobo, Abidjan',
-    joinDate: '01/09/2026',
-    email: 'enseignant@epc-manoi.ci',
-    phone: '+225 01 88 99 00 11',
-    authCode: 'ENS-2026',
-    status: 'Actif',
-    lastLogin: '06/09/2026 à 09:10',
-  },
-  {
-    id: 'staff-005',
-    fullName: 'Mme Awa Coulibaly',
-    role: 'Assistant(e) de Direction',
-    roleId: 'assistant_direction',
-    matricule: 'EMP-AST-005',
-    subjectOrGrade: 'Coordination Pédagogique & Vie Scolaire',
-    assignedClasses: 'Toutes les classes',
-    diplomaOrExperience: 'Master en Sciences de l’Éducation',
-    address: 'Cocody Angré, Abidjan',
-    joinDate: '01/09/2026',
-    email: 'adjointe@epc-manoi.ci',
-    phone: '+225 07 77 88 99 00',
-    authCode: 'AST-2026',
-    status: 'Actif',
-    lastLogin: '06/09/2026 à 08:15',
-  },
-  {
-    id: 'staff-006',
-    fullName: 'M. Stéphane Bamba',
-    role: 'Informaticien / Responsable IT',
-    roleId: 'informaticien',
-    matricule: 'EMP-INF-006',
-    subjectOrGrade: 'Systèmes Informatiques & Réseau',
-    assignedClasses: 'Administration',
-    diplomaOrExperience: 'Ingénieur Télécoms & Réseaux',
-    address: 'Plateau, Abidjan',
-    joinDate: '01/09/2026',
-    email: 'it@epc-manoi.ci',
-    phone: '+225 01 23 45 67 89',
-    authCode: 'INF-2026',
-    status: 'Actif',
-    lastLogin: '06/09/2026 à 07:50',
-  },
 ];
+
+const LEGACY_MOCK_STAFF_IDS = new Set(['staff-002', 'staff-003', 'staff-004', 'staff-005', 'staff-006']);
 
 export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[] {
   if (typeof window === 'undefined') return defaultStaffUsers;
@@ -1198,9 +1115,10 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       for (const d of defaultStaffUsers) {
         codeMap.set(d.authCode, d);
       }
-      // 2. Fusionner avec la liste locale (en préservant les modifications et ajouts réels)
+      // 2. Fusionner avec la liste locale (en excluant les anciens comptes fictifs par défaut pour forcer la création par l'admin)
       for (const u of list) {
         if (!u || !u.authCode) continue;
+        if (LEGACY_MOCK_STAFF_IDS.has(u.id)) continue; // Purger les mocks par défaut
         if (codeMap.has(u.authCode)) {
           const def = codeMap.get(u.authCode)!;
           codeMap.set(u.authCode, {
@@ -1213,7 +1131,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
             authCode: u.authCode || def.authCode,
           });
         } else {
-          // Nouvel utilisateur ajouté dynamiquement par l'admin
+          // Nouvel utilisateur ajouté dynamiquement par l'admin dans la page Administration
           codeMap.set(u.authCode || u.id, u);
         }
       }
@@ -1226,7 +1144,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       return mergedList;
     }
 
-    // Premier chargement : uniquement Fondateur et Directeur
+    // Premier chargement : strictement Fondateur et Directeur (les autres profils doivent être créés en Administration)
     const initialStaff = defaultStaffUsers;
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
@@ -1377,15 +1295,6 @@ export function verifyUserAuthCodeForLogin(
   }
 
   // 3. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) :
-  const defaultCodeMap: Record<string, string> = {
-    secretaire: 'SEC-2026',
-    comptable: 'CPT-2026',
-    assistant_direction: 'AST-2026',
-    educateur: 'EDU-2026',
-    informaticien: 'INF-2026',
-    enseignant: 'ENS-2026',
-  };
-
   const roleNameMap: Record<string, string> = {
     secretaire: 'Secrétaire de Direction',
     comptable: 'Comptable / Gestionnaire',
@@ -1398,14 +1307,24 @@ export function verifyUserAuthCodeForLogin(
   if (!cleanInputCode) {
     return {
       isValid: false,
-      reason: `Veuillez saisir votre code d'authentification transmis par la Direction de l'école.`,
+      reason: `Veuillez saisir votre code d'authentification officiel transmis par la Direction de l'école.`,
     };
   }
 
   const liveStaff = getLiveStaffUsers(schoolSlug);
   const staffForRole = liveStaff.filter((s) => s.roleId === roleId);
 
-  // Vérifier la correspondance exacte du code d'authentification dans la liste du personnel
+  // Si la Direction n'a pas encore créé de membre pour ce rôle : blocage strict
+  if (staffForRole.length === 0) {
+    return {
+      isValid: false,
+      reason: `❌ Accès strictement bloqué : Aucun compte n'a encore été créé pour le poste de ${
+        roleNameMap[roleId] || 'Personnel'
+      } par la Direction dans la page Administration. Tant que la Direction n'a pas ajouté vos coordonnées (Nom, Contact, Code d'accès), la connexion reste bloquée.`,
+    };
+  }
+
+  // Vérifier la correspondance exacte du code d'authentification dans la liste du personnel créé
   const matchedStaff = staffForRole.find(
     (s) => s.authCode.trim().toUpperCase() === cleanInputCode
   );
@@ -1413,23 +1332,24 @@ export function verifyUserAuthCodeForLogin(
   if (!matchedStaff) {
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Aucun compte actif n'a été créé avec ce code d'authentification pour le poste de ${
+      reason: `❌ Accès refusé : Le code d'authentification saisi est incorrect ou ne correspond à aucun profil actif pour le poste de ${
         roleNameMap[roleId] || 'Personnel'
-      } par la Direction de l'école. Veuillez contacter l'Administration pour la création de votre accès.`,
+      }. Veuillez vérifier votre code auprès de la Direction de l'école.`,
     };
   }
 
+  // Si la Direction a verrouillé le compte : refus catégorique même avec le bon code
   if (matchedStaff.status === 'Verrouillé') {
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Ce compte d'accès (${matchedStaff.fullName}) a été verrouillé et bloqué par la Direction de l'établissement.`,
+      reason: `❌ Accès strictement bloqué : Le statut d'accès de ce compte (${matchedStaff.fullName}) a été verrouillé par la Direction de l'école. Même avec le bon code, l'accès est refusé tant que la Direction n'a pas déverrouillé votre statut dans la page Administration.`,
     };
   }
 
   if (matchedStaff.status === 'En attente') {
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Ce compte (${matchedStaff.fullName}) est actuellement en attente d'activation par la Direction.`,
+      reason: `❌ Accès en attente : Ce compte (${matchedStaff.fullName}) est actuellement en attente d'activation par la Direction de l'école.`,
     };
   }
 

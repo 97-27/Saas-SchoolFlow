@@ -62,40 +62,138 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Helper pour comparer 2 dates de manière robuste (gère JJ/MM/AAAA et YYYY-MM-DD)
-  const isMatchingDate = (inv: Invoice, targetDate: string) => {
-    if (!targetDate) return true;
+  const isMatchingTxDate = (txDate: string | undefined, targetDate: string) => {
+    if (!txDate || !targetDate) return false;
     const formattedTarget = formatDate(targetDate);
-    if (inv.issueDate && (formatDate(inv.issueDate) === formattedTarget || inv.issueDate === targetDate)) {
-      return true;
-    }
-    const inst = inv.installments;
-    if (inst) {
-      const dates = [
-        inst.versement1?.date,
-        inst.versement2?.date,
-        inst.versement3?.date,
-        inst.versement4?.date,
-        inst.versement5?.date,
-      ].filter(Boolean);
-      if (dates.some((d) => d && (formatDate(d) === formattedTarget || d === targetDate))) {
-        return true;
-      }
-    }
-    return false;
+    const formattedTx = formatDate(txDate);
+    return formattedTx === formattedTarget || txDate === targetDate;
   };
 
-  // Invoices du jour actif pour le bilan
-  const dayInvoices = useMemo(() => {
-    return invoices.filter((inv) => isMatchingDate(inv, selectedJournalDate));
-  }, [invoices, selectedJournalDate]);
+  // Extraction précise de toutes les transactions réelles (versements & droits d'inscription distincts)
+  const allTransactions = useMemo(() => {
+    const list: Array<{
+      id: string;
+      invoiceId: string;
+      invoiceNumber: string;
+      matriculeCode: string;
+      studentName: string;
+      studentGrade: string;
+      studentGender: 'male' | 'female';
+      enrollmentType: 'nouveau' | 'ancien';
+      motif: string;
+      paymentDate: string;
+      amount: number;
+      paymentMethod: string;
+      status: string;
+      rawInvoice: Invoice;
+    }> = [];
 
-  // Métriques du Bilan Journalier
+    invoices.forEach((inv) => {
+      const numVal = parseInt(inv.invoiceNumber.replace(/\D/g, '') || '1', 10);
+      const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+      const matriculeCode = `${26014800 + numVal}${letters[(numVal - 1) % letters.length]}`;
+      const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
+      const inst = inv.installments;
+
+      let foundVersements = false;
+
+      // 1. Vérification des versements détaillés de l'échéancier
+      if (inst) {
+        const vList = [
+          { key: 'v1', obj: inst.versement1, label: '🎓 1er Versement (Scolarité)' },
+          { key: 'v2', obj: inst.versement2, label: '🎓 2ème Versement (Scolarité)' },
+          { key: 'v3', obj: inst.versement3, label: '🎓 3ème Versement (Scolarité)' },
+          { key: 'v4', obj: inst.versement4, label: '🎓 4ème Versement (Scolarité)' },
+          { key: 'v5', obj: inst.versement5, label: '🎓 5ème Versement (Scolarité)' },
+        ];
+
+        vList.forEach(({ key, obj, label }) => {
+          if (obj && typeof obj.amount === 'number' && obj.amount > 0) {
+            foundVersements = true;
+            list.push({
+              id: `${inv.id}-${key}`,
+              invoiceId: inv.id,
+              invoiceNumber: inv.invoiceNumber,
+              matriculeCode,
+              studentName: inv.studentName,
+              studentGrade: inv.studentGrade,
+              studentGender: inv.studentGender,
+              enrollmentType,
+              motif: label,
+              paymentDate: obj.date || inv.issueDate,
+              amount: obj.amount,
+              paymentMethod: obj.paymentMethod || obj.method || inv.paymentMethod || 'Espèces',
+              status: inv.status,
+              rawInvoice: inv,
+            });
+          }
+        });
+      }
+
+      // 2. Vérification des Droits d'Inscription distincts
+      if (typeof inv.registrationFee === 'number' && inv.registrationFee > 0) {
+        list.push({
+          id: `${inv.id}-reg`,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          matriculeCode,
+          studentName: inv.studentName,
+          studentGrade: inv.studentGrade,
+          studentGender: inv.studentGender,
+          enrollmentType,
+          motif: "📝 Droits d'Inscription",
+          paymentDate: inv.issueDate,
+          amount: inv.registrationFee,
+          paymentMethod: inv.paymentMethod || 'Espèces',
+          status: inv.status,
+          rawInvoice: inv,
+        });
+      }
+
+      // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé
+      if (!foundVersements && (!inv.registrationFee || inv.registrationFee === 0)) {
+        const feeLower = (inv.feeType || '').toLowerCase();
+        let motif = '🎓 1er Versement (Scolarité)';
+        if (feeLower.includes('internat')) motif = '🏠 Internat & Pensionnat';
+        else if (feeLower.includes('cantine')) motif = '🍽️ Cantine Scolaire';
+        else if (feeLower.includes('transport')) motif = '🚌 Transport Scolaire';
+        else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) motif = "📝 Droits d'Inscription";
+
+        const amt = inv.paidAmount !== undefined ? inv.paidAmount : inv.amount;
+        list.push({
+          id: `${inv.id}-tx`,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          matriculeCode,
+          studentName: inv.studentName,
+          studentGrade: inv.studentGrade,
+          studentGender: inv.studentGender,
+          enrollmentType,
+          motif,
+          paymentDate: inv.issueDate,
+          amount: amt,
+          paymentMethod: inv.paymentMethod || 'Espèces',
+          status: inv.status,
+          rawInvoice: inv,
+        });
+      }
+    });
+
+    return list;
+  }, [invoices]);
+
+  // Transactions du jour actif sélectionné
+  const dayTransactions = useMemo(() => {
+    return allTransactions.filter((tx) => isMatchingTxDate(tx.paymentDate, selectedJournalDate));
+  }, [allTransactions, selectedJournalDate]);
+
+  // Métriques du Bilan Journalier (calculées sur les encaissements effectifs du jour)
   const dayMetrics = useMemo(() => {
-    const totalCount = dayInvoices.length;
-    const totalAmount = dayInvoices.reduce((acc, inv) => acc + (inv.paidAmount !== undefined ? inv.paidAmount : inv.amount), 0);
-    const newCount = dayInvoices.filter((inv) => inv.enrollmentType === 'nouveau' || !inv.enrollmentType).length;
-    const oldCount = dayInvoices.filter((inv) => inv.enrollmentType === 'ancien').length;
-    const mismatchedDatesCount = invoices.filter((inv) => !isMatchingDate(inv, selectedJournalDate)).length;
+    const totalCount = dayTransactions.length;
+    const totalAmount = dayTransactions.reduce((acc, tx) => acc + tx.amount, 0);
+    const newCount = dayTransactions.filter((tx) => tx.enrollmentType === 'nouveau').length;
+    const oldCount = dayTransactions.filter((tx) => tx.enrollmentType === 'ancien').length;
+    const mismatchedDatesCount = allTransactions.filter((tx) => !isMatchingTxDate(tx.paymentDate, selectedJournalDate)).length;
 
     return {
       totalCount,
@@ -104,40 +202,34 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       oldCount,
       mismatchedDatesCount,
     };
-  }, [dayInvoices, invoices, selectedJournalDate]);
+  }, [dayTransactions, allTransactions, selectedJournalDate]);
 
-  // Filtered and Sorted invoices (Derniers inscrits en haut : ID-051, ID-050...)
-  const filteredInvoices = useMemo(() => {
-    const list = invoices.filter((inv) => {
-      // Filtre de Date du Jour
-      if (dateFilterMode === 'day_only') {
-        if (!isMatchingDate(inv, selectedJournalDate)) {
-          return false;
-        }
-      }
+  // Transactions filtrées et triées (Derniers règlements en tête)
+  const filteredTransactions = useMemo(() => {
+    const sourceList = dateFilterMode === 'day_only' ? dayTransactions : allTransactions;
 
+    const list = sourceList.filter((tx) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         q === '' ||
-        inv.studentName.toLowerCase().includes(q) ||
-        inv.invoiceNumber.toLowerCase().includes(q) ||
-        inv.guardianName.toLowerCase().includes(q) ||
-        inv.feeType.toLowerCase().includes(q);
+        tx.studentName.toLowerCase().includes(q) ||
+        tx.invoiceNumber.toLowerCase().includes(q) ||
+        tx.matriculeCode.toLowerCase().includes(q) ||
+        tx.motif.toLowerCase().includes(q);
 
       // Class filter
       const matchesClass =
         selectedClass === 'Toutes les classes' ||
-        inv.studentGrade.toLowerCase() === selectedClass.toLowerCase();
+        tx.studentGrade.toLowerCase() === selectedClass.toLowerCase();
 
       // Status filter
       const matchesStatus =
-        selectedStatus === 'all' || inv.status === selectedStatus;
+        selectedStatus === 'all' || tx.status === selectedStatus;
 
       // Enrollment type filter (Nouveau vs Ancien)
       const matchesEnrollment =
         selectedEnrollmentType === 'all' ||
-        (selectedEnrollmentType === 'nouveau' && (inv.enrollmentType === 'nouveau' || !inv.enrollmentType)) ||
-        (selectedEnrollmentType === 'ancien' && inv.enrollmentType === 'ancien');
+        tx.enrollmentType === selectedEnrollmentType;
 
       return matchesSearch && matchesClass && matchesStatus && matchesEnrollment;
     });
@@ -147,18 +239,18 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       const numB = parseInt(b.invoiceNumber.replace(/\D/g, ''), 10) || 0;
       return numB - numA;
     });
-  }, [invoices, dateFilterMode, selectedJournalDate, searchQuery, selectedClass, selectedStatus, selectedEnrollmentType]);
+  }, [allTransactions, dayTransactions, dateFilterMode, searchQuery, selectedClass, selectedStatus, selectedEnrollmentType]);
 
   // Select all toggle
   const isAllSelected =
-    filteredInvoices.length > 0 &&
-    filteredInvoices.every((inv) => selectedIds.includes(inv.id));
+    filteredTransactions.length > 0 &&
+    filteredTransactions.every((tx) => selectedIds.includes(tx.id));
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredInvoices.map((inv) => inv.id));
+      setSelectedIds(filteredTransactions.map((tx) => tx.id));
     }
   };
 
@@ -349,13 +441,12 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            📅 Date du jour ({formatDateFrenchLong(selectedJournalDate)})
+            📅 Date sélectionnée ({formatDateFrenchLong(selectedJournalDate)})
           </button>
           <button
             type="button"
             onClick={() => {
               setDateFilterMode('all_dates');
-              setCurrentPage(1);
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               dateFilterMode === 'all_dates'
@@ -363,7 +454,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Tous les règlements ({invoices.length})
+            Tous les règlements ({allTransactions.length})
           </button>
         </div>
 
@@ -375,9 +466,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              setCurrentPage(1);
             }}
-            placeholder="Rechercher par nom, ID, matricule..."
+            placeholder="Rechercher par nom, ID, matricule, versement..."
             className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400"
           />
         </div>
@@ -388,7 +478,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             value={selectedClass}
             onChange={(e) => {
               setSelectedClass(e.target.value);
-              setCurrentPage(1);
             }}
             className="w-full appearance-none pl-3 pr-8 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
           >
@@ -453,7 +542,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => alert(`Rappels SMS/Email envoyés pour ${selectedIds.length} élèves.`)}
+              onClick={() => alert(`Rappels SMS/Email envoyés pour ${selectedIds.length} règlements.`)}
               className="px-3 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-lg font-medium hover:bg-emerald-100 transition-colors shadow-2xs"
             >
               Envoyer relance groupée
@@ -478,8 +567,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                 <input
                   type="checkbox"
                   checked={
-                    filteredInvoices.length > 0 &&
-                    selectedIds.length === filteredInvoices.length
+                    filteredTransactions.length > 0 &&
+                    selectedIds.length === filteredTransactions.length
                   }
                   onChange={toggleSelectAll}
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
@@ -497,31 +586,28 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
-            {filteredInvoices.length === 0 ? (
+            {filteredTransactions.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Calendar className="w-8 h-8 text-slate-300" />
                     <p className="font-semibold text-slate-600">
-                      Aucun encaissement enregistré pour la date du {formatDateFrenchLong(selectedJournalDate)}.
+                      Aucun versement enregistré pour la date du {formatDateFrenchLong(selectedJournalDate)}.
                     </p>
                     <p className="text-xs text-slate-400">
-                      Modifiez la date ou cliquez sur « Toutes les dates » pour consulter l&apos;historique complet.
+                      Modifiez la date ou cliquez sur « Tous les règlements » pour consulter l&apos;ensemble des encaissements.
                     </p>
                   </div>
                 </td>
               </tr>
             ) : (
-              filteredInvoices.map((invoice) => {
-                const isSelected = selectedIds.includes(invoice.id);
-                const numVal = parseInt(invoice.invoiceNumber.replace(/\D/g, '') || '1', 10);
-                const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-                const matriculeCode = `${26014800 + numVal}${letters[(numVal - 1) % letters.length]}`;
-                const isMatchingToday = isMatchingDate(invoice, selectedJournalDate);
+              filteredTransactions.map((tx) => {
+                const isSelected = selectedIds.includes(tx.id);
+                const isMatchingToday = isMatchingTxDate(tx.paymentDate, selectedJournalDate);
 
                 return (
                   <tr
-                    key={invoice.id}
+                    key={tx.id}
                     className={`hover:bg-emerald-50/30 transition-colors ${
                       isSelected ? 'bg-emerald-50/40' : ''
                     }`}
@@ -531,90 +617,82 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => toggleSelectOne(invoice.id)}
+                        onChange={() => toggleSelectOne(tx.id)}
                         className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                       />
                     </td>
 
-                    {/* ID Élève */}
+                    {/* ID Quittance */}
                     <td className="py-3.5 px-3 font-semibold text-slate-900 font-mono text-[11px] whitespace-nowrap">
-                      {invoice.invoiceNumber}
+                      {tx.invoiceNumber}
                     </td>
 
                     {/* Matricule (8 chiffres + 1 lettre majuscule) */}
                     <td className="py-3.5 px-3 font-mono font-bold text-slate-700 text-[11px] whitespace-nowrap">
-                      {matriculeCode}
+                      {tx.matriculeCode}
                     </td>
 
                     {/* Student Name */}
                     <td className="py-3.5 px-3 min-w-[160px] whitespace-nowrap">
                       <span className="font-extrabold text-slate-900 leading-tight">
-                        {invoice.studentName}
+                        {tx.studentName}
                       </span>
                     </td>
 
                     {/* Class Grade */}
                     <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <span className="inline-flex items-center justify-center font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg text-[11px] whitespace-nowrap shadow-2xs">
-                        {invoice.studentGrade}
+                        {tx.studentGrade}
                       </span>
                     </td>
 
                     {/* Statut Élève (Nouveau / Ancien) */}
                     <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 font-extrabold text-[11px] px-2 py-0.5 rounded-md border ${
-                        invoice.enrollmentType === 'ancien'
+                        tx.enrollmentType === 'ancien'
                           ? 'bg-blue-50 text-blue-800 border-blue-200/80 shadow-2xs'
                           : 'bg-emerald-50 text-emerald-800 border-emerald-200/80 shadow-2xs'
                       }`}>
-                        {invoice.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}
+                        {tx.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}
                       </span>
                     </td>
 
                     {/* Gender badge (M / F) */}
                     <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <GenderBadge gender={invoice.studentGender} />
+                      <GenderBadge gender={tx.studentGender} />
                     </td>
 
-                    {/* Prestation / Motif */}
+                    {/* Prestation / Motif dynamique avec motif exact du versement */}
                     <td className="py-3.5 px-3 whitespace-nowrap">
-                      {invoice.feeType?.toLowerCase().includes('internat') ? (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 border border-purple-200 shadow-2xs">
-                          🏠 Internat & Pensionnat
-                        </span>
-                      ) : invoice.feeType?.toLowerCase().includes('cantine') ? (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
-                          🍽️ Cantine Scolaire
-                        </span>
-                      ) : invoice.feeType?.toLowerCase().includes('transport') ? (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs">
-                          🚌 Transport Scolaire
-                        </span>
-                      ) : invoice.feeType?.toLowerCase().includes('inscription') ? (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-                          📝 Droits d&apos;Inscription
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 font-semibold text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
-                          🎓 {invoice.feeType || 'Frais de Scolarité'}
-                        </span>
-                      )}
+                      <span className={`inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg border shadow-2xs ${
+                        tx.motif.includes('Internat')
+                          ? 'bg-purple-50 text-purple-800 border-purple-200'
+                          : tx.motif.includes('Cantine')
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : tx.motif.includes('Transport')
+                          ? 'bg-blue-50 text-blue-800 border-blue-200'
+                          : tx.motif.includes("Droits d'Inscription")
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                      }`}>
+                        {tx.motif}
+                      </span>
                     </td>
 
-                    {/* Today's Date */}
+                    {/* Date de Paiement du Versement */}
                     <td className="py-3.5 px-3 font-medium whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 font-mono text-[11px] ${
                         isMatchingToday
                           ? 'text-emerald-800 font-bold'
-                          : 'text-amber-700 font-medium'
+                          : 'text-slate-700 font-semibold'
                       }`}>
-                        {formatDate(invoice.issueDate)}
+                        {formatDate(tx.paymentDate)}
                       </span>
                     </td>
 
-                    {/* Amount in FCFA */}
+                    {/* Montant Versé exact de cette opération */}
                     <td className="py-3.5 pr-5 px-3 text-right font-extrabold text-slate-900 whitespace-nowrap font-mono font-heading">
-                      {formatFCFA(invoice.paidAmount !== undefined ? invoice.paidAmount : invoice.amount)}
+                      {formatFCFA(tx.amount)}
                     </td>
                   </tr>
                 );
@@ -629,11 +707,11 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span>
-            Affichage de <strong className="text-slate-900 font-bold">{filteredInvoices.length}</strong> encaissement{filteredInvoices.length > 1 ? 's' : ''} ({dateFilterMode === 'day_only' ? `du ${formatDateFrenchLong(selectedJournalDate)}` : 'toutes dates confondues'}) • Défilement vertical direct
+            Affichage de <strong className="text-slate-900 font-bold">{filteredTransactions.length}</strong> règlement{filteredTransactions.length > 1 ? 's' : ''} ({dateFilterMode === 'day_only' ? `du ${formatDateFrenchLong(selectedJournalDate)}` : 'toutes dates confondues'}) • Défilement vertical direct
           </span>
         </div>
         <span className="text-[11px] text-slate-400 font-medium">
-          Glissez de haut en bas pour visualiser tous les élèves sans limitation de page
+          Journal actualisé en temps réel selon les versements enregistrés
         </span>
       </div>
     </div>

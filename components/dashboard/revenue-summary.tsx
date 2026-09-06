@@ -215,36 +215,42 @@ export function RevenueSummary({
       v5 += p5;
     });
 
+    const getBadgeStyle = (amount: number) => {
+      return amount > 0
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : 'bg-amber-50 text-amber-700 border-amber-200';
+    };
+
     return [
       {
         month: 'Octobre 2026',
         label: '1ère Échéance (1er Versement)',
         collected: isEmpty ? 0 : v1,
-        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        badgeColor: getBadgeStyle(isEmpty ? 0 : v1),
       },
       {
         month: 'Novembre 2026',
         label: '2ème Échéance (2ème Versement)',
         collected: isEmpty ? 0 : v2,
-        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        badgeColor: getBadgeStyle(isEmpty ? 0 : v2),
       },
       {
         month: 'Janvier 2027',
         label: '3ème Échéance (3ème Versement)',
         collected: isEmpty ? 0 : v3,
-        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        badgeColor: getBadgeStyle(isEmpty ? 0 : v3),
       },
       {
         month: 'Mars 2027',
         label: '4ème Échéance (4ème Versement)',
         collected: isEmpty ? 0 : v4,
-        badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+        badgeColor: getBadgeStyle(isEmpty ? 0 : v4),
       },
       {
         month: 'Mai 2027',
         label: '5ème Échéance (5ème Versement)',
         collected: isEmpty ? 0 : v5,
-        badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+        badgeColor: getBadgeStyle(isEmpty ? 0 : v5),
       },
     ];
   }, [students, invoices]);

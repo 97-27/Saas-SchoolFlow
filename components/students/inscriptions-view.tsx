@@ -517,6 +517,7 @@ export function InscriptionsView({
       guardianName: newStudent.guardianName,
       guardianPhone: newStudent.guardianPhone,
       feeType: "Frais d'inscription & Scolarité",
+      registrationFee: registrationFee,
       amount: tuitionAmount,
       discountAmount: discountAmount,
       netAmount: netAmount,
@@ -1151,10 +1152,10 @@ export function InscriptionsView({
 
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
-                Année & Date Encaissement :
+                Date d&apos;encaissement :
               </span>
-              <span className="font-extrabold text-slate-950 text-xs sm:text-sm">
-                {schoolState.academicYear} • {formatDate(paymentDate)}
+              <span className="font-extrabold text-slate-950 text-xs sm:text-sm font-mono">
+                {formatDate(paymentDate)}
               </span>
             </div>
 
@@ -2301,7 +2302,7 @@ export function InscriptionsView({
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
                   Raccourcis :
                 </span>
-                {[0, 10000, 20000, 25000, 50000].map((amt) => (
+                {[0, 5000, 10000].map((amt) => (
                   <button
                     key={amt}
                     type="button"
