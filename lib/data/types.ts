@@ -162,6 +162,10 @@ export interface School {
   hasTransport?: boolean;
   hasAfterSchoolCare?: boolean;
 
+  // Tarifs & Frais Scolaires de l'Établissement (FCFA)
+  defaultRegistrationFee?: number; // Frais d'inscription par défaut fixés par l'école
+  defaultTuitionAmount?: number; // Scolarité annuelle de référence de l'école
+
   // Direction, Fondateur & Official Stamps
   founderName?: string; // Nom officiel du Fondateur (ex: Mr Lawani El Hadj)
   directorName?: string;

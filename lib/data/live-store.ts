@@ -1495,18 +1495,27 @@ export function isSchoolDeleted(slug?: string): boolean {
 }
 
 export interface ResetScopeOptions {
+  // --- 1. Modules Métier de l'Établissement ---
   students?: boolean;        // Registre des élèves & Dossiers d'inscriptions
   invoices?: boolean;        // Scolarité, Caisse, Recettes & Dépenses
-  boarding?: boolean;        // Internat & Hébergement
-  canteen?: boolean;         // Cantine scolaire & Menus
-  transport?: boolean;       // Transport & Lignes de bus
+  salaries?: boolean;        // Salaires & Bulletins de paie du personnel
   grades?: boolean;          // Notes, Évaluations & Bulletins
   attendance?: boolean;      // Présences & Discipline
   documents?: boolean;       // Documents scolaires & Certificats
-  salaries?: boolean;        // Salaires & Bulletins de paie du personnel
   specialDiscounts?: boolean;// Réductions accordées
   messages?: boolean;        // Messages WhatsApp & Historique de diffusion
   staff?: boolean;           // Comptes personnel ajoutés (conserve Directeur & Fondateur)
+
+  // --- 2. Interfaces des Collaborateurs & Membres (Hors Direction) ---
+  secretaireInterface?: boolean; // Interface Secrétaire : admissions, fiches élèves, dossiers scolaires
+  comptableInterface?: boolean;  // Interface Comptable : caisse, encaissements scolarité, quittances, dépenses
+  enseignantInterface?: boolean; // Interface Enseignant : notes par classe, évaluations, présences quotidiennes
+  parentInterface?: boolean;     // Interface Espace Parents : consultation bulletins, reçus, alertes scolarité
+
+  // --- Services Complémentaires ---
+  boarding?: boolean;        // Internat & Hébergement
+  canteen?: boolean;         // Cantine scolaire & Menus
+  transport?: boolean;       // Transport & Lignes de bus
 }
 
 /**
@@ -1537,17 +1546,21 @@ export function resetSchoolData(
       specialDiscounts: true,
       messages: true,
       staff: true,
+      secretaireInterface: true,
+      comptableInterface: true,
+      enseignantInterface: true,
+      parentInterface: true,
     };
 
-    // 1. Vider le registre des élèves (Inscriptions & Dossiers)
-    if (doAll || opt.students) {
+    // 1. Vider le registre des élèves (Inscriptions & Dossiers) - Si Module students OU Interface Secrétaire
+    if (doAll || opt.students || opt.secretaireInterface) {
       localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_${slug}`, JSON.stringify([]));
       localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     }
 
-    // 2. Factures, Scolarités, Caisse & Dépenses
-    if (doAll || opt.invoices) {
+    // 2. Factures, Scolarités, Caisse & Dépenses - Si Module invoices OU Interface Comptable
+    if (doAll || opt.invoices || opt.comptableInterface) {
       localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_${slug}`, JSON.stringify([]));
       localStorage.setItem('schoolflow_school_expenses_v1', JSON.stringify([]));
@@ -1556,19 +1569,19 @@ export function resetSchoolData(
     }
 
     // 3. Réductions spéciales
-    if (doAll || opt.specialDiscounts) {
+    if (doAll || opt.specialDiscounts || opt.comptableInterface) {
       localStorage.setItem('schoolflow_special_discounts_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_special_discounts_v1_${slug}`, JSON.stringify([]));
     }
 
     // 4. Salaires du personnel
-    if (doAll || opt.salaries) {
+    if (doAll || opt.salaries || opt.comptableInterface) {
       localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_staff_salaries_v1_${slug}`, JSON.stringify([]));
     }
 
-    // 5. Notes, Bulletins & Pédagogie
-    if (doAll || opt.grades) {
+    // 5. Notes, Bulletins & Pédagogie - Si Module grades OU Interface Enseignant
+    if (doAll || opt.grades || opt.enseignantInterface) {
       localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_diverse_notes_v1_${slug}`, JSON.stringify([]));
       localStorage.removeItem('schoolflow_notes_diverses_v1');
@@ -1585,21 +1598,21 @@ export function resetSchoolData(
       } catch (e) {}
     }
 
-    // 6. Présences & Assiduité
-    if (doAll || opt.attendance) {
+    // 6. Présences & Assiduité - Si Module attendance OU Interface Enseignant
+    if (doAll || opt.attendance || opt.enseignantInterface) {
       localStorage.removeItem('schoolflow_attendance_v1');
     }
 
-    // 7. Documents scolaires & Certificats
-    if (doAll || opt.documents) {
+    // 7. Documents scolaires & Certificats - Si Module documents OU Interface Secrétaire
+    if (doAll || opt.documents || opt.secretaireInterface) {
       localStorage.removeItem(DOCS_STATUS_KEY);
       localStorage.removeItem('schoolflow_documents_status_v2');
       localStorage.removeItem('schoolflow_documents_status_v3');
       localStorage.removeItem('schoolflow_documents_status_v5');
     }
 
-    // 8. Messagerie & Diffusion
-    if (doAll || opt.messages) {
+    // 8. Messagerie & Diffusion - Si Module messages OU Interface Parent
+    if (doAll || opt.messages || opt.parentInterface) {
       localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_parent_messages_v1_${slug}`, JSON.stringify([]));
       localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
@@ -1628,8 +1641,9 @@ export function resetSchoolData(
       localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
     }
 
-    // 12. Comptes personnel : SEULS LES COMPTES FONDATEUR & DIRECTEUR SONT CONSERVÉS
-    if (doAll || opt.staff) {
+    // 12. Comptes personnel collaborateurs :
+    // SEULS LES COMPTES FONDATEUR & DIRECTEUR SONT CONSERVÉS EN TOUTES CIRCONSTANCES
+    if (doAll || opt.staff || opt.secretaireInterface || opt.comptableInterface || opt.enseignantInterface) {
       const onlyAdminStaff: StaffUser[] = [
         {
           id: 'staff-founder',

@@ -62,18 +62,25 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   // Modales de sécurité & Sélection granulaire des portées de réinitialisation
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetScopes, setResetScopes] = useState<ResetScopeOptions>({
+    // Modules
     students: true,
     invoices: true,
-    boarding: true,
-    canteen: true,
-    transport: true,
+    salaries: true,
     grades: true,
     attendance: true,
     documents: true,
-    salaries: true,
     specialDiscounts: true,
     messages: true,
     staff: true,
+    // Interfaces Membres & Collaborateurs (hors Direction)
+    secretaireInterface: true,
+    comptableInterface: true,
+    enseignantInterface: true,
+    parentInterface: true,
+    // Services
+    boarding: true,
+    canteen: true,
+    transport: true,
   });
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
@@ -219,6 +226,10 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         specialDiscounts: !!resetScopes.specialDiscounts,
         messages: !!resetScopes.messages,
         staff: !!resetScopes.staff,
+        secretaireInterface: false,
+        comptableInterface: false,
+        enseignantInterface: false,
+        parentInterface: false,
         boarding: false,
         canteen: false,
         transport: false,
@@ -234,9 +245,13 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         specialDiscounts: false,
         messages: false,
         staff: false,
-        boarding: !!resetScopes.boarding,
-        canteen: !!resetScopes.canteen,
-        transport: !!resetScopes.transport,
+        secretaireInterface: !!resetScopes.secretaireInterface,
+        comptableInterface: !!resetScopes.comptableInterface,
+        enseignantInterface: !!resetScopes.enseignantInterface,
+        parentInterface: !!resetScopes.parentInterface,
+        boarding: false,
+        canteen: false,
+        transport: false,
       };
     } else {
       scopesToApply = resetScopes;
@@ -1008,6 +1023,57 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Tarifs & Frais Scolaires Standard de l'Établissement */}
+              <div className="space-y-3 pt-4 border-t border-slate-100">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-emerald-600" />
+                    <span>Grille Tarifaire de l&apos;Établissement (FCFA)</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Chaque établissement configure librement ses tarifs qui s&apos;appliqueront sur les interfaces de la secrétaire, du comptable et des parents
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 space-y-2">
+                    <label className="text-xs font-bold text-slate-900 block">
+                      Frais d&apos;inscription par défaut (FCFA) :
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Montant pré-rempli lors d&apos;une nouvelle inscription par la secrétaire ou le comptable.
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      value={school.defaultRegistrationFee ?? ''}
+                      onChange={(e) => handleInputChange('defaultRegistrationFee', parseInt(e.target.value, 10) || 0)}
+                      placeholder="Ex: 25000"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-emerald-300 text-emerald-950 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
+                    <label className="text-xs font-bold text-slate-900 block">
+                      Scolarité annuelle indicative (FCFA) :
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Montant de référence appliqué pour les frais de scolarité de l&apos;année scolaire.
+                    </p>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      value={school.defaultTuitionAmount ?? ''}
+                      onChange={(e) => handleInputChange('defaultTuitionAmount', parseInt(e.target.value, 10) || 0)}
+                      placeholder="Ex: 250000"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1393,16 +1459,17 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                <span>🖥️ 2. Interfaces & Services</span>
+                <span>👥 2. Interfaces Collaborateurs</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
                   {
                     [
-                      resetScopes.boarding,
-                      resetScopes.canteen,
-                      resetScopes.transport,
+                      resetScopes.secretaireInterface,
+                      resetScopes.comptableInterface,
+                      resetScopes.enseignantInterface,
+                      resetScopes.parentInterface,
                     ].filter(Boolean).length
                   }
-                  /3
+                  /4
                 </span>
               </button>
             </div>
@@ -1556,12 +1623,23 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
               </div>
             )}
 
-            {/* CONTENU PARTIE 2 : INTERFACES DE PRESTATIONS & SERVICES */}
+            {/* CONTENU PARTIE 2 : INTERFACES DES MEMBRES & COLLABORATEURS (HORS DIRECTION) */}
             {resetModalTab === 'interfaces' && (
               <div className="space-y-3 animate-in fade-in">
+                {/* Bandeau de protection permanente de la direction */}
+                <div className="p-3 rounded-xl bg-slate-900 text-white flex items-start gap-2.5 text-xs shadow-xs">
+                  <ShieldAlert className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-white">Protection permanente des interfaces de Direction</p>
+                    <p className="text-[11px] text-slate-300">
+                      Les interfaces du <strong>Directeur Général</strong> et du <strong>Fondateur</strong> ne sont jamais réinitialisées. Seuls les espaces des collaborateurs ci-dessous peuvent être remis à zéro.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-xs font-bold text-slate-800">
-                    Sélection des interfaces à réinitialiser :
+                    Sélection des interfaces membres à réinitialiser :
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -1569,9 +1647,10 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       onClick={() =>
                         setResetScopes((prev) => ({
                           ...prev,
-                          boarding: true,
-                          canteen: true,
-                          transport: true,
+                          secretaireInterface: true,
+                          comptableInterface: true,
+                          enseignantInterface: true,
+                          parentInterface: true,
                         }))
                       }
                       className="text-[11px] font-bold text-blue-700 hover:text-blue-800 underline cursor-pointer"
@@ -1584,9 +1663,10 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       onClick={() =>
                         setResetScopes((prev) => ({
                           ...prev,
-                          boarding: false,
-                          canteen: false,
-                          transport: false,
+                          secretaireInterface: false,
+                          comptableInterface: false,
+                          enseignantInterface: false,
+                          parentInterface: false,
                         }))
                       }
                       className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
@@ -1599,19 +1679,24 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {[
                     {
-                      key: 'boarding',
-                      label: '🏢 Interface Internat & Hébergement',
-                      desc: 'Supprime les affectations de chambres, dortoirs et règlements pensionnat.',
+                      key: 'secretaireInterface',
+                      label: '👩‍💼 Interface Secrétaire (Espace Secrétariat)',
+                      desc: 'Supprime les admissions, dossiers d’inscription, fiches d’élèves et registres de la secrétaire.',
                     },
                     {
-                      key: 'canteen',
-                      label: '🍲 Interface Cantine Scolaire',
-                      desc: 'Supprime les abonnements restauration, régimes et paiements de cantine.',
+                      key: 'comptableInterface',
+                      label: '💼 Interface Comptable (Espace Caisse & Comptabilité)',
+                      desc: 'Supprime le journal de caisse, les encaissements de scolarité enregistrés, factures et dépenses du comptable.',
                     },
                     {
-                      key: 'transport',
-                      label: '🚌 Interface Transport Scolaire',
-                      desc: 'Supprime les lignes de bus, circuits de ramassage et abonnements transport.',
+                      key: 'enseignantInterface',
+                      label: '👨‍🏫 Interface Enseignants (Espace Professeurs)',
+                      desc: 'Supprime les saisies de notes par classe, évaluations trimestrielles et registres de présences des enseignants.',
+                    },
+                    {
+                      key: 'parentInterface',
+                      label: '👨‍👩‍👧 Interface Espace Parents (Suivi Familles)',
+                      desc: 'Supprime les bulletins numériques partagés, alertes WhatsApp et notifications envoyées aux parents.',
                     },
                   ].map((item) => {
                     const isChecked = !!(resetScopes as any)[item.key];
@@ -1654,15 +1739,16 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     onClick={() => {
                       setResetScopes((prev) => ({
                         ...prev,
-                        boarding: true,
-                        canteen: true,
-                        transport: true,
+                        secretaireInterface: true,
+                        comptableInterface: true,
+                        enseignantInterface: true,
+                        parentInterface: true,
                       }));
                       handleConfirmReset('interfaces');
                     }}
                     className="w-full sm:w-auto py-2 px-3.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition-all cursor-pointer"
                   >
-                    Supprimer TOUTES les interfaces
+                    Supprimer TOUTES les interfaces membres
                   </button>
 
                   <button

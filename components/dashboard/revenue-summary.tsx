@@ -62,9 +62,9 @@ export function RevenueSummary({
       };
     }
 
-    // 1. Droits d'Inscription & Réinscription : 25 000 FCFA par élève inscrit ou montant personnalisé saisi
+    // 1. Droits d'Inscription & Réinscription : calculé strictement sur la somme des frais d'inscription réels perçus par l'école
     const inscriptionAmount = students.reduce((acc, stu) => {
-      const fee = stu.registrationFee !== undefined && stu.registrationFee > 0 ? stu.registrationFee : 25000;
+      const fee = typeof stu.registrationFee === 'number' ? stu.registrationFee : 0;
       return acc + fee;
     }, 0);
 

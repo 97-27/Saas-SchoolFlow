@@ -117,9 +117,9 @@ export function InscriptionsView({
     return `${year}-${month}-${day}`;
   };
 
-  // Saisie Libre Financière (Frais d'inscription fixés à 25 000 FCFA par défaut)
-  const [registrationFee, setRegistrationFee] = useState<number>(25000);
-  const [tuitionAmount, setTuitionAmount] = useState<number>(0);
+  // Saisie Libre Financière : Chaque école applique ses propres tarifs configurés
+  const [registrationFee, setRegistrationFee] = useState<number>(() => schoolState.defaultRegistrationFee || 0);
+  const [tuitionAmount, setTuitionAmount] = useState<number>(() => schoolState.defaultTuitionAmount || 0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
   const [remainingAmount, setRemainingAmount] = useState<number>(0);
@@ -350,8 +350,8 @@ export function InscriptionsView({
     setIsBoarding(false);
     setIsCanteen(false);
     setIsTransport(false);
-    setRegistrationFee(25000);
-    setTuitionAmount(0);
+    setRegistrationFee(schoolState.defaultRegistrationFee || 0);
+    setTuitionAmount(schoolState.defaultTuitionAmount || 0);
     setDiscountAmount(0);
     setPaidAmount(0);
     setRemainingAmount(0);
@@ -2109,13 +2109,13 @@ export function InscriptionsView({
                 </span>
               </div>
 
-              {/* Ligne 1 : Frais d'inscription (25 000 FCFA standard) + Scolarité Annuelle */}
+              {/* Ligne 1 : Frais d'inscription personnalisés par l'école + Scolarité Annuelle */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Frais d&apos;inscription (FCFA) *</span>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      Standard : 25 000 FCFA
+                    <span>Frais d&apos;inscription (FCFA)</span>
+                    <span className="text-[10px] text-slate-500 font-medium">
+                      {schoolState.defaultRegistrationFee ? `Tarif école : ${formatFCFA(schoolState.defaultRegistrationFee)}` : 'Tarif libre école'}
                     </span>
                   </label>
                   <input
@@ -2124,8 +2124,8 @@ export function InscriptionsView({
                     step="1000"
                     value={registrationFee === 0 ? '' : registrationFee}
                     onChange={(e) => setRegistrationFee(parseInt(e.target.value, 10) || 0)}
-                    placeholder="25000"
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-extrabold text-emerald-900 transition-all"
+                    placeholder="Saisissez le montant"
+                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold text-slate-900 transition-all"
                   />
                 </div>
 
