@@ -31,6 +31,7 @@ import {
   ChevronDown,
   FolderOpen,
   Loader2,
+  Lock,
 } from 'lucide-react';
 
 export interface ChildItem {
@@ -280,6 +281,66 @@ export function SpecialDiscountsView({
   const remainingBalanceFCFA = useMemo(() => {
     return Math.max(0, netToPayFCFA - totalPaidFCFA);
   }, [netToPayFCFA, totalPaidFCFA]);
+
+  // Détection si le reçu actif a déjà été sauvegardé dans les archives sans modification
+  const isExistingReceipt = useMemo(() => {
+    return savedReceipts.some((r) => r.receiptNumber === receiptNumber);
+  }, [savedReceipts, receiptNumber]);
+
+  const hasModifications = useMemo(() => {
+    const existing = savedReceipts.find((r) => r.receiptNumber === receiptNumber);
+    if (!existing) {
+      // Pour un nouveau reçu, il faut obligatoirement le nom du parent et au moins un enfant avec un nom
+      return Boolean(parentName.trim() && children.some((c) => c.fullName && c.fullName.trim().length > 0));
+    }
+    // Pour un reçu déjà archivé, comparer l'état actuel avec l'état enregistré
+    const currentSignature = JSON.stringify({
+      parentName: parentName.trim(),
+      parentPhone: parentPhone.trim(),
+      secondaryPhones,
+      parentAddress: parentAddress.trim(),
+      discountType,
+      discountAmountFCFA,
+      manualTotalAmountFCFA,
+      manualNetToPayFCFA,
+      manualPaidAmountFCFA,
+      issueDate,
+      children: children.map((c) => ({ fullName: c.fullName.trim(), grade: c.grade, tuitionAmount: c.tuitionAmount })),
+      installments: installments.map((i) => ({ amount: i.amount, paymentDate: i.paymentDate, paymentMethod: i.paymentMethod })),
+    });
+    const savedSignature = JSON.stringify({
+      parentName: (existing.parentName || '').trim(),
+      parentPhone: (existing.parentPhone || '').trim(),
+      secondaryPhones: existing.secondaryPhones || [],
+      parentAddress: (existing.parentAddress || '').trim(),
+      discountType: existing.discountType,
+      discountAmountFCFA: existing.discountAmountFCFA,
+      manualTotalAmountFCFA: existing.customTotalAmountFCFA || null,
+      manualNetToPayFCFA: existing.customNetToPayFCFA || null,
+      manualPaidAmountFCFA: existing.customPaidAmountFCFA || null,
+      issueDate: existing.issueDate,
+      children: (existing.children || []).map((c) => ({ fullName: c.fullName.trim(), grade: c.grade, tuitionAmount: c.tuitionAmount })),
+      installments: (existing.installments || []).map((i) => ({ amount: i.amount, paymentDate: i.paymentDate, paymentMethod: i.paymentMethod })),
+    });
+    return currentSignature !== savedSignature;
+  }, [
+    savedReceipts,
+    receiptNumber,
+    parentName,
+    parentPhone,
+    secondaryPhones,
+    parentAddress,
+    discountType,
+    discountAmountFCFA,
+    manualTotalAmountFCFA,
+    manualNetToPayFCFA,
+    manualPaidAmountFCFA,
+    issueDate,
+    children,
+    installments,
+  ]);
+
+  const canSave = hasModifications && (parentName.trim().length > 0) && children.some((c) => c.fullName && c.fullName.trim().length > 0);
 
   // Statistiques globales calculées sur les reçus enregistrés
   const globalKpis = useMemo(() => {
@@ -708,12 +769,13 @@ export function SpecialDiscountsView({
 
           {/* Informations Officielles de l'École */}
           <div className="text-center flex-1 space-y-1">
-            <h2 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading leading-tight uppercase">
-              {currentSchool.name}
-            </h2>
-
-            <div className="inline-block px-3 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase tracking-wide">
-              ({currentSchool.shortName || 'EPC MANOI'})
+            <div className="flex items-center justify-center gap-1.5 flex-nowrap w-full overflow-hidden">
+              <h2 className="text-xs sm:text-sm md:text-base font-extrabold text-slate-900 font-heading leading-tight uppercase whitespace-nowrap truncate max-w-[80%]" title={`${currentSchool.name} (${currentSchool.shortName || 'EPC MANOI'})`}>
+                {currentSchool.name}
+              </h2>
+              <span className="shrink-0 inline-block px-2 py-0.5 rounded-md text-[10.5px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase tracking-wide whitespace-nowrap">
+                ({currentSchool.shortName || 'EPC MANOI'})
+              </span>
             </div>
 
             <p className="text-[11px] font-bold text-emerald-800 italic">
@@ -741,17 +803,17 @@ export function SpecialDiscountsView({
           </div>
         </div>
 
-        {/* 2. TITRE DU REÇU & N° DE REÇU */}
-        <div className="text-center bg-slate-950 text-white py-3 px-4 rounded-2xl shadow-sm space-y-1">
-          <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-heading text-emerald-400">
+        {/* 2. TITRE DU REÇU & N° DE REÇU (Fond clair / économique à l'impression, sans gaspillage d'encre) */}
+        <div className="text-center bg-amber-50/80 text-slate-900 border-2 border-amber-900/30 py-3 px-4 rounded-2xl shadow-2xs space-y-1">
+          <h3 className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-heading text-emerald-950">
             REÇU OFFICIEL DE SCOLARITÉ & RÉDUCTION SPÉCIALE {badgeLabel ? `— ${badgeLabel}` : ''}
           </h3>
           <div className="flex items-center justify-center gap-3 text-[11px] font-mono flex-wrap">
-            <span className="text-amber-300 font-bold bg-white/10 px-2.5 py-0.5 rounded-md border border-white/10">
+            <span className="text-emerald-950 font-bold bg-white px-2.5 py-0.5 rounded-md border border-emerald-300 shadow-2xs">
               N° {receiptNumber}
             </span>
-            <span className="text-slate-300 font-medium">
-              Date : <strong className="text-white">{formatDate(issueDate)}</strong>
+            <span className="text-slate-700 font-medium">
+              Date : <strong className="text-slate-950">{formatDate(issueDate)}</strong>
             </span>
           </div>
         </div>
@@ -828,40 +890,40 @@ export function SpecialDiscountsView({
           </div>
         </div>
 
-        {/* 5. GRAND RÉCAPITULATIF FINANCIER */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 rounded-2xl bg-slate-950 text-white shadow-md">
-          <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+        {/* 5. GRAND RÉCAPITULATIF FINANCIER (Fond clair économique à l'impression, sans bloc noir) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 sm:p-4 rounded-2xl bg-slate-50 border-2 border-slate-300 text-slate-900 shadow-2xs">
+          <div className="space-y-0.5 border-r border-slate-200/80 pr-2">
+            <span className="text-[10px] uppercase font-bold text-slate-500 block tracking-wider">
               Somme Totale
             </span>
-            <p className="text-xs sm:text-sm font-extrabold font-heading text-slate-200">
+            <p className="text-xs sm:text-sm font-black font-heading text-slate-950">
               {formatFCFA(totalBrutFCFA)}
             </p>
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">
+          <div className="space-y-0.5 border-r border-slate-200/80 pr-2">
+            <span className="text-[10px] uppercase font-bold text-amber-800 block tracking-wider">
               Réduction Accordée
             </span>
-            <p className="text-xs sm:text-sm font-extrabold font-heading text-amber-300">
+            <p className="text-xs sm:text-sm font-black font-heading text-rose-700">
               -{formatFCFA(discountAmountFCFA)}
             </p>
           </div>
 
-          <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
+          <div className="space-y-0.5 border-r border-slate-200/80 pr-2">
+            <span className="text-[10px] uppercase font-bold text-emerald-800 block tracking-wider">
               Somme Net À Payer
             </span>
-            <p className="text-sm sm:text-base font-extrabold font-heading text-emerald-400">
+            <p className="text-sm sm:text-base font-black font-heading text-emerald-800">
               {formatFCFA(netToPayFCFA)}
             </p>
           </div>
 
           <div className="space-y-0.5">
-            <span className="text-[10px] uppercase font-bold text-blue-400 block tracking-wider">
+            <span className="text-[10px] uppercase font-bold text-blue-800 block tracking-wider">
               Somme Versée
             </span>
-            <p className="text-sm sm:text-base font-extrabold font-heading text-white">
+            <p className="text-sm sm:text-base font-black font-heading text-blue-900">
               {formatFCFA(totalPaidFCFA)}
             </p>
           </div>
@@ -1530,16 +1592,39 @@ export function SpecialDiscountsView({
             </div>
           </div>
 
-          {/* Bouton de sauvegarde du reçu */}
-          <div className="pt-3 border-t border-slate-100">
+          {/* Bouton de sauvegarde du reçu avec contrôle strict d'archives et de modification */}
+          <div className="pt-3 border-t border-slate-100 space-y-1.5">
             <button
               type="button"
+              disabled={!canSave}
               onClick={handleSaveReceipt}
-              className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className={`w-full py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                canSave
+                  ? 'text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 cursor-pointer'
+                  : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'
+              }`}
             >
-              <FileCheck className="w-4 h-4" />
-              <span>Sauvegarder ce Reçu dans les Archives</span>
+              {canSave ? (
+                <>
+                  <FileCheck className="w-4 h-4 text-white" />
+                  <span>{isExistingReceipt ? 'Enregistrer les Modifications dans les Archives' : 'Sauvegarder ce Reçu dans les Archives'}</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 text-slate-400" />
+                  <span>
+                    {isExistingReceipt
+                      ? 'Reçu Déjà Archivé (Aucune Modification)'
+                      : 'Renseignez la Famille et les Enfants pour Sauvegarder'}
+                  </span>
+                </>
+              )}
             </button>
+            {!canSave && isExistingReceipt && (
+              <p className="text-[10px] text-center text-slate-500 italic">
+                ℹ️ Ajoutez un versement ou modifiez les coordonnées pour débloquer l’enregistrement.
+              </p>
+            )}
           </div>
         </div>
 

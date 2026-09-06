@@ -105,7 +105,7 @@ export function Topbar({
               role: isFounder
                 ? 'Fondateur & Promoteur'
                 : isDirector
-                ? 'Directeur Général (Admin)'
+                ? 'Directeur des Études (Admin)'
                 : (staffMember?.role || parsed.role || 'Personnel'),
               roleId: parsed.roleId || 'directeur',
               roleBadge: isFounder
@@ -137,13 +137,13 @@ export function Topbar({
       // Valeur par défaut
       const defaultDir = allStaff.find((s) => s.roleId === 'directeur');
       setActiveSession({
-        fullName: defaultDir?.fullName || live.directorName || 'Directeur Général',
+        fullName: defaultDir?.fullName || live.directorName || 'Directeur des Études',
         email: defaultDir?.email || '',
         phone: defaultDir?.phone || '',
-        role: 'Directeur Général (Admin)',
+        role: 'Directeur des Études (Admin)',
         roleId: 'directeur',
         roleBadge: '👑 Direction (Admin)',
-        department: 'Direction Générale',
+        department: 'Direction des Études',
         avatarUrl: '',
       });
     };

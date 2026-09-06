@@ -1632,7 +1632,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   <div>
                     <p className="font-bold text-white">Protection permanente des interfaces de Direction</p>
                     <p className="text-[11px] text-slate-300">
-                      Les interfaces du <strong>Directeur Général</strong> et du <strong>Fondateur</strong> ne sont jamais réinitialisées. Seuls les espaces des collaborateurs ci-dessous peuvent être remis à zéro.
+                      Les interfaces du <strong>Directeur des Études</strong> et du <strong>Fondateur</strong> ne sont jamais réinitialisées. Seuls les espaces des collaborateurs ci-dessous peuvent être remis à zéro.
                     </p>
                   </div>
                 </div>

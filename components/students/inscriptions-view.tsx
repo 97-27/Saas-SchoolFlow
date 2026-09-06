@@ -56,7 +56,7 @@ export function InscriptionsView({
   schoolSlug = 'college-excellence',
 }: InscriptionsViewProps) {
   const [students, setStudents] = useState<Student[]>(initialStudents);
-  const [schoolState, setSchoolState] = useState<School>(school);
+  const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(schoolSlug, school));
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [successModalData, setSuccessModalData] = useState<Student | null>(null);
@@ -1201,32 +1201,42 @@ export function InscriptionsView({
         {/* CADRE EN-TÊTE OFFICIEL : Logos harmonieux, Nom école, Sigle en dessous, coordonnées nettes */}
         <div className="relative z-10 border-2 border-slate-900 rounded-xl bg-white shadow-2xs p-3">
           <div className="flex items-center justify-between gap-2 sm:gap-3">
-            {/* Logo de l'École (À gauche) */}
+            {/* Logo de l'École (À gauche) - Sans flash ni image bizarre */}
             <div className="shrink-0 text-center flex items-center justify-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    schoolState.logoUrl ||
-                    'https://images.unsplash.com/photo-1599305445671-ac291c95aaa9?w=200&auto=format&fit=crop&q=80'
-                  }
-                  alt={schoolState.name}
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border border-slate-200 shadow-2xs p-1 flex items-center justify-center overflow-hidden">
+                {schoolState.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={schoolState.logoUrl}
+                    alt={schoolState.name}
+                    className="max-w-full max-h-full object-contain rounded-lg"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-lg bg-emerald-700 text-white flex flex-col items-center justify-center font-heading font-black shadow-inner">
+                    <span className="text-xs sm:text-sm tracking-wider leading-none uppercase">
+                      {schoolState.shortName ? schoolState.shortName.slice(0, 4) : 'SF'}
+                    </span>
+                    <span className="text-[8px] font-bold text-emerald-200 tracking-tight mt-0.5">ÉCOLE</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Informations de l'école au centre : Nom complet, Sigle en dessous, Devise, Contacts */}
+            {/* Informations de l'école au centre : Nom complet et Sigle STRICTEMENT SUR LA MÊME LIGNE */}
             <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
-              <h2
-                className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm md:text-base block w-full leading-tight break-words"
-                title={schoolState.name}
-              >
-                {schoolState.name || 'EPC MARKAZ AHLI SOUNNAH'}
-              </h2>
-              <p className="font-extrabold text-emerald-800 text-[11px] sm:text-xs tracking-wide">
-                ({schoolState.shortName || 'EPC MANOI'})
-              </p>
+              <div className="flex items-center justify-center gap-1.5 flex-nowrap w-full overflow-hidden">
+                <h2
+                  className="font-black uppercase tracking-tight text-slate-950 font-heading text-[11px] sm:text-xs md:text-sm lg:text-[14px] whitespace-nowrap truncate max-w-[80%]"
+                  title={`${schoolState.name} (${schoolState.shortName || 'EPC MANOI'})`}
+                >
+                  {schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+                </h2>
+                {schoolState.shortName && (
+                  <span className="shrink-0 font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px] sm:text-xs tracking-wide uppercase whitespace-nowrap">
+                    ({schoolState.shortName})
+                  </span>
+                )}
+              </div>
               <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
                 « {schoolState.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
               </p>

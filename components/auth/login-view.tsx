@@ -88,12 +88,12 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   },
   directeur: {
     id: 'directeur',
-    title: 'Directeur Général (Admin — Direction Générale)',
+    title: 'Directeur des Études (Admin — Direction des Études)',
     badge: '👑 Direction (Admin)',
-    department: 'Direction Générale & Études',
+    department: 'Direction des Études',
     defaultAuthCode: 'DIR-2026',
     defaultUserName: 'LAWANI MOUHAMED',
-    description: 'Directeur Général : Gestion pédagogique, administrative et financière globale de l’établissement.',
+    description: 'Directeur des Études : Gestion pédagogique, administrative et financière globale de l’établissement.',
     allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
     isAdmin: true,
   },
@@ -583,8 +583,9 @@ export function LoginView({
         country: 'Côte d’Ivoire',
         district: '',
         ministryCode: '',
-        founderName: signupFounderName.trim() || signupResponsableName.trim(),
+        founderName: signupFounderName.trim() || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur'),
         directorName: signupResponsableName.trim(),
+        studiesDirectorName: signupResponsableName.trim(),
         logoUrl: '',
         stampUrl: '',
         countryEmblemUrl: '',
@@ -601,10 +602,10 @@ export function LoginView({
           fullName: `Dr. ${signupResponsableName.trim()}`,
           civility: 'Mr',
           pureName: signupResponsableName.trim(),
-          role: 'DR',
+          role: 'Directeur des Études',
           roleId: 'directeur',
           roleBadge: '👑 Admin',
-          department: 'Direction Générale',
+          department: 'Direction des Études',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
           authCode: 'DIR-2026',
@@ -841,7 +842,7 @@ export function LoginView({
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
                       <option value="fondateur">👑 Fondateur / Promotrice (Admin Suprême — Contrôle Total)</option>
-                      <option value="directeur">👑 Directeur / Directrice (Direction Générale — Admin)</option>
+                      <option value="directeur">👑 Directeur / Directrice des Études (Admin Principal)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
                       <option value="informaticien">💻 Informaticien / Responsable IT (Systèmes & Réseau)</option>
@@ -997,7 +998,7 @@ export function LoginView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
-                      Nom et Prénom du Responsable *
+                      Nom et Prénoms du Directeur des Études (Responsable) *
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1007,10 +1008,13 @@ export function LoginView({
                         autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
-                        placeholder="Ex : Dr. Konate Oumar"
+                        placeholder="Ex : Dr. Konate Oumar (Directeur des Études)"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
+                    <p className="text-[10px] text-slate-500">
+                      ℹ️ Renseignez le nom officiel du Directeur des Études qui gérera l’établissement.
+                    </p>
                   </div>
 
                   <div className="space-y-1">
@@ -1026,10 +1030,13 @@ export function LoginView({
                         autoComplete="off"
                         value={signupFounderName}
                         onChange={(e) => setSignupFounderName(e.target.value)}
-                        placeholder="Ex : M. Bakayoko Souleymane"
+                        placeholder="Ex : M. LAWANI MOUSSA (Fondateur Légal)"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
+                    <p className="text-[10px] text-amber-700 font-medium">
+                      🏛️ Renseignez le nom du Fondateur / Propriétaire légal de l’école (ex : LAWANI MOUSSA).
+                    </p>
                   </div>
                 </div>
 

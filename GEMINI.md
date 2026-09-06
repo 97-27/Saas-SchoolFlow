@@ -1,7 +1,8 @@
 # 🌟 SchoolFlow — Mémorial du Projet, Architecture & Connaissances
 
 > **Document Fondateur & Synthèse d'Ingénierie**  
-> **Auteur & Visionnaire** : LAWANI MOUHAMED (Fondateur & Promoteur)  
+> **Fondateur & Promoteur Légal** : LAWANI MOUSSA  
+> **Directeur des Études & Visionnaire** : LAWANI MOUHAMED  
 > **Établissement Pilote** : EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL (EPC MANOI)  
 > **Plateforme** : SchoolFlow SaaS (Gestion Scolaire Nouvelle Génération pour l'Afrique Francophone)  
 > **Dépôt GitHub** : `97-27/Saas-SchoolFlow` • **Production Vercel** : `https://saas-school-flow-12xh.vercel.app`

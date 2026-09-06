@@ -209,7 +209,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
     const roleTitleMap: Record<string, string> = {
       fondateur: 'Fondateur & Promoteur (Supervision Suprême)',
-      directeur: 'Directeur Général (Admin)',
+      directeur: 'Directeur des Études (Admin)',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
@@ -638,7 +638,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         {member.roleId === 'fondateur'
                           ? '👑 Fondateur'
                           : member.roleId === 'directeur'
-                          ? '👑 Directeur Général'
+                          ? '👑 Directeur des Études'
                           : member.roleId === 'enseignant'
                           ? '👨‍🏫 Enseignant'
                           : member.roleId === 'secretaire'
@@ -859,7 +859,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
                     <div>
                       <span className="text-slate-500 text-[11px] block">Fonction Officielle :</span>
-                      <strong className="text-emerald-950 font-bold">Directeur Général (Admin Principal)</strong>
+                      <strong className="text-emerald-950 font-bold">Directeur des Études (Admin Principal)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 text-[11px] block">Réf. Direction :</span>
@@ -1259,7 +1259,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   ) : editingStaff.roleId === 'directeur' ? (
                     <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>👑 Directeur Général (Admin)</span>
+                      <span>👑 Directeur des Études (Admin)</span>
                     </div>
                   ) : (
                     <select

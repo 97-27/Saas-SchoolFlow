@@ -328,8 +328,14 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
         ...local,
         name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
         shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
-        founderName: local.founderName || fallback?.founderName || (slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUSSA' : 'Fondateur de l’Établissement'),
+        founderName:
+          (slug === 'epc-manoi' || slug === 'college-excellence')
+            ? 'LAWANI MOUSSA'
+            : (local.founderName && !local.founderName.toUpperCase().includes('MOUHAMED')
+                ? local.founderName
+                : (fallback?.founderName || 'LAWANI MOUSSA')),
         directorName: local.directorName || fallback?.directorName || 'LAWANI MOUHAMED',
+        studiesDirectorName: local.studiesDirectorName || fallback?.studiesDirectorName || 'Direction des Études',
         slug: slug,
       };
     }
@@ -1167,8 +1173,8 @@ export const defaultStaffUsers: StaffUser[] = [
   },
   {
     id: 'staff-001',
-    fullName: 'LAWANI MOUHAMED (Directeur Général)',
-    role: 'Directeur Général (Admin)',
+    fullName: 'LAWANI MOUHAMED (Directeur des Études)',
+    role: 'Directeur des Études (Admin)',
     roleId: 'directeur',
     matricule: 'DIR-001',
     subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -1211,8 +1217,8 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     },
     {
       id: 'staff-001',
-      fullName: school.directorName ? `${school.directorName} (Directeur Général)` : 'Directeur Général',
-      role: 'Directeur Général (Admin)',
+      fullName: school.directorName ? `${school.directorName} (Directeur des Études)` : 'Directeur des Études',
+      role: 'Directeur des Études (Admin)',
       roleId: 'directeur',
       matricule: 'DIR-001',
       subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -1259,11 +1265,22 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
 
         if (codeMap.has(u.authCode)) {
           const def = codeMap.get(u.authCode)!;
+          let finalName = u.fullName || def.fullName;
+          if (def.roleId === 'fondateur') {
+            if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence' || finalName.toUpperCase().includes('MOUHAMED')) {
+              finalName = 'LAWANI MOUSSA (Fondateur)';
+            }
+          } else if (def.roleId === 'directeur') {
+            finalName = finalName.replace(/Directeur Général/gi, 'Directeur des Études');
+            if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+              finalName = 'LAWANI MOUHAMED (Directeur des Études)';
+            }
+          }
           codeMap.set(u.authCode, {
             ...def,
             ...u,
-            fullName: u.fullName || def.fullName,
-            role: def.roleId === 'fondateur' ? 'Fondateur & Promoteur (Supervision Suprême)' : def.roleId === 'directeur' ? 'Directeur Général (Admin)' : (u.role || def.role),
+            fullName: finalName,
+            role: def.roleId === 'fondateur' ? 'Fondateur & Promoteur (Supervision Suprême)' : def.roleId === 'directeur' ? 'Directeur des Études (Admin)' : (u.role || def.role),
             roleId: def.roleId || u.roleId,
             matricule: def.roleId === 'fondateur' ? 'FND-001' : def.roleId === 'directeur' ? 'DIR-001' : (u.matricule || def.matricule),
             joinDate: def.roleId === 'fondateur' ? 'Fondateur de l\'Établissement (Depuis 2026)' : (u.joinDate || def.joinDate),
@@ -1975,8 +1992,8 @@ export function resetSchoolData(
         },
         {
           id: 'staff-001',
-          fullName: school.directorName || 'LAWANI MOUHAMED (Directeur Général)',
-          role: 'Directeur Général (Admin)',
+          fullName: school.directorName || 'LAWANI MOUHAMED (Directeur des Études)',
+          role: 'Directeur des Études (Admin)',
           roleId: 'directeur',
           matricule: 'EMP-DIR-001',
           subjectOrGrade: 'Direction des Études & Pédagogie',
