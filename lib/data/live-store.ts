@@ -1095,6 +1095,91 @@ export const defaultStaffUsers: StaffUser[] = [
     status: 'Actif',
     lastLogin: 'En ligne',
   },
+  {
+    id: 'staff-002',
+    fullName: 'Mme Fatou Traoré',
+    role: 'Secrétaire de Direction',
+    roleId: 'secretaire',
+    matricule: 'EMP-SEC-002',
+    subjectOrGrade: 'Accueil & Documents Scolaires',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'BTS Secrétariat & Bureautique',
+    address: 'Cocody Riviera, Abidjan',
+    joinDate: '01/09/2026',
+    email: 'secretaire@epc-manoi.ci',
+    phone: '+225 07 11 22 33 44',
+    authCode: 'SEC-2026',
+    status: 'Actif',
+    lastLogin: '06/09/2026 à 08:30',
+  },
+  {
+    id: 'staff-003',
+    fullName: 'M. Ibrahim Koné',
+    role: 'Comptable / Gestionnaire',
+    roleId: 'comptable',
+    matricule: 'EMP-CPT-003',
+    subjectOrGrade: 'Gestion Financière & Recouvrement',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Licence Finance & Comptabilité',
+    address: 'Yopougon, Abidjan',
+    joinDate: '01/09/2026',
+    email: 'comptable@epc-manoi.ci',
+    phone: '+225 05 44 55 66 77',
+    authCode: 'CPT-2026',
+    status: 'Actif',
+    lastLogin: '06/09/2026 à 08:45',
+  },
+  {
+    id: 'staff-004',
+    fullName: 'M. Paul Koffi',
+    role: 'Enseignant / Professeur',
+    roleId: 'enseignant',
+    matricule: 'EMP-ENS-004',
+    subjectOrGrade: 'Mathématiques & Sciences',
+    assignedClasses: '6ème, 5ème, 4ème, 3ème',
+    diplomaOrExperience: 'CAPES Mathématiques (8 ans exp.)',
+    address: 'Abobo, Abidjan',
+    joinDate: '01/09/2026',
+    email: 'enseignant@epc-manoi.ci',
+    phone: '+225 01 88 99 00 11',
+    authCode: 'ENS-2026',
+    status: 'Actif',
+    lastLogin: '06/09/2026 à 09:10',
+  },
+  {
+    id: 'staff-005',
+    fullName: 'Mme Awa Coulibaly',
+    role: 'Assistant(e) de Direction',
+    roleId: 'assistant_direction',
+    matricule: 'EMP-AST-005',
+    subjectOrGrade: 'Coordination Pédagogique & Vie Scolaire',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Master en Sciences de l’Éducation',
+    address: 'Cocody Angré, Abidjan',
+    joinDate: '01/09/2026',
+    email: 'adjointe@epc-manoi.ci',
+    phone: '+225 07 77 88 99 00',
+    authCode: 'AST-2026',
+    status: 'Actif',
+    lastLogin: '06/09/2026 à 08:15',
+  },
+  {
+    id: 'staff-006',
+    fullName: 'M. Stéphane Bamba',
+    role: 'Informaticien / Responsable IT',
+    roleId: 'informaticien',
+    matricule: 'EMP-INF-006',
+    subjectOrGrade: 'Systèmes Informatiques & Réseau',
+    assignedClasses: 'Administration',
+    diplomaOrExperience: 'Ingénieur Télécoms & Réseaux',
+    address: 'Plateau, Abidjan',
+    joinDate: '01/09/2026',
+    email: 'it@epc-manoi.ci',
+    phone: '+225 01 23 45 67 89',
+    authCode: 'INF-2026',
+    status: 'Actif',
+    lastLogin: '06/09/2026 à 07:50',
+  },
 ];
 
 export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[] {
@@ -1325,39 +1410,32 @@ export function verifyUserAuthCodeForLogin(
     (s) => s.authCode.trim().toUpperCase() === cleanInputCode
   );
 
-  const isDefaultCode = defaultCodeMap[roleId] && cleanInputCode === defaultCodeMap[roleId].toUpperCase();
-
-  if (!matchedStaff && !isDefaultCode) {
+  if (!matchedStaff) {
     return {
       isValid: false,
-      reason: `❌ Code d'authentification incorrect pour le poste de ${
+      reason: `❌ Accès refusé : Aucun compte actif n'a été créé avec ce code d'authentification pour le poste de ${
         roleNameMap[roleId] || 'Personnel'
-      }. Veuillez vérifier le code créé par la Direction.`,
+      } par la Direction de l'école. Veuillez contacter l'Administration pour la création de votre accès.`,
     };
   }
 
-  const candidateStaff =
-    matchedStaff ||
-    staffForRole.find((s) => s.authCode.trim().toUpperCase() === cleanInputCode) ||
-    staffForRole[0];
-
-  if (candidateStaff && candidateStaff.status === 'Verrouillé') {
+  if (matchedStaff.status === 'Verrouillé') {
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Ce compte d'accès (${candidateStaff.fullName}) a été verrouillé et bloqué par la Direction de l'établissement.`,
+      reason: `❌ Accès refusé : Ce compte d'accès (${matchedStaff.fullName}) a été verrouillé et bloqué par la Direction de l'établissement.`,
     };
   }
 
-  if (candidateStaff && candidateStaff.status === 'En attente') {
+  if (matchedStaff.status === 'En attente') {
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Ce compte est actuellement en attente d'activation par la Direction.`,
+      reason: `❌ Accès refusé : Ce compte (${matchedStaff.fullName}) est actuellement en attente d'activation par la Direction.`,
     };
   }
 
   return {
     isValid: true,
-    staffUser: matchedStaff || candidateStaff || undefined,
+    staffUser: matchedStaff,
   };
 }
 

@@ -25,6 +25,7 @@ import {
   Pencil,
   Check,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface TopbarProps {
@@ -64,9 +65,6 @@ export function Topbar({
   });
 
   const [showWelcomeGreeting, setShowWelcomeGreeting] = useState(false);
-  const [isEditingContact, setIsEditingContact] = useState(false);
-  const [editEmail, setEditEmail] = useState('');
-  const [editPhone, setEditPhone] = useState('');
 
   // Synchronisation dynamique de l'école et de l'année scolaire & session
   useEffect(() => {
@@ -143,33 +141,6 @@ export function Topbar({
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-
-  // Enregistrement des modifications d'email et contact direct par l'utilisateur
-  const handleSaveContact = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated = {
-      ...activeSession,
-      email: editEmail.trim() || activeSession.email,
-      phone: editPhone.trim() || activeSession.phone,
-    };
-    setActiveSession(updated);
-    setIsEditingContact(false);
-
-    try {
-      const stored = localStorage.getItem('schoolflow_active_session_v2');
-      const parsed = stored ? JSON.parse(stored) : {};
-      const newSession = {
-        ...parsed,
-        email: updated.email,
-        phone: updated.phone,
-      };
-      localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
-      broadcastLiveUpdate({
-        action: 'session_updated',
-        session: newSession,
-      });
-    } catch (err) {}
-  };
 
   // Téléversement d'une photo de profil personnalisée
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -647,87 +618,31 @@ export function Topbar({
                     </span>
                   </div>
 
-                  {/* Coordonnées Professionnelles Modifiables */}
-                  {isEditingContact ? (
-                    <form onSubmit={handleSaveContact} className="pt-2 border-t border-slate-200/80 space-y-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase block">
-                          Email Professionnel :
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          value={editEmail}
-                          onChange={(e) => setEditEmail(e.target.value)}
-                          placeholder="votre-email@etablissement.ci"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase block">
-                          Contact Direct / WhatsApp :
-                        </label>
-                        <input
-                          type="text"
-                          value={editPhone}
-                          onChange={(e) => setEditPhone(e.target.value)}
-                          placeholder="Ex : +225 07 00 00 00 00"
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="submit"
-                          className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Enregistrer
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingContact(false)}
-                          className="py-1.5 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[11px] cursor-pointer transition-colors"
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="space-y-2 pt-1 border-t border-slate-200/60">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400 text-[11px]">Email Pro :</span>
-                        <span className="font-mono font-semibold text-emerald-800 text-[11px] truncate max-w-[170px]" title={activeSession.email}>
-                          {activeSession.email}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-slate-400 text-[11px]">Contact Direct :</span>
-                        <span className="font-mono font-bold text-emerald-800 text-[11px]">
-                          {activeSession.phone || (
-                            <span className="italic text-slate-400 font-sans font-normal text-[10.5px]">
-                              Non renseigné
-                            </span>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="pt-1 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditEmail(activeSession.email);
-                            setEditPhone(activeSession.phone);
-                            setIsEditingContact(true);
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-3 h-3" /> Modifier mes coordonnées
-                        </button>
-                      </div>
+                  {/* Coordonnées Professionnelles Officielles Certifiées (Lecture Seule) */}
+                  <div className="space-y-2 pt-2 border-t border-slate-200/80">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-slate-400 text-[11px]">Email Pro :</span>
+                      <span className="font-mono font-semibold text-emerald-900 text-[11px] truncate max-w-[170px]" title={activeSession.email}>
+                        {activeSession.email}
+                      </span>
                     </div>
-                  )}
+
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="text-slate-400 text-[11px]">Contact Direct :</span>
+                      <span className="font-mono font-bold text-emerald-900 text-[11px]">
+                        {activeSession.phone || (
+                          <span className="italic text-slate-400 font-sans font-normal text-[10.5px]">
+                            Non renseigné
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[10px] text-slate-500 flex items-center gap-1.5 mt-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Coordonnées certifiées conformes par la Direction de l&apos;école.</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Boutons d'Action : Landing Page & Déconnexion */}

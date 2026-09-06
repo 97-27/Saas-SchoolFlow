@@ -396,6 +396,7 @@ export function LoginView({
         );
         return;
       }
+      var verifiedStaffUser = authCheck.staffUser;
     }
 
     const cleanAuthCode =
@@ -406,8 +407,10 @@ export function LoginView({
     setIsLoading(true);
 
     setTimeout(() => {
-      const finalFullName = `${civility} ${trimmedName}`;
       const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'directeur';
+      const finalFullName = verifiedStaffUser?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel'));
+      const finalEmail = verifiedStaffUser?.email || cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`;
+      const finalPhone = verifiedStaffUser?.phone || (selectedRole === 'parent' ? parentPhone : (isSupremeAdmin ? '' : '+225 07 48 92 11 00'));
       const roleBadge =
         selectedRole === 'fondateur'
           ? '👑 Fondateur (Admin)'
@@ -419,18 +422,18 @@ export function LoginView({
           ? 'Fondateur / Promotrice'
           : selectedRole === 'directeur'
           ? 'DR'
-          : ROLE_CONFIGS[selectedRole].title;
+          : (verifiedStaffUser?.role || ROLE_CONFIGS[selectedRole].title);
 
       const sessionData = {
         fullName: finalFullName,
         civility: civility,
-        pureName: trimmedName,
+        pureName: verifiedStaffUser?.fullName || trimmedName,
         role: roleTitle,
         roleId: selectedRole,
         roleBadge: roleBadge,
         department: ROLE_CONFIGS[selectedRole].department,
-        email: cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`,
-        phone: selectedRole === 'parent' ? parentPhone : '+225 07 48 92 11 00',
+        email: finalEmail,
+        phone: finalPhone,
         authCode: cleanAuthCode,
         isAdmin: isSupremeAdmin,
         matchedChildrenIds: matchedParentStudents.map((s) => s.id),

@@ -797,13 +797,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <span>Coordonnées & Informations Personnelles</span>
                 </h4>
                 <div className="space-y-1.5 text-slate-600 pt-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px]">Numéro Téléphone / WhatsApp :</span>
-                    <strong className="text-slate-900 font-mono">{selectedStaffDetail.phone}</strong>
-                  </div>
+                  {selectedStaffDetail.phone && selectedStaffDetail.phone.trim() ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-[11px]">Numéro Téléphone / WhatsApp :</span>
+                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.phone}</strong>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[11px]">Email Professionnel :</span>
-                    <strong className="text-slate-900 font-mono">{selectedStaffDetail.email}</strong>
+                    <strong className="text-slate-900 font-mono">{selectedStaffDetail.email || 'direction@etablissement.ci'}</strong>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[11px]">Adresse de Résidence :</span>
@@ -812,36 +814,38 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
-              {/* Code d'Authentification Sécurisé & Statut */}
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-emerald-900 block flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Code d&apos;Authentification Officiel :</span>
-                  </span>
-                  <span className="font-mono font-black text-sm text-emerald-950 tracking-widest">
-                    {selectedStaffDetail.authCode}
-                  </span>
+              {/* Code d'Authentification Sécurisé & Statut (Uniquement pour le personnel collaborateur : Secrétaire, Comptable, Enseignant, etc.) */}
+              {!(selectedStaffDetail.roleId === 'directeur' || selectedStaffDetail.roleId === 'fondateur' || selectedStaffDetail.id === 'staff-founder' || selectedStaffDetail.id === 'staff-001') && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-900 block flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Code d&apos;Authentification Officiel :</span>
+                    </span>
+                    <span className="font-mono font-black text-sm text-emerald-950 tracking-widest">
+                      {selectedStaffDetail.authCode}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(selectedStaffDetail.authCode, selectedStaffDetail.id)}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleShareWhatsApp(selectedStaffDetail)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleCopyCode(selectedStaffDetail.authCode, selectedStaffDetail.id)}
-                    className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copier</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleShareWhatsApp(selectedStaffDetail)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span>WhatsApp</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
             </div>
 
