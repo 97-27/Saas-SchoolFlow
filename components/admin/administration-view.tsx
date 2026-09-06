@@ -65,7 +65,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
+  const [editRole, setEditRole] = useState<'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -126,20 +126,25 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
   // Ouvrir la modale d'édition complète
   const openEditModal = (staff: StaffUser) => {
+    // Le fondateur ne peut jamais être modifié (lecture seule uniquement)
+    if (staff.roleId === 'fondateur' || staff.id === 'staff-founder') {
+      alert("Les coordonnées du Fondateur sont protégées et ne peuvent pas être modifiées.");
+      return;
+    }
     setEditingStaff(staff);
     setEditFullName(staff.fullName);
-    const validRoles: ('enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
-      'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
+    const validRoles: ('directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
+      'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
     setEditMatricule(staff.matricule || `EMP-${staff.authCode}`);
-    setEditSubject(staff.subjectOrGrade || 'Toutes les matières (Enseignant Titulaire / Polyvalent)');
+    setEditSubject(staff.subjectOrGrade || (staff.roleId === 'directeur' ? 'Direction Générale des Études' : 'Toutes les matières (Enseignant Titulaire / Polyvalent)'));
     setEditClasses(staff.assignedClasses || 'Toutes les classes');
     setEditDiploma(staff.diplomaOrExperience || '');
     setEditAddress(staff.address || '');
-    setEditEmail(staff.email);
-    setEditPhone(staff.phone);
-    setEditAuthCodeValue(staff.authCode);
+    setEditEmail(staff.email || '');
+    setEditPhone(staff.phone || '');
+    setEditAuthCodeValue(staff.authCode || 'DIR-2026');
     setEditStatus(staff.status);
   };
 
@@ -171,8 +176,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
   // Supprimer / Révoquer un profil et son code
   const handleDeleteStaff = (staff: StaffUser) => {
-    if (staff.roleId === 'directeur' && staffList.filter((s) => s.roleId === 'directeur').length <= 1) {
-      alert("Impossible de supprimer le compte Administrateur Principal.");
+    if (staff.roleId === 'directeur' || staff.roleId === 'fondateur' || staff.id === 'staff-founder' || staff.id === 'staff-001') {
+      alert("Impossible de supprimer un compte de Direction Principale.");
       return;
     }
     if (confirm(`Confirmez-vous la révocation définitive du compte de « ${staff.fullName} » ? Son code d'accès sera immédiatement désactivé.`)) {
@@ -184,16 +189,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Sauvegarder l'édition complète d'un membre
   const handleSaveFullEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingStaff || !editFullName.trim() || !editEmail.trim()) return;
+    if (!editingStaff || !editFullName.trim()) return;
 
     const roleTitleMap: Record<string, string> = {
+      directeur: 'Directeur des Études (Admin)',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
-      directeur: 'Directeur des Études (Admin)',
       fondateur: 'Fondateur / Fondatrice (Supervision)',
       parent: 'Parent d’Élève (Espace Famille)',
     };
@@ -201,28 +206,28 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const updatedUser: StaffUser = {
       ...editingStaff,
       fullName: editFullName.trim(),
-      role: roleTitleMap[editRole] || 'Membre du Personnel',
+      role: roleTitleMap[editRole] || editingStaff.role || 'Membre du Personnel',
       roleId: editRole,
       matricule: editMatricule.trim() || `EMP-${editAuthCodeValue.trim()}`,
       subjectOrGrade: editSubject.trim() || (editRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
       assignedClasses: editClasses.trim() || (editRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
       diplomaOrExperience: editDiploma.trim() || undefined,
       address: editAddress.trim() || undefined,
-      email: editEmail.trim(),
+      email: editEmail.trim() || editingStaff.email,
       phone: editPhone.trim(),
       authCode: editAuthCodeValue.trim().toUpperCase(),
       status: editStatus,
     };
 
     updateFullStaffUser(updatedUser, schoolSlug);
-    showToast(`✅ Informations et code de ${updatedUser.fullName} mis à jour avec succès !`);
+    showToast(`✅ Informations de ${updatedUser.fullName} mises à jour avec succès !`);
     setEditingStaff(null);
   };
 
-  // Ajouter un nouveau membre
+  // Ajouter un nouveau membre (Email et Adresse retirés à la saisie, email alimenté lors de la connexion)
   const handleAddStaffSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFullName.trim() || !newEmail.trim()) return;
+    if (!newFullName.trim()) return;
 
     const generatedCode = newAuthCode.trim() || generateRandomCode(newRole);
     const roleTitleMap: Record<string, string> = {
@@ -233,6 +238,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
     };
+
+    const cleanSlug = schoolSlug || 'schoolflow';
+    const autoEmail = newEmail.trim() || `${newFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@${cleanSlug}.ci`;
 
     const newStaffMember: StaffUser = {
       id: `staff-${Date.now().toString().slice(-4)}`,
@@ -245,7 +253,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
       joinDate: '01/09/2026',
-      email: newEmail.trim(),
+      email: autoEmail,
       phone: newPhone.trim() || '+225 07 00 00 00 00',
       authCode: generatedCode.toUpperCase(),
       status: 'Actif',
@@ -651,42 +659,32 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       </div>
                     </td>
 
-                    {/* 7. Actions (Plus d'infos, WhatsApp, Modifier, Supprimer) */}
+                    {/* 7. Actions (Voir coordonnées, Modifier, Supprimer) */}
                     <td className="py-3 px-3.5 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1 justify-end">
-                        {/* Consulter fiche complète & Plus d'informations */}
+                        {/* 1. Consulter fiche complète & Coordonnées (Accessible pour tous : Fondateur, Directeur, Personnel) */}
                         <button
                           type="button"
                           onClick={() => setSelectedStaffDetail(member)}
                           className="p-1.5 text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Fiche & Plus d'informations (Détails complets)"
+                          title="Voir les coordonnées complètes"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* Partager accès sur WhatsApp (si membre avec code) */}
-                        {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
+                        {/* 2. Modifier les coordonnées et informations : Autorisé pour le Directeur et le Personnel, strictement verrouillé pour le Fondateur */}
+                        {!(member.roleId === 'fondateur' || member.id === 'staff-founder') && (
                           <button
                             type="button"
-                            onClick={() => handleShareWhatsApp(member)}
-                            className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 cursor-pointer shadow-2xs"
-                            title="Envoyer le code et le lien de connexion sur WhatsApp"
+                            onClick={() => openEditModal(member)}
+                            className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
+                            title="Modifier les coordonnées et informations"
                           >
-                            <Share2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         )}
 
-                        {/* Modifier les informations */}
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(member)}
-                          className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Modifier les coordonnées et informations"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Révoquer / Supprimer (Uniquement pour le personnel ajouté, jamais les Admins Suprêmes) */}
+                        {/* 3. Révoquer / Supprimer : Réservé au personnel enseignant/technique (interdit pour Fondateur et Directeur) */}
                         {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
                           <button
                             type="button"
@@ -941,20 +939,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Email Professionnel *</label>
-                  <input
-                    type="email"
-                    required
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="email@etablissement.ci"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Ligne Professionnelle / Numéro Téléphone *</label>
                   <input
                     type="tel"
@@ -963,17 +947,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     onChange={(e) => setNewPhone(e.target.value)}
                     placeholder="+225 07 12 34 56 78"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
-                  <input
-                    type="text"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    placeholder="Ex : Abidjan, Cocody"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
               </div>

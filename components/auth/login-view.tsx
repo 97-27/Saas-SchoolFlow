@@ -46,6 +46,7 @@ import {
   registerSchoolWithSubscription,
   verifySchoolSubscriptionForLogin,
   verifyUserAuthCodeForLogin,
+  updateFullStaffUser,
   broadcastLiveUpdate,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
@@ -419,7 +420,13 @@ export function LoginView({
 
       const finalEmail = isParent
         ? officialParentEmail
-        : (verifiedStaffUser?.email || cleanEmail || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`);
+        : (cleanEmail || verifiedStaffUser?.email || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`);
+
+      // Mettre à jour l'email du membre du personnel s'il s'est connecté avec une adresse spécifique
+      if (verifiedStaffUser && cleanEmail && verifiedStaffUser.email !== cleanEmail) {
+        verifiedStaffUser.email = cleanEmail;
+        updateFullStaffUser(verifiedStaffUser, schoolSlug);
+      }
 
       const finalPhone = isParent
         ? officialParentPhone

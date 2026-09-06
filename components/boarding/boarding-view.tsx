@@ -88,6 +88,20 @@ export function BoardingView({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
+  // Modale finale de confirmation avec bouton OK suite à l'enregistrement d'une quittance
+  const [successReceiptModalData, setSuccessReceiptModalData] = useState<{
+    studentName: string;
+    matricule: string;
+    className: string;
+    pavilion: string;
+    room: string;
+    totalPaid: number;
+    remaining: number;
+    paidMonthsCount: number;
+    paymentDate: string;
+    paymentMethod: string;
+  } | null>(null);
+
   // Modale de Confirmation de Souscription d'Internat
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
@@ -681,12 +695,20 @@ export function BoardingView({
     setIsConfirmModalOpen(false);
     setIsCreatingNew(false);
     setActiveBoarderIndex(0);
-    if (activeTotalCollected > 0) {
-      setToastMessage(`✓ Quittance d'internat enregistrée avec succès (${activePaidMonthsCount}/9 mois réglés pour ${formStudentName}).`);
-    } else {
-      setToastMessage(`✓ Modifications des coordonnées du pensionnaire enregistrées avec succès (${formStudentName}).`);
-    }
-    setTimeout(() => setToastMessage(null), 5000);
+
+    // Déclencher la modale finale de confirmation avec bouton OK demandée par la direction
+    setSuccessReceiptModalData({
+      studentName: formStudentName.trim() || 'Pensionnaire',
+      matricule: formMatricule.trim() || '—',
+      className: formClassName,
+      pavilion: formPavilion,
+      room: formRoom.trim() || 'Chambre 101',
+      totalPaid: activeTotalCollected,
+      remaining: activeRemainingBalance,
+      paidMonthsCount: activePaidMonthsCount,
+      paymentDate: formPaymentDate || getTodayFrenchDateStr(),
+      paymentMethod: formPaymentMethod,
+    });
   };
 
   // Navigation Reçu Précédent / Suivant
@@ -1103,6 +1125,81 @@ export function BoardingView({
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          MODALE FINALE DE CONFIRMATION AVEC BOUTON OK (QUITTANCE ENREGISTRÉE)
+          ═══════════════════════════════════════════════════════════════ */}
+      {successReceiptModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95 text-center">
+            <div className="w-14 h-14 rounded-3xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center shadow-xs">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-900 font-heading">
+                Quittance Enregistrée avec Succès !
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Le dossier du pensionnaire et le journal de caisse ont été mis à jour immédiatement.
+              </p>
+            </div>
+
+            {/* Récapitulatif clair */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left text-xs space-y-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500">Pensionnaire :</span>
+                <span className="font-extrabold text-slate-900 truncate max-w-[200px]">
+                  {successReceiptModalData.studentName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500">Matricule & Classe :</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {successReceiptModalData.matricule} • {successReceiptModalData.className}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500">Hébergement :</span>
+                <span className="font-semibold text-purple-900 truncate max-w-[200px]">
+                  {successReceiptModalData.pavilion} — {successReceiptModalData.room}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500">Mensualités prises en compte :</span>
+                <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  {successReceiptModalData.paidMonthsCount} / 9 mois réglés
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500">Total Encaissé :</span>
+                <span className="font-mono font-black text-emerald-700 text-sm">
+                  {formatFCFA(successReceiptModalData.totalPaid)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Reste Exigible Annuel :</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {formatFCFA(successReceiptModalData.remaining)}
+                </span>
+              </div>
+            </div>
+
+            {/* Bouton OK Unique et Proéminent */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setSuccessReceiptModalData(null)}
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Check className="w-5 h-5" />
+                <span>OK</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════
           EN-TÊTE DE PAGE AVEC ANNÉE SCOLAIRE SUR LA MÊME LIGNE
           ═══════════════════════════════════════════════════════════════ */}

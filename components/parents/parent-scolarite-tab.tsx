@@ -428,52 +428,52 @@ export function ParentScolariteTab({
           </div>
         </div>
 
-        {/* 3 Cartes Métriques Clés Consolidées */}
+        {/* 3 Cartes Métriques Clés : Frais de Scolarité Annuels Officiels de l'Élève */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/15">
-          {/* Montant Total Exigible */}
+          {/* Montant Scolarité Annuelle Exigible */}
           <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs">
             <span className="text-[11px] font-bold text-emerald-300/80 uppercase tracking-wide block">
-              1. Total Annuel Dû (Scolarité + Services)
+              1. Frais Annuels de Scolarité
             </span>
             <span className="text-xl sm:text-2xl font-black font-mono text-white mt-1 block">
-              {formatFCFA(consolidated.totalAnnual)}
+              {formatFCFA(tuitionStats.netTuition)}
             </span>
             <span className="text-[11px] text-slate-300 mt-1 block">
-              Tous frais & prestations scolaires inclus
+              Montant officiel scolarité (base de données école)
             </span>
           </div>
 
-          {/* Somme Déjà Versée */}
+          {/* Scolarité Déjà Versée */}
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 backdrop-blur-xs">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wide">
-                2. Somme Déjà Payée / Avancée
+                2. Scolarité Déjà Versée
               </span>
               <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                {consolidated.progress}% réglé
+                {tuitionStats.progressPercent}% réglé
               </span>
             </div>
             <span className="text-xl sm:text-2xl font-black font-mono text-emerald-300 mt-1 block">
-              {formatFCFA(consolidated.totalPaid)}
+              {formatFCFA(tuitionStats.paid)}
             </span>
             <span className="text-[11px] text-emerald-200/80 mt-1 block">
-              Encaissé et certifié par l'établissement
+              Versements certifiés sur le reçu de l&apos;élève
             </span>
           </div>
 
-          {/* Somme Restante à Payer */}
+          {/* Reste à Payer Scolarité */}
           <div
             className={`p-4 rounded-2xl border backdrop-blur-xs ${
-              consolidated.isFullySettled
+              tuitionStats.isFullyPaid
                 ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
                 : 'bg-amber-500/10 border-amber-400/30 text-amber-200'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wide text-white">
-                3. Reste Total à Payer
+                3. Reste à Payer Scolarité
               </span>
-              {consolidated.isFullySettled ? (
+              {tuitionStats.isFullyPaid ? (
                 <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-400 text-slate-950 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" />
                   Soldé à 100%
@@ -487,25 +487,25 @@ export function ParentScolariteTab({
             </div>
             <span
               className={`text-xl sm:text-2xl font-black font-mono mt-1 block ${
-                consolidated.isFullySettled ? 'text-emerald-300' : 'text-amber-300'
+                tuitionStats.isFullyPaid ? 'text-emerald-300' : 'text-amber-300'
               }`}
             >
-              {formatFCFA(consolidated.totalRemaining)}
+              {formatFCFA(tuitionStats.remaining)}
             </span>
             <span className="text-[11px] text-slate-300 mt-1 block">
-              {consolidated.isFullySettled
-                ? 'Aucun arriéré financier en cours'
-                : 'À solder selon l’échéancier convenu'}
+              {tuitionStats.isFullyPaid
+                ? 'Scolarité annuelle entièrement soldée'
+                : 'Reste exact figurant sur le dossier de l’élève'}
             </span>
           </div>
         </div>
 
-        {/* Barre de Progression Visuelle */}
+        {/* Barre de Progression Visuelle Scolarité */}
         <div className="mt-5">
           <div className="w-full bg-white/15 h-2.5 rounded-full overflow-hidden p-0.5">
             <div
               className="bg-gradient-to-r from-emerald-400 to-teal-300 h-full rounded-full transition-all duration-500 shadow-sm"
-              style={{ width: `${consolidated.progress}%` }}
+              style={{ width: `${tuitionStats.progressPercent}%` }}
             />
           </div>
         </div>

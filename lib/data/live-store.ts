@@ -1320,35 +1320,41 @@ export function verifyUserAuthCodeForLogin(
     ]);
 
     const normInputName = normalize(fullName);
-    const nameTokens = normInputName
+    const inputTokens = normInputName
       .split(/[\s,.-]+/)
-      .filter((t) => t.length >= 3 && !HONORIFICS.has(t));
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
 
-    // Étape 1 : Analyser si le nom du parent figure dans la liste des tuteurs / parents enregistrés de l'école
+    // Étape 1 : Analyser si le nom du parent figure exactement et entièrement mot pour mot dans la liste des tuteurs enregistrés
     const nameMatchedStudents = liveStudents.filter((stu) => {
       const rawGName = (stu.guardianName || '').trim();
       if (!rawGName) return false;
       const normGName = normalize(rawGName);
 
-      // Correspondance exacte ou inclusion globale sans civilité
-      if (normGName === normInputName || normGName.includes(normInputName) || normInputName.includes(normGName)) {
-        return true;
-      }
-
-      // Correspondance par jetons significatifs (au moins un nom de famille ou prénom clé)
       const gTokens = normGName
         .split(/[\s,.-]+/)
-        .filter((t) => t.length >= 3 && !HONORIFICS.has(t));
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
 
-      return nameTokens.some(
-        (token) => gTokens.includes(token) || gTokens.some((gt) => gt === token || gt.startsWith(token) || token.startsWith(gt))
-      );
+      if (gTokens.length === 0 || inputTokens.length === 0) return false;
+
+      // Exigence stricte : le parent doit mettre entièrement et mot pour mot le nom enregistré.
+      // S'il ne met que le prénom ou que le nom de famille, la connexion est strictement bloquée.
+      if (inputTokens.length !== gTokens.length) {
+        return false;
+      }
+
+      // Comparaison stricte mot pour mot (tous les mots doivent correspondre exactement)
+      const sortedInput = [...inputTokens].sort().join(' ');
+      const sortedG = [...gTokens].sort().join(' ');
+
+      return sortedInput === sortedG;
     });
 
     if (nameMatchedStudents.length === 0) {
       return {
         isValid: false,
-        reason: `❌ Accès strictement bloqué : Le nom « ${fullName.trim()} » ne figure pas parmi les parents ou tuteurs enregistrés dans cet établissement. Tant que votre nom n'est pas associé à un élève inscrit dans l'école, la connexion reste bloquée.`,
+        reason: `❌ Accès strictement bloqué : Le nom « ${fullName.trim()} » ne correspond pas mot pour mot au nom complet du tuteur enregistré. Vous devez renseigner exactement et entièrement le nom et prénom(s) tels qu'enregistrés lors de l'inscription (la saisie partielle du prénom ou du nom seul n'est pas autorisée).`,
       };
     }
 

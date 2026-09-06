@@ -155,6 +155,46 @@ export function InscriptionsView({
   const [versement5Method, setVersement5Method] = useState<string>('Orange Money');
   const [versement5Date, setVersement5Date] = useState<string>(getTodayDateStr());
 
+  // Snapshot des versements initiaux lors de la consultation d'un élève existant
+  const [initialVersementsSnapshot, setInitialVersementsSnapshot] = useState<{
+    v1: number;
+    v2: number;
+    v3: number;
+    v4: number;
+    v5: number;
+    total: number;
+  } | null>(null);
+
+  // Détection si un nouveau versement a été saisi pour un reçu existant
+  const currentVersementsTotal =
+    (versement1Amount || 0) +
+    (versement2Amount || 0) +
+    (versement3Amount || 0) +
+    (versement4Amount || 0) +
+    (versement5Amount || 0);
+
+  const hasNewVersement = useMemo(() => {
+    if (!selectedStudentId) return true; // En mode nouveau reçu, toujours débloqué
+    if (!initialVersementsSnapshot) return true;
+    return (
+      currentVersementsTotal > initialVersementsSnapshot.total ||
+      versement1Amount !== initialVersementsSnapshot.v1 ||
+      versement2Amount !== initialVersementsSnapshot.v2 ||
+      versement3Amount !== initialVersementsSnapshot.v3 ||
+      versement4Amount !== initialVersementsSnapshot.v4 ||
+      versement5Amount !== initialVersementsSnapshot.v5
+    );
+  }, [
+    selectedStudentId,
+    initialVersementsSnapshot,
+    currentVersementsTotal,
+    versement1Amount,
+    versement2Amount,
+    versement3Amount,
+    versement4Amount,
+    versement5Amount,
+  ]);
+
   const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr());
   const [paymentMethod, setPaymentMethod] = useState<'especes' | 'virement' | 'en_ligne'>('especes');
   const [onlineOperator, setOnlineOperator] = useState<'mtn' | 'moov' | 'orange' | 'wave'>('orange');
@@ -353,6 +393,18 @@ export function InscriptionsView({
     setIsTransport(!!stu.isTransport);
     setFraisAnnexesPaid(stu.notes?.includes('Frais Annexes (Payé)') || false);
     setTenueCousuePaid(stu.notes?.includes('Tenue tout cousue (Payé)') || false);
+
+    // Mémoriser l'état initial des versements pour verrouiller l'enregistrement tant qu'aucun nouveau versement n'est saisi
+    const initTotal = (v1.amount || 0) + (v2.amount || 0) + (v3.amount || 0) + (v4.amount || 0) + (v5.amount || 0);
+    setInitialVersementsSnapshot({
+      v1: v1.amount || 0,
+      v2: v2.amount || 0,
+      v3: v3.amount || 0,
+      v4: v4.amount || 0,
+      v5: v5.amount || 0,
+      total: initTotal,
+    });
+
     setIsIdPickerOpen(false);
   };
 
@@ -360,6 +412,7 @@ export function InscriptionsView({
   const handleStartNewReceipt = () => {
     const today = getTodayDateStr();
     setSelectedStudentId(null);
+    setInitialVersementsSnapshot(null);
     setLastName('');
     setFirstName('');
     setGender('female');
@@ -445,6 +498,10 @@ export function InscriptionsView({
       alert('Veuillez renseigner le nom et le prénom de l’élève.');
       return;
     }
+    if (selectedStudentId && !hasNewVersement) {
+      alert("L'enregistrement est verrouillé en mode consultation. Seule la saisie d'un nouveau versement débloque l'enregistrement.");
+      return;
+    }
     setShowConfirmModal(true);
   };
 
@@ -468,15 +525,23 @@ export function InscriptionsView({
       versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date } : undefined,
     };
 
+    // En mode consultation, préserver scrupuleusement l'identité de l'élève (modifications d'identité réservées à la page "Vue d'ensemble")
+    const finalLastName = currentSelectedStudent ? currentSelectedStudent.lastName : lastName.trim().toUpperCase();
+    const finalFirstName = currentSelectedStudent ? currentSelectedStudent.firstName : firstName.trim();
+    const finalGender = currentSelectedStudent ? currentSelectedStudent.gender : gender;
+    const finalGrade = currentSelectedStudent ? currentSelectedStudent.grade : grade;
+    const finalEnrollmentType = currentSelectedStudent ? (currentSelectedStudent.enrollmentType || enrollmentType) : enrollmentType;
+    const finalMatricule = currentSelectedStudent ? (currentSelectedStudent.matricule || currentSelectedStudent.studentNumber) : matriculeToSave;
+
     const newStudent: Student = {
       id: studentIdToSave,
       studentNumber: studentNumberToSave,
-      matricule: matriculeToSave,
-      firstName: firstName.trim(),
-      lastName: lastName.trim().toUpperCase(),
-      fullName: `${lastName.trim().toUpperCase()} ${firstName.trim()}`,
-      grade,
-      gender,
+      matricule: finalMatricule,
+      firstName: finalFirstName,
+      lastName: finalLastName,
+      fullName: `${finalLastName} ${finalFirstName}`,
+      grade: finalGrade,
+      gender: finalGender,
       avatar: currentSelectedStudent?.avatar || '',
       dateOfBirth: currentSelectedStudent?.dateOfBirth || '2015-05-12',
       guardianName: guardianName.trim() || 'Parent',
@@ -486,7 +551,7 @@ export function InscriptionsView({
       enrollmentDate: paymentDate,
       attendanceRate: currentSelectedStudent?.attendanceRate || 95,
       status: 'active',
-      enrollmentType: enrollmentType,
+      enrollmentType: finalEnrollmentType,
       registrationFee: registrationFee,
       tuitionAmount: tuitionAmount,
       discountAmount: discountAmount,
@@ -1837,19 +1902,19 @@ export function InscriptionsView({
 
             {/* Bandeau d'information si un élève existant est sélectionné */}
             {selectedStudentId && (
-              <div className="mt-3 p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900 animate-in fade-in">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <div className="mt-3 p-3 bg-amber-50/90 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-amber-950 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>
-                    Vous consultez le reçu de <strong className="font-bold">{(lastName || '').toUpperCase()} {firstName || ''}</strong> (ID {currentIdStr.replace(/\D/g, '').padStart(3, '0')})
+                    Consultation du reçu de <strong className="font-extrabold uppercase">{(lastName || '').toUpperCase()} {firstName || ''}</strong> (ID {currentIdStr.replace(/\D/g, '').padStart(3, '0')}). Les coordonnées d&apos;identité sont verrouillées (modifiables uniquement dans <em>Vue d&apos;ensemble</em>). L&apos;enregistrement du reçu nécessite la saisie d&apos;un nouveau versement.
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleStartNewReceipt}
-                  className="text-blue-700 hover:text-blue-900 font-bold underline text-[11px] shrink-0 ml-2 cursor-pointer"
+                  className="text-amber-800 hover:text-amber-950 font-black underline text-xs shrink-0 cursor-pointer"
                 >
-                  + Nouveau Reçu
+                  + Nouveau Reçu Vierge
                 </button>
               </div>
             )}
@@ -1865,10 +1930,15 @@ export function InscriptionsView({
                 <input
                   type="text"
                   required
+                  disabled={Boolean(selectedStudentId)}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Ex: KOUASSI"
-                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 uppercase font-semibold transition-all"
+                  className={`w-full px-3.5 py-2 text-xs rounded-xl border font-semibold transition-all ${
+                    selectedStudentId
+                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none uppercase'
+                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 uppercase'
+                  }`}
                 />
               </div>
 
@@ -1879,10 +1949,15 @@ export function InscriptionsView({
                 <input
                   type="text"
                   required
+                  disabled={Boolean(selectedStudentId)}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Ex: Aya Marie"
-                  className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold transition-all"
+                  className={`w-full px-3.5 py-2 text-xs rounded-xl border font-semibold transition-all ${
+                    selectedStudentId
+                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
+                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500'
+                  }`}
                 />
               </div>
             </div>
@@ -1904,27 +1979,34 @@ export function InscriptionsView({
                       À saisir manuellement ou auto
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const alphabet = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-                      const letterCode = alphabet[Math.floor(Math.random() * alphabet.length)];
-                      const seq = Math.floor(100000 + Math.random() * 900000);
-                      setCustomMatricule(`26${seq}${letterCode}`);
-                    }}
-                    className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
-                    title="Générer automatiquement un matricule standard"
-                  >
-                    Générer auto
-                  </button>
+                  {!selectedStudentId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const alphabet = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+                        const letterCode = alphabet[Math.floor(Math.random() * alphabet.length)];
+                        const seq = Math.floor(100000 + Math.random() * 900000);
+                        setCustomMatricule(`26${seq}${letterCode}`);
+                      }}
+                      className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
+                      title="Générer automatiquement un matricule standard"
+                    >
+                      Générer auto
+                    </button>
+                  )}
                 </div>
               </div>
               <input
                 type="text"
+                disabled={Boolean(selectedStudentId)}
                 value={customMatricule}
                 onChange={(e) => setCustomMatricule(e.target.value.toUpperCase())}
                 placeholder="Saisissez le matricule officiel de l'élève (ex: 26014801A)..."
-                className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold text-slate-900 uppercase transition-all"
+                className={`w-full px-3.5 py-2 text-xs rounded-xl border font-mono font-bold uppercase transition-all ${
+                  selectedStudentId
+                    ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
+                    : 'bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-900'
+                }`}
               />
             </div>
 
@@ -1938,8 +2020,11 @@ export function InscriptionsView({
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
+                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setGender('female')}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
+                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                    } ${
                       gender === 'female'
                         ? 'bg-pink-50 text-pink-700 border-pink-300 ring-2 ring-pink-400/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -1950,8 +2035,11 @@ export function InscriptionsView({
 
                   <button
                     type="button"
+                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setGender('male')}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
+                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                    } ${
                       gender === 'male'
                         ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-400/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -1968,9 +2056,14 @@ export function InscriptionsView({
                   Classe demandée *
                 </label>
                 <select
+                  disabled={Boolean(selectedStudentId)}
                   value={grade}
                   onChange={(e) => setGrade(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold cursor-pointer transition-all"
+                  className={`w-full px-3 py-2 text-xs rounded-xl border font-semibold transition-all ${
+                    selectedStudentId
+                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
+                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer'
+                  }`}
                 >
                   {availableClasses
                     .filter((c) => c !== 'Toutes les classes')
@@ -1990,8 +2083,11 @@ export function InscriptionsView({
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
+                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setEnrollmentType('nouveau')}
-                    className={`py-2 px-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
+                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                    } ${
                       enrollmentType === 'nouveau'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2003,8 +2099,11 @@ export function InscriptionsView({
 
                   <button
                     type="button"
+                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setEnrollmentType('ancien')}
-                    className={`py-2 px-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 ${
+                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                    } ${
                       enrollmentType === 'ancien'
                         ? 'bg-blue-50 text-blue-800 border-blue-300 ring-2 ring-blue-500/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2543,18 +2642,38 @@ export function InscriptionsView({
             </div>
 
             {/* Bouton de Soumission Principal */}
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
               <button
                 type="submit"
-                className="w-full py-3 px-6 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
+                disabled={Boolean(selectedStudentId && !hasNewVersement)}
+                className={`w-full py-3 px-6 rounded-2xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                  selectedStudentId && !hasNewVersement
+                    ? 'bg-slate-300 text-slate-500 border border-slate-300 shadow-none cursor-not-allowed select-none'
+                    : 'text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 cursor-pointer transform hover:-translate-y-0.5'
+                }`}
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>
-                  {selectedStudentId
-                    ? 'Mettre à jour le Reçu'
-                    : 'Enregistrer le Reçu'}
-                </span>
+                {selectedStudentId && !hasNewVersement ? (
+                  <>
+                    <Lock className="w-4 h-4 text-slate-500" />
+                    <span>Enregistrement bloqué (Saisissez un versement pour débloquer)</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>
+                      {selectedStudentId
+                        ? 'Enregistrer le Nouveau Versement (Reçu mis à jour)'
+                        : 'Enregistrer le Reçu'}
+                    </span>
+                  </>
+                )}
               </button>
+
+              {selectedStudentId && !hasNewVersement && (
+                <p className="text-[11px] text-center text-slate-400 font-medium">
+                  🔒 En mode consultation, l&apos;enregistrement est verrouillé. Ajoutez un versement pour valider le reçu.
+                </p>
+              )}
             </div>
           </form>
         </div>
