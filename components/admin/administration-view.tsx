@@ -324,8 +324,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
       joinDate: '01/09/2026',
-      email: autoEmail,
-      phone: newPhone.trim() || '+225 07 00 00 00 00',
+      email: '',
+      phone: '',
       authCode: generatedCode.toUpperCase(),
       status: 'Actif',
       lastLogin: 'Jamais connecté',
@@ -566,7 +566,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-                <th className="py-3 px-3.5">Membre & Contact</th>
+                <th className="py-3 px-3.5">Membre</th>
                 <th className="py-3 px-2.5 text-center">Poste & Matricule</th>
                 <th className="py-3 px-2.5">Attributions & Matières</th>
                 <th className="py-3 px-2.5 text-center">Code d&apos;Authentification</th>
@@ -586,29 +586,18 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 filteredStaff.map((member) => (
                   <tr key={member.id} className="hover:bg-emerald-50/40 transition-colors">
                     
-                    {/* 1. Nom, Contact & Avatar */}
+                    {/* 1. Nom, Avatar & Adresse */}
                     <td className="py-3 px-3.5">
                       <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 font-extrabold flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs text-xs">
                           {member.fullName.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <strong className="block text-slate-900 font-bold font-heading text-xs truncate max-w-[180px]">
+                          <strong className="block text-slate-900 font-bold font-heading text-xs truncate max-w-[200px]">
                             {member.fullName}
                           </strong>
-                          <span className={`text-[10.5px] font-mono block truncate max-w-[180px] ${
-                            member.email && !member.email.includes('etablissement.ci') && !member.email.includes('epc-manoi.ci')
-                              ? 'text-slate-600'
-                              : 'text-amber-700 italic font-semibold'
-                          }`}>
-                            {member.email && !member.email.includes('etablissement.ci') && !member.email.includes('epc-manoi.ci')
-                              ? member.email
-                              : (member.email?.trim() ? member.email : 'Email : Non renseigné')}
-                          </span>
-                          <span className={`text-[10.5px] font-mono font-medium block ${
-                            member.phone && member.phone.trim() ? 'text-emerald-800' : 'text-slate-400 italic'
-                          }`}>
-                            {member.phone && member.phone.trim() ? member.phone : 'Tél : Non renseigné'}
+                          <span className="text-[10.5px] text-slate-500 font-medium block truncate max-w-[200px]">
+                            {member.address || 'Abidjan, Côte d’Ivoire'}
                           </span>
                         </div>
                       </div>
@@ -1095,16 +1084,23 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Ligne Professionnelle / Numéro Téléphone *</label>
+                  <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
                   <input
-                    type="tel"
-                    required
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="+225 07 12 34 56 78"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
+                    type="text"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    placeholder="Ex : Cocody Angré, Abidjan"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
+              </div>
+
+              {/* Note informative sur la saisie autonome du contact et de l'email à la connexion */}
+              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-950 text-[11px] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  <strong>Connexion autonome :</strong> Aucun numéro ni email n&apos;est exigé ici. Le collaborateur renseignera son email et son contact lors de sa première connexion avec son code d&apos;accès.
+                </span>
               </div>
 
               {/* Informations Pédagogiques STRICTEMENT réservées au profil Enseignant */}

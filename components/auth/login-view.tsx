@@ -47,6 +47,7 @@ import {
   verifySchoolSubscriptionForLogin,
   verifyUserAuthCodeForLogin,
   updateFullStaffUser,
+  updateStaffLoginContact,
   broadcastLiveUpdate,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
@@ -338,15 +339,21 @@ export function LoginView({
 
     let matchedParentStudents: Student[] = [];
 
+    // Vérification obligatoire du contact téléphonique / WhatsApp pour TOUS les utilisateurs
+    const cleanPhone = parentPhone.trim();
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 8) {
+      setErrorMessage(
+        selectedRole === 'parent'
+          ? "Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant."
+          : "Veuillez renseigner obligatoirement votre numéro de téléphone / WhatsApp professionnel direct."
+      );
+      return;
+    }
+
     // Validation spécifique et stricte pour les parents d'élèves
     if (selectedRole === 'parent') {
       if (!trimmedName || trimmedName.length < 2) {
         setErrorMessage("Veuillez renseigner votre Nom et Prénoms de parent / tuteur légal.");
-        return;
-      }
-      const cleanPhone = parentPhone.replace(/\D/g, '');
-      if (!cleanPhone || cleanPhone.length < 8) {
-        setErrorMessage("Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant.");
         return;
       }
 
@@ -413,12 +420,6 @@ export function LoginView({
       const allStaff = getLiveStaffUsers(schoolSlug);
       const matchedStaff = verifiedStaffUser || allStaff.find((s) => s.roleId === selectedRole);
 
-      // Si l'utilisateur s'est connecté avec une adresse email, l'enregistrer dans Administration & Codes
-      if (matchedStaff && cleanEmail && matchedStaff.email !== cleanEmail) {
-        matchedStaff.email = cleanEmail;
-        updateFullStaffUser(matchedStaff, schoolSlug);
-      }
-
       // Pour les parents : profil alimenté par le numéro officiel renseigné à l'inscription et son email de connexion
       const officialParentName = firstChild?.guardianName || (trimmedName ? `${civility} ${trimmedName}` : 'Parent d’Élève');
       const officialParentPhone = firstChild?.whatsappPhone || firstChild?.guardianPhone || parentPhone;
@@ -434,7 +435,16 @@ export function LoginView({
 
       const finalPhone = isParent
         ? officialParentPhone
-        : (matchedStaff?.phone || '');
+        : (cleanPhone || matchedStaff?.phone || '');
+
+      // Enregistrer immédiatement les coordonnées saisies (email pro et téléphone) sur la fiche du collaborateur
+      if (!isParent && cleanAuthCode && cleanEmail && cleanPhone) {
+        updateStaffLoginContact(cleanAuthCode, {
+          fullName: finalFullName,
+          email: cleanEmail,
+          phone: cleanPhone,
+        }, schoolSlug);
+      }
       const roleBadge =
         selectedRole === 'fondateur'
           ? '👑 Fondateur (Admin)'
@@ -908,34 +918,40 @@ export function LoginView({
                   </div>
                 </div>
 
-                {/* 4. Téléphone si parent */}
-                {selectedRole === 'parent' && (
-                  <div className="space-y-1.5 animate-in fade-in">
-                    <label className="font-bold text-slate-800 block text-xs">
-                      4. Numéro de Téléphone Parent / WhatsApp *
-                    </label>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="tel"
-                        required
-                        autoComplete="off"
-                        value={parentPhone}
-                        onChange={(e) => setParentPhone(e.target.value)}
-                        placeholder="Ex : +225 07 48 92 11 00"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all shadow-2xs"
-                      />
-                    </div>
+                {/* 4. Numéro de Téléphone / WhatsApp (OBLIGATOIRE POUR TOUS) */}
+                <div className="space-y-1.5 animate-in fade-in">
+                  <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                    <span>
+                      4. {selectedRole === 'parent' ? "Numéro de Téléphone Parent / WhatsApp *" : "Numéro de Téléphone Direct / WhatsApp *"}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-bold">Obligatoire</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="tel"
+                      required
+                      autoComplete="off"
+                      value={parentPhone}
+                      onChange={(e) => setParentPhone(e.target.value)}
+                      placeholder="Ex : +225 07 48 92 11 00"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all shadow-2xs"
+                    />
                   </div>
-                )}
+                  <p className="text-[10px] text-slate-500">
+                    {selectedRole === 'parent'
+                      ? "ℹ️ Renseignez le numéro exact fourni lors de l'inscription de votre enfant (avec indicatif du pays)."
+                      : "ℹ️ Ce numéro sera automatiquement enregistré sur votre profil officiel de l'école."}
+                  </p>
+                </div>
 
-                {/* 4. Code d'Authentification Officiel (Requis pour Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) */}
+                {/* 5. Code d'Authentification Officiel (Requis pour Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) */}
                 {selectedRole !== 'fondateur' && selectedRole !== 'directeur' && selectedRole !== 'parent' && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>4. Code d&apos;Authentification Sécurisé *</span>
+                        <span>5. Code d&apos;Authentification Sécurisé *</span>
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                         Attribué par la Direction
@@ -949,7 +965,7 @@ export function LoginView({
                         autoComplete="off"
                         value={authCodeInput}
                         onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
-                        placeholder="Entrez votre code d'accès attribué"
+                        placeholder="Entrez votre code d'accès attribué (ex: CPT-2026)"
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
                     </div>
@@ -1008,7 +1024,7 @@ export function LoginView({
                         autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
-                        placeholder="Ex : Dr. Konate Oumar (Directeur des Études)"
+                        placeholder="Ex : Dr. Konate Oumar"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
@@ -1030,7 +1046,7 @@ export function LoginView({
                         autoComplete="off"
                         value={signupFounderName}
                         onChange={(e) => setSignupFounderName(e.target.value)}
-                        placeholder="Ex : M. LAWANI MOUSSA (Fondateur Légal)"
+                        placeholder="Ex : M. LAWANI MOUSSA"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>

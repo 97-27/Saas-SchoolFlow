@@ -26,6 +26,7 @@ export interface Invoice {
   studentGender: 'male' | 'female';
   guardianName: string;
   guardianPhone: string;
+  secondaryPhones?: string[];
   feeType: string;
   registrationFee?: number; // Droits d'inscription distincts en FCFA
   amount: number; // in FCFA (Frais d'inscription / initial)
@@ -55,6 +56,7 @@ export interface Student {
   guardianName: string;
   guardianPhone: string;
   whatsappPhone: string; // Contact WhatsApp du parent
+  secondaryPhones?: string[]; // Autres numéros de contact enregistrés (jusqu'à 3)
   registrationFee?: number; // Droit d'inscription en FCFA
   tuitionAmount: number; // Somme initiale de la scolarité en FCFA
   discountAmount?: number; // Réduction accordée (ex: 5 000 FCFA, 10 000 FCFA)

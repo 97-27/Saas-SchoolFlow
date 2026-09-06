@@ -1156,7 +1156,7 @@ export interface StaffUser {
 export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-founder',
-    fullName: 'LAWANI MOUSSA (Fondateur)',
+    fullName: 'LAWANI MOUSSA',
     role: 'Fondateur & Promoteur (Supervision Suprême)',
     roleId: 'fondateur',
     matricule: 'FND-001',
@@ -1173,7 +1173,7 @@ export const defaultStaffUsers: StaffUser[] = [
   },
   {
     id: 'staff-001',
-    fullName: 'LAWANI MOUHAMED (Directeur des Études)',
+    fullName: 'LAWANI MOUHAMED',
     role: 'Directeur des Études (Admin)',
     roleId: 'directeur',
     matricule: 'DIR-001',
@@ -1188,6 +1188,91 @@ export const defaultStaffUsers: StaffUser[] = [
     status: 'Actif',
     lastLogin: 'En ligne',
   },
+  {
+    id: 'staff-comptable',
+    fullName: 'Service Comptabilité & Caisse',
+    role: 'Comptable / Gestionnaire',
+    roleId: 'comptable',
+    matricule: 'CPT-001',
+    subjectOrGrade: 'Comptabilité, Finances & Recouvrement',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Finance & Gestion d’Établissement',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: '',
+    phone: '',
+    authCode: 'CPT-2026',
+    status: 'Actif',
+    lastLogin: 'En attente de connexion',
+  },
+  {
+    id: 'staff-secretaire',
+    fullName: 'Secrétariat Général de Direction',
+    role: 'Secrétaire de Direction',
+    roleId: 'secretaire',
+    matricule: 'SEC-001',
+    subjectOrGrade: 'Inscriptions, Scolarités & Dossiers Élèves',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Secrétariat Bureautique & Accueil',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: '',
+    phone: '',
+    authCode: 'SEC-2026',
+    status: 'Actif',
+    lastLogin: 'En attente de connexion',
+  },
+  {
+    id: 'staff-assistant',
+    fullName: 'Assistant(e) de Direction',
+    role: 'Assistant(e) de Direction',
+    roleId: 'assistant_direction',
+    matricule: 'ASS-001',
+    subjectOrGrade: 'Administration & Coordination Générale',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Administration Scolaire',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: '',
+    phone: '',
+    authCode: 'ASS-2026',
+    status: 'Actif',
+    lastLogin: 'En attente de connexion',
+  },
+  {
+    id: 'staff-educateur',
+    fullName: 'Éducateur de Vie Scolaire',
+    role: 'Éducateur / Conseiller d’Éducation',
+    roleId: 'educateur',
+    matricule: 'EDU-001',
+    subjectOrGrade: 'Discipline, Présences & Vie Scolaire',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Encadrement Pédagogique',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: '',
+    phone: '',
+    authCode: 'EDU-2026',
+    status: 'Actif',
+    lastLogin: 'En attente de connexion',
+  },
+  {
+    id: 'staff-enseignant',
+    fullName: 'Corps Enseignant Titulaire',
+    role: 'Enseignant / Professeur',
+    roleId: 'enseignant',
+    matricule: 'ENS-001',
+    subjectOrGrade: 'Toutes les matières (Enseignant Titulaire)',
+    assignedClasses: 'Toutes les classes',
+    diplomaOrExperience: 'Diplôme d’État & Pédagogie',
+    address: 'Abidjan',
+    joinDate: '01/09/2026',
+    email: '',
+    phone: '',
+    authCode: 'ENS-2026',
+    status: 'Actif',
+    lastLogin: 'En attente de connexion',
+  },
 ];
 
 const LEGACY_MOCK_STAFF_IDS = new Set(['staff-002', 'staff-003', 'staff-004', 'staff-005', 'staff-006']);
@@ -1197,10 +1282,13 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     return defaultStaffUsers;
   }
   const school = getLiveSchool(schoolSlug);
+  const cleanFounder = (school.founderName || 'Fondateur de l’Établissement').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim();
+  const cleanDirector = (school.directorName || 'Directeur des Études').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+
   return [
     {
       id: 'staff-founder',
-      fullName: school.founderName ? `${school.founderName} (Fondateur)` : 'Fondateur de l’Établissement',
+      fullName: cleanFounder,
       role: 'Fondateur & Promoteur (Supervision Suprême)',
       roleId: 'fondateur',
       matricule: 'FND-001',
@@ -1217,7 +1305,7 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     },
     {
       id: 'staff-001',
-      fullName: school.directorName ? `${school.directorName} (Directeur des Études)` : 'Directeur des Études',
+      fullName: cleanDirector,
       role: 'Directeur des Études (Admin)',
       roleId: 'directeur',
       matricule: 'DIR-001',
@@ -1231,6 +1319,74 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
       authCode: 'DIR-2026',
       status: 'Actif',
       lastLogin: 'En ligne',
+    },
+    {
+      id: 'staff-comptable',
+      fullName: 'Service Comptabilité & Caisse',
+      role: 'Comptable / Gestionnaire',
+      roleId: 'comptable',
+      matricule: 'CPT-001',
+      subjectOrGrade: 'Comptabilité, Finances & Recouvrement',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Finance & Gestion d’Établissement',
+      address: school.city || 'Abidjan',
+      joinDate: '01/09/2026',
+      email: '',
+      phone: '',
+      authCode: 'CPT-2026',
+      status: 'Actif',
+      lastLogin: 'En attente de connexion',
+    },
+    {
+      id: 'staff-secretaire',
+      fullName: 'Secrétariat Général de Direction',
+      role: 'Secrétaire de Direction',
+      roleId: 'secretaire',
+      matricule: 'SEC-001',
+      subjectOrGrade: 'Inscriptions, Scolarités & Dossiers Élèves',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Secrétariat Bureautique & Accueil',
+      address: school.city || 'Abidjan',
+      joinDate: '01/09/2026',
+      email: '',
+      phone: '',
+      authCode: 'SEC-2026',
+      status: 'Actif',
+      lastLogin: 'En attente de connexion',
+    },
+    {
+      id: 'staff-assistant',
+      fullName: 'Assistant(e) de Direction',
+      role: 'Assistant(e) de Direction',
+      roleId: 'assistant_direction',
+      matricule: 'ASS-001',
+      subjectOrGrade: 'Administration & Coordination Générale',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Administration Scolaire',
+      address: school.city || 'Abidjan',
+      joinDate: '01/09/2026',
+      email: '',
+      phone: '',
+      authCode: 'ASS-2026',
+      status: 'Actif',
+      lastLogin: 'En attente de connexion',
+    },
+    {
+      id: 'staff-enseignant',
+      fullName: 'Corps Enseignant Titulaire',
+      role: 'Enseignant / Professeur',
+      roleId: 'enseignant',
+      matricule: 'ENS-001',
+      subjectOrGrade: 'Toutes les matières (Enseignant Titulaire)',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Diplôme d’État & Pédagogie',
+      address: school.city || 'Abidjan',
+      joinDate: '01/09/2026',
+      email: '',
+      phone: '',
+      authCode: 'ENS-2026',
+      status: 'Actif',
+      lastLogin: 'En attente de connexion',
     },
   ];
 }
@@ -1265,15 +1421,14 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
 
         if (codeMap.has(u.authCode)) {
           const def = codeMap.get(u.authCode)!;
-          let finalName = u.fullName || def.fullName;
+          let finalName = (u.fullName || def.fullName).replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
           if (def.roleId === 'fondateur') {
             if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence' || finalName.toUpperCase().includes('MOUHAMED')) {
-              finalName = 'LAWANI MOUSSA (Fondateur)';
+              finalName = 'LAWANI MOUSSA';
             }
           } else if (def.roleId === 'directeur') {
-            finalName = finalName.replace(/Directeur Général/gi, 'Directeur des Études');
             if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
-              finalName = 'LAWANI MOUHAMED (Directeur des Études)';
+              finalName = 'LAWANI MOUHAMED';
             }
           }
           codeMap.set(u.authCode, {
@@ -1292,8 +1447,10 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           });
         } else {
           // Nouvel utilisateur ajouté dynamiquement par l'admin dans la page Administration
+          const sanitizedName = (u.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
           codeMap.set(u.authCode || u.id, {
             ...u,
+            fullName: sanitizedName || u.fullName,
             email: sanitizedEmail !== undefined ? sanitizedEmail : u.email,
           });
         }
@@ -1351,6 +1508,130 @@ export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string =
   const users = getLiveStaffUsers(schoolSlug);
   const updated = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
   saveLiveStaffUsers(updated, schoolSlug);
+}
+
+/**
+ * Met à jour automatiquement l'email professionnel et le contact téléphonique
+ * saisis obligatoirement par le collaborateur lors de sa connexion.
+ */
+export function updateStaffLoginContact(
+  authCode: string,
+  contactData: { fullName?: string; email: string; phone: string },
+  schoolSlug: string = 'epc-manoi'
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const list = getLiveStaffUsers(schoolSlug);
+    const cleanCode = (authCode || '').trim().toUpperCase();
+    let found = false;
+
+    const updated = list.map((s) => {
+      if (s.authCode.trim().toUpperCase() === cleanCode) {
+        found = true;
+        const cleanName = contactData.fullName
+          ? contactData.fullName.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim()
+          : s.fullName;
+        return {
+          ...s,
+          fullName: cleanName || s.fullName,
+          email: contactData.email ? contactData.email.trim() : s.email,
+          phone: contactData.phone ? contactData.phone.trim() : s.phone,
+          lastLogin: new Date().toLocaleDateString('fr-FR') + ' à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        };
+      }
+      return s;
+    });
+
+    if (found) {
+      saveLiveStaffUsers(updated, schoolSlug);
+    }
+  } catch (e) {
+    console.error('Erreur updateStaffLoginContact:', e);
+  }
+}
+
+/**
+ * Vérifie si le numéro saisi par le parent correspond à l'un des numéros enregistrés pour l'élève
+ * (Prend en compte jusqu'à 3 numéros : whatsappPhone, guardianPhone, secondaryPhones, avec ou sans indicatif valide).
+ * Rejette catégoriquement tout faux indicatif de pays.
+ */
+export function checkPhoneMatchesStudent(inputRawPhone: string, stu: Student): boolean {
+  if (!inputRawPhone || !stu) return false;
+  const rawInput = inputRawPhone.trim();
+  const inputDigits = rawInput.replace(/\D/g, '');
+  if (inputDigits.length < 8) return false;
+
+  // Récupérer tous les numéros enregistrés pour cet élève
+  const registeredCandidates: string[] = [
+    stu.whatsappPhone || '',
+    stu.guardianPhone || '',
+    ...(stu.secondaryPhones || []),
+  ].filter(Boolean);
+
+  // Découper les éventuels numéros combinés par /, ;, , ou "ou"
+  const allPhones: string[] = [];
+  for (const item of registeredCandidates) {
+    const parts = item.split(/[/;,|]|\bou\b/i).map((p) => p.trim()).filter(Boolean);
+    allPhones.push(...parts);
+  }
+
+  const hasExplicitPrefix = rawInput.startsWith('+') || rawInput.startsWith('00');
+  let inputPrefix = '';
+  if (rawInput.startsWith('+225') || rawInput.startsWith('00225') || inputDigits.startsWith('225')) {
+    inputPrefix = '225';
+  } else if (rawInput.startsWith('+221') || rawInput.startsWith('00221') || inputDigits.startsWith('221')) {
+    inputPrefix = '221';
+  } else if (rawInput.startsWith('+229') || rawInput.startsWith('00229') || inputDigits.startsWith('229')) {
+    inputPrefix = '229';
+  } else if (rawInput.startsWith('+226') || rawInput.startsWith('00226') || inputDigits.startsWith('226')) {
+    inputPrefix = '226';
+  } else if (rawInput.startsWith('+33') || rawInput.startsWith('0033')) {
+    inputPrefix = '33';
+  }
+
+  for (const regStr of allPhones) {
+    const regDigits = regStr.replace(/\D/g, '');
+    if (regDigits.length < 8) continue;
+
+    let regPrefix = '';
+    if (regStr.startsWith('+225') || regStr.startsWith('00225') || regDigits.startsWith('225')) {
+      regPrefix = '225';
+    } else if (regStr.startsWith('+221') || regStr.startsWith('00221') || regDigits.startsWith('221')) {
+      regPrefix = '221';
+    } else if (regStr.startsWith('+229') || regStr.startsWith('00229') || regDigits.startsWith('229')) {
+      regPrefix = '229';
+    } else if (regStr.startsWith('+226') || regStr.startsWith('00226') || regDigits.startsWith('226')) {
+      regPrefix = '226';
+    }
+
+    // Faux indicatif interdit : si l'utilisateur a saisi un indicatif explicite différent de celui de l'école/enregistré
+    if (hasExplicitPrefix && inputPrefix && regPrefix && inputPrefix !== regPrefix) {
+      continue;
+    }
+
+    // 1. Correspondance exacte des chiffres
+    if (inputDigits === regDigits) return true;
+
+    // 2. Correspondance sans préfixe pays
+    const inputNational = inputPrefix && inputDigits.startsWith(inputPrefix)
+      ? inputDigits.slice(inputPrefix.length)
+      : inputDigits;
+    const regNational = regPrefix && regDigits.startsWith(regPrefix)
+      ? regDigits.slice(regPrefix.length)
+      : regDigits;
+
+    if (inputNational === regNational) return true;
+
+    // 3. Correspondance avec ou sans 0 initial (ex: 0748921100 vs 748921100)
+    if (inputNational.replace(/^0+/, '') === regNational.replace(/^0+/, '')) return true;
+
+    // 4. Correspondance sur les 8 derniers chiffres
+    if (inputNational.length >= 8 && regNational.length >= 8) {
+      if (inputNational.slice(-8) === regNational.slice(-8)) return true;
+    }
+  }
+
+  return false;
 }
 
 export function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): void {
@@ -1521,25 +1802,15 @@ export function verifyUserAuthCodeForLogin(
       };
     }
 
-    // Étape 2 : Vérifier que le numéro de téléphone correspond aux coordonnées du tuteur de cet élève
+    // Étape 2 : Vérifier que le numéro de téléphone correspond aux coordonnées du tuteur de cet élève (reconnaissance des 1, 2 ou 3 numéros enregistrés)
     const phoneAndNameMatches = nameMatchedStudents.filter((stu) => {
-      const gPhone = (stu.guardianPhone || '').replace(/\D/g, '');
-      const wPhone = (stu.whatsappPhone || '').replace(/\D/g, '');
-      const pLast8 = cleanPhone.slice(-8);
-      return (
-        cleanPhone.length >= 8 &&
-        (gPhone.includes(cleanPhone) ||
-          wPhone.includes(cleanPhone) ||
-          cleanPhone.includes(gPhone) ||
-          cleanPhone.includes(wPhone) ||
-          (pLast8 && (gPhone.endsWith(pLast8) || wPhone.endsWith(pLast8))))
-      );
+      return checkPhoneMatchesStudent(parentPhone || '', stu);
     });
 
     if (phoneAndNameMatches.length === 0) {
       return {
         isValid: false,
-        reason: `❌ Accès refusé : Le numéro de téléphone saisi ne correspond pas aux coordonnées enregistrées pour le parent de cet élève. Veuillez saisir le numéro exact renseigné à l'inscription.`,
+        reason: `❌ Accès refusé : Le contact téléphonique saisi ne correspond à aucun des numéros officiellement enregistrés lors de l'inscription de votre enfant (vérifiez votre numéro et l'indicatif téléphonique du pays).`,
       };
     }
 
@@ -1975,7 +2246,7 @@ export function resetSchoolData(
       const onlyAdminStaff: StaffUser[] = [
         {
           id: 'staff-founder',
-          fullName: school.founderName || 'LAWANI MOUSSA (Fondateur)',
+          fullName: (school.founderName || 'LAWANI MOUSSA').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim(),
           role: 'Fondateur / Promotrice (Admin)',
           roleId: 'fondateur',
           matricule: 'EMP-FND-001',
@@ -1992,7 +2263,7 @@ export function resetSchoolData(
         },
         {
           id: 'staff-001',
-          fullName: school.directorName || 'LAWANI MOUHAMED (Directeur des Études)',
+          fullName: (school.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim(),
           role: 'Directeur des Études (Admin)',
           roleId: 'directeur',
           matricule: 'EMP-DIR-001',

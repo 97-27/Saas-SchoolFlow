@@ -931,7 +931,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
                     required
                     value={formAuthor}
                     onChange={(e) => setFormAuthor(e.target.value)}
-                    placeholder="Ex : M. Amadou Fall (Directeur des Études)"
+                    placeholder="Ex : M. Amadou Fall"
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-800"
                   />
                 </div>
