@@ -963,7 +963,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
                     required
                     value={formLastName}
                     onChange={(e) => setFormLastName(e.target.value)}
-                    placeholder="Ex: KOUASSI"
+                    placeholder="Ex: KONATE"
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
@@ -974,7 +974,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
                     required
                     value={formFirstName}
                     onChange={(e) => setFormFirstName(e.target.value)}
-                    placeholder="Ex: Jean-Luc"
+                    placeholder="Ex: Lassina Mouhamed"
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>

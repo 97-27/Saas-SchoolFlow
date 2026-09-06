@@ -84,7 +84,7 @@ export function Sidebar({
   }>({
     roleId: 'directeur',
     roleBadge: '👑 Admin Administratif',
-    fullName: 'M. Jean-Marc Kouassi',
+    fullName: 'LAWANI MOUHAMED',
   });
 
   useEffect(() => {

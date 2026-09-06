@@ -1566,7 +1566,7 @@ export function CommunicationView({
                 </div>
 
                 <p className="text-[9.5px] font-extrabold text-slate-900 uppercase">
-                  {currentSchool.directorName || currentSchool.studiesDirectorName || 'M. Jean-Marc Kouassi'}
+                  {currentSchool.directorName || currentSchool.studiesDirectorName || 'LAWANI MOUHAMED'}
                 </p>
               </div>
             </div>

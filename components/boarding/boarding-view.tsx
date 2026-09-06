@@ -1532,7 +1532,7 @@ export function BoardingView({
                 <input
                   type="text"
                   required
-                  placeholder="Ex: KOUASSI Aya Marie"
+                  placeholder="Ex: KONATE Lassina Mouhamed"
                   value={formStudentName}
                   onChange={(e) => setFormStudentName(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"

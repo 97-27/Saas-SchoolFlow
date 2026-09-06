@@ -480,13 +480,13 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     const rawSchool = localStorage.getItem(schoolKey);
     const schoolStudents: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
 
-    // 2. Charger depuis la clé globale
-    const rawGlobal = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    const globalStudents: Student[] = rawGlobal ? JSON.parse(rawGlobal) : [];
-
-    // 3. Charger depuis les clés démo si applicable
+    // 2. Charger depuis la clé globale UNIQUEMENT pour l'établissement pilote (EPC MANOI)
+    let globalStudents: Student[] = [];
     let fallbackStudents: Student[] = [];
     if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      const rawGlobal = localStorage.getItem(STUDENTS_STORAGE_KEY);
+      globalStudents = rawGlobal ? JSON.parse(rawGlobal) : [];
+
       const rawManoi = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`);
       const manoiStudents: Student[] = rawManoi ? JSON.parse(rawManoi) : [];
       fallbackStudents = manoiStudents;
@@ -519,7 +519,8 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // Réconciliation automatique : si des factures locales existent sans objet élève correspondant, les réintégrer immédiatement
     try {
       const rawInvoicesSchool = localStorage.getItem(`${INVOICES_STORAGE_KEY}_${slug}`);
-      const rawInvoicesGlobal = localStorage.getItem(INVOICES_STORAGE_KEY);
+      const isPilotSchool = slug === 'epc-manoi' || slug === 'college-excellence';
+      const rawInvoicesGlobal = isPilotSchool ? localStorage.getItem(INVOICES_STORAGE_KEY) : null;
       const candidateInvoices: Invoice[] = [
         ...(rawInvoicesSchool ? JSON.parse(rawInvoicesSchool) : []),
         ...(rawInvoicesGlobal ? JSON.parse(rawInvoicesGlobal) : []),
@@ -1041,8 +1042,12 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
 
     // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
     try {
+      const isPilot = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+      const BOARDING_KEY = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${schoolSlug}`;
+      const CANTEEN_KEY = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${schoolSlug}`;
+      const TRANSPORT_KEY = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${schoolSlug}`;
+
       if (typeof student.isBoarding === 'boolean') {
-        const BOARDING_KEY = 'schoolflow_boarding_subscriptions_v3';
         const rawBoarding = localStorage.getItem(BOARDING_KEY);
         const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
         if (student.isBoarding) {
@@ -1071,7 +1076,6 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       }
 
       if (typeof student.isCanteen === 'boolean') {
-        const CANTEEN_KEY = 'schoolflow_canteen_subscriptions_v3';
         const rawCanteen = localStorage.getItem(CANTEEN_KEY);
         const prevCanteen: Record<string, any> = rawCanteen ? JSON.parse(rawCanteen) : {};
         if (student.isCanteen) {
@@ -1087,7 +1091,6 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       }
 
       if (typeof student.isTransport === 'boolean') {
-        const TRANSPORT_KEY = 'schoolflow_transport_subscriptions_v2';
         const rawTransport = localStorage.getItem(TRANSPORT_KEY);
         const prevTransport: Record<string, any> = rawTransport ? JSON.parse(rawTransport) : {};
         if (student.isTransport) {
@@ -1148,15 +1151,15 @@ export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-founder',
     fullName: 'LAWANI MOUSSA (Fondateur)',
-    role: 'Fondateur / Promotrice (Admin)',
+    role: 'Fondateur & Promoteur (Supervision Suprême)',
     roleId: 'fondateur',
-    matricule: 'EMP-FND-001',
+    matricule: 'FND-001',
     subjectOrGrade: 'Présidence & Conseil d’Administration',
     assignedClasses: 'Toutes les classes',
     diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
     address: 'Abidjan',
-    joinDate: '01/09/2026',
-    email: 'direction@epc-manoi.ci',
+    joinDate: 'Fondateur de l\'Établissement (Depuis 2026)',
+    email: '',
     phone: '',
     authCode: 'FND-2026',
     status: 'Actif',
@@ -1167,13 +1170,13 @@ export const defaultStaffUsers: StaffUser[] = [
     fullName: 'LAWANI MOUHAMED (Directeur Général)',
     role: 'Directeur Général (Admin)',
     roleId: 'directeur',
-    matricule: 'EMP-DIR-001',
+    matricule: 'DIR-001',
     subjectOrGrade: 'Direction des Études & Pédagogie',
     assignedClasses: 'Toutes les classes',
     diplomaOrExperience: 'Direction d’Établissement Scolaire (15 ans exp.)',
     address: 'Abidjan',
     joinDate: '01/09/2026',
-    email: 'direction@epc-manoi.ci',
+    email: '',
     phone: '',
     authCode: 'DIR-2026',
     status: 'Actif',
@@ -1183,8 +1186,52 @@ export const defaultStaffUsers: StaffUser[] = [
 
 const LEGACY_MOCK_STAFF_IDS = new Set(['staff-002', 'staff-003', 'staff-004', 'staff-005', 'staff-006']);
 
+export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): StaffUser[] {
+  if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+    return defaultStaffUsers;
+  }
+  const school = getLiveSchool(schoolSlug);
+  return [
+    {
+      id: 'staff-founder',
+      fullName: school.founderName ? `${school.founderName} (Fondateur)` : 'Fondateur de l’Établissement',
+      role: 'Fondateur & Promoteur (Supervision Suprême)',
+      roleId: 'fondateur',
+      matricule: 'FND-001',
+      subjectOrGrade: 'Présidence & Conseil d’Administration',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Fondateur & Promoteur d’Établissement',
+      address: school.city || 'Côte d’Ivoire',
+      joinDate: `Fondateur de l'Établissement (Depuis ${school.academicYear ? school.academicYear.slice(0, 4) : '2026'})`,
+      email: '',
+      phone: school.phone || '',
+      authCode: 'FND-2026',
+      status: 'Actif',
+      lastLogin: 'En ligne',
+    },
+    {
+      id: 'staff-001',
+      fullName: school.directorName ? `${school.directorName} (Directeur Général)` : 'Directeur Général',
+      role: 'Directeur Général (Admin)',
+      roleId: 'directeur',
+      matricule: 'DIR-001',
+      subjectOrGrade: 'Direction des Études & Pédagogie',
+      assignedClasses: 'Toutes les classes',
+      diplomaOrExperience: 'Direction d’Établissement Scolaire',
+      address: school.city || 'Côte d’Ivoire',
+      joinDate: '01/09/2026',
+      email: school.email || '',
+      phone: school.phone || '',
+      authCode: 'DIR-2026',
+      status: 'Actif',
+      lastLogin: 'En ligne',
+    },
+  ];
+}
+
 export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[] {
-  if (typeof window === 'undefined') return defaultStaffUsers;
+  const baseDefaults = getInitialStaffForSchool(schoolSlug);
+  if (typeof window === 'undefined') return baseDefaults;
   try {
     const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
     let raw = localStorage.getItem(storageKey);
@@ -1196,27 +1243,42 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       const list: StaffUser[] = JSON.parse(raw);
       const codeMap = new Map<string, StaffUser>();
       // 1. Initialiser avec les 2 comptes administrateurs direct (Fondateur + Directeur)
-      for (const d of defaultStaffUsers) {
+      for (const d of baseDefaults) {
         codeMap.set(d.authCode, d);
       }
       // 2. Fusionner avec la liste locale (en excluant les anciens comptes fictifs par défaut pour forcer la création par l'admin)
       for (const u of list) {
         if (!u || !u.authCode) continue;
         if (LEGACY_MOCK_STAFF_IDS.has(u.id)) continue; // Purger les mocks par défaut
+        
+        // Purger les adresses email génériques/fictives antérieures
+        let sanitizedEmail = u.email;
+        if (sanitizedEmail === 'direction@epc-manoi.ci' || sanitizedEmail === 'direction@etablissement.ci') {
+          sanitizedEmail = '';
+        }
+
         if (codeMap.has(u.authCode)) {
           const def = codeMap.get(u.authCode)!;
           codeMap.set(u.authCode, {
             ...def,
             ...u,
             fullName: u.fullName || def.fullName,
-            role: u.role || def.role,
-            roleId: u.roleId || def.roleId,
+            role: def.roleId === 'fondateur' ? 'Fondateur & Promoteur (Supervision Suprême)' : def.roleId === 'directeur' ? 'Directeur Général (Admin)' : (u.role || def.role),
+            roleId: def.roleId || u.roleId,
+            matricule: def.roleId === 'fondateur' ? 'FND-001' : def.roleId === 'directeur' ? 'DIR-001' : (u.matricule || def.matricule),
+            joinDate: def.roleId === 'fondateur' ? 'Fondateur de l\'Établissement (Depuis 2026)' : (u.joinDate || def.joinDate),
+            email: sanitizedEmail !== undefined ? sanitizedEmail : def.email,
+            phone: u.phone !== undefined ? u.phone : def.phone,
+            address: u.address !== undefined ? u.address : def.address,
             status: u.status || def.status,
             authCode: u.authCode || def.authCode,
           });
         } else {
           // Nouvel utilisateur ajouté dynamiquement par l'admin dans la page Administration
-          codeMap.set(u.authCode || u.id, u);
+          codeMap.set(u.authCode || u.id, {
+            ...u,
+            email: sanitizedEmail !== undefined ? sanitizedEmail : u.email,
+          });
         }
       }
 
@@ -1229,14 +1291,14 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
     }
 
     // Premier chargement : strictement Fondateur et Directeur (les autres profils doivent être créés en Administration)
-    const initialStaff = defaultStaffUsers;
+    const initialStaff = baseDefaults;
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(initialStaff));
     }
     return initialStaff;
   } catch (e) {
-    return defaultStaffUsers;
+    return baseDefaults;
   }
 }
 
@@ -1639,7 +1701,12 @@ export function verifySchoolSubscriptionForLogin(
     clean.includes('manoi') ||
     clean.includes('mohamed') ||
     clean.includes('mouhamed') ||
+    clean.includes('lawani') ||
     clean.includes('epc') ||
+    clean.includes('konate') ||
+    clean.includes('cisse') ||
+    clean.includes('toure') ||
+    clean.includes('diaby') ||
     clean.includes('kouassi') ||
     clean.includes('admin') ||
     clean.includes('directeur') ||

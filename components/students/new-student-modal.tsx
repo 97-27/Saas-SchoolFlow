@@ -175,7 +175,7 @@ export function NewStudentModal({
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Ex: KOUASSI"
+                  placeholder="Ex: KONATE"
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-bold uppercase transition-all"
                 />
               </div>
@@ -187,7 +187,7 @@ export function NewStudentModal({
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Ex: Aya Marie"
+                  placeholder="Ex: Lassina Mouhamed"
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold transition-all"
                 />
               </div>
@@ -265,7 +265,7 @@ export function NewStudentModal({
                   type="text"
                   value={guardianName}
                   onChange={(e) => setGuardianName(e.target.value)}
-                  placeholder="Ex: M. Kouassi Jean"
+                  placeholder="Ex: M. Konate Ibrahim"
                   className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 />
               </div>

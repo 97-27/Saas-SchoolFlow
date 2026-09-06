@@ -813,7 +813,7 @@ export function SalariesView({
                     required
                     value={staffName}
                     onChange={(e) => setStaffName(e.target.value)}
-                    placeholder="Ex : KOUAME Kouassi Jean"
+                    placeholder="Ex : KONATE Lassina Mouhamed"
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900"
                   />
                 </div>

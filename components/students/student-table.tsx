@@ -928,7 +928,7 @@ export function StudentTable({
                   type="text"
                   value={editGuardianName}
                   onChange={(e) => setEditGuardianName(e.target.value)}
-                  placeholder="Ex: M. Kouassi Jean"
+                  placeholder="Ex: M. Konate Ibrahim"
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 />
               </div>

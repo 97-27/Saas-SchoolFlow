@@ -1184,7 +1184,7 @@ export function ParentBulletinsView({
 
             {/* NOM DU DIRECTEUR DÉFINI DANS LES PARAMÈTRES */}
             <p className="text-[8.5px] font-extrabold text-slate-900 uppercase leading-none">
-              {currentSchool.directorName || currentSchool.studiesDirectorName || 'M. Jean-Marc Kouassi'}
+              {currentSchool.directorName || currentSchool.studiesDirectorName || 'LAWANI MOUHAMED'}
             </p>
           </div>
         </div>

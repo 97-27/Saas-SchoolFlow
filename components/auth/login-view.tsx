@@ -153,7 +153,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👨‍🏫 Enseignant',
     department: 'Corps Enseignant',
     defaultAuthCode: 'ENS-2026',
-    defaultUserName: 'M. Paul Koffi',
+    defaultUserName: 'M. Cissé Ousmane',
     description: 'Saisie des notes, appel des présences par classe, bulletins scolaires et communication.',
     allowedModules: 'Présences & Absences, Pédagogie & Notes, Bulletins Scolaires',
   },
@@ -163,7 +163,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👨‍👩‍👧 Parent',
     department: 'Espace Famille',
     defaultAuthCode: 'PAR-2026',
-    defaultUserName: 'M. & Mme Koné',
+    defaultUserName: 'M. & Mme Konate',
     description: 'Consultation des notes et bulletins de vos enfants, assiduité et communication avec l’école.',
     allowedModules: 'Notes & Bulletins des Enfants, Communication Parents',
   },
@@ -315,7 +315,7 @@ export function LoginView({
 
     const nameParts = trimmedName.split(/\s+/).filter(Boolean);
     if (nameParts.length < 2) {
-      setErrorMessage('Veuillez saisir votre Nom ET au moins un Prénom (ex : Kouassi Jean).');
+      setErrorMessage('Veuillez saisir votre Nom ET au moins un Prénom (ex : Konate Lassina).');
       return;
     }
 
@@ -409,6 +409,16 @@ export function LoginView({
       const isParent = selectedRole === 'parent';
       const firstChild = matchedParentStudents[0];
 
+      // Synchronisation du profil personnel (Fondateur, Directeur, Collaborateurs)
+      const allStaff = getLiveStaffUsers(schoolSlug);
+      const matchedStaff = verifiedStaffUser || allStaff.find((s) => s.roleId === selectedRole);
+
+      // Si l'utilisateur s'est connecté avec une adresse email, l'enregistrer dans Administration & Codes
+      if (matchedStaff && cleanEmail && matchedStaff.email !== cleanEmail) {
+        matchedStaff.email = cleanEmail;
+        updateFullStaffUser(matchedStaff, schoolSlug);
+      }
+
       // Pour les parents : profil alimenté par le numéro officiel renseigné à l'inscription et son email de connexion
       const officialParentName = firstChild?.guardianName || (trimmedName ? `${civility} ${trimmedName}` : 'Parent d’Élève');
       const officialParentPhone = firstChild?.whatsappPhone || firstChild?.guardianPhone || parentPhone;
@@ -416,21 +426,15 @@ export function LoginView({
 
       const finalFullName = isParent
         ? officialParentName
-        : (verifiedStaffUser?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel')));
+        : (matchedStaff?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel')));
 
       const finalEmail = isParent
         ? officialParentEmail
-        : (cleanEmail || verifiedStaffUser?.email || `${selectedRole}@${currentSchool.slug || 'ecole'}.ci`);
-
-      // Mettre à jour l'email du membre du personnel s'il s'est connecté avec une adresse spécifique
-      if (verifiedStaffUser && cleanEmail && verifiedStaffUser.email !== cleanEmail) {
-        verifiedStaffUser.email = cleanEmail;
-        updateFullStaffUser(verifiedStaffUser, schoolSlug);
-      }
+        : (cleanEmail || (matchedStaff?.email && !matchedStaff.email.includes('etablissement.ci') && !matchedStaff.email.includes('epc-manoi.ci') ? matchedStaff.email : ''));
 
       const finalPhone = isParent
         ? officialParentPhone
-        : (verifiedStaffUser?.phone || (isSupremeAdmin ? '' : '+225 07 48 92 11 00'));
+        : (matchedStaff?.phone || '');
       const roleBadge =
         selectedRole === 'fondateur'
           ? '👑 Fondateur (Admin)'
@@ -876,7 +880,7 @@ export function LoginView({
                         autoComplete="off"
                         value={userName}
                         onChange={(e) => setUserName(e.target.value)}
-                        placeholder="Ex : Kouassi Jean-Marc"
+                        placeholder="Ex : Konate Lassina Mouhamed"
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
@@ -1003,7 +1007,7 @@ export function LoginView({
                         autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
-                        placeholder="Ex : Dr. Kouassi Jean-Marc"
+                        placeholder="Ex : Dr. Konate Oumar"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>

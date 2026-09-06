@@ -10,6 +10,7 @@ import {
   addLiveStaffUser,
   deleteLiveStaffUser,
   getLiveSchool,
+  saveLiveSchool,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import {
@@ -65,7 +66,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
+  const [editRole, setEditRole] = useState<'fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -76,23 +77,25 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [editAuthCodeValue, setEditAuthCodeValue] = useState('');
   const [editStatus, setEditStatus] = useState<'Actif' | 'En attente' | 'Verrouillé'>('Actif');
 
-  // Toast
+  // Feedback Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const loadStaff = () => {
-    setStaffList(getLiveStaffUsers(schoolSlug));
-  };
-
-  useEffect(() => {
-    loadStaff();
-    window.addEventListener(DATA_UPDATED_EVENT, loadStaff);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, loadStaff);
-  }, [schoolSlug]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
   };
+
+  // Recharger la liste en temps réel
+  useEffect(() => {
+    setStaffList(getLiveStaffUsers(schoolSlug));
+    const handleUpdate = () => {
+      setStaffList(getLiveStaffUsers(schoolSlug));
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
+  }, [schoolSlug]);
 
   // Copier le code dans le presse-papier
   const handleCopyCode = (code: string, id: string) => {
@@ -104,7 +107,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     }
   };
 
-  // Générer un code aléatoire sécurisé
+  // Générer un code lisible et robuste selon le poste
   const generateRandomCode = (role: string) => {
     const prefix =
       role === 'enseignant'
@@ -124,27 +127,40 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     return `${prefix}-${rand}`;
   };
 
-  // Ouvrir la modale d'édition complète
+  // Ouvrir la modale d'édition complète (Accessible au Fondateur, Directeur et Personnel)
   const openEditModal = (staff: StaffUser) => {
-    // Le fondateur ne peut jamais être modifié (lecture seule uniquement)
-    if (staff.roleId === 'fondateur' || staff.id === 'staff-founder') {
-      alert("Les coordonnées du Fondateur sont protégées et ne peuvent pas être modifiées.");
-      return;
-    }
     setEditingStaff(staff);
     setEditFullName(staff.fullName);
-    const validRoles: ('directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
-      'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
+    const validRoles: ('fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
+      'fondateur', 'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
-    setEditMatricule(staff.matricule || `EMP-${staff.authCode}`);
-    setEditSubject(staff.subjectOrGrade || (staff.roleId === 'directeur' ? 'Direction Générale des Études' : 'Toutes les matières (Enseignant Titulaire / Polyvalent)'));
+    setEditMatricule(
+      staff.roleId === 'fondateur'
+        ? (staff.matricule || 'FND-001')
+        : staff.roleId === 'directeur'
+        ? (staff.matricule || 'DIR-001')
+        : (staff.matricule || `EMP-${staff.authCode}`)
+    );
+    setEditSubject(
+      staff.subjectOrGrade ||
+      (staff.roleId === 'fondateur'
+        ? 'Présidence & Conseil d’Administration'
+        : staff.roleId === 'directeur'
+        ? 'Direction Générale des Études'
+        : 'Toutes les matières (Enseignant Titulaire / Polyvalent)')
+    );
     setEditClasses(staff.assignedClasses || 'Toutes les classes');
     setEditDiploma(staff.diplomaOrExperience || '');
     setEditAddress(staff.address || '');
-    setEditEmail(staff.email || '');
+    
+    // Si l'email est une valeur par défaut fictive, le laisser vide pour que l'utilisateur renseigne son vrai email
+    const currentMail = staff.email && !staff.email.includes('etablissement.ci') && !staff.email.includes('epc-manoi.ci')
+      ? staff.email
+      : (staff.email?.trim() || '');
+    setEditEmail(currentMail);
     setEditPhone(staff.phone || '');
-    setEditAuthCodeValue(staff.authCode || 'DIR-2026');
+    setEditAuthCodeValue(staff.authCode || (staff.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026'));
     setEditStatus(staff.status);
   };
 
@@ -186,20 +202,20 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     }
   };
 
-  // Sauvegarder l'édition complète d'un membre
+  // Sauvegarder l'édition complète d'un membre (Fondateur, Directeur, Personnel)
   const handleSaveFullEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStaff || !editFullName.trim()) return;
 
     const roleTitleMap: Record<string, string> = {
-      directeur: 'Directeur des Études (Admin)',
+      fondateur: 'Fondateur & Promoteur (Supervision Suprême)',
+      directeur: 'Directeur Général (Admin)',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
-      fondateur: 'Fondateur / Fondatrice (Supervision)',
       parent: 'Parent d’Élève (Espace Famille)',
     };
 
@@ -208,19 +224,74 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       fullName: editFullName.trim(),
       role: roleTitleMap[editRole] || editingStaff.role || 'Membre du Personnel',
       roleId: editRole,
-      matricule: editMatricule.trim() || `EMP-${editAuthCodeValue.trim()}`,
-      subjectOrGrade: editSubject.trim() || (editRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
+      matricule:
+        editRole === 'fondateur'
+          ? (editMatricule.trim() || 'FND-001')
+          : editRole === 'directeur'
+          ? (editMatricule.trim() || 'DIR-001')
+          : (editMatricule.trim() || `EMP-${editAuthCodeValue.trim()}`),
+      subjectOrGrade:
+        editSubject.trim() ||
+        (editRole === 'enseignant'
+          ? 'Toutes les matières (Enseignant Polyvalent)'
+          : editRole === 'fondateur'
+          ? 'Présidence & Conseil d’Administration'
+          : editRole === 'directeur'
+          ? 'Direction Générale des Études'
+          : 'Administration Générale'),
       assignedClasses: editClasses.trim() || (editRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
       diplomaOrExperience: editDiploma.trim() || undefined,
       address: editAddress.trim() || undefined,
-      email: editEmail.trim() || editingStaff.email,
+      email: editEmail.trim(), // Permet d'enregistrer l'adresse email réelle
       phone: editPhone.trim(),
       authCode: editAuthCodeValue.trim().toUpperCase(),
       status: editStatus,
     };
 
     updateFullStaffUser(updatedUser, schoolSlug);
-    showToast(`✅ Informations de ${updatedUser.fullName} mises à jour avec succès !`);
+
+    // Mettre à jour les paramètres de l'école si le Fondateur ou le Directeur a été modifié
+    try {
+      const curSchool = getLiveSchool(schoolSlug);
+      let schoolChanged = false;
+      const nextSchool = { ...curSchool };
+      if (editRole === 'fondateur') {
+        if (editFullName.trim() && nextSchool.founderName !== editFullName.trim()) {
+          nextSchool.founderName = editFullName.trim();
+          schoolChanged = true;
+        }
+      } else if (editRole === 'directeur') {
+        if (
+          editFullName.trim() &&
+          (nextSchool.directorName !== editFullName.trim() || nextSchool.studiesDirectorName !== editFullName.trim())
+        ) {
+          nextSchool.directorName = editFullName.trim();
+          nextSchool.studiesDirectorName = editFullName.trim();
+          schoolChanged = true;
+        }
+      }
+      if (schoolChanged) {
+        saveLiveSchool(nextSchool, schoolSlug);
+      }
+
+      // Synchroniser la session active si le compte en cours d'édition correspond à la session active
+      const activeRaw = localStorage.getItem('schoolflow_active_session_v2');
+      if (activeRaw) {
+        const parsed = JSON.parse(activeRaw);
+        if (parsed.roleId === editRole || parsed.authCode === updatedUser.authCode || parsed.fullName === editingStaff.fullName) {
+          parsed.fullName = updatedUser.fullName;
+          parsed.pureName = updatedUser.fullName;
+          parsed.email = updatedUser.email;
+          parsed.phone = updatedUser.phone;
+          localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(parsed));
+          window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+        }
+      }
+    } catch (err) {
+      console.warn('Erreur mise à jour école/session:', err);
+    }
+
+    showToast(`✅ Informations de ${updatedUser.fullName} enregistrées avec succès !`);
     setEditingStaff(null);
   };
 
@@ -525,11 +596,19 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           <strong className="block text-slate-900 font-bold font-heading text-xs truncate max-w-[180px]">
                             {member.fullName}
                           </strong>
-                          <span className="text-[10.5px] text-slate-500 font-mono block truncate max-w-[180px]">
-                            {member.email}
+                          <span className={`text-[10.5px] font-mono block truncate max-w-[180px] ${
+                            member.email && !member.email.includes('etablissement.ci') && !member.email.includes('epc-manoi.ci')
+                              ? 'text-slate-600'
+                              : 'text-amber-700 italic font-semibold'
+                          }`}>
+                            {member.email && !member.email.includes('etablissement.ci') && !member.email.includes('epc-manoi.ci')
+                              ? member.email
+                              : (member.email?.trim() ? member.email : 'Email : Non renseigné')}
                           </span>
-                          <span className="text-[10.5px] text-emerald-800 font-mono font-medium block">
-                            {member.phone}
+                          <span className={`text-[10.5px] font-mono font-medium block ${
+                            member.phone && member.phone.trim() ? 'text-emerald-800' : 'text-slate-400 italic'
+                          }`}>
+                            {member.phone && member.phone.trim() ? member.phone : 'Tél : Non renseigné'}
                           </span>
                         </div>
                       </div>
@@ -538,7 +617,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     {/* 2. Poste & Matricule */}
                     <td className="py-3 px-2.5 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10.5px] font-bold border whitespace-nowrap mb-1 ${
-                        member.roleId === 'enseignant'
+                        member.roleId === 'fondateur'
+                          ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs font-extrabold'
+                          : member.roleId === 'directeur'
+                          ? 'bg-emerald-50 text-emerald-950 border-emerald-300 shadow-2xs font-extrabold'
+                          : member.roleId === 'enseignant'
                           ? 'bg-emerald-50 text-emerald-900 border-emerald-200/80'
                           : member.roleId === 'secretaire'
                           ? 'bg-purple-50 text-purple-800 border-purple-200'
@@ -552,7 +635,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
                           : 'bg-slate-100 text-slate-800 border-slate-200'
                       }`}>
-                        {member.roleId === 'enseignant'
+                        {member.roleId === 'fondateur'
+                          ? '👑 Fondateur'
+                          : member.roleId === 'directeur'
+                          ? '👑 Directeur Général'
+                          : member.roleId === 'enseignant'
                           ? '👨‍🏫 Enseignant'
                           : member.roleId === 'secretaire'
                           ? '📝 Secrétaire'
@@ -567,7 +654,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           : member.role}
                       </span>
                       <span className="block font-mono font-bold text-slate-700 text-[10.5px]">
-                        {member.matricule || `EMP-${member.authCode}`}
+                        {member.roleId === 'fondateur'
+                          ? 'FND-001 • Promoteur Légal'
+                          : member.roleId === 'directeur'
+                          ? `${member.matricule || 'DIR-001'} • Direction Générale`
+                          : (member.matricule || `EMP-${member.authCode}`)}
                       </span>
                     </td>
 
@@ -588,7 +679,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                             {member.role}
                           </span>
                           <span className="text-[10.5px] text-slate-500 block truncate max-w-[190px]">
-                            Ligne : {member.phone}
+                            Ligne : {member.phone || 'Non renseignée'}
                           </span>
                         </>
                       )}
@@ -672,17 +763,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* 2. Modifier les coordonnées et informations : Autorisé pour le Directeur et le Personnel, strictement verrouillé pour le Fondateur */}
-                        {!(member.roleId === 'fondateur' || member.id === 'staff-founder') && (
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(member)}
-                            className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
-                            title="Modifier les coordonnées et informations"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        {/* 2. Modifier les coordonnées et informations : Accessible pour le Fondateur, le Directeur et tout le Personnel */}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(member)}
+                          className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Modifier les coordonnées et informations"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
 
                         {/* 3. Révoquer / Supprimer : Réservé au personnel enseignant/technique (interdit pour Fondateur et Directeur) */}
                         {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
@@ -739,8 +828,50 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             {/* Corps de la fiche */}
             <div className="space-y-3 text-xs">
               
-              {/* Informations Pédagogiques (Enseignant) ou Informations Administratives (Autres Rôles) */}
-              {selectedStaffDetail.roleId === 'enseignant' ? (
+              {/* Informations Spécifiques selon le Rôle (Fondateur, Directeur, Enseignant, Personnel) */}
+              {selectedStaffDetail.roleId === 'fondateur' ? (
+                <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
+                  <h4 className="font-bold text-amber-950 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-700" />
+                    <span>Statut Juridique & Attributions du Promoteur</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Statut Légal :</span>
+                      <strong className="text-amber-950 font-bold">Fondateur & Promoteur Légal</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Réf. Promoteur & Mandat :</span>
+                      <strong className="text-amber-950 font-mono font-bold">FND-001 (Promoteur Légal)</strong>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-amber-200/60 flex items-center justify-between">
+                      <span className="text-slate-500 text-[11px]">Mandat de Fondation :</span>
+                      <strong className="text-amber-950 font-medium">Fondateur de l&apos;Établissement (Depuis 2026)</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedStaffDetail.roleId === 'directeur' ? (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-2">
+                  <h4 className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    <span>Direction Générale & Pédagogique</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Fonction Officielle :</span>
+                      <strong className="text-emerald-950 font-bold">Directeur Général (Admin Principal)</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Réf. Direction :</span>
+                      <strong className="text-emerald-950 font-mono font-bold">{selectedStaffDetail.matricule || 'DIR-001'}</strong>
+                    </div>
+                    <div className="col-span-2 pt-1 border-t border-emerald-200/60 flex items-center justify-between">
+                      <span className="text-slate-500 text-[11px]">Date de prise de fonction :</span>
+                      <strong className="text-emerald-950 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedStaffDetail.roleId === 'enseignant' ? (
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
                   <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                     <GraduationCap className="w-4 h-4 text-emerald-600" />
@@ -760,7 +891,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <strong className="text-slate-900">{selectedStaffDetail.diplomaOrExperience || 'Diplôme d’État & Certification Pédagogique'}</strong>
                     </div>
                     <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Date de prise de fonction :</span>
+                      <span className="text-slate-400 text-[11px]">Date d&apos;embauche :</span>
                       <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
                     </div>
                   </div>
@@ -781,7 +912,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <strong className="text-slate-900 font-mono">{selectedStaffDetail.matricule || `EMP-${selectedStaffDetail.authCode}`}</strong>
                     </div>
                     <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Date de prise de fonction :</span>
+                      <span className="text-slate-400 text-[11px]">Date d&apos;embauche :</span>
                       <strong className="text-slate-900 font-mono">{selectedStaffDetail.joinDate || '01/09/2026'}</strong>
                     </div>
                   </div>
@@ -795,15 +926,28 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <span>Coordonnées & Informations Personnelles</span>
                 </h4>
                 <div className="space-y-1.5 text-slate-600 pt-1">
-                  {selectedStaffDetail.phone && selectedStaffDetail.phone.trim() ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-[11px]">Numéro Téléphone / WhatsApp :</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[11px]">Numéro Téléphone / WhatsApp :</span>
+                    {selectedStaffDetail.phone && selectedStaffDetail.phone.trim() ? (
                       <strong className="text-slate-900 font-mono">{selectedStaffDetail.phone}</strong>
-                    </div>
-                  ) : null}
+                    ) : (
+                      <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px] border border-amber-200/60">
+                        Non renseigné
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[11px]">Email Professionnel :</span>
-                    <strong className="text-slate-900 font-mono">{selectedStaffDetail.email || 'direction@etablissement.ci'}</strong>
+                    {selectedStaffDetail.email &&
+                    selectedStaffDetail.email.trim() &&
+                    !selectedStaffDetail.email.includes('etablissement.ci') &&
+                    !selectedStaffDetail.email.includes('epc-manoi.ci') ? (
+                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.email}</strong>
+                    ) : (
+                      <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px] border border-amber-200/60">
+                        Non renseigné
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[11px]">Adresse de Résidence :</span>
@@ -850,8 +994,20 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             <div className="pt-2 flex items-center justify-end gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  const s = selectedStaffDetail;
+                  setSelectedStaffDetail(null);
+                  openEditModal(s);
+                }}
+                className="px-4 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/20"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Modifier les Coordonnées</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setSelectedStaffDetail(null)}
-                className="px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
               >
                 Fermer la Fiche
               </button>
@@ -900,7 +1056,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     required
                     value={newFullName}
                     onChange={(e) => setNewFullName(e.target.value)}
-                    placeholder="Ex : M. N'Goran Kouamé"
+                    placeholder="Ex : M. Cissé Bakary"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600"
                   />
                 </div>
@@ -1088,53 +1244,90 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     required
                     value={editFullName}
                     onChange={(e) => setEditFullName(e.target.value)}
-                    placeholder="Ex : M. Jean-Marc Kouassi"
+                    placeholder="Ex : M. Konate Lassina Mouhamed"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600"
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Poste / Rôle d&apos;Accès *</label>
-                  <select
-                    value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
-                  >
-                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
-                    <option value="secretaire">📝 Secrétaire de Direction</option>
-                    <option value="comptable">💼 Comptable / Gestionnaire</option>
-                    <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                    <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
-                    <option value="informaticien">💻 Informaticien / Responsable IT</option>
-                  </select>
+                  {editingStaff.roleId === 'fondateur' ? (
+                    <div className="w-full px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
+                      <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>👑 Fondateur & Promoteur (Supervision Suprême)</span>
+                    </div>
+                  ) : editingStaff.roleId === 'directeur' ? (
+                    <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>👑 Directeur Général (Admin)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
+                    >
+                      <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
+                      <option value="secretaire">📝 Secrétaire de Direction</option>
+                      <option value="comptable">💼 Comptable / Gestionnaire</option>
+                      <option value="assistant_direction">📋 Assistant(e) de Direction</option>
+                      <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
+                      <option value="informaticien">💻 Informaticien / Responsable IT</option>
+                    </select>
+                  )}
                 </div>
               </div>
 
-              {/* Matricule & Email */}
+              {/* Matricule / Réf & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">
-                    Matricule d&apos;Embauche
+                    {editingStaff.roleId === 'fondateur'
+                      ? 'Réf. Promoteur & Mandat'
+                      : editingStaff.roleId === 'directeur'
+                      ? 'Réf. Direction Générale'
+                      : 'Matricule d’Embauche'}
                   </label>
-                  <input
-                    type="text"
-                    value={editMatricule}
-                    onChange={(e) => setEditMatricule(e.target.value)}
-                    placeholder="Ex : EMP-ENS-004"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
-                  />
+                  {editingStaff.roleId === 'fondateur' ? (
+                    <input
+                      type="text"
+                      disabled
+                      value="FND-001 (Promoteur & Propriétaire Légal)"
+                      className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-amber-50/60 font-mono font-bold text-amber-950 cursor-not-allowed select-none"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={editMatricule}
+                      onChange={(e) => setEditMatricule(e.target.value)}
+                      placeholder={editingStaff.roleId === 'directeur' ? 'DIR-001' : 'Ex : EMP-ENS-004'}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Email Professionnel *</label>
+                  <label className="font-bold text-slate-700 block">
+                    Email Professionnel {editingStaff.roleId === 'fondateur' || editingStaff.roleId === 'directeur' ? '(Vrai Email)' : '*'}
+                  </label>
                   <input
                     type="email"
-                    required
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder="email@etablissement.ci"
+                    placeholder={
+                      editingStaff.roleId === 'fondateur'
+                        ? 'Ex : fondateur@votre-ecole.ci (ou vide : Non renseigné)'
+                        : editingStaff.roleId === 'directeur'
+                        ? 'Ex : direction@votre-ecole.ci (ou vide : Non renseigné)'
+                        : 'email@etablissement.ci'
+                    }
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
+                  {(!editEmail || !editEmail.trim()) && (
+                    <p className="text-[10.5px] text-amber-600 font-medium">
+                      ⚠️ Actuellement : Non renseigné. Saisissez votre vrai email pour l’afficher sur votre profil.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1213,39 +1406,58 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Statut d&apos;Accès</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 focus:border-emerald-600 cursor-pointer"
-                  >
-                    <option value="Actif">Actif (Autorisé)</option>
-                    <option value="En attente">En attente</option>
-                    <option value="Verrouillé">Verrouillé (Accès Bloqué)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-slate-700 block text-[11px]">
-                      Code d&apos;Authentification *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
-                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                  {editingStaff.roleId === 'fondateur' || editingStaff.roleId === 'directeur' ? (
+                    <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold text-xs flex items-center gap-1.5 shadow-2xs">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>👑 Accès Permanent (Direction Suprême)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 focus:border-emerald-600 cursor-pointer"
                     >
-                      Régénérer
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    required
-                    value={editAuthCodeValue}
-                    onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
-                  />
+                      <option value="Actif">Actif (Autorisé)</option>
+                      <option value="En attente">En attente</option>
+                      <option value="Verrouillé">Verrouillé (Accès Bloqué)</option>
+                    </select>
+                  )}
                 </div>
+
+                {!(editingStaff.roleId === 'fondateur' || editingStaff.roleId === 'directeur') ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 block text-[11px]">
+                        Code d&apos;Authentification *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        Régénérer
+                      </button>
+                    </div>
+
+                    <input
+                      type="text"
+                      required
+                      value={editAuthCodeValue}
+                      onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 block text-[11px]">
+                      Mode d&apos;Accès Officiel
+                    </label>
+                    <div className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5">
+                      <Shield className="w-4 h-4 text-slate-500" />
+                      <span>Connexion directe sécurisée par identifiant</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
