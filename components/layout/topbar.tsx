@@ -54,13 +54,13 @@ export function Topbar({
     department?: string;
     avatarUrl?: string;
   }>({
-    fullName: 'LAWANI MOUHAMED',
+    fullName: 'LAWANI MOUSSA',
     email: 'direction@epc-manoi.ci',
     phone: '',
     role: 'Fondateur / Promotrice',
     roleId: 'fondateur',
     roleBadge: '👑 Fondateur (Admin)',
-    department: 'Direction Suprême',
+    department: 'Présidence & Conseil',
     avatarUrl: '',
   });
 
@@ -86,15 +86,15 @@ export function Topbar({
               role: isFounder
                 ? 'Fondateur / Promotrice'
                 : isDirector
-                ? 'DR'
-                : (parsed.role || 'DR'),
+                ? 'Directeur Général'
+                : (parsed.role || 'Personnel'),
               roleId: parsed.roleId || 'fondateur',
               roleBadge: isFounder
                 ? '👑 Fondateur (Admin)'
                 : isDirector
-                ? '👑 DR'
-                : (parsed.roleBadge || '👑 DR'),
-              department: parsed.department || 'Direction',
+                ? '👑 Direction (Admin)'
+                : (parsed.roleBadge || 'Personnel'),
+              department: parsed.department || (isFounder ? 'Présidence & Conseil' : isDirector ? 'Direction Générale' : 'Direction'),
               avatarUrl: parsed.avatarUrl || '',
             });
 
@@ -116,13 +116,13 @@ export function Topbar({
       } catch (e) {}
 
       setActiveSession({
-        fullName: live.founderName || live.directorName || 'LAWANI MOUHAMED',
+        fullName: live.founderName || 'LAWANI MOUSSA',
         email: live.email || 'direction@epc-manoi.ci',
         phone: '',
         role: 'Fondateur / Promotrice',
         roleId: 'fondateur',
         roleBadge: '👑 Fondateur (Admin)',
-        department: 'Direction Suprême',
+        department: 'Présidence & Conseil',
         avatarUrl: '',
       });
     };
@@ -189,6 +189,14 @@ export function Topbar({
   const loadNotifications = () => {
     if (typeof window === 'undefined') return;
     try {
+      // Les enseignants et les parents ne doivent PAS recevoir les notifications des messages parents destinés à la Direction
+      const currentRole = activeSession.roleId || 'directeur';
+      if (currentRole === 'enseignant' || currentRole === 'parent') {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+
       const raw =
         localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
         localStorage.getItem('schoolflow_parent_messages_v1');
@@ -221,7 +229,7 @@ export function Topbar({
             sender: m.parentName || "Parent d'élève",
             role: m.studentName ? `Parent de ${m.studentName} (${m.studentGrade || ''})` : "Parent d'élève",
             type: m.category || 'info',
-            message: m.message || m.subject || '',
+            message: m.subject ? `${m.subject} : ${m.message || ''}` : (m.message || ''),
             time: m.timestamp ? (m.timestamp.includes('T') ? m.timestamp.split('T')[0] : m.timestamp) : "Récemment",
             unread: m.status === 'new' || m.unread === true,
             icon,

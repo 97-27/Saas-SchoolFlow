@@ -204,6 +204,64 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
   }
 }
 
+let isSyncingServer = false;
+/**
+ * Synchronise les données réelles enregistrées depuis l'API serveur pour assurer la persistance
+ * lorsque le lien du site est partagé avec d'autres utilisateurs ou ouvert sur d'autres appareils.
+ */
+export function syncSchoolDataWithServer(slug: string): void {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined' || isSyncingServer) return;
+  isSyncingServer = true;
+
+  fetch(`/api/sync?slug=${encodeURIComponent(slug)}`)
+    .then((res) => res.json())
+    .then((result) => {
+      isSyncingServer = false;
+      if (result && result.success && result.data) {
+        const data = result.data;
+        let hasChanges = false;
+
+        if (data.schoolSettings) {
+          const localSettingsKey = `${SCHOOL_SETTINGS_PREFIX}${slug}`;
+          const current = localStorage.getItem(localSettingsKey);
+          if (!current) {
+            localStorage.setItem(localSettingsKey, JSON.stringify(data.schoolSettings));
+            hasChanges = true;
+          }
+        }
+
+        if (data.students && Array.isArray(data.students) && data.students.length > 0) {
+          const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
+          const local = localStorage.getItem(schoolKey);
+          const localCount = local ? JSON.parse(local).length : 0;
+          if (!local || localCount < data.students.length) {
+            localStorage.setItem(schoolKey, JSON.stringify(data.students));
+            localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(data.students));
+            hasChanges = true;
+          }
+        }
+
+        if (data.invoices && Array.isArray(data.invoices) && data.invoices.length > 0) {
+          const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
+          const local = localStorage.getItem(invSchoolKey);
+          const localCount = local ? JSON.parse(local).length : 0;
+          if (!local || localCount < data.invoices.length) {
+            localStorage.setItem(invSchoolKey, JSON.stringify(data.invoices));
+            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(data.invoices));
+            hasChanges = true;
+          }
+        }
+
+        if (hasChanges) {
+          broadcastLiveUpdate({ action: 'server_hydrated', slug });
+        }
+      }
+    })
+    .catch(() => {
+      isSyncingServer = false;
+    });
+}
+
 /**
  * Récupère la configuration personnalisée de l'école (nom, slogan, devise, logos, ville, fondateur, etc.)
  */
@@ -227,14 +285,19 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
       country: 'Côte d’Ivoire',
       district: 'Abidjan',
       ministryCode: '321119',
-      founderName: slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUHAMED' : 'Fondateur / Promoteur',
-      directorName: 'M. Jean-Marc Kouassi (Direction Pédagogique)',
+      founderName: slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur',
+      directorName: 'LAWANI MOUHAMED',
       studiesDirectorName: 'Direction des Études',
       status: 'active',
       subscriptionPlan: 'annuel',
       createdAt: '2026-09-01',
     };
   }
+
+  // Lancer la réconciliation serveur en tâche de fond pour les nouveaux appareils
+  try {
+    syncSchoolDataWithServer(slug);
+  } catch (e) {}
 
   try {
     // 1. Chercher d'abord avec le slug spécifique
@@ -265,8 +328,8 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
         ...local,
         name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
         shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
-        founderName: local.founderName || fallback?.founderName || (slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUHAMED' : 'Fondateur de l’Établissement'),
-        directorName: local.directorName || fallback?.directorName || 'M. Jean-Marc Kouassi (Direction Pédagogique)',
+        founderName: local.founderName || fallback?.founderName || (slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUSSA' : 'Fondateur de l’Établissement'),
+        directorName: local.directorName || fallback?.directorName || 'LAWANI MOUHAMED',
         slug: slug,
       };
     }
@@ -372,8 +435,18 @@ export function saveLiveSchool(school: School): void {
       localStorage.setItem('schoolflow_active_school_settings_v1', json);
     }
 
-    // Synchronisation en arrière-plan avec Supabase Cloud
+    // Synchronisation en arrière-plan avec Supabase Cloud & API Serveur SchoolFlow
     saveSchoolToSupabase(school).catch(() => {});
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: school.slug,
+          schoolSettings: school,
+        }),
+      }).catch(() => {});
+    }
 
     // Déclenchement de la diffusion temps réel parallèle
     broadcastLiveUpdate({
@@ -828,9 +901,20 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
-    // 5. Synchronisation Supabase Cloud en arrière-plan
+    // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan
     saveStudentToSupabase(studentWithSlug, slug).catch(() => {});
     saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          students: [studentWithSlug, ...filteredSchool],
+          invoices: [invoiceWithSlug, ...filteredInvSchool],
+        }),
+      }).catch(() => {});
+    }
 
     // 6. Diffusion temps réel parallèle immédiate à toutes les interfaces
     broadcastLiveUpdate({
@@ -1063,7 +1147,7 @@ export interface StaffUser {
 export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-founder',
-    fullName: 'LAWANI MOUHAMED (Fondateur)',
+    fullName: 'LAWANI MOUSSA (Fondateur)',
     role: 'Fondateur / Promotrice (Admin)',
     roleId: 'fondateur',
     matricule: 'EMP-FND-001',
@@ -1080,7 +1164,7 @@ export const defaultStaffUsers: StaffUser[] = [
   },
   {
     id: 'staff-001',
-    fullName: 'Dr. Jean-Marc Kouassi (Direction Pédagogique)',
+    fullName: 'LAWANI MOUHAMED (Directeur Général)',
     role: 'Directeur Général (Admin)',
     roleId: 'directeur',
     matricule: 'EMP-DIR-001',
@@ -1807,7 +1891,7 @@ export function resetSchoolData(
       const onlyAdminStaff: StaffUser[] = [
         {
           id: 'staff-founder',
-          fullName: school.founderName || 'LAWANI MOUHAMED (Fondateur)',
+          fullName: school.founderName || 'LAWANI MOUSSA (Fondateur)',
           role: 'Fondateur / Promotrice (Admin)',
           roleId: 'fondateur',
           matricule: 'EMP-FND-001',
@@ -1824,7 +1908,7 @@ export function resetSchoolData(
         },
         {
           id: 'staff-001',
-          fullName: school.directorName || 'Dr. Jean-Marc Kouassi (Direction Pédagogique)',
+          fullName: school.directorName || 'LAWANI MOUHAMED (Directeur Général)',
           role: 'Directeur Général (Admin)',
           roleId: 'directeur',
           matricule: 'EMP-DIR-001',

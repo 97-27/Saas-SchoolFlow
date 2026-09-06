@@ -1099,7 +1099,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     type="text"
                     value={school.founderName || ''}
                     onChange={(e) => handleInputChange('founderName', e.target.value)}
-                    placeholder="Ex: LAWANI MOUHAMED"
+                    placeholder="Ex: LAWANI MOUSSA"
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-bold"
                   />
                   <p className="text-[10px] text-slate-500">
@@ -1119,7 +1119,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       handleInputChange('directorName', e.target.value);
                       handleInputChange('studiesDirectorName', e.target.value);
                     }}
-                    placeholder="Ex: M. Jean-Marc Kouassi (Direction Pédagogique)"
+                    placeholder="Ex: LAWANI MOUHAMED (Direction Pédagogique)"
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-bold"
                   />
                   <p className="text-[10px] text-slate-500">

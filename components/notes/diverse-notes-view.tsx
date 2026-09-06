@@ -47,6 +47,7 @@ export interface DiverseNote {
   targetGrade?: string;
   targetStudentName?: string;
   author: string;
+  authorRole?: string;
   date: string;
   note1: string; // Note 1 demandée par l'utilisateur
   note2: string; // Note 2 demandée par l'utilisateur
@@ -99,13 +100,31 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     );
   };
 
-  // Liste des notes persistée (vide par défaut et purgée des anciens mocks)
+  const [activeSession, setActiveSession] = useState<{
+    roleId?: string;
+    roleBadge?: string;
+    fullName?: string;
+    pureName?: string;
+    role?: string;
+  }>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('schoolflow_active_session_v2');
+        if (stored) return JSON.parse(stored);
+      } catch (e) {}
+    }
+    return { roleId: 'directeur', roleBadge: '👑 Direction (Admin)', fullName: 'Direction Générale' };
+  });
+
+  const activeRoleId = activeSession?.roleId || 'directeur';
+  const getRoleStorageKey = (role: string) => `${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_${role}`;
+
+  // Liste des notes persistée isolée strictement par rôle / utilisateur
   const [notes, setNotes] = useState<DiverseNote[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved =
-          localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+        const role = (JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}') as any).roleId || 'directeur';
+        const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_${role}`);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeNotes(parsed);
@@ -134,7 +153,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [formTargetType, setFormTargetType] = useState<DiverseNote['targetType']>('Général (Établissement)');
   const [formTargetGrade, setFormTargetGrade] = useState('CM2');
   const [formTargetStudentName, setFormTargetStudentName] = useState('');
-  const [formAuthor, setFormAuthor] = useState('Direction des Études');
+  const [formAuthor, setFormAuthor] = useState('Direction');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formNote1, setFormNote1] = useState('');
   const [formNote2, setFormNote2] = useState('');
@@ -147,25 +166,36 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Synchronisation avec le store et purge automatique
+  // Synchronisation avec le store et partitionnement étanche par rôle
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     setStudents(getLiveStudents(mockStudents, schoolSlug));
 
-    const loadAndSanitize = () => {
-      setCurrentSchool(getLiveSchool(schoolSlug, school));
-      setStudents(getLiveStudents(mockStudents, schoolSlug));
+    const loadSessionAndNotes = () => {
+      let currentRole = 'directeur';
       if (typeof window !== 'undefined') {
         try {
-          const saved =
-            localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`) ||
-            localStorage.getItem(DIVERSE_NOTES_STORAGE_KEY);
+          const stored = localStorage.getItem('schoolflow_active_session_v2');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setActiveSession(parsed);
+            currentRole = parsed.roleId || 'directeur';
+          }
+        } catch (e) {}
+      }
+
+      setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setStudents(getLiveStudents(mockStudents, schoolSlug));
+
+      if (typeof window !== 'undefined') {
+        try {
+          const targetKey = getRoleStorageKey(currentRole);
+          const saved = localStorage.getItem(targetKey);
           if (saved) {
             const parsed = JSON.parse(saved);
             const cleaned = sanitizeNotes(parsed);
             if (cleaned.length !== parsed.length) {
-              localStorage.setItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
-              localStorage.setItem(DIVERSE_NOTES_STORAGE_KEY, JSON.stringify(cleaned));
+              localStorage.setItem(targetKey, JSON.stringify(cleaned));
             }
             setNotes(cleaned);
             return;
@@ -175,20 +205,18 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
       }
     };
 
-    loadAndSanitize();
-    window.addEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, loadAndSanitize);
+    loadSessionAndNotes();
+    window.addEventListener(DATA_UPDATED_EVENT, loadSessionAndNotes);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, loadSessionAndNotes);
   }, [schoolSlug, school]);
 
-  // Sauvegarder dans localStorage
+  // Sauvegarder dans le stockage dédié au rôle actif
   const saveNotesToStorage = (list: DiverseNote[]) => {
     setNotes(list);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(list));
-        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
-          localStorage.setItem(DIVERSE_NOTES_STORAGE_KEY, JSON.stringify(list));
-        }
+        const targetKey = getRoleStorageKey(activeRoleId);
+        localStorage.setItem(targetKey, JSON.stringify(list));
       } catch (e) {}
     }
   };
@@ -244,7 +272,19 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     setFormTargetType('Général (Établissement)');
     setFormTargetGrade('CM2');
     setFormTargetStudentName('');
-    setFormAuthor('Direction des Études');
+    setFormAuthor(
+      activeSession?.fullName ||
+        activeSession?.pureName ||
+        (activeRoleId === 'secretaire'
+          ? 'Secrétaire de Direction'
+          : activeRoleId === 'comptable'
+          ? 'Comptable'
+          : activeRoleId === 'enseignant'
+          ? 'Enseignant'
+          : activeRoleId === 'parent'
+          ? 'Parent d’Élève'
+          : 'Direction Générale')
+    );
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormNote1('');
     setFormNote2('');
@@ -295,6 +335,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         targetGrade: formTargetType === 'Classe Spécifique' ? formTargetGrade : undefined,
         targetStudentName: formTargetType === 'Élève Particulier' ? formTargetStudentName : undefined,
         author: formAuthor,
+        authorRole: editingNote.authorRole || activeRoleId,
         date: formDate,
         note1: formNote1,
         note2: formNote2,
@@ -320,7 +361,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         targetType: formTargetType,
         targetGrade: formTargetType === 'Classe Spécifique' ? formTargetGrade : undefined,
         targetStudentName: formTargetType === 'Élève Particulier' ? formTargetStudentName : undefined,
-        author: formAuthor,
+        author: formAuthor || activeSession?.fullName || 'Personnel',
+        authorRole: activeRoleId,
         date: formDate,
         note1: formNote1,
         note2: formNote2,
@@ -434,6 +476,26 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
             <span>Nouvelle Note</span>
           </button>
         </div>
+      </div>
+
+      {/* 1.5. Bandeau d'isolation stricte des notes par membre / rôle */}
+      <div className="p-3.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-emerald-950 font-medium shadow-2xs print:hidden">
+        <div className="flex items-center gap-2.5">
+          <span className="w-7 h-7 rounded-xl bg-emerald-200/80 text-emerald-900 flex items-center justify-center font-bold text-sm shrink-0">
+            🔒
+          </span>
+          <div>
+            <p className="font-bold text-emerald-900">
+              Espace Personnel Privé & Étanche ({activeSession.roleBadge || activeSession.role || 'Personnel'})
+            </p>
+            <p className="text-[11px] text-emerald-700">
+              Vous consultez exclusivement vos notes personnelles ({activeSession.fullName || 'Utilisateur'}). Les autres membres de l&apos;école ne peuvent pas voir vos notes.
+            </p>
+          </div>
+        </div>
+        <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-white border border-emerald-300 text-emerald-800 shrink-0 shadow-2xs">
+          Cloisonnement Actif
+        </span>
       </div>
 
       {/* 2. Les Cartes KPI Statistiques */}
