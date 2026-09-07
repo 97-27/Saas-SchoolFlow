@@ -95,7 +95,18 @@ export function InscriptionsView({
       // Fusionner immédiatement l'élève reçu par diffusion d'événement pour réactivité instantanée
       const eventStudent = e?.detail?.student;
       let combinedLive = [...live];
-      if (eventStudent && !combinedLive.some((s) => s.id === eventStudent.id || s.studentNumber === eventStudent.studentNumber)) {
+      if (
+        eventStudent &&
+        !combinedLive.some(
+          (s) =>
+            s.id === eventStudent.id ||
+            (eventStudent.studentNumber && s.studentNumber === eventStudent.studentNumber) ||
+            (eventStudent.matricule && s.matricule && s.matricule === eventStudent.matricule) ||
+            (s.fullName &&
+              eventStudent.fullName &&
+              s.fullName.toLowerCase().trim() === eventStudent.fullName.toLowerCase().trim())
+        )
+      ) {
         combinedLive.push(eventStudent);
       }
 
@@ -343,15 +354,39 @@ export function InscriptionsView({
     return 'Espèces';
   };
 
-  // Liste triée des élèves par numéro ID croissant (avec protection totale contre les objets incomplets)
+  // Liste triée des élèves par numéro ID croissant (avec dédoublonnage strict anti-doublon)
   const sortedStudentsById = useMemo(() => {
-    return [...(students || [])]
-      .filter((s): s is Student => Boolean(s && (s.id || s.studentNumber)))
-      .sort((a, b) => {
-        const numA = parseInt((a?.studentNumber || a?.id || '').replace(/\D/g, ''), 10) || 0;
-        const numB = parseInt((b?.studentNumber || b?.id || '').replace(/\D/g, ''), 10) || 0;
-        return numA - numB;
-      });
+    const seen = new Set<string>();
+    const unique: Student[] = [];
+
+    for (const s of (students || [])) {
+      if (!s || (!s.id && !s.studentNumber)) continue;
+      const idKey = (s.id || s.studentNumber || '').toUpperCase().trim();
+      const numKey = (s.studentNumber || s.id || '').toUpperCase().trim();
+      const nameKey = (s.fullName || `${s.lastName || ''} ${s.firstName || ''}`).toUpperCase().trim().replace(/\s+/g, ' ');
+      const matKey = (s.matricule || '').toUpperCase().trim();
+
+      if (
+        seen.has(idKey) ||
+        seen.has(numKey) ||
+        (nameKey && seen.has(nameKey)) ||
+        (matKey && matKey !== '' && seen.has(matKey))
+      ) {
+        continue;
+      }
+
+      if (idKey) seen.add(idKey);
+      if (numKey) seen.add(numKey);
+      if (nameKey) seen.add(nameKey);
+      if (matKey) seen.add(matKey);
+      unique.push(s);
+    }
+
+    return unique.sort((a, b) => {
+      const numA = parseInt((a?.studentNumber || a?.id || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt((b?.studentNumber || b?.id || '').replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
   }, [students]);
 
   // Compute next available Student ID sequence number

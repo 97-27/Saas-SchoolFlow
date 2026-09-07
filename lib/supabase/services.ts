@@ -11,13 +11,24 @@ import { School, Student, Invoice } from '@/lib/data/types';
 export async function getSchoolFromSupabase(slug: string): Promise<School | null> {
   if (!isSupabaseConfigured) return null;
   try {
-    const { data, error } = await supabase
+    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+    let { data, error } = await supabase
       .from('schools')
       .select('*')
       .eq('slug', slug)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) return null;
+    if (!data && isPilot) {
+      const fallbackSlug = slug === 'epc-manoi' ? 'college-excellence' : 'epc-manoi';
+      const { data: fbData } = await supabase
+        .from('schools')
+        .select('*')
+        .eq('slug', fallbackSlug)
+        .maybeSingle();
+      data = fbData;
+    }
+
+    if (!data) return null;
 
     // Récupérer le cachet officiel sauvegardé
     let stampUrl = '';
@@ -151,19 +162,22 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
 export async function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data: school } = await supabase
+    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+
+    const { data: schools } = await supabase
       .from('schools')
       .select('id')
-      .eq('slug', schoolSlug)
-      .single();
+      .in('slug', slugs);
 
-    if (!school) return [];
+    if (!schools || schools.length === 0) return [];
+    const schoolIds = schools.map((s: any) => s.id);
 
     const { data, error } = await supabase
       .from('students')
       .select('*')
-      .eq('school_id', school.id)
-      .order('created_at', { ascending: true });
+      .in('school_id', schoolIds)
+      .order('student_number', { ascending: true });
 
     if (error || !data) return [];
 
@@ -416,19 +430,22 @@ export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: 
 export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoice[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data: school } = await supabase
+    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+
+    const { data: schools } = await supabase
       .from('schools')
       .select('id')
-      .eq('slug', schoolSlug)
-      .single();
+      .in('slug', slugs);
 
-    if (!school) return [];
+    if (!schools || schools.length === 0) return [];
+    const schoolIds = schools.map((s: any) => s.id);
 
     const { data, error } = await supabase
       .from('invoices')
       .select('*, students(*)')
-      .eq('school_id', school.id)
-      .order('created_at', { ascending: true });
+      .in('school_id', schoolIds)
+      .order('invoice_number', { ascending: true });
 
     if (error || !data) return [];
 
@@ -569,18 +586,21 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const { data: school } = await supabase
+    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+
+    const { data: schools } = await supabase
       .from('schools')
       .select('id')
-      .eq('slug', schoolSlug)
-      .single();
+      .in('slug', slugs);
 
-    if (!school) return [];
+    if (!schools || schools.length === 0) return [];
+    const schoolIds = schools.map((s: any) => s.id);
 
     const { data, error } = await supabase
       .from('staff_users')
       .select('*')
-      .eq('school_id', school.id)
+      .in('school_id', schoolIds)
       .neq('role_id', 'school_stamp')
       .order('created_at', { ascending: true });
 

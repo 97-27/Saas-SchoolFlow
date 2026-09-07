@@ -45,14 +45,22 @@ ensureDataFile();
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const slug = searchParams.get('slug') || 'college-excellence';
+    const slug = searchParams.get('slug') || 'epc-manoi';
     const forceSupabase = searchParams.get('forceSupabase') === 'true';
 
     ensureDataFile();
     let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
 
-    // Si la mémoire est vide (démarrage à froid) ou si un rechargement forcé depuis Supabase est demandé
-    if (!schoolData || !schoolData.students || forceSupabase) {
+    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+    if (isPilot && (!schoolData?.students || schoolData.students.length === 0)) {
+      const partnerSlug = slug === 'epc-manoi' ? 'college-excellence' : 'epc-manoi';
+      if (memoryStore[partnerSlug]?.students?.length > 0) {
+        schoolData = { ...memoryStore[partnerSlug] };
+      }
+    }
+
+    // Si la mémoire est vide ou sans élèves ou si un rechargement forcé depuis Supabase est demandé
+    if (!schoolData || !schoolData.students || schoolData.students.length === 0 || forceSupabase) {
       try {
         const [sbSchool, sbStudents, sbInvoices, sbStaff] = await Promise.all([
           getSchoolFromSupabase(slug),
@@ -80,6 +88,10 @@ export async function GET(request: NextRequest) {
           schoolData.staffUsers = sbStaff;
         }
         memoryStore[slug] = schoolData;
+        if (isPilot) {
+          memoryStore['epc-manoi'] = schoolData;
+          memoryStore['college-excellence'] = schoolData;
+        }
       } catch (sbErr) {
         console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
       }
@@ -156,7 +168,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    memoryStore[slug] = {
+    const updatedEntry = {
       ...currentSchool,
       slug,
       updatedAt: new Date().toISOString(),
@@ -166,6 +178,13 @@ export async function POST(request: NextRequest) {
       ...(mergedSettings !== undefined ? { schoolSettings: mergedSettings } : {}),
       ...(staffUsers !== undefined ? { staffUsers } : {}),
     };
+    memoryStore[slug] = updatedEntry;
+
+    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+    if (isPilot) {
+      memoryStore['epc-manoi'] = { ...updatedEntry, slug: 'epc-manoi' };
+      memoryStore['college-excellence'] = { ...updatedEntry, slug: 'college-excellence' };
+    }
 
     // Sauvegarde asynchrone dans Supabase Cloud pour la persistance multi-appareils
     try {

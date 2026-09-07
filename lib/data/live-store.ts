@@ -812,6 +812,8 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 
     const seenIds = new Set<string>();
     const seenNumbers = new Set<string>();
+    const seenNames = new Set<string>();
+    const seenMatricules = new Set<string>();
     const uniqueStudents: Student[] = [];
 
     // Priorité absolue aux élèves enregistrés
@@ -826,11 +828,23 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       
       const idKey = stu.id || stu.studentNumber;
       const numKey = stu.studentNumber || stu.id;
-      if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
-        seenIds.add(idKey);
-        seenNumbers.add(numKey);
-        uniqueStudents.push(normalizeStudent(stu));
+      const nameKey = (stu.fullName || `${stu.lastName || ''} ${stu.firstName || ''}`).toLowerCase().trim().replace(/\s+/g, ' ');
+      const matKey = (stu.matricule || '').trim().toUpperCase();
+
+      if (
+        seenIds.has(idKey) ||
+        seenNumbers.has(numKey) ||
+        (nameKey && seenNames.has(nameKey)) ||
+        (matKey && matKey !== '' && seenMatricules.has(matKey))
+      ) {
+        continue;
       }
+
+      seenIds.add(idKey);
+      seenNumbers.add(numKey);
+      if (nameKey) seenNames.add(nameKey);
+      if (matKey) seenMatricules.add(matKey);
+      uniqueStudents.push(normalizeStudent(stu));
     }
 
     // Réconciliation automatique : si des factures locales existent sans objet élève correspondant, les réintégrer immédiatement
