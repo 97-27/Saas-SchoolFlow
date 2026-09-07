@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice, StudentInstallments } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';

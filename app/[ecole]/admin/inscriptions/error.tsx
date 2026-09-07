@@ -31,8 +31,17 @@ export default function InscriptionsError({
         <div className="flex items-center justify-center gap-2.5 pt-2">
           <button
             type="button"
-            onClick={() => reset()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+            onClick={() => {
+              try {
+                reset();
+              } catch {
+                // Ignore reset error
+              }
+              if (typeof window !== 'undefined') {
+                window.location.reload();
+              }
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Recharger le formulaire</span>
