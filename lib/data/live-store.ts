@@ -271,13 +271,13 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
     syncSchoolDataWithServer(slug);
   });
 
-  // 2. Rafraîchissement automatique silencieux toutes les 2.5 secondes pour répercuter instantanément les suppressions et ajouts entre appareils
+  // 2. Rafraîchissement automatique silencieux toutes les 4 secondes pour répercuter instantanément les suppressions et ajouts entre appareils
   if (activeSyncInterval) clearInterval(activeSyncInterval);
   activeSyncInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       syncSchoolDataWithServer(slug);
     }
-  }, 2500);
+  }, 4000);
 }
 
 /**
@@ -310,11 +310,27 @@ export function syncSchoolDataWithServer(slug: string): void {
 
         const delSet = getDeletedStudentIds();
 
-        // 2. Synchroniser les paramètres de l'école
+        // 2. Synchroniser les paramètres de l'école (Préservation absolue des éléments graphiques : logo, emblème, cachet)
         if (data.schoolSettings) {
           const localSettingsKey = `${SCHOOL_SETTINGS_PREFIX}${slug}`;
           const current = localStorage.getItem(localSettingsKey);
-          const newStr = JSON.stringify(data.schoolSettings);
+          let currentObj: School | null = null;
+          try {
+            if (current) currentObj = JSON.parse(current);
+          } catch (e) {}
+
+          const incoming = data.schoolSettings;
+          const mergedSchool: School = {
+            ...(currentObj || {}),
+            ...incoming,
+            logoUrl: incoming.logoUrl || currentObj?.logoUrl || '',
+            countryEmblemUrl: incoming.countryEmblemUrl || currentObj?.countryEmblemUrl || '',
+            stampUrl: incoming.stampUrl || currentObj?.stampUrl || '',
+            founderName: incoming.founderName || currentObj?.founderName || (isPilot ? 'LAWANI MOUSSA' : ''),
+            directorName: incoming.directorName || currentObj?.directorName || (isPilot ? 'LAWANI MOUHAMED' : ''),
+          };
+
+          const newStr = JSON.stringify(mergedSchool);
           if (!current || current !== newStr) {
             localStorage.setItem(localSettingsKey, newStr);
             if (isPilot) {
@@ -463,6 +479,9 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
       return {
         ...fallback,
         ...local,
+        logoUrl: local.logoUrl || fallback?.logoUrl || '',
+        countryEmblemUrl: local.countryEmblemUrl || fallback?.countryEmblemUrl || '',
+        stampUrl: local.stampUrl || fallback?.stampUrl || '',
         name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
         shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
         founderName:

@@ -90,14 +90,60 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   const [stampPreview, setStampPreview] = useState<string>(school.stampUrl || '');
   const [emblemPreview, setEmblemPreview] = useState<string>(school.countryEmblemUrl || '');
 
+  // Fonction de compression d'image client via Canvas pour éviter les dépassements de quota et accélérer la synchro
+  const compressImageFile = (file: File, maxDim = 512, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve('');
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve((e.target?.result as string) || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const compressed = canvas.toDataURL(mime, quality);
+          resolve(compressed);
+        };
+        img.src = (e.target?.result as string) || '';
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   useEffect(() => {
     const syncWithLive = () => {
       const live = getLiveSchool(initialSchool.slug, initialSchool);
-      setSchool(live);
+      setSchool((prev) => ({
+        ...live,
+        logoUrl: prev.logoUrl || live.logoUrl || '',
+        countryEmblemUrl: prev.countryEmblemUrl || live.countryEmblemUrl || '',
+        stampUrl: prev.stampUrl || live.stampUrl || '',
+      }));
       setSubscriptionStatus(getSchoolSubscription(initialSchool.slug || 'epc-manoi'));
-      setLogoPreview(live.logoUrl || '');
-      setEmblemPreview(live.countryEmblemUrl || '');
-      setStampPreview(live.stampUrl || '');
+      if (live.logoUrl) setLogoPreview(live.logoUrl);
+      if (live.countryEmblemUrl) setEmblemPreview(live.countryEmblemUrl);
+      if (live.stampUrl) setStampPreview(live.stampUrl);
     };
 
     syncWithLive();
@@ -130,21 +176,22 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   const [enteredDeleteEmailCode, setEnteredDeleteEmailCode] = useState('');
   const [isEmailCodeSent, setIsEmailCodeSent] = useState(false);
 
-  // 1. Logo avec sauvegarde automatique et instantanée
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 1. Logo avec compression Canvas et sauvegarde automatique instantanée
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setLogoPreview(result);
-        const updated = { ...school, logoUrl: result };
+      try {
+        const compressed = await compressImageFile(file, 512, 0.85);
+        if (!compressed) return;
+        setLogoPreview(compressed);
+        const updated = { ...school, logoUrl: compressed };
         setSchool(updated);
         saveLiveSchool(updated);
-        setActionFeedback('✓ Nouveau logo enregistré et appliqué instantanément sur toute la plateforme.');
+        setActionFeedback('✓ Nouveau logo optimisé, enregistré et synchronisé avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.warn('Erreur chargement logo:', err);
+      }
     }
   };
 
@@ -153,25 +200,26 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     const updated = { ...school, logoUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Logo réinitialisé (visuel d’exemple actif).');
+    setActionFeedback('✓ Logo réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
-  // 2. Emblème avec sauvegarde automatique et instantanée
-  const handleEmblemUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 2. Emblème avec compression Canvas et sauvegarde automatique instantanée
+  const handleEmblemUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setEmblemPreview(result);
-        const updated = { ...school, countryEmblemUrl: result };
+      try {
+        const compressed = await compressImageFile(file, 512, 0.85);
+        if (!compressed) return;
+        setEmblemPreview(compressed);
+        const updated = { ...school, countryEmblemUrl: compressed };
         setSchool(updated);
         saveLiveSchool(updated);
-        setActionFeedback('✓ Emblème national enregistré et appliqué instantanément.');
+        setActionFeedback('✓ Emblème national optimisé, enregistré et synchronisé avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.warn('Erreur chargement emblème:', err);
+      }
     }
   };
 
@@ -180,25 +228,26 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     const updated = { ...school, countryEmblemUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Emblème réinitialisé (visuel d’exemple actif).');
+    setActionFeedback('✓ Emblème réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
-  // 3. Cachet officiel avec sauvegarde automatique et instantanée
-  const handleStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 3. Cachet officiel avec compression Canvas et sauvegarde automatique instantanée
+  const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setStampPreview(result);
-        const updated = { ...school, stampUrl: result };
+      try {
+        const compressed = await compressImageFile(file, 512, 0.85);
+        if (!compressed) return;
+        setStampPreview(compressed);
+        const updated = { ...school, stampUrl: compressed };
         setSchool(updated);
         saveLiveSchool(updated);
-        setActionFeedback('✓ Cachet officiel scanné enregistré avec succès.');
+        setActionFeedback('✓ Cachet officiel scanné optimisé et enregistré avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.warn('Erreur chargement cachet:', err);
+      }
     }
   };
 
@@ -207,7 +256,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     const updated = { ...school, stampUrl: '' };
     setSchool(updated);
     saveLiveSchool(updated);
-    setActionFeedback('✓ Cachet officiel réinitialisé (visuel d’exemple actif).');
+    setActionFeedback('✓ Cachet officiel réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
 

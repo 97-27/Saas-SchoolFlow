@@ -54,14 +54,12 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
 export async function saveSchoolToSupabase(school: School): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    const payload = {
+    const payload: Record<string, any> = {
       slug: school.slug,
       name: school.name,
       short_name: school.shortName,
       motto: school.motto,
       slogan: school.slogan,
-      logo_url: school.logoUrl,
-      country_emblem_url: school.countryEmblemUrl,
       logo_color: school.logoColor || '#059669',
       city: school.city,
       country: school.country,
@@ -79,6 +77,13 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
       status: school.status || 'active',
       updated_at: new Date().toISOString(),
     };
+
+    if (school.logoUrl !== undefined && school.logoUrl !== '') {
+      payload.logo_url = school.logoUrl;
+    }
+    if (school.countryEmblemUrl !== undefined && school.countryEmblemUrl !== '') {
+      payload.country_emblem_url = school.countryEmblemUrl;
+    }
 
     const { error } = await supabase
       .from('schools')

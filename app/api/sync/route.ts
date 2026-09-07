@@ -60,7 +60,12 @@ export async function GET(request: NextRequest) {
       ]);
 
       if (sbSchool) {
-        schoolData.schoolSettings = sbSchool;
+        schoolData.schoolSettings = {
+          ...sbSchool,
+          logoUrl: sbSchool.logoUrl || schoolData.schoolSettings?.logoUrl || '',
+          countryEmblemUrl: sbSchool.countryEmblemUrl || schoolData.schoolSettings?.countryEmblemUrl || '',
+          stampUrl: sbSchool.stampUrl || schoolData.schoolSettings?.stampUrl || '',
+        };
       }
       if (sbStudents !== null && Array.isArray(sbStudents)) {
         schoolData.students = sbStudents;
@@ -132,6 +137,18 @@ export async function POST(request: NextRequest) {
       ? invoices.filter((inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber))
       : undefined;
 
+    let mergedSettings = schoolSettings;
+    if (schoolSettings) {
+      const existingSettings = currentSchool.schoolSettings || {};
+      mergedSettings = {
+        ...existingSettings,
+        ...schoolSettings,
+        logoUrl: schoolSettings.logoUrl || existingSettings.logoUrl || '',
+        countryEmblemUrl: schoolSettings.countryEmblemUrl || existingSettings.countryEmblemUrl || '',
+        stampUrl: schoolSettings.stampUrl || existingSettings.stampUrl || '',
+      };
+    }
+
     memoryStore[slug] = {
       ...currentSchool,
       slug,
@@ -139,14 +156,14 @@ export async function POST(request: NextRequest) {
       deletedStudentIds: existingDeleted,
       ...(cleanStudents !== undefined ? { students: cleanStudents } : {}),
       ...(cleanInvoices !== undefined ? { invoices: cleanInvoices } : {}),
-      ...(schoolSettings !== undefined ? { schoolSettings } : {}),
+      ...(mergedSettings !== undefined ? { schoolSettings: mergedSettings } : {}),
       ...(staffUsers !== undefined ? { staffUsers } : {}),
     };
 
     // Sauvegarde asynchrone dans Supabase Cloud pour la persistance multi-appareils
     try {
-      if (schoolSettings) {
-        saveSchoolToSupabase(schoolSettings).catch(() => {});
+      if (mergedSettings) {
+        saveSchoolToSupabase(mergedSettings).catch(() => {});
       }
       if (cleanStudents && Array.isArray(cleanStudents)) {
         for (const st of cleanStudents) {

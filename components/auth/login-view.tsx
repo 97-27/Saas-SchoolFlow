@@ -574,12 +574,18 @@ export function LoginView({
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
 
+      // Générer automatiquement un sigle intelligent
+      const words = signupSchoolName.trim().split(/\s+/);
+      const generatedShortName = words.length > 1
+        ? words.map((w) => w[0]).join('').toUpperCase().slice(0, 8)
+        : signupSchoolName.slice(0, 8).toUpperCase();
+
       // Créer et enregistrer la nouvelle école dans le live-store
       const newSchool: School = {
         id: `school_${Date.now()}`,
         slug: slug,
         name: signupSchoolName.trim().toUpperCase(),
-        shortName: '',
+        shortName: generatedShortName,
         logoColor: '#059669',
         academicYear: '2026-2027',
         currentTerm: 'Trimestre 1',
@@ -587,15 +593,15 @@ export function LoginView({
         phone: cleanSignupPhone,
         whatsappPhone: cleanSignupPhone,
         email: signupEmail.trim(),
-        motto: '',
-        slogan: '',
-        city: '',
+        motto: 'Discipline • Rigueur • Réussite',
+        slogan: 'L’Excellence au service de l’Éducation',
+        city: 'Abidjan',
         country: 'Côte d’Ivoire',
-        district: '',
+        district: 'Abidjan',
         ministryCode: '',
         founderName: signupFounderName.trim() || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur'),
-        directorName: signupResponsableName.trim(),
-        studiesDirectorName: signupResponsableName.trim(),
+        directorName: signupResponsableName.trim() || 'Directeur Général',
+        studiesDirectorName: signupResponsableName.trim() || 'Direction des Études',
         logoUrl: '',
         stampUrl: '',
         countryEmblemUrl: '',
