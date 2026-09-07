@@ -204,8 +204,10 @@ export function RevenueSummary({
         p4 = inst.versement4?.amount || 0;
         p5 = inst.versement5?.amount || 0;
       } else if (paid > 0) {
-        // Versement global sans échéancier détaillé -> affecté au 1er versement
-        p1 = paid;
+        // Versement global sans échéancier détaillé -> affecté au 1er versement UNIQUEMENT pour la part de scolarité
+        const regFee = stu.registrationFee || 0;
+        const tuitionPaid = Math.max(0, paid - regFee);
+        p1 = tuitionPaid;
       }
 
       v1 += p1;

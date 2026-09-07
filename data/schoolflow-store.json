@@ -29,12 +29,7 @@
         "paidAmount": 30000,
         "balanceRemaining": 65000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-002",
@@ -60,15 +55,10 @@
         "tuitionAmount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-003",
@@ -94,15 +84,10 @@
         "tuitionAmount": 80000,
         "discountAmount": 0,
         "netAmount": 80000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 80000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-004",
@@ -128,15 +113,10 @@
         "tuitionAmount": 100000,
         "discountAmount": 0,
         "netAmount": 100000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 100000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-005",
@@ -162,15 +142,10 @@
         "tuitionAmount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-006",
@@ -196,15 +171,10 @@
         "tuitionAmount": 90000,
         "discountAmount": 0,
         "netAmount": 90000,
-        "paidAmount": 90000,
-        "balanceRemaining": 0,
-        "tuitionStatus": "paid",
-        "installments": {
-          "versement1": {
-            "amount": 90000,
-            "date": "2026-09-07"
-          }
-        }
+        "paidAmount": 40000,
+        "balanceRemaining": 90000,
+        "tuitionStatus": "unpaid",
+        "installments": {}
       }
     ],
     "invoices": [
@@ -229,7 +199,8 @@
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-002",
@@ -246,13 +217,14 @@
         "amount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-003",
@@ -269,13 +241,14 @@
         "amount": 80000,
         "discountAmount": 0,
         "netAmount": 80000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 80000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-004",
@@ -292,13 +265,14 @@
         "amount": 100000,
         "discountAmount": 0,
         "netAmount": 100000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 100000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-005",
@@ -315,13 +289,14 @@
         "amount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-006",
@@ -338,13 +313,14 @@
         "amount": 90000,
         "discountAmount": 0,
         "netAmount": 90000,
-        "paidAmount": 90000,
-        "balanceRemaining": 0,
+        "paidAmount": 40000,
+        "balanceRemaining": 90000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "paid"
+        "status": "partial",
+        "installments": {}
       }
     ],
     "deletedStudentIds": []
@@ -379,12 +355,7 @@
         "paidAmount": 30000,
         "balanceRemaining": 65000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-002",
@@ -410,15 +381,10 @@
         "tuitionAmount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-003",
@@ -444,15 +410,10 @@
         "tuitionAmount": 80000,
         "discountAmount": 0,
         "netAmount": 80000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 80000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-004",
@@ -478,15 +439,10 @@
         "tuitionAmount": 100000,
         "discountAmount": 0,
         "netAmount": 100000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 100000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-005",
@@ -512,15 +468,10 @@
         "tuitionAmount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "tuitionStatus": "unpaid",
-        "installments": {
-          "versement1": {
-            "amount": 30000,
-            "date": "2026-09-07"
-          }
-        }
+        "installments": {}
       },
       {
         "id": "stu-006",
@@ -546,15 +497,10 @@
         "tuitionAmount": 90000,
         "discountAmount": 0,
         "netAmount": 90000,
-        "paidAmount": 90000,
-        "balanceRemaining": 0,
-        "tuitionStatus": "paid",
-        "installments": {
-          "versement1": {
-            "amount": 90000,
-            "date": "2026-09-07"
-          }
-        }
+        "paidAmount": 40000,
+        "balanceRemaining": 90000,
+        "tuitionStatus": "unpaid",
+        "installments": {}
       }
     ],
     "invoices": [
@@ -579,7 +525,8 @@
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-002",
@@ -596,13 +543,14 @@
         "amount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-003",
@@ -619,13 +567,14 @@
         "amount": 80000,
         "discountAmount": 0,
         "netAmount": 80000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 80000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-004",
@@ -642,13 +591,14 @@
         "amount": 100000,
         "discountAmount": 0,
         "netAmount": 100000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 100000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-005",
@@ -665,13 +615,14 @@
         "amount": 60000,
         "discountAmount": 0,
         "netAmount": 60000,
-        "paidAmount": 30000,
+        "paidAmount": 25000,
         "balanceRemaining": 60000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "partial"
+        "status": "partial",
+        "installments": {}
       },
       {
         "id": "inv-006",
@@ -688,13 +639,14 @@
         "amount": 90000,
         "discountAmount": 0,
         "netAmount": 90000,
-        "paidAmount": 90000,
-        "balanceRemaining": 0,
+        "paidAmount": 40000,
+        "balanceRemaining": 90000,
         "enrollmentType": "nouveau",
         "paymentMethod": "Espèces en caisse",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
-        "status": "paid"
+        "status": "partial",
+        "installments": {}
       }
     ],
     "deletedStudentIds": []

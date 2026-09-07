@@ -36,6 +36,8 @@ import {
   AlertTriangle,
   FilePlus,
   Layers,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface DocumentsViewProps {
@@ -82,16 +84,29 @@ export function DocumentsView({
     return records;
   });
 
-  const loadDocsStatus = () => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(DOCS_STATUS_KEY);
-        if (saved) {
-          setDocRecords(JSON.parse(saved));
-        }
-      } catch (err) {
-        console.error('Erreur rechargement doc status', err);
-      }
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  // Synchronisation bidirectionnelle du défilement horizontal en haut et au niveau de la table
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
+
+  const scrollTable = (direction: 'left' | 'right') => {
+    if (tableScrollRef.current) {
+      const scrollAmount = 350;
+      tableScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
     }
   };
 
@@ -614,9 +629,53 @@ export function DocumentsView({
           )}
         </div>
 
+        {/* ════════ BARRE DE DÉFILEMENT HORIZONTAL DÉDIÉE AU SOMMET DU TABLEAU ════════ */}
+        <div className="bg-slate-50/90 border-t border-b border-slate-200 px-4 py-2 flex items-center justify-between gap-3 select-none">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-850 border border-emerald-300 shadow-2xs font-heading">
+              <span>↔️</span>
+              <span>Défilement Horizontal</span>
+            </span>
+            <span className="text-slate-500 text-[11px] hidden md:inline">
+              Faites glisser la barre ci-dessous ou cliquez sur les boutons pour afficher toutes les pièces
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => scrollTable('left')}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+              title="Faire défiler vers la gauche"
+            >
+              <ChevronLeft className="w-4 h-4 text-emerald-600" />
+              <span>◀ Gauche</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTable('right')}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+              title="Faire défiler vers la droite"
+            >
+              <span>Droite ▶</span>
+              <ChevronRight className="w-4 h-4 text-emerald-600" />
+            </button>
+          </div>
+        </div>
+
+        {/* Barre de défilement horizontale en haut (synchronisée) */}
+        <div
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          className="overflow-x-auto overflow-y-hidden h-4 bg-slate-100/90 border-b border-slate-200 cursor-ew-resize scrollbar-thin scrollbar-thumb-emerald-500"
+          title="Faites glisser cette barre pour faire défiler les colonnes du tableau"
+        >
+          <div className="min-w-[1100px] h-1" />
+        </div>
+
         {/* Table des Dossiers Scolaires */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[950px]">
+        <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead className="sticky top-0 z-10 shadow-2xs">
               <tr className="bg-slate-100/95 backdrop-blur-xs border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-3.5 pl-5 pr-3 w-10">

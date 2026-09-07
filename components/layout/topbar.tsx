@@ -108,6 +108,17 @@ export function Topbar({
 
             const pureFullName = (parsed.fullName || staffMember?.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
 
+            const cleanCode = (parsed.authCode || staffMember?.authCode || '').toUpperCase();
+            const persistentAvatar =
+              (cleanCode ? localStorage.getItem(`schoolflow_user_avatar_${cleanCode}`) : null) ||
+              (pureFullName ? localStorage.getItem(`schoolflow_user_avatar_${pureFullName}`) : null) ||
+              (parsed.fullName ? localStorage.getItem(`schoolflow_user_avatar_${parsed.fullName}`) : null) ||
+              (parsed.roleId ? localStorage.getItem(`schoolflow_user_avatar_${parsed.roleId}`) : null) ||
+              localStorage.getItem('schoolflow_user_avatar_custom') ||
+              staffMember?.avatarUrl ||
+              parsed.avatarUrl ||
+              '';
+
             setActiveSession({
               fullName: pureFullName || parsed.fullName,
               email: cleanEmail,
@@ -124,7 +135,7 @@ export function Topbar({
                 ? '👑 Direction (Admin)'
                 : (parsed.roleBadge || 'Personnel'),
               department: parsed.department || (isFounder ? 'Présidence & Conseil' : isDirector ? 'Direction Générale' : 'Direction'),
-              avatarUrl: parsed.avatarUrl || '',
+              avatarUrl: persistentAvatar,
             });
 
             // Affichage automatique du message « Bonjour [Nom] » pendant 8 secondes à la connexion
@@ -147,6 +158,14 @@ export function Topbar({
       // Valeur par défaut
       const defaultDir = allStaff.find((s) => s.roleId === 'directeur');
       const defaultName = (defaultDir?.fullName || live.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+      const persistentDirAvatar =
+        localStorage.getItem('schoolflow_user_avatar_DIR-2026') ||
+        localStorage.getItem('schoolflow_user_avatar_directeur') ||
+        localStorage.getItem(`schoolflow_user_avatar_${defaultName}`) ||
+        localStorage.getItem('schoolflow_user_avatar_custom') ||
+        defaultDir?.avatarUrl ||
+        '';
+
       setActiveSession({
         fullName: defaultName,
         email: defaultDir?.email || '',
@@ -155,7 +174,7 @@ export function Topbar({
         roleId: 'directeur',
         roleBadge: '👑 Direction (Admin)',
         department: 'Direction des Études',
-        avatarUrl: '',
+        avatarUrl: persistentDirAvatar,
       });
     };
 
@@ -272,9 +291,37 @@ export function Topbar({
         const parsed = stored ? JSON.parse(stored) : {};
         const newSession = { ...parsed, avatarUrl: dataUrl };
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
+
+        // Clés indélébiles de sauvegarde permanente par code d'accès, rôle et nom
+        if (parsed.authCode) {
+          localStorage.setItem(`schoolflow_user_avatar_${parsed.authCode.toUpperCase()}`, dataUrl);
+        }
+        if (activeSession.roleId) {
+          localStorage.setItem(`schoolflow_user_avatar_${activeSession.roleId}`, dataUrl);
+        }
+        if (activeSession.fullName) {
+          localStorage.setItem(`schoolflow_user_avatar_${activeSession.fullName}`, dataUrl);
+        }
+        localStorage.setItem('schoolflow_user_avatar_custom', dataUrl);
+
+        // Sauvegarder également dans le registre du personnel (staffUsers)
+        const allStaff = getLiveStaffUsers(schoolSlug);
+        const nextStaff = allStaff.map((s) => {
+          if (
+            (parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase()) ||
+            s.roleId === activeSession.roleId ||
+            s.fullName === activeSession.fullName
+          ) {
+            return { ...s, avatarUrl: dataUrl };
+          }
+          return s;
+        });
+        saveLiveStaffUsers(nextStaff, schoolSlug);
+
         broadcastLiveUpdate({
           action: 'session_updated',
           session: newSession,
+          avatarUrl: dataUrl,
         });
       } catch (err) {}
     };

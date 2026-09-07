@@ -473,8 +473,22 @@ export function LoginView({
         authCode: cleanAuthCode,
         isAdmin: isSupremeAdmin,
         matchedChildrenIds: matchedParentStudents.map((s) => s.id),
-        avatarUrl:
-          selectedRole === 'fondateur' || selectedRole === 'directeur'
+        avatarUrl: (() => {
+          let persistentAvatar = '';
+          try {
+            persistentAvatar =
+              (cleanAuthCode ? localStorage.getItem(`schoolflow_user_avatar_${cleanAuthCode.toUpperCase()}`) : null) ||
+              (finalFullName ? localStorage.getItem(`schoolflow_user_avatar_${finalFullName}`) : null) ||
+              (selectedRole ? localStorage.getItem(`schoolflow_user_avatar_${selectedRole}`) : null) ||
+              verifiedStaffUser?.avatarUrl ||
+              matchedStaff?.avatarUrl ||
+              localStorage.getItem('schoolflow_user_avatar_custom') ||
+              '';
+          } catch (e) {}
+
+          if (persistentAvatar) return persistentAvatar;
+
+          return selectedRole === 'fondateur' || selectedRole === 'directeur'
             ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'
             : selectedRole === 'secretaire'
             ? 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=200&auto=format&fit=crop&q=80'
@@ -486,7 +500,8 @@ export function LoginView({
             ? 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200&auto=format&fit=crop&q=80'
             : selectedRole === 'parent'
             ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&auto=format&fit=crop&q=80'
-            : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+            : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80';
+        })(),
         loginTime: new Date().toISOString(),
       };
 

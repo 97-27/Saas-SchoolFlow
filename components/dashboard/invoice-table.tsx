@@ -113,6 +113,18 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
         vList.forEach(({ key, obj, label }) => {
           if (obj && typeof obj.amount === 'number' && obj.amount > 0) {
+            // Sécurité anti-doublon : si le versement correspond aux droits d'inscription et que la scolarité reste impayée (balanceRemaining === tuitionAmount)
+            const isDuplicateOfRegFee =
+              typeof inv.registrationFee === 'number' &&
+              inv.registrationFee > 0 &&
+              obj.amount === inv.registrationFee &&
+              (matchedStudent?.balanceRemaining === matchedStudent?.tuitionAmount ||
+                matchedStudent?.tuitionStatus === 'unpaid');
+
+            if (isDuplicateOfRegFee) {
+              return; // C'est le droit d'inscription comptabilisé en tant que tel, ne pas créer de faux versement scolarité
+            }
+
             foundVersements = true;
             list.push({
               id: `${inv.id}-${key}`,

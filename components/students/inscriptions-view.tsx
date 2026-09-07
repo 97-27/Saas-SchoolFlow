@@ -652,14 +652,13 @@ export function InscriptionsView({
       const defaultDate = stu.enrollmentDate || stu.paymentDate || getTodayDateStr();
       setPaymentDate(defaultDate);
 
-      // Charger les 5 versements de l'élève
+      // Charger les 5 versements réels de l'élève (sans inventer de versements fictifs)
       const inst = stu.installments;
-      const p = stu.paidAmount || 0;
-      const v1 = inst?.versement1 || (p > 0 ? { amount: Math.min(p, 100000), paymentMethod: stu.paymentMethod || 'Espèces', date: defaultDate } : { amount: 0, paymentMethod: 'Espèces', date: defaultDate });
-      const v2 = inst?.versement2 || (p > 100000 ? { amount: Math.min(p - 100000, 50000), paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate } : { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate });
-      const v3 = inst?.versement3 || (p > 150000 ? { amount: Math.min(p - 150000, 50000), paymentMethod: 'Virement bancaire', date: defaultDate } : { amount: 0, paymentMethod: 'Virement bancaire', date: defaultDate });
-      const v4 = inst?.versement4 || (p > 200000 ? { amount: Math.min(p - 200000, 50000), paymentMethod: 'Espèces', date: defaultDate } : { amount: 0, paymentMethod: 'Espèces', date: defaultDate });
-      const v5 = inst?.versement5 || (p > 250000 ? { amount: p - 250000, paymentMethod: 'Orange Money', date: defaultDate } : { amount: 0, paymentMethod: 'Orange Money', date: defaultDate });
+      const v1 = inst?.versement1 || { amount: 0, paymentMethod: 'Espèces', date: defaultDate };
+      const v2 = inst?.versement2 || { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate };
+      const v3 = inst?.versement3 || { amount: 0, paymentMethod: 'Virement bancaire', date: defaultDate };
+      const v4 = inst?.versement4 || { amount: 0, paymentMethod: 'Espèces', date: defaultDate };
+      const v5 = inst?.versement5 || { amount: 0, paymentMethod: 'Orange Money', date: defaultDate };
 
       setVersement1Amount(Number(v1?.amount) || 0);
       setVersement1Method(v1?.paymentMethod || 'Espèces');
@@ -1347,7 +1346,16 @@ export function InscriptionsView({
     }
 
     const name = stuName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
-    setSuccessToast("📸 Génération instantanée de la photo officielle du reçu...");
+    setSuccessToast("📸 Génération du reçu et ouverture de WhatsApp...");
+
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+      `Bonjour, voici le reçu officiel de paiement (${receiptNumber}) pour ${name} — ${schoolState.name}.`
+    )}`;
+
+    // Ouvrir immédiatement l'onglet WhatsApp du parent en direct
+    try {
+      window.open(whatsappUrl, '_blank');
+    } catch (e) {}
 
     try {
       const installmentsList = [
@@ -1406,11 +1414,10 @@ export function InscriptionsView({
           name,
         });
 
-        setSuccessToast(`📷 Photo HD du reçu générée (${fileName}) et copiée !`);
+        setSuccessToast(`📷 Photo HD du reçu générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération reçu image:', err);
-      const whatsappUrl = `https://wa.me/${cleanPhone}`;
       window.open(whatsappUrl, '_blank');
     }
   };
@@ -3338,15 +3345,31 @@ export function InscriptionsView({
 
             {/* Boutons d'actions principaux spacieux et ergonomiques */}
             <div className="space-y-2 pt-1">
-              {/* Bouton WhatsApp Principal */}
-              <button
-                type="button"
-                onClick={() => handleCaptureAndShareWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone, successModalData.fullName)}
-                className="w-full py-3 px-4 rounded-2xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer transform hover:-translate-y-0.5"
-              >
-                <Smartphone className="w-4 h-4" />
-                <span>Envoyer la photo du reçu par WhatsApp aux parents</span>
-              </button>
+              {/* Bouton WhatsApp Principal Direct */}
+              <div className="space-y-1">
+                <a
+                  href={`https://wa.me/${(successModalData.whatsappPhone || successModalData.guardianPhone || '').replace(/\D/g, '').replace(/^0+/, '').replace(/^(\d{10})$/, '225$1')}?text=${encodeURIComponent(
+                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    handleCaptureAndShareWhatsApp(
+                      successModalData.whatsappPhone || successModalData.guardianPhone,
+                      successModalData.fullName
+                    );
+                  }}
+                  className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
+                >
+                  <Smartphone className="w-5 h-5 text-white shrink-0" />
+                  <span>
+                    📱 Ouvrir WhatsApp Parent ({successModalData.whatsappPhone || successModalData.guardianPhone || 'Numéro parent'})
+                  </span>
+                </a>
+                <p className="text-[11px] text-emerald-800 font-bold text-center">
+                  💡 Le reçu officiel HD est déjà copié : faites simplement <strong>Ctrl + V</strong> (ou Coller) dans WhatsApp pour envoyer la photo !
+                </p>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {/* Bouton Imprimer le Reçu */}
