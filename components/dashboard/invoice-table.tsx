@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Invoice } from '@/lib/data/types';
+import { Invoice, Student } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate, formatDateFrenchLong } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, formatDateFrenchLong, formatFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -22,7 +22,7 @@ import {
   Users,
   Coins,
 } from 'lucide-react';
-import { getLiveInvoices, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveInvoices, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 
 interface InvoiceTableProps {
   initialInvoices: Invoice[];
@@ -31,12 +31,15 @@ interface InvoiceTableProps {
 
 export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
+  const [students, setStudents] = useState<Student[]>([]);
 
   useEffect(() => {
     setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
+    setStudents(getLiveStudents([], schoolSlug));
 
     const handleUpdate = () => {
       setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
+      setStudents(getLiveStudents([], schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -89,9 +92,10 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     }> = [];
 
     invoices.forEach((inv) => {
-      const numVal = parseInt(inv.invoiceNumber.replace(/\D/g, '') || '1', 10);
-      const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-      const matriculeCode = `${26014800 + numVal}${letters[(numVal - 1) % letters.length]}`;
+      const matchedStudent = students.find(
+        (s) => s.id === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
+      );
+      const matriculeCode = matchedStudent?.matricule || (inv as any).matricule || '';
       const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
       const inst = inv.installments;
 
@@ -627,15 +631,15 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       {tx.invoiceNumber}
                     </td>
 
-                    {/* Matricule (8 chiffres + 1 lettre majuscule) */}
+                    {/* Matricule officiel (ou tiret si non attribué) */}
                     <td className="py-3.5 px-3 font-mono font-bold text-slate-700 text-[11px] whitespace-nowrap">
-                      {tx.matriculeCode}
+                      {tx.matriculeCode || '—'}
                     </td>
 
-                    {/* Student Name */}
+                    {/* Nom de famille en majuscules d'abord, puis prénoms */}
                     <td className="py-3.5 px-3 min-w-[160px] whitespace-nowrap">
                       <span className="font-extrabold text-slate-900 leading-tight">
-                        {tx.studentName}
+                        {formatFullNameNomFirst(tx.studentName)}
                       </span>
                     </td>
 

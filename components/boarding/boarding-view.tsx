@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate } from '@/lib/data/live-store';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
@@ -263,14 +263,14 @@ export function BoardingView({
 
         // Sécurité anti-disparition : si l'élève n'est pas encore dans l'état local students, reconstruction directe depuis cs
         if (!foundStudent && cs.studentName) {
-          const nameParts = cs.studentName.trim().split(' ');
+          const parsedName = splitFullNameNomFirst(cs.studentName);
           foundStudent = {
             id: cs.studentId,
             studentNumber: cs.matricule || `MAT-${cs.studentId.slice(-4)}`,
-            matricule: cs.matricule || `MAT-${cs.studentId.slice(-4)}`,
-            firstName: nameParts[0] || 'Élève',
-            lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
-            fullName: cs.studentName.trim(),
+            matricule: cs.matricule || '',
+            firstName: parsedName.firstName || 'Élève',
+            lastName: parsedName.lastName || 'PENSIONNAIRE',
+            fullName: `${parsedName.lastName || 'PENSIONNAIRE'} ${parsedName.firstName || 'Élève'}`.trim(),
             avatar: '',
             gender: cs.gender === 'F' ? 'female' : 'male',
             grade: cs.className || '6ème',
@@ -561,14 +561,14 @@ export function BoardingView({
     saveSubscriptionsToStorage(updatedSubs);
 
     // 3. Enregistrer l'élève dans le registre persistant multi-clés et Supabase (SANS fausse scolarité)
-    const nameParts = formStudentName.trim().split(' ');
+    const parsedName = splitFullNameNomFirst(formStudentName);
     const studentObj: Student = {
       id: targetStudentId,
-      studentNumber: formMatricule.trim(),
-      matricule: formMatricule.trim(),
-      firstName: nameParts[0] || 'Élève',
-      lastName: nameParts.slice(1).join(' ') || 'Pensionnaire',
-      fullName: formStudentName.trim(),
+      studentNumber: formMatricule.trim() || `ID-${targetStudentId.replace(/\D/g, '').padStart(3, '0')}`,
+      matricule: formMatricule.trim() || '',
+      firstName: parsedName.firstName || 'Élève',
+      lastName: parsedName.lastName || 'PENSIONNAIRE',
+      fullName: `${parsedName.lastName || 'PENSIONNAIRE'} ${parsedName.firstName || 'Élève'}`.trim(),
       avatar: '',
       gender: formGender === 'F' ? 'female' : 'male',
       grade: formClassName,

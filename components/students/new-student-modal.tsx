@@ -43,6 +43,8 @@ export function NewStudentModal({
   const [guardianName, setGuardianName] = useState('');
   const [whatsappPhone, setWhatsappPhone] = useState('+225 07 ');
   const [tuitionAmount, setTuitionAmount] = useState<number>(250000);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [paidAmount, setPaidAmount] = useState<number>(250000);
   // Helper pour obtenir la date du jour (format YYYY-MM-DD)
   const getTodayDateStr = () => {
     const d = new Date();
@@ -51,13 +53,13 @@ export function NewStudentModal({
 
   const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr);
 
-  // Compute matricule from student number
+  const [customMatricule, setCustomMatricule] = useState('');
+  const matricule = customMatricule.trim().toUpperCase();
+
   const seqNum = useMemo(() => {
     return parseInt(nextStudentNumber.replace(/\D/g, '') || '51', 10);
   }, [nextStudentNumber]);
 
-  const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-  const matricule = `${26014800 + seqNum}${letters[(seqNum - 1) % letters.length]}`;
   const receiptNumber = `REC-2026-${seqNum.toString().padStart(5, '0')}`;
 
   const netAmount = Math.max(0, tuitionAmount - discountAmount);
@@ -85,7 +87,7 @@ export function NewStudentModal({
       matricule: matricule,
       lastName: lastName.trim().toUpperCase(),
       firstName: firstName.trim(),
-      fullName: `${firstName.trim()} ${lastName.trim().toUpperCase()}`,
+      fullName: `${lastName.trim().toUpperCase()} ${firstName.trim()}`,
       avatar: '',
       grade: grade,
       gender: gender,
@@ -128,7 +130,7 @@ export function NewStudentModal({
                   Nouvelle Inscription & Reçu Automatique
                 </h3>
                 <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                  {nextStudentNumber} • {matricule}
+                  {nextStudentNumber}{matricule ? ` • ${matricule}` : ''}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
@@ -244,6 +246,21 @@ export function NewStudentModal({
                     ))}
                 </select>
               </div>
+            </div>
+
+            {/* Matricule Officiel (Facultatif) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">Matricule Officiel (Facultatif)</label>
+                <span className="text-[10px] text-slate-400 italic">Laisser vide si pas encore attribué</span>
+              </div>
+              <input
+                type="text"
+                value={customMatricule}
+                onChange={(e) => setCustomMatricule(e.target.value.toUpperCase())}
+                placeholder="Laisser vide si pas encore attribué (ex: 26014801A)..."
+                className="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold uppercase transition-all"
+              />
             </div>
 
             {/* Adresse où l'enfant habite */}
@@ -520,7 +537,7 @@ export function NewStudentModal({
                   Identifiant & Matricule :
                 </span>
                 <span className="font-mono font-extrabold text-slate-900 text-[11px]">
-                  {nextStudentNumber} • {matricule}
+                  {nextStudentNumber}{matricule ? ` • ${matricule}` : ' • —'}
                 </span>
               </div>
 

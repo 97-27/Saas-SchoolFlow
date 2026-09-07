@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatDate, formatFCFA } from '@/lib/utils/formatters';
+import { formatDate, formatFCFA, splitFullNameNomFirst, formatFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockSchools } from '@/lib/data/mock-data';
 import { getStudentDocumentRecord } from '@/lib/data/live-store';
 import { NewStudentModal } from './new-student-modal';
@@ -142,7 +142,7 @@ export function StudentTable({
       ...editingStudent,
       lastName: editLastName.trim().toUpperCase(),
       firstName: editFirstName.trim(),
-      fullName: `${editFirstName.trim()} ${editLastName.trim().toUpperCase()}`,
+      fullName: `${editLastName.trim().toUpperCase()} ${editFirstName.trim()}`,
       grade: editGrade,
       gender: editGender,
       paymentDate: editPaymentDate,
@@ -515,20 +515,27 @@ export function StudentTable({
 
                       {/* Matricule (8 chiffres + lettre) */}
                       <td className="py-3.5 px-3 font-mono font-bold text-slate-700 text-[11px] whitespace-nowrap">
-                        {student.matricule || '26014801A'}
+                        {student.matricule || '—'}
                       </td>
 
                       {/* Nom & Prénom + Badge Genre */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-900 uppercase">
-                            {student.lastName}
-                          </span>
-                          <span className="font-semibold text-slate-700">
-                            {student.firstName}
-                          </span>
-                          <GenderBadge gender={student.gender} />
-                        </div>
+                        {(() => {
+                          const parsed = splitFullNameNomFirst(student.fullName || `${student.lastName || ''} ${student.firstName || ''}`);
+                          const displayLastName = (student.lastName || parsed.lastName || '').toUpperCase();
+                          const displayFirstName = student.firstName || parsed.firstName || '';
+                          return (
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-900 uppercase">
+                                {displayLastName}
+                              </span>
+                              <span className="font-semibold text-slate-700">
+                                {displayFirstName}
+                              </span>
+                              <GenderBadge gender={student.gender} />
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Classe (centrée) */}
@@ -764,7 +771,7 @@ export function StudentTable({
                     Modifier les Coordonnées de l&apos;Élève
                   </h3>
                   <span className="font-mono text-xs text-emerald-700 font-bold">
-                    {editingStudent.studentNumber} • {editingStudent.matricule}
+                    {editingStudent.studentNumber}{editingStudent.matricule ? ` • ${editingStudent.matricule}` : ''}
                   </span>
                 </div>
               </div>
@@ -991,7 +998,7 @@ export function StudentTable({
                       {viewingStudent.studentNumber}
                     </span>
                     <span className="font-mono text-xs text-slate-500">
-                      Matricule : {viewingStudent.matricule} • Classe : {viewingStudent.grade}
+                      Matricule : {viewingStudent.matricule || 'Non attribué'} • Classe : {viewingStudent.grade}
                     </span>
                   </div>
                 </div>
@@ -1277,7 +1284,7 @@ export function StudentTable({
                   <div key={s.id} className="py-1.5 flex items-center justify-between text-xs">
                     <div>
                       <strong className="text-slate-900 uppercase font-heading block">{s.fullName}</strong>
-                      <span className="font-mono text-[10px] text-slate-500">{s.studentNumber} • {s.matricule} • {s.grade}</span>
+                      <span className="font-mono text-[10px] text-slate-500">{s.studentNumber}{s.matricule ? ` • ${s.matricule}` : ''} • {s.grade}</span>
                     </div>
                     <GenderBadge gender={s.gender} />
                   </div>

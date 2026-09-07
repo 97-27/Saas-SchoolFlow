@@ -376,33 +376,33 @@ export function LoginView({
       matchedParentStudents = (authCheck as any).matchedStudents || [];
     }
 
-    // Validation du Code d'Authentification pour les utilisateurs (Secrétaire, Comptable, Enseignant, etc.)
-    // Seuls le Fondateur et le Directeur bénéficient d'un accès direct sans code d'authentification
+    // Validation de la connexion et des droits d'accès
     let verifiedStaffUser: any = null;
-    if (selectedRole !== 'fondateur' && selectedRole !== 'directeur') {
-      if (selectedRole !== 'parent' && !authCodeInput.trim()) {
+
+    if (selectedRole !== 'parent') {
+      // Pour les collaborateurs (hors Directeur et Fondateur), le code d'authentification officiel est strictement requis
+      if (selectedRole !== 'fondateur' && selectedRole !== 'directeur' && !authCodeInput.trim()) {
         setErrorMessage(`Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`);
         return;
       }
 
-      if (selectedRole !== 'parent') {
-        const authCheck = verifyUserAuthCodeForLogin(
-          selectedRole,
-          authCodeInput,
-          trimmedName,
-          schoolSlug,
-          parentPhone
-        );
+      // Vérification stricte des identifiants et prérogatives d'accès (Fondateur, Directeur, Collaborateurs)
+      const authCheck = verifyUserAuthCodeForLogin(
+        selectedRole,
+        authCodeInput,
+        trimmedName,
+        schoolSlug,
+        parentPhone
+      );
 
-        if (!authCheck.isValid) {
-          setErrorMessage(
-            authCheck.reason ||
-              `❌ Code d'authentification invalide pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
-          );
-          return;
-        }
-        verifiedStaffUser = authCheck.staffUser;
+      if (!authCheck.isValid) {
+        setErrorMessage(
+          authCheck.reason ||
+            `❌ Accès refusé pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
+        );
+        return;
       }
+      verifiedStaffUser = authCheck.staffUser;
     }
 
     const cleanAuthCode =
@@ -418,31 +418,33 @@ export function LoginView({
 
       // Synchronisation du profil personnel (Fondateur, Directeur, Collaborateurs)
       const allStaff = getLiveStaffUsers(schoolSlug);
-      const matchedStaff = verifiedStaffUser || allStaff.find((s) => s.roleId === selectedRole);
+      const matchedStaff = verifiedStaffUser || (cleanAuthCode ? allStaff.find((s) => s.authCode.toUpperCase() === cleanAuthCode) : undefined);
 
       // Pour les parents : profil alimenté par le numéro officiel renseigné à l'inscription et son email de connexion
       const officialParentName = firstChild?.guardianName || (trimmedName ? `${civility} ${trimmedName}` : 'Parent d’Élève');
       const officialParentPhone = firstChild?.whatsappPhone || firstChild?.guardianPhone || parentPhone;
       const officialParentEmail = cleanEmail || loginEmail;
 
+      // Coordonnées : priorité absolue aux coordonnées renseignées par l'utilisateur
+      const formattedInputName = trimmedName ? `${civility ? `${civility} ` : ''}${trimmedName}`.trim() : '';
       const finalFullName = isParent
         ? officialParentName
-        : (matchedStaff?.fullName || (trimmedName ? `${civility} ${trimmedName}` : (ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel')));
+        : (formattedInputName || verifiedStaffUser?.fullName || matchedStaff?.fullName || ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel');
 
       const finalEmail = isParent
         ? officialParentEmail
-        : (cleanEmail || (matchedStaff?.email && !matchedStaff.email.includes('etablissement.ci') && !matchedStaff.email.includes('epc-manoi.ci') ? matchedStaff.email : ''));
+        : (cleanEmail || verifiedStaffUser?.email || (matchedStaff?.email && !matchedStaff.email.includes('etablissement.ci') && !matchedStaff.email.includes('epc-manoi.ci') ? matchedStaff.email : ''));
 
       const finalPhone = isParent
         ? officialParentPhone
-        : (cleanPhone || matchedStaff?.phone || '');
+        : (cleanPhone || verifiedStaffUser?.phone || matchedStaff?.phone || '');
 
-      // Enregistrer immédiatement les coordonnées saisies (email pro et téléphone) sur la fiche du collaborateur
-      if (!isParent && cleanAuthCode && cleanEmail && cleanPhone) {
+      // Enregistrer immédiatement les coordonnées saisies (nom, email pro et téléphone) sur la fiche du collaborateur
+      if (!isParent && cleanAuthCode && (cleanEmail || cleanPhone || formattedInputName)) {
         updateStaffLoginContact(cleanAuthCode, {
           fullName: finalFullName,
-          email: cleanEmail,
-          phone: cleanPhone,
+          email: finalEmail,
+          phone: finalPhone,
         }, schoolSlug);
       }
       const roleBadge =

@@ -575,13 +575,11 @@ export function SpecialDiscountsView({
           } else {
             maxSeq += 1;
             const idStr = `ID-${String(maxSeq).padStart(3, '0')}`;
-            const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-            const matricule = `${26014800 + maxSeq}${letters[(maxSeq - 1) % letters.length]}`;
 
             const newStu: Student = {
               id: idStr,
               studentNumber: idStr,
-              matricule: matricule,
+              matricule: '',
               lastName: lName,
               firstName: fName,
               fullName: nameTrimmed,

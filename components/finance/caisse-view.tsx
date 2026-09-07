@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Invoice, School } from '@/lib/data/types';
+import { Invoice, School, Student } from '@/lib/data/types';
 import { InvoiceStatusBadge, GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, formatFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import {
   Wallet,
@@ -25,7 +25,7 @@ import {
   Building2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveInvoices, getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 
 interface CaisseViewProps {
   initialInvoices: Invoice[];
@@ -39,11 +39,13 @@ export function CaisseView({
   schoolSlug,
 }: CaisseViewProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, schoolSlug));
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(schoolSlug));
   const [currentSchool, setCurrentSchool] = useState<School>(() => getLiveSchool(schoolSlug, school));
 
   useEffect(() => {
     const handleUpdate = () => {
       setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
+      setStudents(getLiveStudents(schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     handleUpdate();
@@ -491,9 +493,10 @@ export function CaisseView({
               ) : (
                 filteredInvoices.map((inv) => {
                   const isSelected = selectedIds.includes(inv.id);
-                  const numVal = parseInt(inv.invoiceNumber.replace(/\D/g, '') || '1', 10);
-                  const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-                  const matriculeStr = `${26014800 + numVal}${letters[(numVal - 1) % letters.length]}`;
+                  const matchedStudent = students.find(
+                    (s) => s.id === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
+                  );
+                  const matriculeStr = matchedStudent?.matricule || (inv as any).matricule || '—';
                   const initialAmount = inv.amount;
                   const discount = inv.discountAmount || 0;
                   const netAmount = inv.netAmount || Math.max(0, initialAmount - discount);
@@ -514,7 +517,7 @@ export function CaisseView({
                       </td>
                       <td className="py-3.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">{inv.invoiceNumber}</td>
                       <td className="py-3.5 px-3 font-mono text-slate-600 whitespace-nowrap">{matriculeStr}</td>
-                      <td className="py-3.5 px-3 font-extrabold uppercase text-slate-900 whitespace-nowrap">{inv.studentName}</td>
+                      <td className="py-3.5 px-3 font-extrabold uppercase text-slate-900 whitespace-nowrap">{formatFullNameNomFirst(inv.studentName)}</td>
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">{inv.studentGrade}</td>
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">{inv.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}</td>
                       <td className="py-3.5 px-3 text-center whitespace-nowrap"><GenderBadge gender={inv.studentGender} /></td>

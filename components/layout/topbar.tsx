@@ -94,23 +94,23 @@ export function Topbar({
             const isFounder = parsed.roleId === 'fondateur';
             const isDirector = parsed.roleId === 'directeur';
 
-            // Chercher le membre correspondant dans liveStaffUsers pour avoir son email et téléphone à jour
-            const staffMember = allStaff.find(
-              (s) => (parsed.authCode && s.authCode === parsed.authCode) || s.roleId === parsed.roleId || s.fullName === parsed.fullName
-            );
+            // Chercher le membre correspondant dans liveStaffUsers STRICTEMENT par son code d'accès officiel
+            const staffMember = parsed.authCode && !isFounder && !isDirector
+              ? allStaff.find((s) => s.authCode?.toUpperCase() === parsed.authCode?.toUpperCase())
+              : undefined;
 
-            const rawEmail = staffMember?.email || parsed.email || '';
             const cleanEmail =
-              rawEmail && !rawEmail.includes('etablissement.ci') && !rawEmail.includes('epc-manoi.ci')
-                ? rawEmail
-                : (rawEmail.trim() ? rawEmail : '');
+              parsed.email ||
+              (staffMember?.email && !staffMember.email.includes('etablissement.ci') && !staffMember.email.includes('epc-manoi.ci')
+                ? staffMember.email
+                : (staffMember?.email || ''));
 
-            const pureFullName = (staffMember?.fullName || parsed.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+            const pureFullName = (parsed.fullName || staffMember?.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
 
             setActiveSession({
               fullName: pureFullName || parsed.fullName,
               email: cleanEmail,
-              phone: staffMember?.phone || parsed.phone || '',
+              phone: parsed.phone || staffMember?.phone || '',
               role: isFounder
                 ? 'Fondateur & Promoteur'
                 : isDirector

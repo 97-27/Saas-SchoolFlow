@@ -108,3 +108,60 @@ export function formatDateWithWeekday(dateInput: string | Date): string {
   ];
   return `${DAYS_FR[d.getDay()]} ${d.getDate()} ${MONTHS_FR[d.getMonth()]} ${d.getFullYear()}`;
 }
+
+/**
+ * Splits a full name into Family Name (uppercase) and First Names,
+ * adhering strictly to West African naming standards (Family Name first).
+ * Examples:
+ * - "KONATE Lassina Mouhamed" -> { lastName: "KONATE", firstName: "Lassina Mouhamed" }
+ * - "KOUASSI KOUADIO Jean" -> { lastName: "KOUASSI KOUADIO", firstName: "Jean" }
+ * - "Lassina Mouhamed KONATE" -> { lastName: "KONATE", firstName: "Lassina Mouhamed" }
+ * - "Traoré" -> { lastName: "TRAORÉ", firstName: "" }
+ */
+export function splitFullNameNomFirst(fullName?: string): { lastName: string; firstName: string } {
+  if (!fullName) return { lastName: '', firstName: '' };
+  const clean = fullName.trim();
+  if (!clean) return { lastName: '', firstName: '' };
+
+  const parts = clean.split(/\s+/);
+  if (parts.length === 1) {
+    return { lastName: parts[0].toUpperCase(), firstName: '' };
+  }
+
+  const isAllUpper = (word: string) => {
+    const lettersOnly = word.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+    return lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
+  };
+
+  // If the last word is all uppercase and first word is not (e.g. "Lassina Mouhamed KONATE")
+  if (isAllUpper(parts[parts.length - 1]) && !isAllUpper(parts[0])) {
+    let splitIdx = parts.length - 1;
+    while (splitIdx > 0 && isAllUpper(parts[splitIdx - 1])) {
+      splitIdx--;
+    }
+    const lastName = parts.slice(splitIdx).join(' ').toUpperCase();
+    const firstName = parts.slice(0, splitIdx).join(' ');
+    return { lastName, firstName };
+  }
+
+  // Standard African format: Family name first (e.g. "KONATE Lassina Mouhamed")
+  let splitIdx = 1;
+  while (splitIdx < parts.length - 1 && isAllUpper(parts[splitIdx])) {
+    splitIdx++;
+  }
+  const lastName = parts.slice(0, splitIdx).join(' ').toUpperCase();
+  const firstName = parts.slice(splitIdx).join(' ');
+  return { lastName, firstName };
+}
+
+/**
+ * Formats a student full name so that the Family Name is ALWAYS first and uppercase,
+ * followed by the first names.
+ * Example: "Lassina Mouhamed KONATE" -> "KONATE Lassina Mouhamed"
+ */
+export function formatFullNameNomFirst(fullName?: string): string {
+  if (!fullName) return '—';
+  const { lastName, firstName } = splitFullNameNomFirst(fullName);
+  if (!lastName && !firstName) return '—';
+  return `${lastName} ${firstName}`.trim();
+}

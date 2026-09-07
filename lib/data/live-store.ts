@@ -11,6 +11,7 @@ import {
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
+import { splitFullNameNomFirst, formatFullNameNomFirst } from '@/lib/utils/formatters';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -631,18 +632,30 @@ const normalizeStudent = (stu: any): Student => {
   const numVal = parseInt((stu?.studentNumber || stu?.id || '1').replace(/\D/g, '') || '1', 10);
   const idStr = stu?.id || `stu-${numVal.toString().padStart(3, '0')}`;
   const numStr = stu?.studentNumber || `ID-${numVal.toString().padStart(3, '0')}`;
-  const lastName = (stu?.lastName || '').trim().toUpperCase();
-  const firstName = (stu?.firstName || '').trim();
-  const fullName = (stu?.fullName || `${lastName} ${firstName}`).trim() || 'Élève';
+
+  let rawLastName = (stu?.lastName || '').trim().toUpperCase();
+  let rawFirstName = (stu?.firstName || '').trim();
+  const rawFullName = (stu?.fullName || stu?.studentName || '').trim();
+
+  // Si le nom ou prénom est manquant mais que le nom complet existe, le décomposer avec priorité NOM de famille en premier
+  if ((!rawLastName || !rawFirstName) && rawFullName) {
+    const parsed = splitFullNameNomFirst(rawFullName);
+    if (!rawLastName) rawLastName = parsed.lastName;
+    if (!rawFirstName) rawFirstName = parsed.firstName;
+  }
+
+  const finalLastName = rawLastName || 'ÉLÈVE';
+  const finalFirstName = rawFirstName || '';
+  const finalFullName = `${finalLastName} ${finalFirstName}`.trim() || 'Élève';
 
   return {
     ...stu,
     id: idStr,
     studentNumber: numStr,
-    matricule: stu?.matricule || '26014801A',
-    lastName: lastName || 'ÉLÈVE',
-    firstName: firstName || 'Inscrit',
-    fullName: fullName,
+    matricule: stu?.matricule || '',
+    lastName: finalLastName,
+    firstName: finalFirstName,
+    fullName: finalFullName,
     grade: stu?.grade || '6ème',
     gender: stu?.gender === 'male' ? 'male' : 'female',
     avatar: stu?.avatar || '',
@@ -742,21 +755,18 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
         const numKey = inv.invoiceNumber || inv.studentId || inv.id;
         if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
           const numVal = parseInt(inv.invoiceNumber?.replace(/\D/g, '') || '1', 10);
-          const letters = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-          const letterCode = letters[(numVal - 1) % letters.length];
-          const matriculeCode = `${26014800 + numVal}${letterCode}`;
-
-          const nameParts = (inv.studentName || 'Élève').trim().split(' ');
-          const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : (nameParts[0] || 'Élève');
-          const lastName = (nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0] || '').toUpperCase();
+          const parsed = splitFullNameNomFirst(inv.studentName || 'Élève');
+          const lastName = parsed.lastName || 'ÉLÈVE';
+          const firstName = parsed.firstName || '';
+          const fullName = `${lastName} ${firstName}`.trim() || inv.studentName || 'Élève';
 
           const reconstructedStudent: Student = {
             id: inv.studentId || `stu-${numVal.toString().padStart(3, '0')}`,
             studentNumber: inv.invoiceNumber.startsWith('ID-') ? inv.invoiceNumber : `ID-${numVal.toString().padStart(3, '0')}`,
-            matricule: matriculeCode,
+            matricule: (inv as any).matricule || '',
             firstName,
             lastName,
-            fullName: inv.studentName,
+            fullName,
             grade: inv.studentGrade || '6ème',
             gender: inv.studentGender || 'female',
             avatar: inv.studentAvatar || '',
@@ -1762,10 +1772,57 @@ export function recordStaffLogin(
 }
 
 /**
+ * Helper de comparaison intelligente de noms (insensible aux civilités, accents, casse, et ordre).
+ * Permet de valider "LAWANI MOUHAMED" face à "Mouhamed Lawani" ou "M. LAWANI Mouhamed".
+ */
+export function areNamesMatching(input: string, official: string): boolean {
+  if (!input || !official) return false;
+
+  const normalize = (str: string) =>
+    str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .trim();
+
+  const HONORIFICS = new Set([
+    'm', 'mr', 'mme', 'mlle', 'madame', 'monsieur', 'dr', 'docteur',
+    'prof', 'professeur', 'frere', 'soeur', 'pasteur', 'imam', 'maitre',
+    'directeur', 'directrice', 'fondateur', 'fondatrice', 'general', 'generale'
+  ]);
+
+  const inputTokens = normalize(input)
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
+
+  const officialTokens = normalize(official)
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
+
+  if (inputTokens.length === 0 || officialTokens.length === 0) return false;
+
+  const inputSet = new Set(inputTokens);
+  const officialSet = new Set(officialTokens);
+
+  // Tous les mots officiels sont présents dans la saisie ou inversement
+  const officialInInput = officialTokens.every((t) => inputSet.has(t));
+  const inputInOfficial = inputTokens.every((t) => officialSet.has(t));
+  if (officialInInput || inputInOfficial) return true;
+
+  // Au moins 2 mots clés majeurs correspondent
+  const commonTokens = inputTokens.filter((t) => officialSet.has(t));
+  if (commonTokens.length >= 2) return true;
+  if (commonTokens.length >= 1 && (inputTokens.length === 1 || officialTokens.length === 1)) return true;
+
+  return false;
+}
+
+/**
  * Vérification des codes d'authentification pour la connexion.
  * Règles Fondamentales SchoolFlow :
  * 1. Fondateur & Directeur (Responsables de l'école ayant souscrit l'abonnement) :
- *    Accès direct dès que l'abonnement de l'école est actif, leur permettant d'administrer l'école et de créer les codes.
+ *    Accès strictement réservé au Fondateur ou Directeur officiel ayant souscrit l'abonnement. Tout autre nom est catégoriquement rejeté.
  * 2. Parents d'élèves :
  *    Accès validé dès que leur nom ou numéro de téléphone figure dans le registre officiel des élèves inscrits.
  * 3. Tous les autres rôles (Secrétaire, Comptable, Assistant(e), Enseignants) :
@@ -1783,9 +1840,63 @@ export function verifyUserAuthCodeForLogin(
   const cleanInputCode = (authCodeOrPassword || '').trim().toUpperCase();
   const cleanName = (fullName || '').trim().toLowerCase();
 
-  // 1. Profils Administrateurs Maîtres (Fondateur & Directeur / Responsables de l'établissement ayant souscrit l'abonnement) :
-  if (roleId === 'fondateur' || roleId === 'directeur') {
+  // 1. Profil Fondateur :
+  // Doit obligatoirement correspondre au Fondateur ou Directeur officiel ayant souscrit l'abonnement de l'école
+  if (roleId === 'fondateur') {
+    if (!cleanName || cleanName.length < 2) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner votre Nom et Prénoms officiels de Fondateur / Promotrice de l'établissement.",
+      };
+    }
+
+    const currentSchool = getLiveSchool(schoolSlug, mockSchools[0]);
+    const officialFounder = (currentSchool.founderName || 'LAWANI MOUSSA').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim();
+    const officialDirector = (currentSchool.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+
+    const matchesFounder = areNamesMatching(fullName, officialFounder);
+    const matchesDirector = areNamesMatching(fullName, officialDirector);
+
+    if (!matchesFounder && !matchesDirector) {
+      return {
+        isValid: false,
+        reason: `❌ Accès refusé : Le nom « ${fullName.trim()} » ne correspond pas au Fondateur officiel ayant souscrit l'abonnement de cet établissement (${officialFounder}). Seul le titulaire officiel de la souscription peut accéder à ce profil.`,
+      };
+    }
+
     return { isValid: true };
+  }
+
+  // 2. Profil Directeur :
+  // Doit obligatoirement correspondre au Directeur officiel ou au Fondateur ayant souscrit l'abonnement
+  if (roleId === 'directeur') {
+    if (!cleanName || cleanName.length < 2) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner votre Nom et Prénoms officiels de Directeur / Directrice de l'établissement.",
+      };
+    }
+
+    const currentSchool = getLiveSchool(schoolSlug, mockSchools[0]);
+    const officialDirector = (currentSchool.directorName || currentSchool.studiesDirectorName || 'LAWANI MOUHAMED').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+    const officialFounder = (currentSchool.founderName || 'LAWANI MOUSSA').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim();
+
+    const matchesDirector = areNamesMatching(fullName, officialDirector);
+    const matchesFounder = areNamesMatching(fullName, officialFounder);
+
+    // Vérifier également si un compte directeur a été configuré dans l'équipe
+    const liveStaff = getLiveStaffUsers(schoolSlug);
+    const staffDirector = liveStaff.find((s) => s.roleId === 'directeur');
+    const matchesStaffDir = staffDirector ? areNamesMatching(fullName, staffDirector.fullName) : false;
+
+    if (!matchesDirector && !matchesFounder && !matchesStaffDir) {
+      return {
+        isValid: false,
+        reason: `❌ Accès refusé : Le nom « ${fullName.trim()} » ne correspond pas au Directeur officiel de cet établissement (${officialDirector}). Seul le Directeur désigné ou le Fondateur (${officialFounder}) ayant souscrit l'abonnement peuvent se connecter avec les prérogatives de Direction.`,
+      };
+    }
+
+    return { isValid: true, staffUser: staffDirector };
   }
 
   // 2. Profil Parent d'Élève :
