@@ -1270,13 +1270,13 @@ export function InscriptionsView({
       y += 48;
     };
 
-    drawRow("Frais d'inscription", formatFCFA(finalRegistrationFee));
-    drawRow(`Scolarité annuelle (${finalStuGrade})`, formatFCFA(finalTuitionAmount));
-    if (finalDiscountAmount > 0) {
-      drawRow('Réduction / Bourse accordée', `-${formatFCFA(finalDiscountAmount)}`);
+    drawRow("Frais d'inscription", formatFCFA(finalRegistrationFee || 0));
+    drawRow(`Scolarité annuelle (${finalStuGrade})`, formatFCFA(finalTuitionAmount || 0));
+    if ((finalDiscountAmount || 0) > 0) {
+      drawRow('Réduction / Bourse accordée', `-${formatFCFA(finalDiscountAmount || 0)}`);
     }
-    if (finalPaidAmount > 0) {
-      drawRow('Versements Scolarité Encaissés', formatFCFA(finalPaidAmount), false, true, false);
+    if ((finalPaidAmount || 0) > 0) {
+      drawRow('Versements Scolarité Encaissés', formatFCFA(finalPaidAmount || 0), false, true, false);
     }
     drawRow(
       'Reste à Payer Scolarité (Solde)',

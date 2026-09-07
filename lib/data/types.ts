@@ -42,6 +42,7 @@ export interface Invoice {
   issueDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
   status: InvoiceStatus;
+  updatedAt?: string;
 }
 
 export interface Student {
@@ -78,6 +79,7 @@ export interface Student {
   isBoarding?: boolean;
   isCanteen?: boolean;
   isTransport?: boolean;
+  updatedAt?: string; // Horodatage ISO de dernière modification
 }
 
 export interface DashboardKPIs {
@@ -128,6 +130,7 @@ export interface School {
   shortName: string;
   motto?: string; // Devise officielle (ex: Discipline • Rigueur • Réussite)
   slogan?: string; // Slogan de l'établissement (ex: L'excellence au service de l'avenir)
+  receiptHeaderFullName?: string;
   receiptHeaderMotto?: string;
   receiptHeaderSlogan?: string;
   receiptHeaderAddress?: string;
