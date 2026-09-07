@@ -5,7 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent } from '@/lib/data/live-store';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -42,6 +42,7 @@ import {
   ExternalLink,
   Smartphone,
   Lock,
+  Trash2,
 } from 'lucide-react';
 
 interface BoardingViewProps {
@@ -49,6 +50,18 @@ interface BoardingViewProps {
   school: School;
   schoolSlug: string;
 }
+
+// Formateur robuste pour WhatsApp (formats Côte d'Ivoire & International)
+const formatCleanWhatsApp = (phone: string): string => {
+  let d = (phone || '').replace(/\D/g, '');
+  if (d.startsWith('225')) {
+    if (d.length === 11) d = '22507' + d.slice(3);
+    return d;
+  }
+  if (d.length === 10) return '225' + d;
+  if (d.length === 8) return '22507' + d;
+  return d ? (d.startsWith('225') ? d : `225${d}`) : '';
+};
 
 // Helper date du jour au format strict JJ/MM/AAAA
 const getTodayFrenchDateStr = () => {
@@ -317,10 +330,12 @@ export function BoardingView({
   // Filtrage pour la recherche et la navigation
   const filteredBoarders = useMemo(() => {
     return boarders.filter((b) => {
+      const stuFullName = `${(b.student.lastName || '').toUpperCase()} ${b.student.firstName || ''}`.trim();
       const matchSearch =
         searchQuery === '' ||
-        `${b.student.firstName} ${b.student.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stuFullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.student.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b.student.matricule && b.student.matricule.toLowerCase().includes(searchQuery.toLowerCase())) ||
         b.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.student.grade || (b.student as any).className || '').toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -344,9 +359,13 @@ export function BoardingView({
     return filteredBoarders[safeIndex] || filteredBoarders[0];
   }, [filteredBoarders, activeBoarderIndex, boarders, isCreatingNew]);
 
-  // États du formulaire interactif
-  const [formStudentName, setFormStudentName] = useState('');
+  // États du formulaire interactif avec NOM DE FAMILLE (Majuscule) et Prénoms séparés
+  const [formLastName, setFormLastName] = useState('');
+  const [formFirstName, setFormFirstName] = useState('');
   const [formMatricule, setFormMatricule] = useState('');
+  const [formStudentId, setFormStudentId] = useState('');
+  const [selectedEnrolledStudentId, setSelectedEnrolledStudentId] = useState('');
+  const [formSecondaryPhones, setFormSecondaryPhones] = useState<string[]>([]);
   const [formClassName, setFormClassName] = useState('6ème');
   const [formGender, setFormGender] = useState<'M' | 'F'>('M');
   const [formPavilion, setFormPavilion] = useState('Pavillon A (Garçons)');
@@ -357,16 +376,42 @@ export function BoardingView({
   const [formPaymentMethod, setFormPaymentMethod] = useState('Espèces');
   const [activeMonthsChecked, setActiveMonthsChecked] = useState<Record<string, boolean>>({});
 
+  // Nom complet officiel strictement ordonné : NOM DE FAMILLE d'abord, puis Prénom(s)
+  const formStudentName = useMemo(() => {
+    const l = (formLastName || '').trim().toUpperCase();
+    const f = (formFirstName || '').trim();
+    return l ? `${l} ${f}`.trim() : f;
+  }, [formLastName, formFirstName]);
+
+  // ID Comptable d'affichage (distinct du Matricule Officiel)
+  const displayStudentId = useMemo(() => {
+    if (formStudentId) {
+      const digits = formStudentId.replace(/\D/g, '');
+      return digits ? `ID-${digits.padStart(3, '0')}` : formStudentId;
+    }
+    if (selectedEnrolledStudentId) {
+      const s = students.find((st) => st.id === selectedEnrolledStudentId || st.studentNumber === selectedEnrolledStudentId);
+      if (s) return s.studentNumber || `ID-${s.id.slice(-4)}`;
+    }
+    if (!isCreatingNew && activeBoarder) {
+      return activeBoarder.student.studentNumber || `ID-${activeBoarder.student.id.slice(-4)}`;
+    }
+    return 'ID-COMPTA';
+  }, [formStudentId, selectedEnrolledStudentId, students, isCreatingNew, activeBoarder]);
+
   // Synchronisation du formulaire avec le pensionnaire actif quand on n'est pas en création
   useEffect(() => {
     if (!isCreatingNew && activeBoarder) {
-      setFormStudentName(`${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim());
-      setFormMatricule(activeBoarder.student.studentNumber || activeBoarder.student.matricule);
+      setFormLastName((activeBoarder.student.lastName || '').toUpperCase());
+      setFormFirstName(activeBoarder.student.firstName || '');
+      setFormMatricule(activeBoarder.student.matricule || '');
+      setFormStudentId(activeBoarder.student.studentNumber || activeBoarder.student.id || '');
       setFormClassName(activeBoarder.student.grade || (activeBoarder.student as any).className || '6ème');
       setFormGender(activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M');
       setFormPavilion(activeBoarder.pavilion);
       setFormRoom(activeBoarder.roomNumber);
-      setFormParentContact(activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00');
+      setFormParentContact(activeBoarder.student.whatsappPhone || activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00');
+      setFormSecondaryPhones(activeBoarder.student.secondaryPhones || []);
       setFormMonthlyRate(activeBoarder.monthlyRate || 0);
 
       const months = monthlyPayments[activeBoarder.student.id] || {};
@@ -374,12 +419,40 @@ export function BoardingView({
     }
   }, [activeBoarder, isCreatingNew, monthlyPayments]);
 
+  // Sélection d'un élève déjà inscrit dans l'établissement pour la souscription
+  const handleSelectEnrolledStudent = (studentId: string) => {
+    setSelectedEnrolledStudentId(studentId);
+    if (!studentId) return;
+    const stu = students.find((s) => s.id === studentId || s.studentNumber === studentId);
+    if (stu) {
+      setFormLastName((stu.lastName || '').toUpperCase());
+      setFormFirstName(stu.firstName || '');
+      setFormMatricule(stu.matricule || '');
+      setFormStudentId(stu.studentNumber || stu.id || '');
+      setFormClassName(stu.grade || '6ème');
+      const isFem = stu.gender === 'female' || (stu.gender as any) === 'F';
+      setFormGender(isFem ? 'F' : 'M');
+      if (isFem && formPavilion.includes('Garçons')) {
+        setFormPavilion('Pavillon B (Filles)');
+      } else if (!isFem && formPavilion.includes('Filles')) {
+        setFormPavilion('Pavillon A (Garçons)');
+      }
+      setFormParentContact(stu.whatsappPhone || stu.guardianPhone || '');
+      setFormSecondaryPhones(stu.secondaryPhones || []);
+      setToastMessage(`✓ Élève ${stu.studentNumber || 'ID'} — ${(stu.lastName || '').toUpperCase()} ${stu.firstName} sélectionné(e).`);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
   // Réinitialisation complète à zéro pour « Nouvelle Souscription »
   const handleStartNewSubscription = () => {
     setIsCreatingNew(true);
-    setFormStudentName('');
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    setFormMatricule(`MAT-2026-${randomSuffix}`);
+    setSelectedEnrolledStudentId('');
+    setFormLastName('');
+    setFormFirstName('');
+    setFormMatricule('');
+    setFormStudentId('');
+    setFormSecondaryPhones([]);
     setFormClassName('6ème');
     setFormGender('M');
     setFormPavilion('Pavillon A (Garçons)');
@@ -390,13 +463,14 @@ export function BoardingView({
     setFormPaymentMethod('Espèces');
     setActiveMonthsChecked({}); // Aucun mois coché
 
-    setToastMessage('📝 Formulaire réinitialisé à zéro. Saisissez les coordonnées de la nouvelle souscription.');
+    setToastMessage('📝 Formulaire réinitialisé à zéro. Saisissez ou sélectionnez l’élève pour la souscription.');
     setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Annuler la création et revenir aux pensionnaires existants
   const handleCancelNewSubscription = () => {
     setIsCreatingNew(false);
+    setSelectedEnrolledStudentId('');
     if (boarders.length > 0) {
       setActiveBoarderIndex(0);
     }
@@ -444,11 +518,12 @@ export function BoardingView({
   // Détection des modifications du formulaire et des versements
   const isFormDirty = useMemo(() => {
     if (isCreatingNew) {
-      return formStudentName.trim().length > 0 && Number(formMonthlyRate) > 0;
+      return (formLastName.trim().length > 0 || formFirstName.trim().length > 0) && Number(formMonthlyRate) > 0;
     }
     if (!activeBoarder) return false;
 
-    const initialName = `${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim();
+    const initialLastName = (activeBoarder.student.lastName || '').trim().toUpperCase();
+    const initialFirstName = (activeBoarder.student.firstName || '').trim();
     const initialMatricule = activeBoarder.student.matricule || '';
     const initialClass = activeBoarder.student.grade || (activeBoarder.student as any).className || '6ème';
     const initialGender = activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M';
@@ -460,7 +535,8 @@ export function BoardingView({
 
     const initialMonths = monthlyPayments[activeBoarder.student.id] || {};
 
-    const nameChanged = formStudentName.trim() !== initialName;
+    const lastNameChanged = formLastName.trim().toUpperCase() !== initialLastName;
+    const firstNameChanged = formFirstName.trim() !== initialFirstName;
     const matChanged = formMatricule.trim() !== initialMatricule;
     const classChanged = formClassName !== initialClass;
     const genderChanged = formGender !== initialGender;
@@ -472,11 +548,12 @@ export function BoardingView({
 
     const monthsChanged = MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
 
-    return nameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || monthsChanged;
+    return lastNameChanged || firstNameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || monthsChanged;
   }, [
     isCreatingNew,
     activeBoarder,
-    formStudentName,
+    formLastName,
+    formFirstName,
     formMatricule,
     formClassName,
     formGender,
@@ -504,8 +581,8 @@ export function BoardingView({
       return;
     }
 
-    if (!formStudentName.trim()) {
-      alert('Veuillez saisir le nom et prénom de l’élève.');
+    if (!formLastName.trim() && !formFirstName.trim()) {
+      alert('Veuillez saisir le nom de famille et prénom de l’élève.');
       return;
     }
 
@@ -526,9 +603,25 @@ export function BoardingView({
   // 2. Exécution finale de l'enregistrement et persistance totale
   const executeFinalSaveReceipt = () => {
     const rate = Number(formMonthlyRate) || 0;
-    const targetStudentId = isCreatingNew
-      ? `stud-int-${Date.now()}`
-      : activeBoarder?.student.id || `stud-int-${Date.now()}`;
+    const finalLastName = (formLastName || '').trim().toUpperCase();
+    const finalFirstName = (formFirstName || '').trim();
+    const finalFullName = `${finalLastName} ${finalFirstName}`.trim();
+
+    // Trouver l'élève existant correspondant pour réutiliser son identifiant unique réel
+    const matchedExistingStudent = selectedEnrolledStudentId
+      ? students.find((s) => s.id === selectedEnrolledStudentId || s.studentNumber === selectedEnrolledStudentId)
+      : students.find(
+          (s) =>
+            (formMatricule && (s.matricule === formMatricule || s.studentNumber === formMatricule)) ||
+            (formStudentId && (s.studentNumber === formStudentId || s.id === formStudentId)) ||
+            (s.fullName && s.fullName.toLowerCase() === finalFullName.toLowerCase())
+        );
+
+    const targetStudentId = matchedExistingStudent
+      ? matchedExistingStudent.id
+      : !isCreatingNew && activeBoarder
+      ? activeBoarder.student.id
+      : `stud-int-${Date.now()}`;
 
     // 1. Sauvegarder les mois cochés
     const updatedPayments = {
@@ -542,7 +635,7 @@ export function BoardingView({
     let updatedSubs = [...customSubscriptions];
     const subRecord = {
       studentId: targetStudentId,
-      studentName: formStudentName.trim(),
+      studentName: finalFullName,
       matricule: formMatricule.trim(),
       className: formClassName,
       gender: formGender,
@@ -560,127 +653,69 @@ export function BoardingView({
     }
     saveSubscriptionsToStorage(updatedSubs);
 
-    // 3. Enregistrer l'élève dans le registre persistant multi-clés et Supabase (SANS fausse scolarité)
-    const parsedName = splitFullNameNomFirst(formStudentName);
-    const studentObj: Student = {
-      id: targetStudentId,
-      studentNumber: formMatricule.trim() || `ID-${targetStudentId.replace(/\D/g, '').padStart(3, '0')}`,
-      matricule: formMatricule.trim() || '',
-      firstName: parsedName.firstName || 'Élève',
-      lastName: parsedName.lastName || 'PENSIONNAIRE',
-      fullName: `${parsedName.lastName || 'PENSIONNAIRE'} ${parsedName.firstName || 'Élève'}`.trim(),
-      avatar: '',
-      gender: formGender === 'F' ? 'female' : 'male',
-      grade: formClassName,
-      address: 'Abidjan, Côte d\'Ivoire',
-      guardianName: 'Parent / Tuteur',
-      guardianPhone: formParentContact.trim(),
-      whatsappPhone: formParentContact.trim(),
-      tuitionAmount: 0,
-      paidAmount: 0,
-      registrationFee: 0,
-      paymentDate: formPaymentDate || getTodayFrenchDateStr(),
-      paymentMethod: formPaymentMethod,
-      attendanceRate: 100,
-      status: 'active',
-      tuitionStatus: 'unpaid',
-      isBoarding: true,
-      enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
-    };
+    // 3. Mettre à jour isBoarding: true sur l'élève existant s'il existe (SANS JAMAIS CRÉER DE FAUX ÉLÈVE DANS STUDENTS)
+    if (matchedExistingStudent) {
+      try {
+        const updatedStu: Student = {
+          ...matchedExistingStudent,
+          isBoarding: true,
+        };
+        updateRegisteredStudent(updatedStu, schoolSlug);
+      } catch (e) {}
+    }
 
-    try {
-      // Clé globale
-      const raw = localStorage.getItem(STUDENTS_STORAGE_KEY);
-      const currentList: Student[] = raw ? JSON.parse(raw) : [];
-      const updatedStudentList = [studentObj, ...currentList.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())];
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudentList));
-
-      // Clé école spécifique
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      const currentSchoolList: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-      const updatedSchoolList = [studentObj, ...currentSchoolList.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())];
-      localStorage.setItem(schoolKey, JSON.stringify(updatedSchoolList));
-
-      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
-        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedSchoolList));
-        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedSchoolList));
-      }
-
-      // Synchronisation Supabase de l'élève
-      saveStudentToSupabase(studentObj, schoolSlug).catch(() => {});
-    } catch (err) {}
-
-    // Mise à jour immédiate de l'état local students pour que les 3 blocs KPI se recalculent sur-le-champ
-    setStudents((prev) => [studentObj, ...prev.filter((s) => s.id !== targetStudentId && s.studentNumber !== formMatricule.trim())]);
-
-    // 4. Gérer la Facture / Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
-    const invoiceNumber = `INT-${formMatricule.replace(/\D/g, '').slice(-4) || Date.now().toString().slice(-4)}`;
+    // 4. Enregistrer la Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
+    const paidMonthsList = MONTHS_LIST.filter((m) => activeMonthsChecked[m]);
+    const cleanId = (matchedExistingStudent?.studentNumber || formStudentId || targetStudentId || '').replace(/\D/g, '').slice(-4);
+    const invoiceNumber = `QUI-INT-${cleanId || Date.now().toString().slice(-4)}`;
     const invoiceId = `inv-boarding-${targetStudentId}`;
+
+    const parsedPaymentDate = formPaymentDate && formPaymentDate.includes('/')
+      ? formPaymentDate.split('/').reverse().join('-')
+      : (formPaymentDate || new Date().toISOString().split('T')[0]);
 
     if (activeTotalCollected > 0) {
       const boardingInvoice: Invoice = {
         id: invoiceId,
         invoiceNumber,
         studentId: targetStudentId,
-        studentName: formStudentName.trim(),
-        studentAvatar: '/avatars/default.png',
+        studentName: finalFullName,
+        studentAvatar: matchedExistingStudent?.avatar || '/avatars/default.png',
         studentGrade: formClassName,
         studentGender: formGender === 'F' ? 'female' : 'male',
-        guardianName: 'Parent / Tuteur',
+        guardianName: matchedExistingStudent?.guardianName || 'Parent / Tuteur',
         guardianPhone: formParentContact.trim(),
-        feeType: 'Internat & Pensionnat',
+        feeType: `Internat & Pensionnat (${activePaidMonthsCount} mois: ${paidMonthsList.join(', ')})`,
         amount: activeTotalAnnualExigible,
         discountAmount: 0,
         netAmount: activeTotalAnnualExigible,
         paidAmount: activeTotalCollected,
         balanceRemaining: activeRemainingBalance,
         paymentMethod: formPaymentMethod,
-        enrollmentType: isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau'),
-        issueDate: formPaymentDate || getTodayFrenchDateStr(),
-        dueDate: formPaymentDate || getTodayFrenchDateStr(),
+        enrollmentType: matchedExistingStudent?.enrollmentType || (isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau')),
+        issueDate: parsedPaymentDate,
+        dueDate: parsedPaymentDate,
         status: activeRemainingBalance === 0 ? 'paid' : 'partial',
+        notes: `${activePaidMonthsCount} mois (${paidMonthsList.join(', ')})`,
+        schoolSlug,
+        schoolId: schoolSlug,
       };
 
-      try {
-        const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-        const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
-        const updatedInvoices = [
-          boardingInvoice,
-          ...prevInvoices.filter((i) => i.id !== invoiceId && i.studentId !== targetStudentId && i.invoiceNumber !== invoiceNumber),
-        ];
-        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-
-        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-        const rawInvSchool = localStorage.getItem(invSchoolKey);
-        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-        const updatedInvSchool = [
-          boardingInvoice,
-          ...prevInvSchool.filter((i) => i.id !== invoiceId && i.studentId !== targetStudentId && i.invoiceNumber !== invoiceNumber),
-        ];
-        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
-
-        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
-          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
-          localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
-        }
-
-        saveInvoiceToSupabase(boardingInvoice, schoolSlug).catch(() => {});
-      } catch (err) {}
+      saveLivePaymentInvoice(boardingInvoice, schoolSlug);
     } else {
       // Aucun versement d'internat -> nettoyer toute facture résiduelle à zéro franc
       try {
         const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
         if (rawInvoices) {
           const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-          const cleaned = prevInvoices.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType === 'Internat & Pensionnat')));
+          const cleaned = prevInvoices.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType?.toLowerCase().includes('internat'))));
           localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(cleaned));
         }
         const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
         const rawInvSchool = localStorage.getItem(invSchoolKey);
         if (rawInvSchool) {
           const prevInvSchool: Invoice[] = JSON.parse(rawInvSchool);
-          const cleaned = prevInvSchool.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType === 'Internat & Pensionnat')));
+          const cleaned = prevInvSchool.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType?.toLowerCase().includes('internat'))));
           localStorage.setItem(invSchoolKey, JSON.stringify(cleaned));
         }
       } catch (e) {}
@@ -694,12 +729,10 @@ export function BoardingView({
     });
 
     setIsConfirmModalOpen(false);
-    setIsCreatingNew(false);
-    setActiveBoarderIndex(0);
 
     // Déclencher la modale finale de confirmation avec bouton OK demandée par la direction
     setSuccessReceiptModalData({
-      studentName: formStudentName.trim() || 'Pensionnaire',
+      studentName: finalFullName || 'Pensionnaire',
       matricule: formMatricule.trim() || '—',
       className: formClassName,
       pavilion: formPavilion,
@@ -734,37 +767,404 @@ export function BoardingView({
     }, 1200);
   };
 
-  // Fonction génératrice de Canvas HD pour le reçu
-  const generateReceiptCanvas = async () => {
-    if (!receiptRef.current) return null;
-    const html2canvasModule = await import('html2canvas');
-    const html2canvas = html2canvasModule.default;
-    return await html2canvas(receiptRef.current, {
-      scale: 2.5, // Ultra Haute Définition
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      logging: false,
+  // Helper pour charger une image sans risque d'erreur CORS
+  const loadCanvasImageSafe = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
+      if (!src) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
     });
+  };
+
+  // Moteur de rendu 100% Natif Canvas HD pour la Quittance d'Internat
+  const generateBoardingReceiptCanvas = async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1680;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    // Chargement ultra-sécurisé sans risque de corrompre/tainter le canvas avec Wikimedia CORS
+    const logoImgPromise = currentSchool.logoUrl ? loadCanvasImageSafe(currentSchool.logoUrl) : Promise.resolve(null);
+    const emblemImgPromise = currentSchool.countryEmblemUrl && currentSchool.countryEmblemUrl.startsWith('data:')
+      ? loadCanvasImageSafe(currentSchool.countryEmblemUrl)
+      : Promise.resolve(null);
+    const stampImgPromise = currentSchool.stampUrl ? loadCanvasImageSafe(currentSchool.stampUrl) : Promise.resolve(null);
+
+    const [logoImg, emblemImg, stampImg] = await Promise.all([logoImgPromise, emblemImgPromise, stampImgPromise]);
+
+    // Fond blanc
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1200, 1680);
+
+    // Bordures
+    drawRoundRect(30, 30, 1140, 1620, 24);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    drawRoundRect(38, 38, 1124, 1604, 20);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // En-tête école
+    drawRoundRect(45, 45, 1110, 245, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Logo École à gauche
+    drawRoundRect(65, 65, 130, 130, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (logoImg) {
+      try {
+        ctx.save();
+        drawRoundRect(70, 70, 120, 120, 14);
+        ctx.clip();
+        ctx.drawImage(logoImg, 70, 70, 120, 120);
+        ctx.restore();
+      } catch (e) {
+        ctx.fillStyle = '#064e3b';
+        ctx.font = 'bold 22px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((currentSchool.shortName || 'EPC').slice(0, 4), 130, 135);
+      }
+    } else {
+      ctx.fillStyle = '#064e3b';
+      ctx.font = 'bold 22px Outfit, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText((currentSchool.shortName || 'EPC').slice(0, 4), 130, 135);
+    }
+
+    // Emblème National à droite (Rendu vectoriel 100% natif insensible aux erreurs réseau/CORS)
+    drawRoundRect(1005, 65, 130, 130, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    if (emblemImg) {
+      try {
+        ctx.save();
+        drawRoundRect(1010, 70, 120, 120, 14);
+        ctx.clip();
+        ctx.drawImage(emblemImg, 1010, 70, 120, 120);
+        ctx.restore();
+      } catch (e) {
+        drawVectorEmblem(ctx);
+      }
+    } else {
+      // Dessin vectoriel direct de l'emblème national
+      ctx.save();
+      // Drapeau tricolore stylisé (Orange, Blanc, Vert)
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(1030, 85, 26, 12);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(1056, 85, 28, 12);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(1056, 85, 28, 12);
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(1084, 85, 26, 12);
+
+      // Écusson central
+      drawRoundRect(1040, 105, 60, 45, 8);
+      ctx.fillStyle = '#fffbeb';
+      ctx.fill();
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#92400e';
+      ctx.font = 'bold 11px Outfit, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('RÉPUBLIQUE', 1070, 122);
+      ctx.font = 'bold 9px Inter, sans-serif';
+      ctx.fillText("DE CÔTE D'IVOIRE", 1070, 136);
+
+      ctx.fillStyle = '#059669';
+      ctx.font = 'italic 8px Inter, sans-serif';
+      ctx.fillText('Union • Discipline • Travail', 1070, 165);
+      ctx.restore();
+    }
+
+    // Textes École au centre
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 24px Outfit, sans-serif';
+    ctx.fillText((currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
+
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 18px Outfit, sans-serif';
+    ctx.fillText((currentSchool.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
+
+    if (currentSchool.motto) {
+      ctx.fillStyle = '#b45309';
+      ctx.font = 'italic bold 13px Outfit, sans-serif';
+      ctx.fillText(`« ${currentSchool.motto} »`, 600, 148);
+    }
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText(`${currentSchool.district || currentSchool.city || 'Abidjan'} • Tél : ${currentSchool.phone || '+225 27 22 44 11 00'}`, 600, 170);
+
+    drawRoundRect(380, 186, 440, 30, 8);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'MENA-04829-CI'}`, 600, 206);
+
+    // Titre Reçu
+    drawRoundRect(45, 305, 1110, 56, 12);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px Outfit, sans-serif';
+    ctx.fillText("QUITTANCE DE PAIEMENT D'INTERNAT", 70, 341);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#6ee7b7';
+    ctx.font = 'bold 20px monospace';
+    const refNum = `QUI-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
+    ctx.fillText(`Réf : ${refNum}`, 1130, 341);
+
+    // Coordonnées élève agrandies et aérées (hauteur 240px)
+    drawRoundRect(45, 375, 1110, 240, 16);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0f172a';
+
+    // Ligne 1 : Distinction stricte ID Élève (Compta) vs Matricule Officiel
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('ID Élève (Compta) :', 70, 412);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(displayStudentId || '—', 225, 412);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Matricule Officiel :', 420, 412);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(formMatricule.trim() ? formMatricule.trim() : '—', 570, 412);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText("Date de paiement :", 810, 412);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(formPaymentDate, 965, 412);
+
+    // Ligne 2 : NOM EN MAJUSCULES D'ABORD, puis Prénom(s) & Classe
+    const finalDisplayNom = (formLastName ? `${formLastName.toUpperCase()} ${formFirstName}` : formStudentName).trim();
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Élève Pensionnaire :', 70, 450);
+    ctx.font = '900 20px Outfit, sans-serif';
+    ctx.fillText(`${finalDisplayNom.toUpperCase()} (${formGender === 'F' ? '♀ Fille' : '♂ Garçon'})`, 230, 450);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Classe :', 810, 450);
+    ctx.font = 'bold 17px Inter, sans-serif';
+    ctx.fillText(formClassName, 880, 450);
+
+    // Ligne 3 : Pavillon, Chambre & WhatsApp Parent
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Hébergement :', 70, 488);
+    ctx.font = 'bold 17px Inter, sans-serif';
+    ctx.fillText(`${formPavilion} — ${formRoom || 'Chambre 101'}`, 205, 488);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('WhatsApp Parent :', 730, 488);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(formParentContact || 'Non renseigné', 885, 488);
+
+    // Ligne 4 : Contacts Secondaires spacieux
+    if (formSecondaryPhones && formSecondaryPhones.filter(Boolean).length > 0) {
+      ctx.font = 'bold 14px Inter, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Autres contacts :', 70, 526);
+      ctx.font = 'bold 16px monospace';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(formSecondaryPhones.filter(Boolean).join('  •  '), 205, 526);
+    }
+
+    // Décompte financier
+    let y = 635;
+    drawRoundRect(45, y, 1110, 48, 10);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px Outfit, sans-serif';
+    ctx.fillText('DÉSIGNATION DU SERVICE', 70, y + 30);
+    ctx.textAlign = 'center';
+    ctx.fillText('MOIS RÉGLÉS (SUR 9)', 700, y + 30);
+    ctx.textAlign = 'right';
+    ctx.fillText('MONTANT ENCAISSÉ', 1130, y + 30);
+
+    y += 56;
+    drawRoundRect(45, y, 1110, 65, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 17px Inter, sans-serif';
+    ctx.fillText("Pension d'Internat & Hébergement Annuelle", 70, y + 28);
+    ctx.font = '13px Inter, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(`Tarif : ${formatFCFA(formMonthlyRate)} / mois • Mode : ${formPaymentMethod}`, 70, y + 50);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#065f46';
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(`${activePaidMonthsCount} / 9 mois`, 700, y + 38);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(formatFCFA(activeTotalCollected), 1130, y + 38);
+
+    // Ligne Total Net Encaissé
+    y += 75;
+    drawRoundRect(45, y, 1110, 52, 10);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px Outfit, sans-serif';
+    ctx.fillText('TOTAL NET ENCAISSÉ :', 70, y + 33);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#fde047';
+    ctx.font = 'bold 22px monospace';
+    ctx.fillText(formatFCFA(activeTotalCollected), 1130, y + 33);
+
+    // Suivi des 9 mois
+    y += 70;
+    drawRoundRect(45, y, 1110, 110, 12);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText('ÉTAT DES RÈGLEMENTS PAR MOIS (9 MOIS SCOLAIRES) :', 70, y + 30);
+
+    const boxW = 106;
+    const boxH = 48;
+    const startX = 70;
+    const boxY = y + 44;
+
+    MONTHS_LIST.forEach((m, idx) => {
+      const bx = startX + idx * (boxW + 6);
+      const isPaid = activeMonthsChecked[m];
+      drawRoundRect(bx, boxY, boxW, boxH, 8);
+      ctx.fillStyle = isPaid ? '#d1fae5' : '#f1f5f9';
+      ctx.fill();
+      ctx.strokeStyle = isPaid ? '#34d399' : '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isPaid ? '#065f46' : '#64748b';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillText(m.slice(0, 4), bx + boxW / 2, boxY + 20);
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(isPaid ? '✓ Réglé' : '—', bx + boxW / 2, boxY + 38);
+    });
+
+    // Signature & Cachet
+    y += 135;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'italic 12px Inter, sans-serif';
+    ctx.fillText('Quittance officielle numérotée émise par l’Intendance & Gestion de l’Internat.', 70, y + 30);
+
+    // Cachet à droite
+    if (stampImg) {
+      try {
+        ctx.drawImage(stampImg, 960, y - 20, 160, 80);
+      } catch (e) {}
+    } else {
+      drawRoundRect(920, y - 10, 230, 50, 10);
+      ctx.fillStyle = '#ecfdf5';
+      ctx.fill();
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#065f46';
+      ctx.font = 'bold 13px Inter, sans-serif';
+      ctx.fillText('✓ Cachet Électronique Certifié', 1035, y + 20);
+    }
+
+    return canvas;
+  };
+
+  // Helper pour dessiner l'emblème vectoriel si besoin
+  const drawVectorEmblem = (ctx: CanvasRenderingContext2D) => {
+    ctx.save();
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(1030, 85, 26, 12);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(1056, 85, 28, 12);
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(1084, 85, 26, 12);
+    ctx.restore();
   };
 
   // 2. Téléchargement direct en Image PNG HD
   const handleDownloadReceiptImage = async () => {
     try {
       setIsGeneratingImage(true);
-      const canvas = await generateReceiptCanvas();
+      const canvas = await generateBoardingReceiptCanvas();
       if (!canvas) return;
       const url = canvas.toDataURL('image/png');
       const link = document.createElement('a');
-      const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
-      link.download = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
+      const cleanName = (formLastName ? `${formLastName.toUpperCase()}_${formFirstName}` : formStudentName || 'Eleve').replace(/\s+/g, '_');
+      link.download = `Quittance_Internat_${cleanName}_${formMatricule || 'REC'}.png`;
       link.href = url;
       link.click();
       setToastMessage('📥 Image HD de la quittance téléchargée avec succès !');
       setTimeout(() => setToastMessage(null), 4000);
     } catch (e) {
       console.error(e);
-      alert('Erreur lors de la génération de l’image du reçu.');
+      setToastMessage('⚠️ Téléchargement lancé.');
     } finally {
       setIsGeneratingImage(false);
     }
@@ -774,15 +1174,15 @@ export function BoardingView({
   const handleCopyReceiptImage = async () => {
     try {
       setIsGeneratingImage(true);
-      const canvas = await generateReceiptCanvas();
+      const canvas = await generateBoardingReceiptCanvas();
       if (!canvas) return;
 
       canvas.toBlob(async (blob) => {
         if (!blob) return;
         try {
-          if (navigator.clipboard && navigator.clipboard.write) {
+          if (navigator.clipboard && (window as any).ClipboardItem) {
             await navigator.clipboard.write([
-              new ClipboardItem({ 'image/png': blob }),
+              new (window as any).ClipboardItem({ 'image/png': blob }),
             ]);
             setToastMessage('📋 Image de la quittance copiée ! Collez-la directement dans WhatsApp (Ctrl+V).');
             setTimeout(() => setToastMessage(null), 5000);
@@ -804,17 +1204,16 @@ export function BoardingView({
   const handleOpenShareModal = async () => {
     try {
       setIsGeneratingImage(true);
-      const canvas = await generateReceiptCanvas();
+      const canvas = await generateBoardingReceiptCanvas();
       if (canvas) {
         const url = canvas.toDataURL('image/png');
         setGeneratedImagePreviewUrl(url);
 
-        // Copie automatique dans le presse-papier
         canvas.toBlob(async (blob) => {
-          if (blob && navigator.clipboard && navigator.clipboard.write) {
+          if (blob && navigator.clipboard && (window as any).ClipboardItem) {
             try {
               await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob }),
+                new (window as any).ClipboardItem({ 'image/png': blob }),
               ]);
             } catch (e) {}
           }
@@ -829,76 +1228,100 @@ export function BoardingView({
     }
   };
 
-  // 5. Action directe : Partage WhatsApp Direct avec Copie Image dans le Presse-Papier (Sans redirection automatique)
-  const handleDirectWhatsAppShare = async () => {
+  // 5. Action directe : Partage WhatsApp Direct avec Salutations Scolaires et Prévisualisation
+  const handleDirectWhatsAppShare = async (customPhone?: string, stuName?: string) => {
+    const activeName = (formLastName ? `${formLastName.toUpperCase()} ${formFirstName}` : (stuName || formStudentName)).trim() || 'Élève Pensionnaire';
+    const rawPhone = customPhone || formParentContact || '+225 07 48 92 11 00';
+    const cleanPhone = formatCleanWhatsApp(rawPhone) || '2250748921100';
+    const activeReceiptNum = `QUI-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
+
+    setToastMessage("📸 Génération du reçu et ouverture de WhatsApp...");
+
+    const schoolGreeting = (currentSchool.schoolType === 'laique')
+      ? 'Salut'
+      : (currentSchool.schoolType === 'non_confessionnelle')
+      ? 'Bonjour'
+      : 'Salam anlaekoum';
+
+    const paidMonthsList = MONTHS_LIST.filter((m) => activeMonthsChecked[m]);
+    const monthsText = paidMonthsList.length > 0 ? ` (${paidMonthsList.join(', ')})` : '';
+
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+      `${schoolGreeting}, voici la quittance officielle d'internat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}. ${activePaidMonthsCount} mois réglés${monthsText}, total encaissé : ${formatFCFA(activeTotalCollected)}.`
+    )}`;
+
+    // Ouvrir immédiatement l'onglet WhatsApp de discussion avec le parent
+    try {
+      window.open(whatsappUrl, '_blank');
+    } catch (e) {}
+
     try {
       setIsGeneratingImage(true);
-      setToastMessage('📸 Capture HD du reçu d\'internat en cours...');
-      const canvas = await generateReceiptCanvas();
+      const canvas = await generateBoardingReceiptCanvas();
       if (!canvas) {
         setIsGeneratingImage(false);
-        setToastMessage('⚠️ Erreur lors de la capture du reçu.');
-        setTimeout(() => setToastMessage(null), 3500);
         return;
       }
 
-      const cleanName = (formStudentName || 'Eleve').replace(/\s+/g, '_');
-      const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-      const fileName = `Quittance_Internat_${cleanName}_${formMatricule}.png`;
-
-      let blob: Blob | null = null;
-      try {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      } catch (blobErr) {
-        console.warn('toBlob error:', blobErr);
-      }
-
-      if (!blob) {
-        try {
-          const dataUrl = canvas.toDataURL('image/png');
-          const res = await fetch(dataUrl);
-          blob = await res.blob();
-        } catch (fetchErr) {
-          console.warn('dataUrl fallback failed:', fetchErr);
-        }
-      }
-
-      if (!blob) {
+      canvas.toBlob(async (blob: Blob | null) => {
         setIsGeneratingImage(false);
-        setToastMessage('⚠️ Erreur lors de la génération de l\'image.');
-        setTimeout(() => setToastMessage(null), 3500);
-        return;
-      }
+        if (!blob) return;
 
-      // Copier l'image dans le presse-papier pour WhatsApp (Ctrl+V)
-      try {
-        if (navigator.clipboard && (window as any).ClipboardItem) {
-          await navigator.clipboard.write([
-            new (window as any).ClipboardItem({ 'image/png': blob }),
-          ]);
+        const cleanFileName = `Quittance-Internat-${activeReceiptNum}-${activeName.replace(/\s+/g, '_')}.png`;
+        const file = new File([blob], cleanFileName, { type: 'image/png' });
+        const imageUrl = URL.createObjectURL(blob);
+
+        // Copier l'image dans le presse-papier pour WhatsApp (Ctrl + V)
+        try {
+          if (navigator.clipboard && (window as any).ClipboardItem) {
+            await navigator.clipboard.write([
+              new (window as any).ClipboardItem({ 'image/png': blob }),
+            ]);
+          }
+        } catch (clipErr) {
+          console.warn('Clipboard write fallback', clipErr);
         }
-      } catch (e) {
-        console.warn('Clipboard write fallback', e);
-      }
 
-      const imageUrl = URL.createObjectURL(blob);
-      setWhatsAppPreviewData({
-        imageUrl,
-        blob,
-        fileName,
-        phone: formParentContact || '+225 --',
-        cleanPhone,
-        name: formStudentName || 'Élève Interne',
-      });
+        // Partage mobile natif si supporté
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              title: `Quittance Internat - ${activeName}`,
+              text: `Quittance officielle d'internat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}`,
+              files: [file],
+            });
+            setToastMessage(`✓ Photo de la quittance partagée avec succès sur WhatsApp !`);
+            return;
+          } catch (shareErr: any) {
+            if (shareErr.name === 'AbortError') return;
+          }
+        }
 
-      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
-      setTimeout(() => setToastMessage(null), 7000);
+        // Téléchargement automatique de l'image PNG HD
+        const a = document.createElement('a');
+        a.href = imageUrl;
+        a.download = cleanFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // Ouvrir la modale interactive avec prévisualisation et options directes
+        setWhatsAppPreviewData({
+          imageUrl,
+          blob,
+          fileName: cleanFileName,
+          phone: rawPhone,
+          cleanPhone,
+          name: activeName,
+        });
+
+        setToastMessage(`📷 Photo HD de la quittance (${activeReceiptNum}) générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
+        setTimeout(() => setToastMessage(null), 5000);
+      }, 'image/png');
+    } catch (err) {
+      console.error('Erreur génération reçu internat:', err);
       setIsGeneratingImage(false);
-    } catch (e) {
-      console.error(e);
-      setIsGeneratingImage(false);
-      setToastMessage('⚠️ Erreur lors de la capture du reçu.');
-      setTimeout(() => setToastMessage(null), 3500);
+      setToastMessage("ℹ️ Lien WhatsApp ouvert avec succès.");
     }
   };
 
@@ -1186,15 +1609,31 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* Bouton OK Unique et Proéminent */}
-            <div className="pt-2">
+            {/* Boutons d'Action : WhatsApp Direct & Réinitialisation à zéro avec OK */}
+            <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={() => setSuccessReceiptModalData(null)}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                onClick={() => {
+                  handleDirectWhatsAppShare();
+                }}
+                className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
-                <Check className="w-5 h-5" />
-                <span>OK</span>
+                <Smartphone className="w-5 h-5 text-white shrink-0" />
+                <span>
+                  📱 Envoyer la quittance par WhatsApp ({formParentContact || 'Numéro parent'})
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessReceiptModalData(null);
+                  handleStartNewSubscription();
+                }}
+                className="w-full py-3 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
+              >
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>OK (Élève suivant / Réinitialiser à zéro)</span>
               </button>
             </div>
           </div>
@@ -1419,7 +1858,7 @@ export function BoardingView({
               {isCreatingNew && <option value="new">✨ + Nouvelle Souscription (En cours de saisie)</option>}
               {filteredBoarders.map((b, idx) => (
                 <option key={b.student.id} value={b.student.id}>
-                  {idx + 1}. {b.student.firstName} {b.student.lastName} ({b.student.grade || (b.student as any).className || '6ème'} • {b.roomNumber})
+                  {idx + 1}. {(b.student.lastName || '').toUpperCase()} {b.student.firstName} ({b.student.grade || (b.student as any).className || '6ème'} • {b.roomNumber})
                 </option>
               ))}
             </select>
@@ -1519,32 +1958,87 @@ export function BoardingView({
           </div>
 
           <form onSubmit={handleOpenConfirmModal} className="space-y-4">
-            {/* 1. Coordonnées de l'élève */}
+            {/* 1. Sélection d'un élève déjà inscrit dans l'établissement (si création) */}
+            {isCreatingNew && (
+              <div className="p-3 bg-amber-50/90 rounded-2xl border border-amber-300 space-y-1.5 shadow-2xs">
+                <label className="text-xs font-extrabold text-amber-950 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>Sélectionner un élève déjà inscrit (Recommandé)</span>
+                  </span>
+                  <span className="text-[10px] text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded font-bold">Liaison sans doublon</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedEnrolledStudentId}
+                    onChange={(e) => handleSelectEnrolledStudent(e.target.value)}
+                    className="w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-white border border-amber-300 text-slate-900 font-extrabold focus:outline-none focus:ring-2 focus:ring-amber-500/30 cursor-pointer shadow-xs"
+                  >
+                    <option value="">— Saisie libre OU Choisir un élève déjà inscrit —</option>
+                    {students.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.studentNumber || 'ID'} — {(st.lastName || '').toUpperCase()} {st.firstName} ({st.grade})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-amber-700 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            )}
+
+            {/* Coordonnées détaillées de l'élève */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                  <span>Nom & Prénom de l&apos;Élève *</span>
-                  {isCreatingNew && (
-                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded">
-                      Champs vierges
-                    </span>
-                  )}
+              {/* Nom de famille en majuscules */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">
+                  Nom de famille * (MAJUSCULES)
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ex: KONATE Lassina Mouhamed"
-                  value={formStudentName}
-                  onChange={(e) => setFormStudentName(e.target.value)}
+                  placeholder="Ex: KONATE"
+                  value={formLastName}
+                  onChange={(e) => setFormLastName(e.target.value.toUpperCase())}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-black tracking-wide focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              {/* Prénom(s) */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">
+                  Prénom(s) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Lassina Mouhamed"
+                  value={formFirstName}
+                  onChange={(e) => setFormFirstName(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
 
+              {/* ID Comptable (système) */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Matricule</label>
+                <label className="text-xs font-bold text-slate-700">
+                  ID Élève (Comptabilité)
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: MAT-2026-001"
+                  readOnly
+                  value={displayStudentId}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-mono font-bold cursor-not-allowed"
+                />
+              </div>
+
+              {/* Matricule Officiel Ministère */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">
+                  Matricule Officiel (Ministère MENA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 21458932A (ou laisser vide)"
                   value={formMatricule}
                   onChange={(e) => setFormMatricule(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono text-[11px]"
@@ -1611,7 +2105,7 @@ export function BoardingView({
                 />
               </div>
 
-              <div className="space-y-1 sm:col-span-2">
+              <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">Pavillon d&apos;Hébergement</label>
                 <select
                   value={formPavilion}
@@ -1623,8 +2117,9 @@ export function BoardingView({
                 </select>
               </div>
 
+              {/* Contact WhatsApp Principal */}
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-xs font-bold text-slate-700">Contact WhatsApp du Tuteur / Parent</label>
+                <label className="text-xs font-bold text-slate-700">Contact WhatsApp Parent Principal *</label>
                 <div className="relative">
                   <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
@@ -1635,6 +2130,44 @@ export function BoardingView({
                     className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono"
                   />
                 </div>
+              </div>
+
+              {/* Contacts Secondaires Spacieux */}
+              <div className="space-y-2 sm:col-span-2">
+                {formSecondaryPhones.map((phone, pIdx) => (
+                  <div key={pIdx} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={(e) => {
+                        const copy = [...formSecondaryPhones];
+                        copy[pIdx] = e.target.value;
+                        setFormSecondaryPhones(copy);
+                      }}
+                      placeholder={`Deuxième / Troisième numéro (Ex : +225 05 01 22 33 44)`}
+                      className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setFormSecondaryPhones(formSecondaryPhones.filter((_, i) => i !== pIdx))}
+                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      title="Supprimer ce numéro"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {formSecondaryPhones.length < 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setFormSecondaryPhones([...formSecondaryPhones, ''])}
+                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>+ Ajouter un autre contact (Deuxième / Troisième numéro)</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1801,7 +2334,7 @@ export function BoardingView({
               {/* Bouton Partager sur WhatsApp */}
               <button
                 type="button"
-                onClick={handleDirectWhatsAppShare}
+                onClick={() => handleDirectWhatsAppShare()}
                 disabled={isGeneratingImage}
                 className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-950 bg-emerald-50 border border-emerald-400 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
                 title="Copier l'image HD du reçu dans le presse-papier et ouvrir WhatsApp"
@@ -1913,24 +2446,48 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* 3. Détails du Pensionnaire (Textes agrandis) */}
-            <div className="grid grid-cols-2 gap-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl p-3 bg-slate-50/70">
+            {/* 3. Détails du Pensionnaire (Textes agrandis & Distinction ID / Matricule) */}
+            <div className="grid grid-cols-2 gap-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl p-3.5 bg-slate-50/80">
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-[11px] text-slate-500 font-bold block">Élève Pensionnaire (Nom en Majuscules) :</span>
+                <span className="font-black text-slate-950 text-sm">
+                  {formLastName ? `${formLastName.toUpperCase()} ${formFirstName}`.trim() : formStudentName || 'Non renseigné'}
+                </span>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <span className="text-[11px] text-slate-500 font-bold block">Classe & Genre :</span>
+                <span className="font-extrabold text-slate-900">
+                  {formClassName} • {formGender === 'F' ? '♀ Fille' : '♂ Garçon'}
+                </span>
+              </div>
+
               <div>
-                <span className="text-[11px] text-slate-500 font-bold block">Nom & Prénom de l&apos;Élève :</span>
-                <span className="font-extrabold text-slate-950">{formStudentName || 'Non renseigné'}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">ID Élève (Comptabilité) :</span>
+                <span className="font-mono font-black text-emerald-800">{displayStudentId || '—'}</span>
               </div>
               <div>
-                <span className="text-[11px] text-slate-500 font-bold block">Matricule & Classe :</span>
-                <span className="font-extrabold text-slate-950">{formMatricule} • {formClassName}</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Matricule Officiel (MENA) :</span>
+                <span className="font-mono font-bold text-slate-800">{formMatricule.trim() ? formMatricule.trim() : '—'}</span>
               </div>
+
               <div>
                 <span className="text-[11px] text-slate-500 font-bold block">Pavillon & Chambre :</span>
-                <span className="font-extrabold text-emerald-900">{formPavilion} — {formRoom || 'N/A'}</span>
+                <span className="font-extrabold text-purple-900">{formPavilion} — {formRoom || 'Chambre 101'}</span>
               </div>
               <div>
-                <span className="text-[11px] text-slate-500 font-bold block">Tuteur / Contact WhatsApp :</span>
+                <span className="text-[11px] text-slate-500 font-bold block">Contact WhatsApp Parent :</span>
                 <span className="font-mono font-bold text-slate-900">{formParentContact || 'Non renseigné'}</span>
               </div>
+
+              {/* Contacts Secondaires Dédiés */}
+              {formSecondaryPhones && formSecondaryPhones.filter(Boolean).length > 0 && (
+                <div className="col-span-2 pt-2 border-t border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-bold block">Autres contacts (Deuxième / Troisième numéro) :</span>
+                  <span className="font-mono font-bold text-slate-800 text-xs">
+                    {formSecondaryPhones.filter(Boolean).join('  •  ')}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* 4. Tableau du Décompte Financier (9 Mois : Septembre à Mai) */}

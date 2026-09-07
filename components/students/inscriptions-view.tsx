@@ -1183,7 +1183,7 @@ export function InscriptionsView({
     ctx.fillText(`Quittance N° : ${finalReceiptNum}`, 1130, 341);
 
     // --- COORDONNÉES ÉLÈVE & PARENT ARRONDI (radius 16) ---
-    drawRoundRect(45, 375, 1110, 215, 16);
+    drawRoundRect(45, 375, 1110, 228, 16);
     ctx.fillStyle = '#f8fafc';
     ctx.fill();
     ctx.strokeStyle = '#cbd5e1';
@@ -1193,43 +1193,57 @@ export function InscriptionsView({
     ctx.textAlign = 'left';
     ctx.fillStyle = '#0f172a';
 
-    // Ligne 1 : Matricule (officiel si saisi, ou automatique ID-xxx si non saisi) & Date
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Matricule :', 70, 412);
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(finalStuMat || finalStuId, 165, 412);
+    // Ligne 1 : ID Comptable, Matricule Officiel & Date d'encaissement
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('ID Élève :', 70, 408);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(finalStuId, 155, 408);
 
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText("Date d'encaissement :", 730, 412);
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(formatDate(finalStuDate), 920, 412);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Matricule :', 390, 408);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(finalStuMat ? finalStuMat : '—', 485, 408);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText("Date d'encaissement :", 750, 408);
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(formatDate(finalStuDate), 930, 408);
 
     // Ligne 2 : Nom de l'élève & Classe
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Nom & Prénom :', 70, 450);
-    ctx.font = 'bold 22px Outfit, sans-serif';
-    ctx.fillText(`${finalStuName.toUpperCase()} (${finalStuGender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 210, 450);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Nom & Prénom :', 70, 442);
+    ctx.font = 'bold 20px Outfit, sans-serif';
+    ctx.fillText(`${finalStuName.toUpperCase()} (${finalStuGender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 205, 442);
 
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Classe & Statut :', 750, 442);
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Classe & Statut :', 730, 450);
-    ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 880, 450);
+    ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 885, 442);
 
-    // Ligne 3 : Parent & Téléphone(s) (Principal + Numéros secondaires si renseignés)
+    // Ligne 3 : Parent & Contacts Téléphoniques (Principal, 2ème, 3ème numéro)
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Parent / Tuteur :', 70, 474);
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Parent / Tuteur :', 70, 488);
-    ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(finalStuParent, 210, 488);
+    ctx.fillText(finalStuParent, 205, 474);
 
     const finalSecPhones = (targetStudent?.secondaryPhones && targetStudent.secondaryPhones.length > 0)
       ? targetStudent.secondaryPhones
       : secondaryPhones.map((p) => p.trim()).filter(Boolean);
-    const allPhones = [finalStuPhone, ...finalSecPhones].filter((p, i, arr) => Boolean(p) && p !== 'Non renseigné' && arr.indexOf(p) === i);
 
-    ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText(allPhones.length > 1 ? 'Contacts Parents :' : 'WhatsApp :', 710, 488);
-    ctx.font = allPhones.length > 2 ? 'bold 13px monospace' : allPhones.length === 2 ? 'bold 15px monospace' : 'bold 18px monospace';
-    ctx.fillText(allPhones.join(' • '), 855, 488);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Contact WhatsApp :', 750, 474);
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(finalStuPhone || '—', 915, 474);
+
+    if (finalSecPhones.length > 0) {
+      let secPhoneText = '';
+      if (finalSecPhones[0]) secPhoneText += `Deuxième numéro : ${finalSecPhones[0]}`;
+      if (finalSecPhones[1]) secPhoneText += `   |   Troisième numéro : ${finalSecPhones[1]}`;
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = '#475569';
+      ctx.fillText(secPhoneText, 750, 498);
+      ctx.fillStyle = '#0f172a';
+    }
 
     // Ligne 4 : 5 Blocs de Prestations & Services avec Icônes/Emojis et Badges de Statut
     const servicesList = [
@@ -1285,7 +1299,7 @@ export function InscriptionsView({
       },
     ];
 
-    const cardY = 516;
+    const cardY = 526;
     const cardW = 205;
     const cardH = 58;
     const gap = 15;
@@ -1326,7 +1340,7 @@ export function InscriptionsView({
     });
 
     // --- TABLEAU FINANCIER OFFICIEL ARRONDI ---
-    drawRoundRect(45, 605, 1110, 42, 10);
+    drawRoundRect(45, 615, 1110, 42, 10);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
 
@@ -1694,14 +1708,23 @@ export function InscriptionsView({
 
         {/* Détails Élève & Coordonnées Quittance */}
         <div className="relative z-10 rounded-xl bg-slate-50/95 border border-slate-200 p-3.5 space-y-2.5 text-xs sm:text-sm">
-          {/* 1. En-tête de Quittance : Identifiant, Date & Statut Administratif */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
+          {/* 1. En-tête de Quittance : Identifiant Comptable, Matricule Officiel, Date & Statut Administratif */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
-                Matricule Élève :
+                ID Élève (Compta) :
+              </span>
+              <span className="font-mono font-black text-emerald-800 text-xs sm:text-sm">
+                {currentIdStr}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
+                Matricule Officiel :
               </span>
               <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
-                {currentMatricule || currentIdStr}
+                {currentMatricule ? currentMatricule : '—'}
               </span>
             </div>
 
@@ -1775,17 +1798,38 @@ export function InscriptionsView({
 
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold">
-                {secondaryPhones.filter(Boolean).length > 0 ? 'Contacts Parents (WhatsApp / Tél) :' : 'Contact WhatsApp Parent :'}
+                Contact Principal (WhatsApp) :
               </span>
-              <span className="font-mono font-black text-emerald-900 text-xs sm:text-sm">
+              <span className="font-mono font-black text-emerald-900 text-xs sm:text-sm block">
                 {whatsappPhone || '—'}
-                {secondaryPhones.filter(Boolean).length > 0 && (
-                  <span className="text-slate-600 font-bold ml-1">
-                    • {secondaryPhones.filter(Boolean).join(' • ')}
-                  </span>
-                )}
               </span>
             </div>
+
+            {/* Ligne dédiée spacieuse pour le 2ème et 3ème numéro pour éviter tout débordement */}
+            {secondaryPhones && secondaryPhones.filter(Boolean).length > 0 && (
+              <div className="col-span-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center gap-3">
+                {secondaryPhones[0] && secondaryPhones[0].trim() && (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Deuxième numéro :
+                    </span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
+                      {secondaryPhones[0].trim()}
+                    </span>
+                  </div>
+                )}
+                {secondaryPhones[1] && secondaryPhones[1].trim() && (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Troisième numéro :
+                    </span>
+                    <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300 shadow-2xs">
+                      {secondaryPhones[1].trim()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold">
@@ -3287,15 +3331,15 @@ export function InscriptionsView({
             {/* Récapitulatif clair */}
             <div className="space-y-2.5 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                <span className="text-slate-500">Identifiant :</span>
-                <span className="font-mono font-extrabold text-slate-900">
+                <span className="text-slate-500">ID Comptable :</span>
+                <span className="font-mono font-extrabold text-emerald-800">
                   {currentIdStr}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                <span className="text-slate-500">Matricule :</span>
+                <span className="text-slate-500">Matricule Officiel :</span>
                 <span className="font-mono font-extrabold text-slate-900">
-                  {currentMatricule || currentIdStr}
+                  {currentMatricule ? currentMatricule : '— Non renseigné —'}
                 </span>
               </div>
 

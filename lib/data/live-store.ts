@@ -852,6 +852,30 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
         )
           continue;
 
+        // PROTECTION ABSOLUE : Les factures de prestations de services (Internat, Cantine, Transport)
+        // ne doivent JAMAIS recréer ou dédoubler un élève dans la liste des inscriptions !
+        const feeLower = (inv.feeType || '').toLowerCase();
+        if (
+          feeLower.includes('internat') ||
+          feeLower.includes('cantine') ||
+          feeLower.includes('transport') ||
+          inv.invoiceNumber.startsWith('QUI-INT-') ||
+          inv.invoiceNumber.startsWith('QUI-CAN-') ||
+          inv.invoiceNumber.startsWith('QUI-TRA-')
+        ) {
+          continue;
+        }
+
+        // Vérification anti-doublon par nom ou identifiant déjà existant
+        const alreadyExists = uniqueStudents.some(
+          (s) =>
+            s.id === inv.studentId ||
+            (inv.studentId && s.studentNumber === inv.studentId) ||
+            s.studentNumber === inv.invoiceNumber ||
+            (s.fullName && inv.studentName && s.fullName.toLowerCase().trim() === inv.studentName.toLowerCase().trim())
+        );
+        if (alreadyExists) continue;
+
         const idKey = inv.studentId || inv.id || inv.invoiceNumber;
         const numKey = inv.invoiceNumber || inv.studentId || inv.id;
         if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
@@ -1002,22 +1026,31 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       const recKey = numDigits ? `REC-2026-${parseInt(numDigits, 10).toString().padStart(3, '0')}` : '';
       const idKey = numDigits ? `ID-${parseInt(numDigits, 10).toString().padStart(3, '0')}` : '';
 
+      const isServiceInvoice =
+        (inv.feeType || '').toLowerCase().includes('internat') ||
+        (inv.feeType || '').toLowerCase().includes('cantine') ||
+        (inv.feeType || '').toLowerCase().includes('transport') ||
+        (inv.invoiceNumber || '').startsWith('QUI-');
+
       // Sécurité anti-doublon absolue : ne jamais enregistrer deux fois le même reçu ou élève
-      const alreadySeen =
-        seenIds.has(inv.id) ||
-        seenNumbers.has(inv.invoiceNumber) ||
-        (recKey && seenNumbers.has(recKey)) ||
-        (idKey && seenNumbers.has(idKey)) ||
-        (inv.studentId && seenStudentIds.has(inv.studentId));
+      const alreadySeen = isServiceInvoice
+        ? seenIds.has(inv.id) || seenNumbers.has(inv.invoiceNumber)
+        : seenIds.has(inv.id) ||
+          seenNumbers.has(inv.invoiceNumber) ||
+          (recKey && seenNumbers.has(recKey)) ||
+          (idKey && seenNumbers.has(idKey)) ||
+          (inv.studentId && seenStudentIds.has(inv.studentId));
 
       if (!alreadySeen) {
         seenIds.add(inv.id);
         seenNumbers.add(inv.invoiceNumber);
-        if (recKey) seenNumbers.add(recKey);
-        if (idKey) seenNumbers.add(idKey);
-        if (inv.studentId) {
-          seenStudentIds.add(inv.studentId);
-          seenIds.add(inv.studentId);
+        if (!isServiceInvoice) {
+          if (recKey) seenNumbers.add(recKey);
+          if (idKey) seenNumbers.add(idKey);
+          if (inv.studentId) {
+            seenStudentIds.add(inv.studentId);
+            seenIds.add(inv.studentId);
+          }
         }
 
         // Si l'élève a été modifié, mettre à jour les coordonnées dans la facture

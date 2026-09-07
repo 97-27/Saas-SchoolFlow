@@ -192,7 +192,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         let motif = '1er Versement';
         if (feeLower.includes('internat')) {
           prestation = '🏠 Internat';
-          motif = inv.notes || 'Pensionnat & Hébergement';
+          motif = inv.notes || (inv.feeType && inv.feeType.includes('(') ? inv.feeType.slice(inv.feeType.indexOf('(') + 1, inv.feeType.lastIndexOf(')')) : 'Pensionnat & Hébergement');
         } else if (feeLower.includes('cantine')) {
           prestation = '🍽️ Cantine';
           motif = inv.notes || 'Restauration scolaire';
