@@ -10,6 +10,8 @@ import {
   saveStudentToSupabase,
   saveInvoiceToSupabase,
   saveStaffUserToSupabase,
+  deleteStudentFromSupabase,
+  deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
 
 // Stockage serveur persistant pour synchroniser les données entre appareils
@@ -60,17 +62,33 @@ export async function GET(request: NextRequest) {
       if (sbSchool) {
         schoolData.schoolSettings = sbSchool;
       }
-      if (sbStudents && Array.isArray(sbStudents) && sbStudents.length > 0) {
+      if (sbStudents !== null && Array.isArray(sbStudents)) {
         schoolData.students = sbStudents;
       }
-      if (sbInvoices && Array.isArray(sbInvoices) && sbInvoices.length > 0) {
+      if (sbInvoices !== null && Array.isArray(sbInvoices)) {
         schoolData.invoices = sbInvoices;
       }
-      if (sbStaff && Array.isArray(sbStaff) && sbStaff.length > 0) {
+      if (sbStaff !== null && Array.isArray(sbStaff)) {
         schoolData.staffUsers = sbStaff;
       }
     } catch (sbErr) {
       console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
+    }
+
+    // Filtrer les élèves et factures contre les identifiants supprimés
+    const deletedIds: string[] = schoolData.deletedStudentIds || [];
+    const delSet = new Set(deletedIds);
+    if (delSet.size > 0) {
+      if (Array.isArray(schoolData.students)) {
+        schoolData.students = schoolData.students.filter(
+          (s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule)
+        );
+      }
+      if (Array.isArray(schoolData.invoices)) {
+        schoolData.invoices = schoolData.invoices.filter(
+          (inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber)
+        );
+      }
     }
 
     return NextResponse.json({
@@ -86,7 +104,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { slug, students, invoices, schoolSettings, staffUsers } = body;
+    const { slug, students, invoices, schoolSettings, staffUsers, deletedStudentIds } = body;
 
     if (!slug) {
       return NextResponse.json({ success: false, error: 'Slug manquant' }, { status: 400 });
@@ -95,14 +113,34 @@ export async function POST(request: NextRequest) {
     ensureDataFile();
 
     const currentSchool = memoryStore[slug] || {};
+    let existingDeleted: string[] = currentSchool.deletedStudentIds || [];
+
+    // Traitement des suppressions dans Supabase Cloud et mémoisation
+    if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
+      existingDeleted = Array.from(new Set([...existingDeleted, ...deletedStudentIds]));
+      for (const delId of deletedStudentIds) {
+        deleteStudentFromSupabase(delId, slug).catch(() => {});
+        deleteInvoiceFromSupabase(delId, slug).catch(() => {});
+      }
+    }
+
+    const delSet = new Set(existingDeleted);
+    const cleanStudents = Array.isArray(students)
+      ? students.filter((s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule))
+      : undefined;
+    const cleanInvoices = Array.isArray(invoices)
+      ? invoices.filter((inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber))
+      : undefined;
+
     memoryStore[slug] = {
       ...currentSchool,
       slug,
       updatedAt: new Date().toISOString(),
-      ...(students ? { students } : {}),
-      ...(invoices ? { invoices } : {}),
-      ...(schoolSettings ? { schoolSettings } : {}),
-      ...(staffUsers ? { staffUsers } : {}),
+      deletedStudentIds: existingDeleted,
+      ...(cleanStudents !== undefined ? { students: cleanStudents } : {}),
+      ...(cleanInvoices !== undefined ? { invoices: cleanInvoices } : {}),
+      ...(schoolSettings !== undefined ? { schoolSettings } : {}),
+      ...(staffUsers !== undefined ? { staffUsers } : {}),
     };
 
     // Sauvegarde asynchrone dans Supabase Cloud pour la persistance multi-appareils
@@ -110,13 +148,13 @@ export async function POST(request: NextRequest) {
       if (schoolSettings) {
         saveSchoolToSupabase(schoolSettings).catch(() => {});
       }
-      if (students && Array.isArray(students)) {
-        for (const st of students) {
+      if (cleanStudents && Array.isArray(cleanStudents)) {
+        for (const st of cleanStudents) {
           saveStudentToSupabase(st, slug).catch(() => {});
         }
       }
-      if (invoices && Array.isArray(invoices)) {
-        for (const inv of invoices) {
+      if (cleanInvoices && Array.isArray(cleanInvoices)) {
+        for (const inv of cleanInvoices) {
           saveInvoiceToSupabase(inv, slug).catch(() => {});
         }
       }

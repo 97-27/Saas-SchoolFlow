@@ -185,44 +185,39 @@ export const mockSchools: Record<string, School> = {
 export const defaultSchool = mockSchools['epc-manoi'] || mockSchools['college-excellence'];
 
 export const mockKPIs: DashboardKPIs = {
-  totalStudents: 1,
+  totalStudents: 0,
   totalStudentsTrend: 0,
   totalStudentsGirls: 0,
-  totalStudentsBoys: 1,
+  totalStudentsBoys: 0,
 
   returningStudents: 0,
   returningStudentsGirls: 0,
   returningStudentsBoys: 0,
 
-  newStudents: 1,
+  newStudents: 0,
   newStudentsGirls: 0,
-  newStudentsBoys: 1,
+  newStudentsBoys: 0,
 
-  boardingStudents: 1,
+  boardingStudents: 0,
   boardingStudentsGirls: 0,
-  boardingStudentsBoys: 1,
+  boardingStudentsBoys: 0,
 
-  collectionRate: 40.0,
+  collectionRate: 0,
   collectionRateTrend: 0,
-  totalCollectedFCFA: 100000,
-  totalOverdueFCFA: 150000,
-  overdueInvoicesCount: 1,
-  avgAttendance: 98.0,
+  totalCollectedFCFA: 0,
+  totalOverdueFCFA: 0,
+  overdueInvoicesCount: 0,
+  avgAttendance: 100.0,
   avgAttendanceTrend: 0,
   activeStaffCount: 2,
   monthlyRevenue: [
-    { month: 'Septembre', collected: 100000, target: 250000, percentage: 40.0, color: '#10b981' },
+    { month: 'Septembre', collected: 0, target: 0, percentage: 0, color: '#10b981' },
     { month: 'Octobre', collected: 0, target: 0, percentage: 0, color: '#10b981' },
     { month: 'Novembre', collected: 0, target: 0, percentage: 0, color: '#10b981' },
     { month: 'Décembre', collected: 0, target: 0, percentage: 0, color: '#fbbf24' },
     { month: 'Janvier', collected: 0, target: 0, percentage: 0, color: '#f97316' },
   ],
-  feeBreakdown: [
-    { category: "Droits d'inscription", amount: 65000, percentage: 65.0, color: '#10b981' },
-    { category: 'Scolarités trimestrielles', amount: 35000, percentage: 35.0, color: '#fbbf24' },
-    { category: 'Cantine & Restauration', amount: 0, percentage: 0, color: '#3b82f6' },
-    { category: 'Transport scolaire', amount: 0, percentage: 0, color: '#8b5cf6' },
-  ],
+  feeBreakdown: [],
 };
 
 export const availableClasses = [
@@ -242,71 +237,9 @@ export const availableClasses = [
   '3ème',
 ];
 
-export const mockStudents: Student[] = [
-  {
-    id: 'stu-001',
-    studentNumber: 'ID-001',
-    matricule: '26014801A',
-    firstName: 'Lassina Mouhamed',
-    lastName: 'KONATE',
-    fullName: 'KONATE Lassina Mouhamed',
-    grade: '6ème',
-    gender: 'male',
-    avatar: 'https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?w=150&auto=format&fit=crop&q=80',
-    address: 'Abobo Biabou 2, Abidjan',
-    guardianName: 'M. Konate Ibrahim',
-    guardianPhone: '+225 07 48 92 11 00',
-    whatsappPhone: '+225 07 48 92 11 00',
-    registrationFee: 65000,
-    tuitionAmount: 250000,
-    discountAmount: 0,
-    netAmount: 250000,
-    paidAmount: 100000,
-    balanceRemaining: 150000,
-    paymentDate: '2026-08-27',
-    attendanceRate: 98,
-    dateOfBirth: '2014-05-12',
-    status: 'active',
-    tuitionStatus: 'partial',
-    enrollmentType: 'nouveau',
-    paymentMethod: 'Espèces',
-    installments: {
-      versement1: { amount: 100000, paymentMethod: 'Espèces', date: '2026-08-27', receiptNumber: 'REC-2026-001' },
-    },
-    isBoarding: true,
-    isCanteen: true,
-    isTransport: true,
-    notes: 'Prestations : Frais Annexes (Payé ✓), Tenue tout cousue (Payé ✓)',
-  },
-];
+export const mockStudents: Student[] = [];
 
-export const mockInvoices: Invoice[] = [
-  {
-    id: 'inv-001',
-    invoiceNumber: 'ID-001',
-    studentId: 'stu-001',
-    studentName: 'KONATE Lassina Mouhamed',
-    studentAvatar: 'https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?w=150&auto=format&fit=crop&q=80',
-    studentGrade: '6ème',
-    studentGender: 'male',
-    guardianName: 'M. Konate Ibrahim',
-    guardianPhone: '+225 07 48 92 11 00',
-    feeType: "Frais d'inscription & Scolarité",
-    amount: 250000,
-    paidAmount: 100000,
-    discountAmount: 0,
-    netAmount: 250000,
-    balanceRemaining: 150000,
-    paymentMethod: 'Espèces',
-    enrollmentType: 'nouveau',
-    installments: {
-      versement1: { amount: 100000, paymentMethod: 'Espèces', date: '2026-08-27', receiptNumber: 'REC-2026-001' },
-    },
-    issueDate: '2026-08-27',
-    dueDate: '2026-08-27',
-    status: 'partial',
-  },
-];
+export const mockInvoices: Invoice[] = [];
 
 export const mockCanteenSubscriptions: CanteenSubscription[] = [
   {

@@ -1,1 +1,14 @@
-{}
+{
+  "epc-manoi": {
+    "slug": "epc-manoi",
+    "students": [],
+    "invoices": [],
+    "deletedStudentIds": []
+  },
+  "college-excellence": {
+    "slug": "college-excellence",
+    "students": [],
+    "invoices": [],
+    "deletedStudentIds": []
+  }
+}

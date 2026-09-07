@@ -2,7 +2,15 @@
 
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools } from '@/lib/data/mock-data';
-import { saveSchoolToSupabase, saveStudentToSupabase, saveInvoiceToSupabase, saveStaffUserToSupabase, deleteStaffUserFromSupabase } from '@/lib/supabase/services';
+import {
+  saveSchoolToSupabase,
+  saveStudentToSupabase,
+  saveInvoiceToSupabase,
+  saveStaffUserToSupabase,
+  deleteStaffUserFromSupabase,
+  deleteStudentFromSupabase,
+  deleteInvoiceFromSupabase,
+} from '@/lib/supabase/services';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -94,110 +102,142 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
   if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return;
 
   try {
+    const cleanSlug = schoolSlug || 'epc-manoi';
+    const isPilot = cleanSlug === 'epc-manoi' || cleanSlug === 'college-excellence';
+
+    // 0. Récupérer tous les élèves existants pour extraire l'intégralité de leurs identifiants (id, studentNumber, matricule)
+    const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+    const rawSchool = localStorage.getItem(schoolKey);
+    const rawGlobal = localStorage.getItem(STUDENTS_STORAGE_KEY);
+    const existingList: Student[] = [
+      ...(rawSchool ? JSON.parse(rawSchool) : []),
+      ...(rawGlobal ? JSON.parse(rawGlobal) : []),
+    ];
+
+    const inputIdSet = new Set(idsToDelete);
+    const allDeletedIdentifiers = new Set<string>(idsToDelete);
+
+    for (const s of existingList) {
+      if (
+        inputIdSet.has(s.id) ||
+        (s.studentNumber && inputIdSet.has(s.studentNumber)) ||
+        (s.matricule && inputIdSet.has(s.matricule))
+      ) {
+        if (s.id) allDeletedIdentifiers.add(s.id);
+        if (s.studentNumber) allDeletedIdentifiers.add(s.studentNumber);
+        if (s.matricule) allDeletedIdentifiers.add(s.matricule);
+      }
+    }
+
+    const deleteArray = Array.from(allDeletedIdentifiers);
     const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
     const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-    const updatedDeleted = Array.from(new Set([...prevDeleted, ...idsToDelete]));
+    const updatedDeleted = Array.from(new Set([...prevDeleted, ...deleteArray]));
     localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(updatedDeleted));
 
     const deleteSet = new Set(updatedDeleted);
 
-    // Nettoyer stockage local des élèves
-    const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
-    if (rawStudents) {
-      const prevStudents: Student[] = JSON.parse(rawStudents);
-      const filtered = prevStudents.filter(
-        (s) => !deleteSet.has(s.id) && !deleteSet.has(s.studentNumber)
+    // 1. Filtrer et nettoyer le stockage local des élèves sur TOUTES les clés
+    const filterStudents = (arr: Student[]) =>
+      arr.filter(
+        (s) =>
+          !deleteSet.has(s.id) &&
+          (!s.studentNumber || !deleteSet.has(s.studentNumber)) &&
+          (!s.matricule || !deleteSet.has(s.matricule))
       );
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
+
+    const prevStudents: Student[] = rawGlobal ? JSON.parse(rawGlobal) : [];
+    const remainingGlobal = filterStudents(prevStudents);
+    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(remainingGlobal));
+
+    const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+    const remainingSchool = filterStudents(prevSchool);
+    localStorage.setItem(schoolKey, JSON.stringify(remainingSchool));
+
+    if (isPilot) {
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(remainingSchool));
+      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(remainingSchool));
     }
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      if (rawSchool) {
-        const prevSchool: Student[] = JSON.parse(rawSchool);
-        const filtered = prevSchool.filter(
-          (s) => !deleteSet.has(s.id) && !deleteSet.has(s.studentNumber)
-        );
-        localStorage.setItem(schoolKey, JSON.stringify(filtered));
-      }
-    }
-
-    // Nettoyer stockage local des factures / scolarités
-    const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-    if (rawInvoices) {
-      const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-      const filtered = prevInvoices.filter(
+    // 2. Filtrer et nettoyer le stockage local des factures / scolarités sur TOUTES les clés
+    const filterInvoices = (arr: Invoice[]) =>
+      arr.filter(
         (inv) =>
           !deleteSet.has(inv.id) &&
-          !deleteSet.has(inv.studentId) &&
-          !deleteSet.has(inv.invoiceNumber)
+          (!inv.studentId || !deleteSet.has(inv.studentId)) &&
+          (!inv.invoiceNumber || !deleteSet.has(inv.invoiceNumber))
       );
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filtered));
+
+    const invGlobalRaw = localStorage.getItem(INVOICES_STORAGE_KEY);
+    const prevInvoices: Invoice[] = invGlobalRaw ? JSON.parse(invGlobalRaw) : [];
+    const remainingInvoicesGlobal = filterInvoices(prevInvoices);
+    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(remainingInvoicesGlobal));
+
+    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+    const invSchoolRaw = localStorage.getItem(invSchoolKey);
+    const prevInvSchool: Invoice[] = invSchoolRaw ? JSON.parse(invSchoolRaw) : [];
+    const remainingInvSchool = filterInvoices(prevInvSchool);
+    localStorage.setItem(invSchoolKey, JSON.stringify(remainingInvSchool));
+
+    if (isPilot) {
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(remainingInvSchool));
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(remainingInvSchool));
     }
 
-    if (schoolSlug && schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-      const rawInvSchool = localStorage.getItem(invSchoolKey);
-      if (rawInvSchool) {
-        const prevInvSchool: Invoice[] = JSON.parse(rawInvSchool);
-        const filtered = prevInvSchool.filter(
-          (inv) =>
-            !deleteSet.has(inv.id) &&
-            !deleteSet.has(inv.studentId) &&
-            !deleteSet.has(inv.invoiceNumber)
-        );
-        localStorage.setItem(invSchoolKey, JSON.stringify(filtered));
-      }
+    // 3. Supprimer immédiatement dans Supabase Cloud pour tous les appareils
+    for (const id of deleteArray) {
+      deleteStudentFromSupabase(id, cleanSlug).catch(() => {});
+      deleteInvoiceFromSupabase(id, cleanSlug).catch(() => {});
     }
 
-    // Nettoyer Internat, Cantine et Transport des élèves supprimés
+    // 4. Notifier l'API serveur pour répercuter la suppression immédiatement vers tous les ordinateurs et téléphones
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: cleanSlug,
+          students: remainingSchool,
+          invoices: remainingInvSchool,
+          deletedStudentIds: deleteArray,
+        }),
+      }).catch(() => {});
+    }
+
+    // 5. Nettoyer Internat, Cantine et Transport des élèves supprimés
     try {
-      const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+      const BOARDING_KEY = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${cleanSlug}`;
+      const rawBoarding = localStorage.getItem(BOARDING_KEY);
       if (rawBoarding) {
         const list: any[] = JSON.parse(rawBoarding);
-        const filtered = list.filter((b) => !deleteSet.has(b.studentId) && !deleteSet.has(b.matricule));
-        localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(filtered));
+        const filtered = list.filter((b) => !deleteSet.has(b.studentId) && (!b.matricule || !deleteSet.has(b.matricule)));
+        localStorage.setItem(BOARDING_KEY, JSON.stringify(filtered));
       }
-      const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
-      if (rawBoardingPay) {
-        const map: Record<string, any> = JSON.parse(rawBoardingPay);
-        idsToDelete.forEach((id) => delete map[id]);
-        localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(map));
-      }
-      const rawCanteen = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
+
+      const CANTEEN_KEY = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${cleanSlug}`;
+      const rawCanteen = localStorage.getItem(CANTEEN_KEY);
       if (rawCanteen) {
         const map: Record<string, any> = JSON.parse(rawCanteen);
-        idsToDelete.forEach((id) => delete map[id]);
-        localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(map));
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(CANTEEN_KEY, JSON.stringify(map));
       }
-      const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
-      if (rawCanteenPay) {
-        const map: Record<string, any> = JSON.parse(rawCanteenPay);
-        idsToDelete.forEach((id) => delete map[id]);
-        localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(map));
-      }
-      const rawTransport = localStorage.getItem('schoolflow_transport_subscriptions_v2');
+
+      const TRANSPORT_KEY = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${cleanSlug}`;
+      const rawTransport = localStorage.getItem(TRANSPORT_KEY);
       if (rawTransport) {
         const map: Record<string, any> = JSON.parse(rawTransport);
-        idsToDelete.forEach((id) => delete map[id]);
-        localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(map));
-      }
-      const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
-      if (rawTransportPay) {
-        const map: Record<string, any> = JSON.parse(rawTransportPay);
-        idsToDelete.forEach((id) => delete map[id]);
-        localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(map));
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(TRANSPORT_KEY, JSON.stringify(map));
       }
     } catch (e) {
       console.warn('Erreur nettoyage souscriptions prestations:', e);
     }
 
-    // Déclencher la diffusion temps réel parallèle
+    // 6. Déclencher la diffusion temps réel parallèle
     broadcastLiveUpdate({
       action: 'students_deleted',
-      deletedIds: idsToDelete,
-      schoolSlug,
+      deletedIds: deleteArray,
+      schoolSlug: cleanSlug,
     });
   } catch (error) {
     console.error('Erreur suppression live-store students:', error);
@@ -205,6 +245,41 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
 }
 
 let isSyncingServer = false;
+let crossDeviceSyncStarted = false;
+let activeSyncInterval: any = null;
+
+/**
+ * Démarre la synchronisation temps réel multi-appareils (PC, téléphone, tablettes des collaborateurs)
+ */
+export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+
+  // Lancer immédiatement la synchronisation
+  syncSchoolDataWithServer(slug);
+
+  if (crossDeviceSyncStarted) return;
+  crossDeviceSyncStarted = true;
+
+  // 1. Synchronisation instantanée dès que l'écran devient actif (déverrouillage téléphone, switch d'application, focus onglet)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncSchoolDataWithServer(slug);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    syncSchoolDataWithServer(slug);
+  });
+
+  // 2. Rafraîchissement automatique silencieux toutes les 2.5 secondes pour répercuter instantanément les suppressions et ajouts entre appareils
+  if (activeSyncInterval) clearInterval(activeSyncInterval);
+  activeSyncInterval = setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      syncSchoolDataWithServer(slug);
+    }
+  }, 2500);
+}
+
 /**
  * Synchronise les données réelles enregistrées depuis l'API serveur pour assurer la persistance
  * lorsque le lien du site est partagé avec d'autres utilisateurs ou ouvert sur d'autres appareils.
@@ -213,45 +288,105 @@ export function syncSchoolDataWithServer(slug: string): void {
   if (typeof window === 'undefined' || typeof fetch === 'undefined' || isSyncingServer) return;
   isSyncingServer = true;
 
-  fetch(`/api/sync?slug=${encodeURIComponent(slug)}`)
+  fetch(`/api/sync?slug=${encodeURIComponent(slug)}&t=${Date.now()}`)
     .then((res) => res.json())
     .then((result) => {
       isSyncingServer = false;
       if (result && result.success && result.data) {
         const data = result.data;
         let hasChanges = false;
+        const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
 
-        if (data.schoolSettings) {
-          const localSettingsKey = `${SCHOOL_SETTINGS_PREFIX}${slug}`;
-          const current = localStorage.getItem(localSettingsKey);
-          if (!current) {
-            localStorage.setItem(localSettingsKey, JSON.stringify(data.schoolSettings));
+        // 1. Fusionner les identifiants supprimés depuis le serveur
+        if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds) && data.deletedStudentIds.length > 0) {
+          const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
+          const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
+          const merged = Array.from(new Set([...prevDeleted, ...data.deletedStudentIds]));
+          if (merged.length !== prevDeleted.length) {
+            localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(merged));
             hasChanges = true;
           }
         }
 
-        if (data.students && Array.isArray(data.students)) {
+        const delSet = getDeletedStudentIds();
+
+        // 2. Synchroniser les paramètres de l'école
+        if (data.schoolSettings) {
+          const localSettingsKey = `${SCHOOL_SETTINGS_PREFIX}${slug}`;
+          const current = localStorage.getItem(localSettingsKey);
+          const newStr = JSON.stringify(data.schoolSettings);
+          if (!current || current !== newStr) {
+            localStorage.setItem(localSettingsKey, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, newStr);
+              localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, newStr);
+              localStorage.setItem('schoolflow_active_school_settings_v1', newStr);
+            }
+            hasChanges = true;
+          }
+        }
+
+        // 3. Synchroniser les élèves
+        if (data.students !== undefined && Array.isArray(data.students)) {
+          const filteredStudents = data.students.filter(
+            (s: any) =>
+              !delSet.has(s.id) &&
+              (!s.studentNumber || !delSet.has(s.studentNumber)) &&
+              (!s.matricule || !delSet.has(s.matricule))
+          );
           const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
-          localStorage.setItem(schoolKey, JSON.stringify(data.students));
-          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(data.students));
-          hasChanges = true;
+          const currentLocal = localStorage.getItem(schoolKey);
+          const newStr = JSON.stringify(filteredStudents);
+          if (currentLocal !== newStr) {
+            localStorage.setItem(schoolKey, newStr);
+            localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
+              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
+            }
+            hasChanges = true;
+          }
         }
 
-        if (data.invoices && Array.isArray(data.invoices)) {
+        // 4. Synchroniser les factures / encaissements
+        if (data.invoices !== undefined && Array.isArray(data.invoices)) {
+          const filteredInvoices = data.invoices.filter(
+            (inv: any) =>
+              !delSet.has(inv.id) &&
+              (!inv.studentId || !delSet.has(inv.studentId)) &&
+              (!inv.invoiceNumber || !delSet.has(inv.invoiceNumber))
+          );
           const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
-          localStorage.setItem(invSchoolKey, JSON.stringify(data.invoices));
-          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(data.invoices));
-          hasChanges = true;
+          const currentLocal = localStorage.getItem(invSchoolKey);
+          const newStr = JSON.stringify(filteredInvoices);
+          if (currentLocal !== newStr) {
+            localStorage.setItem(invSchoolKey, newStr);
+            localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
+            }
+            hasChanges = true;
+          }
         }
 
+        // 5. Synchroniser le personnel
         if (data.staffUsers && Array.isArray(data.staffUsers)) {
           const filteredStaff = data.staffUsers.filter(
             (u: any) => !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode)
           );
           const staffSchoolKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
-          localStorage.setItem(staffSchoolKey, JSON.stringify(filteredStaff));
-          localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(filteredStaff));
-          hasChanges = true;
+          const currentLocal = localStorage.getItem(staffSchoolKey);
+          const newStr = JSON.stringify(filteredStaff);
+          if (currentLocal !== newStr) {
+            localStorage.setItem(staffSchoolKey, newStr);
+            localStorage.setItem(STAFF_USERS_STORAGE_KEY, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_epc-manoi`, newStr);
+              localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_college-excellence`, newStr);
+            }
+            hasChanges = true;
+          }
         }
 
         if (hasChanges) {
@@ -296,9 +431,9 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
     };
   }
 
-  // Lancer la réconciliation serveur en tâche de fond pour les nouveaux appareils
+  // Lancer la réconciliation serveur et la boucle temps réel multi-appareils
   try {
-    syncSchoolDataWithServer(slug);
+    startCrossDeviceSync(slug);
   } catch (e) {}
 
   try {
@@ -483,6 +618,9 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     const slug = schoolSlug || 'epc-manoi';
     const deletedIds = getDeletedStudentIds();
 
+    // Déclencher la synchronisation multi-terminaux (PC <-> Smartphone)
+    startCrossDeviceSync(slug);
+
     // 1. Charger depuis la clé spécifique à l'école
     const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
     const rawSchool = localStorage.getItem(schoolKey);
@@ -513,7 +651,12 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // Priorité absolue aux élèves enregistrés
     for (const stu of allCandidates) {
       if (!isValidStudent(stu)) continue;
-      if (deletedIds.has(stu.id) || (stu.studentNumber && deletedIds.has(stu.studentNumber))) continue;
+      if (
+        deletedIds.has(stu.id) ||
+        (stu.studentNumber && deletedIds.has(stu.studentNumber)) ||
+        (stu.matricule && deletedIds.has(stu.matricule))
+      )
+        continue;
       
       const idKey = stu.id || stu.studentNumber;
       const numKey = stu.studentNumber || stu.id;
@@ -536,7 +679,12 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 
       for (const inv of candidateInvoices) {
         if (!inv || !inv.invoiceNumber) continue;
-        if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
+        if (
+          deletedIds.has(inv.id) ||
+          deletedIds.has(inv.studentId) ||
+          deletedIds.has(inv.invoiceNumber)
+        )
+          continue;
 
         const idKey = inv.studentId || inv.id || inv.invoiceNumber;
         const numKey = inv.invoiceNumber || inv.studentId || inv.id;
@@ -588,13 +736,19 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       }
     } catch (e) {}
 
-    // Si aucun élève n'a encore été créé en local et que ce n'est pas un reset, utiliser les élèves initiaux
-    if (uniqueStudents.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+    // Si le stockage n'a JAMAIS été initialisé (aucun enregistrement, premier lancement à froid)
+    const hasExplicitRecord = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(STUDENTS_STORAGE_KEY) !== null);
+    if (!hasExplicitRecord && uniqueStudents.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
       const status = getSchoolSubscription('epc-manoi');
       if (!status.isDataReset) {
         for (const stu of initialStudents) {
           if (!isValidStudent(stu)) continue;
-          if (deletedIds.has(stu.id) || (stu.studentNumber && deletedIds.has(stu.studentNumber))) continue;
+          if (
+            deletedIds.has(stu.id) ||
+            (stu.studentNumber && deletedIds.has(stu.studentNumber)) ||
+            (stu.matricule && deletedIds.has(stu.matricule))
+          )
+            continue;
           if (!seenIds.has(stu.id) && !seenNumbers.has(stu.studentNumber)) {
             seenIds.add(stu.id);
             seenNumbers.add(stu.studentNumber);
@@ -628,6 +782,9 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
   try {
     const slug = schoolSlug || 'epc-manoi';
     const deletedIds = getDeletedStudentIds();
+
+    // Déclencher la synchronisation multi-terminaux (PC <-> Smartphone)
+    startCrossDeviceSync(slug);
 
     // 1. Charger depuis la clé spécifique à l'école
     const schoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
@@ -807,8 +964,9 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       }
     } catch (e) {}
 
-    // Fallback aux factures initiales uniquement si aucune facture locale n'existe pour la démo
-    if (uniqueInvoices.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+    // Fallback aux factures initiales uniquement si le stockage n'a JAMAIS été initialisé
+    const hasInitializedInvoices = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(INVOICES_STORAGE_KEY) !== null);
+    if (!hasInitializedInvoices && uniqueInvoices.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
       const status = getSchoolSubscription('epc-manoi');
       if (!status.isDataReset) {
         for (const inv of initialInvoices) {
@@ -1116,9 +1274,20 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       console.warn('Erreur update sync prestations annexes:', err);
     }
 
-    // 4. Synchronisation en arrière-plan avec Supabase Cloud
+    // 4. Synchronisation en arrière-plan avec Supabase Cloud et API Serveur
     saveStudentToSupabase(student, schoolSlug).catch(() => {});
     saveInvoiceToSupabase(updatedInvoice, schoolSlug).catch(() => {});
+    if (typeof fetch !== 'undefined') {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: schoolSlug || 'epc-manoi',
+          students: updatedSchool,
+          invoices: nextInvSchool,
+        }),
+      }).catch(() => {});
+    }
 
     // 5. Propagation globale de l'événement
     broadcastLiveUpdate({

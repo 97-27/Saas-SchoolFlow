@@ -227,6 +227,88 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
   }
 }
 
+const isUUID = (str: string): boolean => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+};
+
+export async function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !identifier) return false;
+  try {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) return false;
+
+    if (isUUID(identifier)) {
+      // Supprimer d'abord les factures liées pour respecter les contraintes d'intégrité
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('id', identifier);
+      const { error } = await supabase.from('students').delete().eq('school_id', school.id).eq('id', identifier);
+      if (!error) return true;
+    } else {
+      // Trouver l'ID UUID de l'élève par son matricule ou numéro d'élève
+      const { data: found } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', school.id)
+        .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
+        .maybeSingle();
+
+      if (found?.id) {
+        await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', found.id);
+        const { error } = await supabase.from('students').delete().eq('school_id', school.id).eq('id', found.id);
+        if (!error) return true;
+      }
+
+      // Nettoyage de sécurité direct
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('invoice_number', identifier);
+      await supabase.from('students').delete().eq('school_id', school.id).eq('student_number', identifier);
+      await supabase.from('students').delete().eq('school_id', school.id).eq('matricule', identifier);
+    }
+    return true;
+  } catch (err) {
+    console.warn('deleteStudentFromSupabase catch:', err);
+    return false;
+  }
+}
+
+export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !identifier) return false;
+  try {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', schoolSlug)
+      .single();
+
+    if (!school) return false;
+
+    if (isUUID(identifier)) {
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', identifier);
+    } else {
+      await supabase.from('invoices').delete().eq('school_id', school.id).eq('invoice_number', identifier);
+      const { data: found } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', school.id)
+        .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
+        .maybeSingle();
+      if (found?.id) {
+        await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', found.id);
+      }
+    }
+    return true;
+  } catch (err) {
+    console.warn('deleteInvoiceFromSupabase catch:', err);
+    return false;
+  }
+}
+
+
 // 3. GESTION DES FACTURES (INVOICES)
 export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoice[]> {
   if (!isSupabaseConfigured) return [];
