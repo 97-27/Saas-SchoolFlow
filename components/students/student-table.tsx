@@ -176,13 +176,13 @@ export function StudentTable({
     };
 
     setStudents((prev) =>
-      prev.map((s) => (s.id === updated.id ? updated : s))
+      prev.map((s) => (s.id === updated.id || s.studentNumber === updated.studentNumber ? updated : s))
     );
 
     // Save to local storage and sync invoice across dashboard and caisse
     updateRegisteredStudent(updated, schoolSlug);
 
-    setSuccessMessage(`Coordonnées et date d'inscription de l'élève ${updated.fullName} mises à jour avec succès !`);
+    setSuccessMessage(`Coordonnées et date d'inscription (${formatDate(formattedDate)}) de l'élève ${updated.fullName} enregistrées avec succès !`);
     setTimeout(() => setSuccessMessage(null), 5000);
     setEditingStudent(null);
   };

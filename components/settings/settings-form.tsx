@@ -14,6 +14,7 @@ import {
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { formatDate } from '@/lib/utils/formatters';
 import {
   Building2,
   MapPin,

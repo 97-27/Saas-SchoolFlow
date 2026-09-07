@@ -241,80 +241,10 @@ export const mockStudents: Student[] = [];
 
 export const mockInvoices: Invoice[] = [];
 
-export const mockCanteenSubscriptions: CanteenSubscription[] = [
-  {
-    id: 'cant-001',
-    studentId: 'stu-001',
-    studentName: 'KONATE Lassina Mouhamed',
-    grade: '6ème',
-    dietaryRestrictions: 'Standard (Sans allergie)',
-    plan: 'Demi-pension Complète',
-    monthlyFee: 25000,
-    status: 'active',
-  },
-  {
-    id: 'cant-002',
-    studentId: 'stu-002',
-    studentName: 'DIOMANDÉ Cheick Oumar',
-    grade: '3ème',
-    dietaryRestrictions: 'Standard (Sans allergie)',
-    plan: 'Déjeuner Uniquement',
-    monthlyFee: 20000,
-    status: 'active',
-  },
-  {
-    id: 'cant-003',
-    studentId: 'stu-003',
-    studentName: 'TRAORÉ Aminata',
-    grade: 'CM2',
-    dietaryRestrictions: 'Standard (Sans allergie)',
-    plan: 'Demi-pension Complète',
-    monthlyFee: 25000,
-    status: 'active',
-  },
-];
+export const mockCanteenSubscriptions: CanteenSubscription[] = [];
 
-export const mockTransportSubscriptions: TransportSubscription[] = [
-  {
-    id: 'trans-001',
-    studentId: 'stu-001',
-    studentName: 'KONATE Lassina Mouhamed',
-    grade: '6ème',
-    route: 'Ligne 1 — Circuit Abobo Biabou / Gare',
-    stopLocation: 'Arrêt Pharmacie Biabou',
-    monthlyFee: 20000,
-    status: 'active',
-  },
-  {
-    id: 'trans-002',
-    studentId: 'stu-002',
-    studentName: 'DIOMANDÉ Cheick Oumar',
-    grade: '3ème',
-    route: 'Ligne 2 — Circuit Cocody / 2 Plateaux',
-    stopLocation: 'Arrêt Carrefour Duncan',
-    monthlyFee: 25000,
-    status: 'active',
-  },
-];
+export const mockTransportSubscriptions: TransportSubscription[] = [];
 
-export const mockBoardingStudents: BoardingStudent[] = [
-  {
-    id: 'brd-001',
-    studentId: 'stu-001',
-    studentName: 'KONATE Lassina Mouhamed',
-    grade: '6ème',
-    gender: 'male',
-    dormitory: 'Pavillon Masculin A (Al-Amal)',
-    roomNumber: 'Chambre 104',
-    bedNumber: 'Lit 02',
-    guardianName: 'M. Konate Ibrahim',
-    guardianPhone: '+225 07 48 92 11 00',
-    emergencyContact: '+225 07 48 92 11 00',
-    medicalNotes: 'Régime standard, aucune allergie connue',
-    status: 'present',
-    monthlyFee: 50000,
-    paymentStatus: 'paid',
-  },
-];
+export const mockBoardingStudents: BoardingStudent[] = [];
 
 export const mockSpecialDiscounts: SpecialDiscount[] = [];

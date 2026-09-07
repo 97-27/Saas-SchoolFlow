@@ -46,39 +46,46 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug') || 'college-excellence';
+    const forceSupabase = searchParams.get('forceSupabase') === 'true';
 
     ensureDataFile();
-    let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : {};
+    let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
 
-    // 1. Tenter d'hydrater directement depuis Supabase Cloud
-    try {
-      const [sbSchool, sbStudents, sbInvoices, sbStaff] = await Promise.all([
-        getSchoolFromSupabase(slug),
-        getStudentsFromSupabase(slug),
-        getInvoicesFromSupabase(slug),
-        getStaffUsersFromSupabase(slug),
-      ]);
+    // Si la mémoire est vide (démarrage à froid) ou si un rechargement forcé depuis Supabase est demandé
+    if (!schoolData || !schoolData.students || forceSupabase) {
+      try {
+        const [sbSchool, sbStudents, sbInvoices, sbStaff] = await Promise.all([
+          getSchoolFromSupabase(slug),
+          getStudentsFromSupabase(slug),
+          getInvoicesFromSupabase(slug),
+          getStaffUsersFromSupabase(slug),
+        ]);
 
-      if (sbSchool) {
-        schoolData.schoolSettings = {
-          ...sbSchool,
-          logoUrl: sbSchool.logoUrl || schoolData.schoolSettings?.logoUrl || '',
-          countryEmblemUrl: sbSchool.countryEmblemUrl || schoolData.schoolSettings?.countryEmblemUrl || '',
-          stampUrl: sbSchool.stampUrl || schoolData.schoolSettings?.stampUrl || '',
-        };
+        if (!schoolData) schoolData = {};
+        if (sbSchool) {
+          schoolData.schoolSettings = {
+            ...sbSchool,
+            logoUrl: sbSchool.logoUrl || schoolData.schoolSettings?.logoUrl || '',
+            countryEmblemUrl: sbSchool.countryEmblemUrl || schoolData.schoolSettings?.countryEmblemUrl || '',
+            stampUrl: sbSchool.stampUrl || schoolData.schoolSettings?.stampUrl || '',
+          };
+        }
+        if (sbStudents !== null && Array.isArray(sbStudents)) {
+          schoolData.students = sbStudents;
+        }
+        if (sbInvoices !== null && Array.isArray(sbInvoices)) {
+          schoolData.invoices = sbInvoices;
+        }
+        if (sbStaff !== null && Array.isArray(sbStaff)) {
+          schoolData.staffUsers = sbStaff;
+        }
+        memoryStore[slug] = schoolData;
+      } catch (sbErr) {
+        console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
       }
-      if (sbStudents !== null && Array.isArray(sbStudents)) {
-        schoolData.students = sbStudents;
-      }
-      if (sbInvoices !== null && Array.isArray(sbInvoices)) {
-        schoolData.invoices = sbInvoices;
-      }
-      if (sbStaff !== null && Array.isArray(sbStaff)) {
-        schoolData.staffUsers = sbStaff;
-      }
-    } catch (sbErr) {
-      console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
     }
+
+    if (!schoolData) schoolData = {};
 
     // Filtrer les élèves et factures contre les identifiants supprimés
     const deletedIds: string[] = schoolData.deletedStudentIds || [];

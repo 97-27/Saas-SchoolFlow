@@ -21,12 +21,14 @@ export interface Invoice {
   invoiceNumber: string;
   studentId: string;
   studentName: string;
-  studentAvatar: string;
+  studentAvatar?: string;
   studentGrade: string;
   studentGender: 'male' | 'female';
   guardianName: string;
   guardianPhone: string;
   secondaryPhones?: string[];
+  schoolSlug?: string;
+  schoolId?: string;
   feeType: string;
   registrationFee?: number; // Droits d'inscription distincts en FCFA
   amount: number; // in FCFA (Frais d'inscription / initial)

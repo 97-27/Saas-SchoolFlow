@@ -39,13 +39,13 @@ export function CaisseView({
   schoolSlug,
 }: CaisseViewProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, schoolSlug));
-  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(schoolSlug));
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents([], schoolSlug));
   const [currentSchool, setCurrentSchool] = useState<School>(() => getLiveSchool(schoolSlug, school));
 
   useEffect(() => {
     const handleUpdate = () => {
       setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
-      setStudents(getLiveStudents(schoolSlug));
+      setStudents(getLiveStudents([], schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     handleUpdate();

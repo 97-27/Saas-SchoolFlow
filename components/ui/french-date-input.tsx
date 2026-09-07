@@ -43,27 +43,33 @@ export function FrenchDateInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Parse existing value into year, month, day
+  // Parse existing value into year, month, day de manière robuste (ISO, FR slash, FR tiret, horodatage)
   const parsed = useMemo(() => {
     const now = new Date();
     let y = now.getFullYear();
     let m = now.getMonth() + 1;
     let d = now.getDate();
 
-    if (value) {
-      if (value.includes('-')) {
-        const parts = value.split('-');
-        if (parts.length === 3) {
-          y = parseInt(parts[0], 10) || y;
-          m = parseInt(parts[1], 10) || m;
-          d = parseInt(parts[2], 10) || d;
+    if (value && typeof value === 'string') {
+      const clean = value.trim().split('T')[0];
+      // Format AAAA-MM-JJ ou AAAA/MM/JJ
+      const isoMatch = clean.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+      if (isoMatch) {
+        const parsedY = parseInt(isoMatch[1], 10);
+        const parsedM = parseInt(isoMatch[2], 10);
+        const parsedD = parseInt(isoMatch[3], 10);
+        if (parsedY >= 1970 && parsedM >= 1 && parsedM <= 12 && parsedD >= 1 && parsedD <= 31) {
+          return { year: parsedY, month: parsedM, day: parsedD };
         }
-      } else if (value.includes('/')) {
-        const parts = value.split('/');
-        if (parts.length === 3) {
-          d = parseInt(parts[0], 10) || d;
-          m = parseInt(parts[1], 10) || m;
-          y = parseInt(parts[2], 10) || y;
+      }
+      // Format JJ/MM/AAAA ou JJ-MM-AAAA
+      const frMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+      if (frMatch) {
+        const parsedD = parseInt(frMatch[1], 10);
+        const parsedM = parseInt(frMatch[2], 10);
+        const parsedY = parseInt(frMatch[3], 10);
+        if (parsedY >= 1970 && parsedM >= 1 && parsedM <= 12 && parsedD >= 1 && parsedD <= 31) {
+          return { year: parsedY, month: parsedM, day: parsedD };
         }
       }
     }
@@ -321,11 +327,10 @@ export function FrenchDateInput({
       {/* POPUP DU CALENDRIER SÉCURISÉ CONTRE LE ROGNAGE */}
       {isOpen && (
         <div
-          className={`absolute ${popupAlignmentClass} mt-1.5 z-50 w-72 max-w-[calc(100vw-24px)] p-3 bg-white rounded-2xl border border-slate-200 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800`}
-          style={{ minWidth: '260px' }}
+          className={`absolute ${popupAlignmentClass} mt-1.5 z-50 w-[268px] max-w-[calc(100vw-24px)] p-2.5 bg-white rounded-2xl border border-slate-200 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800`}
         >
           {/* Header Calendrier: < Mois Année > */}
-          <div className="flex items-center justify-between px-1 mb-2.5">
+          <div className="flex items-center justify-between px-1 mb-2">
             <button
               type="button"
               onClick={handlePrevMonth}
@@ -350,7 +355,7 @@ export function FrenchDateInput({
           </div>
 
           {/* En-tête des Jours: Lu Ma Me Je Ve Sa Di */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
             {WEEKDAYS_FR.map((wd) => (
               <span key={wd} className="text-[10px] font-bold text-slate-400 py-0.5">
                 {wd}
@@ -359,13 +364,13 @@ export function FrenchDateInput({
           </div>
 
           {/* Grille des Jours */}
-          <div className="grid grid-cols-7 gap-1 text-center">
+          <div className="grid grid-cols-7 gap-0.5 text-center">
             {calendarGrid.map((c, idx) => (
-              <div key={idx} className="flex flex-col items-center justify-center p-0.5">
+              <div key={idx} className="flex flex-col items-center justify-center p-0">
                 <button
                   type="button"
                   onClick={() => handleSelectDay(c.day, c.month, c.year)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] transition-all relative cursor-pointer ${
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] transition-all relative cursor-pointer ${
                     c.isSelected
                       ? 'bg-slate-900 text-white font-bold shadow-xs scale-105'
                       : c.isCurrentMonth
@@ -387,13 +392,28 @@ export function FrenchDateInput({
           </div>
 
           {/* Raccourcis bas de calendrier */}
-          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
             <button
               type="button"
               onClick={handleSetToday}
               className="px-2 py-0.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold transition-colors cursor-pointer"
             >
               Aujourd&apos;hui
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange('2026-09-07');
+                setViewYear(2026);
+                setViewMonth(8);
+                setIsOpen(false);
+              }}
+              className="px-2 py-0.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 font-bold transition-colors cursor-pointer"
+              title="Rentrée scolaire officielle"
+            >
+              07/09/2026
             </button>
 
             <button

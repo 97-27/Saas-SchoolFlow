@@ -435,10 +435,32 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 
     if (!school) return false;
 
-    const payload = {
+    // Résoudre l'UUID réel de l'élève pour respecter la clé étrangère Supabase
+    let validStudentUUID: string | null = null;
+    if (invoice.studentId && isUUID(invoice.studentId)) {
+      validStudentUUID = invoice.studentId;
+    } else {
+      const studentNum = invoice.invoiceNumber?.replace('REC-2026-', 'ID-') || invoice.studentId;
+      const { data: st } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', school.id)
+        .or(`student_number.eq.${studentNum},student_number.eq.${invoice.invoiceNumber}`)
+        .maybeSingle();
+      if (st?.id) {
+        validStudentUUID = st.id;
+      }
+    }
+
+    if (!validStudentUUID) {
+      console.warn('saveInvoiceToSupabase: impossible de lier la facture à un élève existant pour', invoice.invoiceNumber);
+      return false;
+    }
+
+    const payload: Record<string, any> = {
       school_id: school.id,
       invoice_number: invoice.invoiceNumber,
-      student_id: invoice.studentId || null,
+      student_id: validStudentUUID,
       fee_type: invoice.feeType || "Frais d'inscription & Scolarité",
       amount: invoice.amount || 0,
       paid_amount: invoice.paidAmount || 0,
@@ -449,7 +471,6 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       issue_date: invoice.issueDate || new Date().toISOString().split('T')[0],
       due_date: invoice.dueDate || new Date().toISOString().split('T')[0],
       status: invoice.status || 'draft',
-      updated_at: new Date().toISOString(),
     };
 
     const { data: existing } = await supabase

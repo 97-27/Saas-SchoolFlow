@@ -67,15 +67,73 @@ export function InscriptionsView({
   const [idSearchQuery, setIdSearchQuery] = useState('');
   const [idTypeFilter, setIdTypeFilter] = useState<'all' | 'nouveau' | 'ancien'>('all');
 
-  // Synchronisation dynamique avec le live-store (Élèves & Paramètres École)
+  const [collaboratorAlert, setCollaboratorAlert] = useState<{
+    message: string;
+    studentNumber: string;
+    fullName: string;
+    newSeq: number;
+  } | null>(null);
+
+  const prevMaxSeqRef = useRef<number>(0);
+
+  // Synchronisation dynamique avec le live-store (Élèves & Paramètres École) + Détection Collaborateur en temps réel
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents, schoolSlug));
+    const initialLive = getLiveStudents(initialStudents, schoolSlug);
+    setStudents(initialLive);
     setSchoolState(getLiveSchool(schoolSlug, school));
 
+    const initialNums = initialLive
+      .map((s) => {
+        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      })
+      .filter((n) => !isNaN(n) && n > 0);
+    prevMaxSeqRef.current = initialNums.length > 0 ? Math.max(...initialNums) : 0;
+
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents, schoolSlug));
+      const live = getLiveStudents(initialStudents, schoolSlug);
+      setStudents(live);
       setSchoolState(getLiveSchool(schoolSlug, school));
+
+      const nums = live
+        .map((s) => {
+          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        })
+        .filter((n) => !isNaN(n) && n > 0);
+      const currentMax = nums.length > 0 ? Math.max(...nums) : 0;
+
+      // Détecter si un collaborateur vient de valider un reçu
+      if (prevMaxSeqRef.current > 0 && currentMax > prevMaxSeqRef.current) {
+        const latestStu = live.find((s) => {
+          const num = parseInt((s?.studentNumber || s?.id || '')?.replace(/\D/g, ''), 10);
+          return num === currentMax;
+        });
+        const stuName = latestStu?.fullName || latestStu?.lastName || 'Nouvel élève';
+        const stuNum = latestStu?.studentNumber || `ID-${String(currentMax).padStart(3, '0')}`;
+        const nextNumber = currentMax + 1;
+
+        setCollaboratorAlert({
+          message: `Un collaborateur vient de valider le reçu ${stuNum} (${stuName}) ! Votre formulaire a été automatiquement ajusté au prochain reçu n° REC-2026-${String(nextNumber).padStart(3, '0')} (ID-${String(nextNumber).padStart(3, '0')}) pour éviter toute collision.`,
+          studentNumber: stuNum,
+          fullName: stuName,
+          newSeq: nextNumber,
+        });
+
+        // Si l'utilisateur avait sélectionné l'ID qui vient d'être pris par le collaborateur, basculer immédiatement
+        setSelectedStudentId((prev) => {
+          if (prev === stuNum || prev === latestStu?.id) {
+            return null; // Bascule automatiquement sur le nouveau reçu
+          }
+          return prev;
+        });
+
+        setTimeout(() => setCollaboratorAlert(null), 10000);
+      }
+
+      prevMaxSeqRef.current = currentMax;
     };
+
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
@@ -1018,38 +1076,45 @@ export function InscriptionsView({
       ctx.fillText("CÔTE D'IVOIRE", 1070, 150);
     }
 
-    // Textes École au centre : Nom complet et Sigle SUR LA MÊME LIGNE, Devise, Slogan, Contacts, Code
+    // Textes École au centre : Nom complet en Ligne 1, Sigle en Ligne 2, Devise, Slogan, Contacts, Code
     ctx.textAlign = 'center';
 
-    // Ligne 1 : Nom complet de l'école + Sigle entre parenthèses
+    // Ligne 1 : Nom complet de l'école seul
     ctx.fillStyle = '#0f172a';
-    const schoolDisplayName = `${(schoolState.name || 'EPC MARKAZ AHLI SOUNNAH').toUpperCase()}${schoolState.shortName ? ` (${schoolState.shortName.toUpperCase()})` : ''}`;
-    ctx.font = schoolDisplayName.length > 45 ? 'bold 19px Outfit, sans-serif' : 'bold 22px Outfit, sans-serif';
-    ctx.fillText(schoolDisplayName, 600, 85);
+    const fullName = (schoolState.name || 'EPC MARKAZ AHLI SOUNNAH').toUpperCase();
+    ctx.font = fullName.length > 45 ? 'bold 18px Outfit, sans-serif' : 'bold 21px Outfit, sans-serif';
+    ctx.fillText(fullName, 600, 78);
 
-    // Ligne 2 : Devise
-    ctx.fillStyle = '#065f46';
-    ctx.font = 'italic bold 15px Outfit, sans-serif';
-    ctx.fillText(schoolState.receiptHeaderMotto || schoolState.motto || '« Excellence Académique • Rigueur • Éducation de Référence »', 600, 115);
-
-    // Ligne 3 : Slogan
-    if (schoolState.receiptHeaderSlogan || schoolState.slogan) {
-      ctx.fillStyle = '#b45309';
-      ctx.font = 'italic bold 14px Outfit, sans-serif';
-      ctx.fillText(schoolState.receiptHeaderSlogan || schoolState.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux', 600, 142);
+    // Ligne 2 : Sigle de l'établissement sous le nom complet
+    if (schoolState.shortName) {
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillText(schoolState.shortName.toUpperCase(), 600, 102);
     }
 
-    // Ligne 4 : Contacts & Situation
-    ctx.fillStyle = '#334155';
-    ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 168);
+    // Ligne 3 : Devise
+    ctx.fillStyle = '#065f46';
+    ctx.font = 'italic bold 14px Outfit, sans-serif';
+    ctx.fillText(schoolState.receiptHeaderMotto || schoolState.motto || '« Excellence Académique • Rigueur • Éducation de Référence »', 600, 126);
 
-    // Ligne 5 : Badge Code Établissement arrondi au centre
-    drawRoundRect(380, 185, 440, 32, 8);
+    // Ligne 4 : Slogan
+    if (schoolState.receiptHeaderSlogan || schoolState.slogan) {
+      ctx.fillStyle = '#b45309';
+      ctx.font = 'italic bold 13px Outfit, sans-serif';
+      ctx.fillText(schoolState.receiptHeaderSlogan || schoolState.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux', 600, 148);
+    }
+
+    // Ligne 5 : Contacts & Situation
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 170);
+
+    // Ligne 6 : Badge Code Établissement arrondi au centre
+    drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = 'bold 13px monospace';
     ctx.fillText(`Code Établissement : ${schoolState.menaCode || schoolState.ministryCode || 'MENA-04829-CI'}`, 600, 206);
 
     // --- BANDEAU TITRE DU REÇU ARRONDI (radius 12) ---
@@ -1112,21 +1177,14 @@ export function InscriptionsView({
     ctx.font = 'bold 18px monospace';
     ctx.fillText(phone || 'Non renseigné', 840, 505);
 
-    // Ligne 4 : Droits d'inscription & Prestations
-    const isRegistrationPaid = (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0);
-    ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText("Droits d'inscr. :", 70, 550);
-    ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillStyle = isRegistrationPaid ? '#047857' : '#be123c';
-    ctx.fillText(`${isRegistrationPaid ? '☑ Payés' : '☐ Non payés'}${registrationFee > 0 ? ` (${formatFCFA(registrationFee)})` : ''}`, 200, 550);
-
+    // Ligne 4 : Prestations & Services Souscrits
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText('Prestations :', 500, 550);
-    ctx.font = 'bold 13.5px Inter, sans-serif';
+    ctx.fillText('Prestations :', 70, 550);
+    ctx.font = 'bold 14px Inter, sans-serif';
     ctx.fillText(
-      `Internat : ${isBoarding ? 'Oui' : 'Non'}  •  Cantine : ${isCanteen ? 'Oui ✓' : 'Non ✕'}  •  Transport : ${isTransport ? 'Oui ✓' : 'Non ✕'}  •  Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
-      610,
+      `Internat : ${isBoarding ? 'Oui (Interne)' : 'Non (Externe)'}   •   Cantine : ${isCanteen ? 'Souscrit ✓' : 'Non ✕'}   •   Transport : ${isTransport ? 'Souscrit ✓' : 'Non ✕'}   •   Frais Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
+      175,
       550
     );
 
@@ -1403,15 +1461,20 @@ export function InscriptionsView({
               </div>
             </div>
 
-            {/* Informations de l'école au centre : Nom complet et Sigle STRICTEMENT SUR LA MÊME LIGNE */}
-            <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
+            {/* Informations de l'école au centre : Nom complet en Ligne 1, Sigle EN DESSOUS en Ligne 2 */}
+            <div className="flex-1 min-w-0 px-1 text-center space-y-1">
               <h2
                 className="font-black uppercase tracking-tight text-slate-950 font-heading text-[11px] sm:text-xs md:text-sm lg:text-[14px] leading-tight text-center"
-                title={`${schoolState.name} (${schoolState.shortName || 'EPC MANOI'})`}
               >
                 {schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
-                {schoolState.shortName ? ` (${schoolState.shortName})` : ''}
               </h2>
+              {schoolState.shortName && (
+                <div>
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-900 text-white font-mono font-black text-[10px] sm:text-xs tracking-wider shadow-2xs">
+                    {schoolState.shortName.toUpperCase()}
+                  </span>
+                </div>
+              )}
               <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] leading-tight">
                 « {schoolState.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
               </p>
@@ -1571,35 +1634,6 @@ export function InscriptionsView({
               </span>
             </div>
 
-            {/* Case à cocher Droits d'inscription */}
-            <div className="col-span-2 py-1.5 px-3 rounded-xl bg-slate-100/90 border border-slate-200/90 flex items-center justify-between">
-              <span className="text-[10px] text-slate-600 uppercase font-bold tracking-tight">
-                Droits d&apos;inscription :
-              </span>
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-4 h-4 rounded flex items-center justify-center border text-[11px] font-black transition-all ${
-                    (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
-                      ? 'bg-emerald-600 border-emerald-700 text-white shadow-2xs'
-                      : 'bg-white border-slate-300 text-transparent'
-                  }`}
-                >
-                  {(registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0) ? '✓' : ''}
-                </div>
-                <span
-                  className={`text-xs font-black font-heading ${
-                    (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
-                      ? 'text-emerald-800'
-                      : 'text-rose-700'
-                  }`}
-                >
-                  {(registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
-                    ? 'Payés'
-                    : 'Non payés'}
-                  {registrationFee > 0 ? ` (${formatFCFA(registrationFee)})` : ''}
-                </span>
-              </div>
-            </div>
 
             <div className="col-span-2 pt-2 border-t border-slate-200/70 flex items-center justify-between">
               <div>
@@ -1939,6 +1973,38 @@ export function InscriptionsView({
         </div>
       )}
 
+      {/* Alerte Détection Collaborateur en direct */}
+      {collaboratorAlert && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-emerald-500/10 border-2 border-amber-500 rounded-2xl p-4 flex items-start justify-between gap-3 text-amber-950 animate-in slide-in-from-top-2 duration-200 shadow-md">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-500 text-white rounded-xl font-bold shrink-0 mt-0.5 animate-pulse shadow-xs">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black font-heading text-sm sm:text-base text-amber-950">
+                  ⚡ Nouveau reçu validé par un collaborateur en direct !
+                </span>
+                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md font-mono text-[10px] font-black border border-amber-300">
+                  SYNCHRO TEMPS RÉEL
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
+                {collaboratorAlert.message}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCollaboratorAlert(null)}
+            className="text-amber-800 hover:text-amber-950 p-1.5 rounded-xl hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0 font-bold"
+            title="Fermer l'alerte"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* ================= SECTION PRINCIPALE 2 COLONNES (FORMULAIRE & REÇU OFFICIEL) ================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ================= GAUCHE : FORMULAIRE DE SAISIE (6 COLS) ================= */}
@@ -2053,10 +2119,10 @@ export function InscriptionsView({
                       ? 'bg-emerald-600 text-white shadow-emerald-600/30'
                       : 'bg-white border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50'
                   }`}
-                  title="Réinitialiser le formulaire pour une nouvelle inscription"
+                  title="Créer un nouveau reçu avec le numéro d'ordre suivant"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span>+ Nouveau Reçu</span>
+                  <span>+ Ajouter un nouveau</span>
                 </button>
               </div>
             </div>

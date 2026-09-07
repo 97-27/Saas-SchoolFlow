@@ -624,6 +624,7 @@ export function BoardingView({
         invoiceNumber,
         studentId: targetStudentId,
         studentName: formStudentName.trim(),
+        studentAvatar: '/avatars/default.png',
         studentGrade: formClassName,
         studentGender: formGender === 'F' ? 'female' : 'male',
         guardianName: 'Parent / Tuteur',

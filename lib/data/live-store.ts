@@ -272,13 +272,13 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
     syncSchoolDataWithServer(slug);
   });
 
-  // 2. Rafraîchissement automatique silencieux toutes les 4 secondes pour répercuter instantanément les suppressions et ajouts entre appareils
+  // 2. Rafraîchissement automatique ultra-rapide chaque seconde (1000ms) pour répercuter instantanément les reçus entre collaborateurs
   if (activeSyncInterval) clearInterval(activeSyncInterval);
   activeSyncInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       syncSchoolDataWithServer(slug);
     }
-  }, 4000);
+  }, 1000);
 }
 
 /**
@@ -343,7 +343,7 @@ export function syncSchoolDataWithServer(slug: string): void {
           }
         }
 
-        // 3. Synchroniser les élèves
+        // 3. Synchroniser les élèves (Protection absolue des données existantes)
         if (data.students !== undefined && Array.isArray(data.students)) {
           const filteredStudents = data.students.filter(
             (s: any) =>
@@ -353,19 +353,33 @@ export function syncSchoolDataWithServer(slug: string): void {
           );
           const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
           const currentLocal = localStorage.getItem(schoolKey);
-          const newStr = JSON.stringify(filteredStudents);
-          if (currentLocal !== newStr) {
-            localStorage.setItem(schoolKey, newStr);
-            localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
-            if (isPilot) {
-              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
-              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
+          let prevStudents: Student[] = [];
+          try {
+            if (currentLocal) prevStudents = JSON.parse(currentLocal);
+          } catch (e) {}
+
+          // Ne JAMAIS écraser des données existantes si le serveur envoie une liste vide
+          if (filteredStudents.length === 0 && prevStudents.length > 0) {
+            fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug, students: prevStudents }),
+            }).catch(() => {});
+          } else if (filteredStudents.length > 0) {
+            const newStr = JSON.stringify(filteredStudents);
+            if (currentLocal !== newStr) {
+              localStorage.setItem(schoolKey, newStr);
+              localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
+              if (isPilot) {
+                localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
+                localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
+              }
+              hasChanges = true;
             }
-            hasChanges = true;
           }
         }
 
-        // 4. Synchroniser les factures / encaissements
+        // 4. Synchroniser les factures / encaissements (Protection absolue)
         if (data.invoices !== undefined && Array.isArray(data.invoices)) {
           const filteredInvoices = data.invoices.filter(
             (inv: any) =>
@@ -375,15 +389,28 @@ export function syncSchoolDataWithServer(slug: string): void {
           );
           const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
           const currentLocal = localStorage.getItem(invSchoolKey);
-          const newStr = JSON.stringify(filteredInvoices);
-          if (currentLocal !== newStr) {
-            localStorage.setItem(invSchoolKey, newStr);
-            localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
-            if (isPilot) {
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
+          let prevInvoices: Invoice[] = [];
+          try {
+            if (currentLocal) prevInvoices = JSON.parse(currentLocal);
+          } catch (e) {}
+
+          if (filteredInvoices.length === 0 && prevInvoices.length > 0) {
+            fetch('/api/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ slug, invoices: prevInvoices }),
+            }).catch(() => {});
+          } else if (filteredInvoices.length > 0) {
+            const newStr = JSON.stringify(filteredInvoices);
+            if (currentLocal !== newStr) {
+              localStorage.setItem(invSchoolKey, newStr);
+              localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
+              if (isPilot) {
+                localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
+                localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
+              }
+              hasChanges = true;
             }
-            hasChanges = true;
           }
         }
 
@@ -584,22 +611,26 @@ export function saveGradesPortalStatus(schoolSlug: string, status: GradesPortalS
  * Enregistre les paramètres modifiés d'une école dans le stockage persistant
  * et émet un événement pour que le reçu et toutes les pages se mettent à jour immédiatement.
  */
-export function saveLiveSchool(school: School): void {
+export function saveLiveSchool(school: School, targetSlug?: string): void {
   if (typeof window === 'undefined') return;
 
   try {
     const json = JSON.stringify(school);
+    const activeSlug = targetSlug || school.slug;
     // Sauvegarder sur le slug spécifique
-    localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${school.slug}`, json);
+    localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${activeSlug}`, json);
+    if (activeSlug !== school.slug) {
+      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${school.slug}`, json);
+    }
 
-    if (school.slug === 'epc-manoi' || school.slug === 'college-excellence') {
+    if (school.slug === 'epc-manoi' || school.slug === 'college-excellence' || activeSlug === 'epc-manoi' || activeSlug === 'college-excellence') {
       localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, json);
       localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, json);
       localStorage.setItem('schoolflow_active_school_settings_v1', json);
     }
 
     // Synchronisation en arrière-plan avec Supabase Cloud & API Serveur SchoolFlow
-    saveSchoolToSupabase(school).catch(() => {});
+    saveSchoolToSupabase(activeSlug !== school.slug ? { ...school, slug: activeSlug } : school).catch(() => {});
     if (typeof fetch !== 'undefined') {
       fetch('/api/sync', {
         method: 'POST',

@@ -186,7 +186,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     });
 
     return list;
-  }, [invoices]);
+  }, [invoices, students]);
 
   // Transactions du jour actif sélectionné
   const dayTransactions = useMemo(() => {

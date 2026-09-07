@@ -83,8 +83,8 @@ export function ClassesView({
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
-  // 5 Blocs : 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'
-  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('all');
+  // 4 Blocs : 'all' | 'maternelle' | 'primaire' | 'college'
+  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college'>('all');
   const [selectedClass, setSelectedClass] = useState<string>('Toutes les classes');
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState<'all' | 'female' | 'male'>('all');

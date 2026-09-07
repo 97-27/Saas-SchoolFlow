@@ -324,16 +324,22 @@ export function GradesView({
   const cyclesConfig = useMemo(() => {
     return {
       college: {
-        label: 'Cycle Secondaire / Collège (6ème à 3ème)',
+        label: 'Cycle Collège (6ème à 3ème)',
         sub: 'Saisie & gestion des notes trimestrielles',
         icon: Building2,
         classes: ['6ème', '5ème', '4ème', '3ème'],
+      },
+      lycee: {
+        label: 'Cycle Lycée (2nde à Tle)',
+        sub: 'Saisie & gestion des notes trimestrielles',
+        icon: GraduationCap,
+        classes: ['2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'],
       },
       pedagogie: {
         label: 'Pédagogie & Fiches de Cours',
         sub: 'Fiches de préparation, leçons & ressources MENA',
         icon: BookOpen,
-        classes: ['6ème', '5ème', '4ème', '3ème'],
+        classes: ['6ème', '5ème', '4ème', '3ème', '2nde A', '1ère D', 'Tle D'],
       },
     };
   }, []);
@@ -797,8 +803,8 @@ export function GradesView({
         </div>
       )}
 
-      {/* 2. LES 2 BLOCS DU HAUT (Collège & Pédagogie Fiches de Cours) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+      {/* 2. LES 3 BLOCS DU HAUT (Collège, Lycée & Pédagogie Fiches de Cours) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {(Object.keys(cyclesConfig) as Array<keyof typeof cyclesConfig>).map((tabKey) => {
           const cfg = cyclesConfig[tabKey];
           const Icon = cfg.icon;
@@ -999,10 +1005,10 @@ export function GradesView({
             {/* Classes */}
             <div>
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
-                1. Classe ({cyclesConfig[activeTab].label}) :
+                1. Classe ({cyclesConfig[activeTab]?.label || 'Classe'}) :
               </span>
               <div className="flex items-center gap-2 flex-wrap">
-                {cyclesConfig[activeTab].classes.map((cls) => {
+                {(cyclesConfig[activeTab]?.classes || []).map((cls: string) => {
                   const isSelected = selectedClass === cls;
                   return (
                     <button

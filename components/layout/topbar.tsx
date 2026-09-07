@@ -27,6 +27,7 @@ import {
   ShieldAlert,
   CreditCard,
   UserCheck,
+  FileText,
   Camera,
   Upload,
   Pencil,

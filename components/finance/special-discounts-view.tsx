@@ -624,7 +624,7 @@ export function SpecialDiscountsView({
               enrollmentType: 'nouveau',
               issueDate: issueDate || '01/09/2026',
               dueDate: '2027-05-31',
-              status: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'unpaid',
+              status: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'sent',
             };
 
             saveRegisteredStudent(newStu, newInv, schoolSlug);

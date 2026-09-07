@@ -171,13 +171,26 @@ export function ParentScolariteTab({
 
   // Données Cantine
   const canteenData = useMemo(() => {
-    if (!activeChild) return null;
+    const emptyCanteen = {
+      isSubscribed: false,
+      monthlyRate: 0,
+      discount: 0,
+      diet: '',
+      paidMonths: [] as string[],
+      paidMonthsCount: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      remaining: 0,
+      isFullyPaid: false,
+      monthsState: {} as Record<string, boolean>,
+    };
+    if (!activeChild) return emptyCanteen;
     const childId = activeChild.id;
     const custom = canteenSubs[childId];
     const isSubscribed = Boolean(activeChild.isCanteen || custom);
 
     if (!isSubscribed) {
-      return { isSubscribed: false };
+      return emptyCanteen;
     }
 
     const monthlyRate = custom?.rate || 25000;
@@ -209,13 +222,26 @@ export function ParentScolariteTab({
 
   // Données Transport
   const transportData = useMemo(() => {
-    if (!activeChild) return null;
+    const emptyTransport = {
+      isSubscribed: false,
+      monthlyRate: 0,
+      discount: 0,
+      stop: '',
+      paidMonths: [] as string[],
+      paidMonthsCount: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      remaining: 0,
+      isFullyPaid: false,
+      monthsState: {} as Record<string, boolean>,
+    };
+    if (!activeChild) return emptyTransport;
     const childId = activeChild.id;
     const custom = transportSubs[childId];
     const isSubscribed = Boolean(activeChild.isTransport || custom);
 
     if (!isSubscribed) {
-      return { isSubscribed: false };
+      return emptyTransport;
     }
 
     const monthlyRate = custom?.rate || 35000;
@@ -247,7 +273,20 @@ export function ParentScolariteTab({
 
   // Données Internat
   const boardingData = useMemo(() => {
-    if (!activeChild) return null;
+    const emptyBoarding = {
+      isSubscribed: false,
+      monthlyRate: 0,
+      pavilion: '',
+      roomNumber: '',
+      paidMonths: [] as string[],
+      paidMonthsCount: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      remaining: 0,
+      isFullyPaid: false,
+      monthsState: {} as Record<string, boolean>,
+    };
+    if (!activeChild) return emptyBoarding;
     const childId = activeChild.id;
     const customSub = boardingSubs.find(
       (b) => b.studentId === childId || b.matricule === activeChild.matricule
@@ -255,7 +294,7 @@ export function ParentScolariteTab({
     const isSubscribed = Boolean(activeChild.isBoarding || customSub);
 
     if (!isSubscribed) {
-      return { isSubscribed: false };
+      return emptyBoarding;
     }
 
     const monthlyRate = customSub?.monthlyRate || 75000;
