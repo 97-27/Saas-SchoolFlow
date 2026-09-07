@@ -1848,8 +1848,14 @@ export function BoardingView({
               <div className="text-center flex-1 space-y-0.5 min-w-0">
                 <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight">
                   {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
-                  {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                 </h1>
+                {currentSchool.shortName && (
+                  <div>
+                    <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-900 text-white font-mono font-black text-[9.5px] tracking-wider shadow-2xs">
+                      {currentSchool.shortName.toUpperCase()}
+                    </span>
+                  </div>
+                )}
                 <p className="text-[10px] sm:text-[11px] italic text-emerald-900 font-semibold leading-tight">
                   « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                 </p>

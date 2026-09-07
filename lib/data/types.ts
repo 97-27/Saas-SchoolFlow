@@ -42,6 +42,7 @@ export interface Invoice {
   issueDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
   status: InvoiceStatus;
+  notes?: string;
   updatedAt?: string;
 }
 

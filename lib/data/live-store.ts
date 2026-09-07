@@ -1325,6 +1325,69 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
 }
 
 /**
+ * Sauvegarde ou met à jour une facture de prestation (Transport, Cantine, Internat, etc.)
+ * dans le stockage persistant, Supabase Cloud et l'API serveur,
+ * et diffuse immédiatement l'événement pour affichage dans le journal du Tableau de Bord.
+ */
+export function saveLivePaymentInvoice(invoice: Invoice, schoolSlug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const slug = schoolSlug || 'epc-manoi';
+
+    // 1. Sauvegarder dans la clé globale
+    const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+    const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
+    const filteredInvoices = prevInvoices.filter(
+      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+    );
+    const invoiceWithSlug: Invoice = { ...invoice, schoolSlug: slug, schoolId: slug };
+    const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
+    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+
+    // 2. Sauvegarder dans la clé spécifique à l'école
+    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
+    const rawInvSchool = localStorage.getItem(invSchoolKey);
+    const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+    const filteredInvSchool = prevInvSchool.filter(
+      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+    );
+    const updatedInvSchool = [invoiceWithSlug, ...filteredInvSchool];
+    localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
+
+    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
+      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
+    }
+
+    // 3. Synchronisation Supabase Cloud & API Serveur en arrière-plan
+    saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
+    if (typeof fetch !== 'undefined') {
+      const rawSchoolStu = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_${slug}`);
+      const schoolStudents: Student[] = rawSchoolStu ? JSON.parse(rawSchoolStu) : [];
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          students: schoolStudents,
+          invoices: updatedInvSchool,
+        }),
+      }).catch(() => {});
+    }
+
+    // 4. Diffusion temps réel parallèle
+    broadcastLiveUpdate({
+      action: 'invoice_saved',
+      invoice: invoiceWithSlug,
+      schoolSlug: slug,
+    });
+  } catch (error) {
+    console.error('Erreur sauvegarde facture de prestation:', error);
+  }
+}
+
+/**
  * Met à jour un élève existant et synchronise automatiquement sa facture / caisse
  * et notifie le tableau de bord et toutes les vues actives.
  */

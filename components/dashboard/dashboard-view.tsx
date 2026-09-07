@@ -11,7 +11,6 @@ import {
   UserCheck,
   UserPlus,
   Building2,
-  AlertTriangle,
   PlusCircle,
   FileSpreadsheet,
   ArrowRight,
@@ -189,8 +188,8 @@ export function DashboardView({
       </div>
 
 
-      {/* 5 Cartes KPI Pandhowan avec répartition Filles / Garçons et Effectifs Réels */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5">
+      {/* 4 Cartes KPI Pandhowan avec répartition Filles / Garçons et Effectifs Réels */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Card 1: Total Élèves Inscrits */}
         <StatCard
           title="Total Élèves Inscrits"
@@ -253,19 +252,6 @@ export function DashboardView({
           subtitle={`Pensionnaires inclus dans l'effectif global (${metrics.totalCount})`}
           iconBgColor="bg-purple-50"
           iconColor="text-purple-600"
-        />
-
-        {/* Card 5: Reste à Percevoir */}
-        <StatCard
-          title="Reste à Percevoir"
-          value={formatFCFA(metrics.totalOverdue)}
-          icon={AlertTriangle}
-          trend={-parseFloat((100 - parseFloat(metrics.collectionRate)).toFixed(1))}
-          isPositiveGood={false}
-          trendText={`${metrics.overdueCount} en attente`}
-          subtitle={`Taux d'encaissement : ${metrics.collectionRate}%`}
-          iconBgColor="bg-rose-50"
-          iconColor="text-rose-600"
         />
       </div>
 

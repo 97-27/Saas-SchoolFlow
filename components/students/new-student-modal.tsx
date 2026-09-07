@@ -427,7 +427,7 @@ export function NewStudentModal({
                   <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Date d&apos;inscription & versement</span>
+                      <span>Date d&apos;inscription</span>
                     </span>
                     <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                       {paymentDate ? formatDate(paymentDate) : 'JJ/MM/AAAA'}

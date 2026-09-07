@@ -192,13 +192,13 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         let motif = '1er Versement';
         if (feeLower.includes('internat')) {
           prestation = '🏠 Internat';
-          motif = 'Pensionnat & Hébergement';
+          motif = inv.notes || 'Pensionnat & Hébergement';
         } else if (feeLower.includes('cantine')) {
           prestation = '🍽️ Cantine';
-          motif = 'Restauration scolaire';
+          motif = inv.notes || 'Restauration scolaire';
         } else if (feeLower.includes('transport')) {
           prestation = '🚌 Transport';
-          motif = 'Navette scolaire';
+          motif = inv.notes || 'Navette scolaire';
         } else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) {
           prestation = "📝 Frais d'Inscription";
           motif = "Droits d'Inscription";
@@ -220,7 +220,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               enrollmentType,
               prestation,
               motif,
-              paymentDate: matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
+              paymentDate: inv.issueDate || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || getTodayDateStr(),
               amount: amt,
               paymentMethod: inv.paymentMethod || 'Espèces',
               status: inv.status,

@@ -5,7 +5,7 @@ import { Student, School } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import {
   UtensilsCrossed,
   Download,
@@ -54,7 +54,6 @@ const MONTHS_LIST = [
   'Mars',
   'Avril',
   'Mai',
-  'Juin',
 ];
 
 const CANTEEN_PAYMENTS_KEY = 'schoolflow_canteen_monthly_payments_v3';
@@ -249,7 +248,6 @@ export function CanteenView({
           Mars: false,
           Avril: false,
           Mai: false,
-          Juin: false,
         };
 
         const paidMonths = Object.keys(monthsState).filter((m) => monthsState[m]);
@@ -305,7 +303,7 @@ export function CanteenView({
     ).length;
 
     const totalCollected = subscribers.reduce((acc, s) => acc + s.totalPaidAmount, 0);
-    const totalExigible = subscribers.reduce((acc, s) => acc + (s.monthlyRate * 10 - s.discountAmount), 0);
+    const totalExigible = subscribers.reduce((acc, s) => acc + (s.monthlyRate * 9 - s.discountAmount), 0);
     const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
 
     return {
@@ -395,6 +393,42 @@ export function CanteenView({
       } catch (e) {}
     }
 
+    // Synchronisation de la quittance / facture de cantine dans le journal des encaissements
+    const paidMonths = Object.keys(selectedStudentForMonths.monthsState || {}).filter(
+      (m) => selectedStudentForMonths.monthsState[m]
+    );
+    const totalPaid = selectedStudentForMonths.totalPaidAmount;
+    const totalExigible = (selectedStudentForMonths.monthlyRate * 9) - (selectedStudentForMonths.discountAmount || 0);
+    const remaining = Math.max(0, totalExigible - totalPaid);
+
+    if (totalPaid > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const canteenInvoice = {
+        id: `inv-canteen-${stuId}`,
+        invoiceNumber: `CAN-${selectedStudentForMonths.studentNumber?.replace(/\D/g, '') || stuId.replace(/\D/g, '').slice(-4) || '001'}`,
+        studentId: selectedStudentForMonths.id,
+        studentName: selectedStudentForMonths.fullName,
+        studentAvatar: selectedStudentForMonths.avatar || '/avatars/default.png',
+        studentGrade: selectedStudentForMonths.grade,
+        studentGender: selectedStudentForMonths.gender,
+        guardianName: selectedStudentForMonths.guardianName || 'Parent / Tuteur',
+        guardianPhone: selectedStudentForMonths.whatsappPhone || selectedStudentForReceipt?.guardianPhone || '',
+        feeType: 'Cantine',
+        amount: totalExigible,
+        discountAmount: selectedStudentForMonths.discountAmount || 0,
+        netAmount: totalExigible,
+        paidAmount: totalPaid,
+        balanceRemaining: remaining,
+        paymentMethod: 'Espèces',
+        enrollmentType: selectedStudentForMonths.enrollmentType || 'nouveau',
+        issueDate: todayStr,
+        dueDate: todayStr,
+        status: remaining === 0 ? ('paid' as const) : ('partial' as const),
+        notes: paidMonths.length > 0 ? `Mois réglés : ${paidMonths.join(', ')}` : 'Restauration Scolaire (Cantine)',
+      };
+      saveLivePaymentInvoice(canteenInvoice, schoolSlug);
+    }
+
     setToastMessage(`✓ Cotisations & Réduction enregistrées pour ${selectedStudentForMonths.fullName}`);
     setTimeout(() => setToastMessage(null), 4000);
     setSelectedStudentForMonths(null);
@@ -433,7 +467,6 @@ export function CanteenView({
         Mars: false,
         Avril: false,
         Mai: false,
-        Juin: false,
       },
     };
     setMonthlyPayments(nextPayments);
@@ -443,6 +476,39 @@ export function CanteenView({
         localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextCustom));
         localStorage.setItem(CANTEEN_PAYMENTS_KEY, JSON.stringify(nextPayments));
       } catch (e) {}
+    }
+
+    // Créer la transaction de cantine pour Septembre
+    const targetStu = students.find((s) => s.id === newSubStudentId);
+    if (targetStu) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const paidAmt = Math.max(0, rate - discount);
+      const totalExigible = (rate * 9) - discount;
+      const remaining = Math.max(0, totalExigible - paidAmt);
+      const canteenInvoice = {
+        id: `inv-canteen-${newSubStudentId}`,
+        invoiceNumber: `CAN-${targetStu.studentNumber?.replace(/\D/g, '') || newSubStudentId.replace(/\D/g, '').slice(-4) || '001'}`,
+        studentId: newSubStudentId,
+        studentName: targetStu.fullName,
+        studentAvatar: targetStu.avatar || '/avatars/default.png',
+        studentGrade: targetStu.grade,
+        studentGender: targetStu.gender,
+        guardianName: targetStu.guardianName || 'Parent / Tuteur',
+        guardianPhone: targetStu.whatsappPhone || targetStu.guardianPhone || '',
+        feeType: 'Cantine',
+        amount: totalExigible,
+        discountAmount: discount,
+        netAmount: totalExigible,
+        paidAmount: paidAmt,
+        balanceRemaining: remaining,
+        paymentMethod: 'Espèces',
+        enrollmentType: targetStu.enrollmentType || 'nouveau',
+        issueDate: todayStr,
+        dueDate: todayStr,
+        status: remaining === 0 ? ('paid' as const) : ('partial' as const),
+        notes: 'Mois réglé : Septembre 2026',
+      };
+      saveLivePaymentInvoice(canteenInvoice, schoolSlug);
     }
 
     setIsNewSubModalOpen(false);
@@ -1123,8 +1189,14 @@ export function CanteenView({
                 <div className="text-center flex-1 space-y-0.5 min-w-0">
                   <h2 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight">
                     {currentSchool.name}
-                    {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                   </h2>
+                  {currentSchool.shortName && (
+                    <div>
+                      <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-900 text-white font-mono font-black text-[9.5px] tracking-wider shadow-2xs">
+                        {currentSchool.shortName.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-[9.5px] italic text-emerald-900 font-semibold leading-tight">
                     « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                   </p>
@@ -1205,8 +1277,13 @@ export function CanteenView({
                       </td>
                       <td className="py-2 px-3 text-center whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200 text-xs">
-                          {selectedStudentForReceipt.paidMonthsCount} / 10 mois
+                          {selectedStudentForReceipt.paidMonthsCount} / 9 mois
                         </span>
+                        {selectedStudentForReceipt.paidMonths.length > 0 && (
+                          <span className="block text-[9.5px] text-emerald-950 font-extrabold mt-0.5 max-w-[200px] truncate">
+                            {selectedStudentForReceipt.paidMonths.join(', ')}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 px-3 text-right font-extrabold text-slate-900 font-heading">
                         {formatFCFA(selectedStudentForReceipt.grossAmount || selectedStudentForReceipt.paidMonthsCount * selectedStudentForReceipt.monthlyRate)}
@@ -1236,6 +1313,31 @@ export function CanteenView({
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Suivi Visuel des 9 Mois de l'Année Scolaire */}
+              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/70 space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  État des Règlements par Mois (9 Mois Scolaires) :
+                </span>
+                <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5 text-center">
+                  {MONTHS_LIST.map((m) => {
+                    const isPaid = selectedStudentForReceipt.monthsState?.[m];
+                    return (
+                      <div
+                        key={m}
+                        className={`py-1 px-1 rounded-lg border text-[9.5px] font-extrabold transition-all ${
+                          isPaid
+                            ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
+                            : 'bg-slate-100 text-slate-400 border-slate-200'
+                        }`}
+                      >
+                        <span className="block truncate">{m.slice(0, 4)}.</span>
+                        <span className="text-[8.5px]">{isPaid ? '✓ Réglé' : '—'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Cachet Officiel */}

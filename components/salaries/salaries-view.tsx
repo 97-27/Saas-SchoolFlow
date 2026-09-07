@@ -443,8 +443,15 @@ export function SalariesView({
               suppressHydrationWarning
               className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-heading uppercase tracking-tight leading-snug"
             >
-              {currentSchool.name}{currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
+              {currentSchool.name}
             </h3>
+            {currentSchool.shortName && (
+              <div>
+                <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-900 text-white font-mono font-black text-[10px] sm:text-xs tracking-wider shadow-2xs">
+                  {currentSchool.shortName.toUpperCase()}
+                </span>
+              </div>
+            )}
 
             <p
               suppressHydrationWarning

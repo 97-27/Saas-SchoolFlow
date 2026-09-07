@@ -1193,33 +1193,33 @@ export function InscriptionsView({
     ctx.textAlign = 'left';
     ctx.fillStyle = '#0f172a';
 
-    // Ligne 1 : ID & Date (SANS le matricule officiel — réservé au registre)
+    // Ligne 1 : Matricule (officiel si saisi, ou automatique ID-xxx si non saisi) & Date
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Identifiant :', 70, 415);
+    ctx.fillText('Matricule :', 70, 412);
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(finalStuId, 180, 415);
+    ctx.fillText(finalStuMat || finalStuId, 165, 412);
 
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText("Date d'encaissement :", 730, 415);
+    ctx.fillText("Date d'encaissement :", 730, 412);
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(formatDate(finalStuDate), 920, 415);
+    ctx.fillText(formatDate(finalStuDate), 920, 412);
 
     // Ligne 2 : Nom de l'élève & Classe
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Nom & Prénom :', 70, 460);
+    ctx.fillText('Nom & Prénom :', 70, 450);
     ctx.font = 'bold 22px Outfit, sans-serif';
-    ctx.fillText(`${finalStuName.toUpperCase()} (${finalStuGender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 210, 460);
+    ctx.fillText(`${finalStuName.toUpperCase()} (${finalStuGender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 210, 450);
 
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Classe & Statut :', 730, 460);
+    ctx.fillText('Classe & Statut :', 730, 450);
     ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 880, 460);
+    ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 880, 450);
 
     // Ligne 3 : Parent & Téléphone(s) (Principal + Numéros secondaires si renseignés)
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('Parent / Tuteur :', 70, 505);
+    ctx.fillText('Parent / Tuteur :', 70, 488);
     ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(finalStuParent, 210, 505);
+    ctx.fillText(finalStuParent, 210, 488);
 
     const finalSecPhones = (targetStudent?.secondaryPhones && targetStudent.secondaryPhones.length > 0)
       ? targetStudent.secondaryPhones
@@ -1227,20 +1227,103 @@ export function InscriptionsView({
     const allPhones = [finalStuPhone, ...finalSecPhones].filter((p, i, arr) => Boolean(p) && p !== 'Non renseigné' && arr.indexOf(p) === i);
 
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText(allPhones.length > 1 ? 'Contacts Parents :' : 'WhatsApp :', 710, 505);
+    ctx.fillText(allPhones.length > 1 ? 'Contacts Parents :' : 'WhatsApp :', 710, 488);
     ctx.font = allPhones.length > 2 ? 'bold 13px monospace' : allPhones.length === 2 ? 'bold 15px monospace' : 'bold 18px monospace';
-    ctx.fillText(allPhones.join(' • '), 855, 505);
+    ctx.fillText(allPhones.join(' • '), 855, 488);
 
-    // Ligne 4 : Prestations & Services Souscrits
-    ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText('Prestations :', 70, 550);
-    ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(
-      `Internat : ${finalBoarding ? 'Oui (Interne)' : 'Non (Externe)'}   •   Cantine : ${finalCanteen ? 'Souscrit ✓' : 'Non ✕'}   •   Transport : ${finalTransport ? 'Souscrit ✓' : 'Non ✕'}   •   Frais Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
-      175,
-      550
-    );
+    // Ligne 4 : 5 Blocs de Prestations & Services avec Icônes/Emojis et Badges de Statut
+    const servicesList = [
+      {
+        title: '🏢 Internat',
+        active: finalBoarding,
+        activeLabel: 'Pensionnaire',
+        inactiveLabel: 'Externe',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#f1f5f9',
+        inactiveText: '#475569',
+      },
+      {
+        title: '🍲 Cantine',
+        active: finalCanteen,
+        activeLabel: 'Souscrit',
+        inactiveLabel: 'Sans cantine',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#f1f5f9',
+        inactiveText: '#475569',
+      },
+      {
+        title: '🚌 Transport',
+        active: finalTransport,
+        activeLabel: 'Souscrit',
+        inactiveLabel: 'Sans transport',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#f1f5f9',
+        inactiveText: '#475569',
+      },
+      {
+        title: '🎒 Frais Annexes',
+        active: fraisAnnexesPaid,
+        activeLabel: 'Payé',
+        inactiveLabel: 'Non payé',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#ffe4e6',
+        inactiveText: '#9f1239',
+      },
+      {
+        title: '👔 Tenue Cousue',
+        active: tenueCousuePaid,
+        activeLabel: 'Payé',
+        inactiveLabel: 'Non payé',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#ffe4e6',
+        inactiveText: '#9f1239',
+      },
+    ];
+
+    const cardY = 516;
+    const cardW = 205;
+    const cardH = 58;
+    const gap = 15;
+    const startX = 65;
+
+    servicesList.forEach((srv, idx) => {
+      const bx = startX + idx * (cardW + gap);
+      // Fond de la boîte avec bordure
+      drawRoundRect(bx, cardY, cardW, cardH, 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Titre Service avec Icône
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillText(srv.title, bx + cardW / 2, cardY + 20);
+
+      // Badge Statut
+      const badgeW = 155;
+      const badgeH = 22;
+      const badgeX = bx + (cardW - badgeW) / 2;
+      const badgeY = cardY + 28;
+      drawRoundRect(badgeX, badgeY, badgeW, badgeH, 6);
+      ctx.fillStyle = srv.active ? srv.activeBg : srv.inactiveBg;
+      ctx.fill();
+      ctx.strokeStyle = srv.active ? '#6ee7b7' : '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = srv.active ? srv.activeText : srv.inactiveText;
+      ctx.font = 'bold 11px Inter, sans-serif';
+      const label = srv.active ? `✓ ${srv.activeLabel}` : srv.inactiveLabel;
+      ctx.fillText(label, bx + cardW / 2, badgeY + 15);
+    });
 
     // --- TABLEAU FINANCIER OFFICIEL ARRONDI ---
     drawRoundRect(45, 605, 1110, 42, 10);
@@ -1615,10 +1698,10 @@ export function InscriptionsView({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
-                Identifiant Élève :
+                Matricule Élève :
               </span>
               <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
-                {currentIdStr}
+                {currentMatricule || currentIdStr}
               </span>
             </div>
 
@@ -3209,14 +3292,12 @@ export function InscriptionsView({
                   {currentIdStr}
                 </span>
               </div>
-              {currentMatricule ? (
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                  <span className="text-slate-500">Matricule officiel :</span>
-                  <span className="font-mono font-extrabold text-slate-900">
-                    {currentMatricule}
-                  </span>
-                </div>
-              ) : null}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                <span className="text-slate-500">Matricule :</span>
+                <span className="font-mono font-extrabold text-slate-900">
+                  {currentMatricule || currentIdStr}
+                </span>
+              </div>
 
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
                 <span className="text-slate-500">Nom & Prénom de l&apos;élève :</span>
