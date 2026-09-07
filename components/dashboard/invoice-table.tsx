@@ -91,9 +91,11 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       rawInvoice: Invoice;
     }> = [];
 
+    const seenTxKeys = new Set<string>();
+
     invoices.forEach((inv) => {
       const matchedStudent = students.find(
-        (s) => s.id === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
+        (s) => s.id === inv.studentId || s.studentNumber === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
       );
       const matriculeCode = matchedStudent?.matricule || (inv as any).matricule || '';
       const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
@@ -113,17 +115,22 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
         vList.forEach(({ key, obj, label }) => {
           if (obj && typeof obj.amount === 'number' && obj.amount > 0) {
-            // Sécurité anti-doublon : si le versement correspond aux droits d'inscription et que la scolarité reste impayée (balanceRemaining === tuitionAmount)
-            const isDuplicateOfRegFee =
-              typeof inv.registrationFee === 'number' &&
-              inv.registrationFee > 0 &&
-              obj.amount === inv.registrationFee &&
-              (matchedStudent?.balanceRemaining === matchedStudent?.tuitionAmount ||
-                matchedStudent?.tuitionStatus === 'unpaid');
+            // Sécurité anti-doublon et anti-versement fictif :
+            // Si la scolarité n'a pas encore été payée ou si le montant correspond uniquement aux droits d'inscription
+            const isFictiveOrUnpaid =
+              (matchedStudent?.tuitionStatus === 'unpaid') ||
+              (matchedStudent?.tuitionAmount && matchedStudent?.balanceRemaining !== undefined && matchedStudent.balanceRemaining >= matchedStudent.tuitionAmount) ||
+              (typeof matchedStudent?.paidAmount === 'number' && typeof inv.registrationFee === 'number' && matchedStudent.paidAmount <= inv.registrationFee) ||
+              (typeof inv.paidAmount === 'number' && typeof inv.registrationFee === 'number' && inv.paidAmount <= inv.registrationFee) ||
+              (inv.balanceRemaining !== undefined && inv.amount !== undefined && inv.balanceRemaining >= inv.amount);
 
-            if (isDuplicateOfRegFee) {
-              return; // C'est le droit d'inscription comptabilisé en tant que tel, ne pas créer de faux versement scolarité
+            if (isFictiveOrUnpaid) {
+              return; // Ne jamais afficher de faux versement scolarité !
             }
+
+            const txKey = `${inv.invoiceNumber || inv.id}-${key}-${obj.amount}`;
+            if (seenTxKeys.has(txKey)) return;
+            seenTxKeys.add(txKey);
 
             foundVersements = true;
             list.push({
@@ -150,22 +157,26 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
       // 2. Vérification des Droits d'Inscription distincts
       if (typeof inv.registrationFee === 'number' && inv.registrationFee > 0) {
-        list.push({
-          id: `${inv.id}-reg`,
-          invoiceId: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          matriculeCode,
-          studentName: inv.studentName,
-          studentGrade: inv.studentGrade,
-          studentGender: inv.studentGender,
-          enrollmentType,
-          motif: "📝 Droits d'Inscription",
-          paymentDate: matchedStudent?.enrollmentDate || matchedStudent?.paymentDate || inv.issueDate,
-          amount: inv.registrationFee,
-          paymentMethod: inv.paymentMethod || 'Espèces',
-          status: inv.status,
-          rawInvoice: inv,
-        });
+        const regKey = `${inv.invoiceNumber || inv.id}-reg-${inv.registrationFee}`;
+        if (!seenTxKeys.has(regKey)) {
+          seenTxKeys.add(regKey);
+          list.push({
+            id: `${inv.id}-reg`,
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            matriculeCode,
+            studentName: inv.studentName,
+            studentGrade: inv.studentGrade,
+            studentGender: inv.studentGender,
+            enrollmentType,
+            motif: "📝 Droits d'Inscription",
+            paymentDate: matchedStudent?.enrollmentDate || matchedStudent?.paymentDate || inv.issueDate,
+            amount: inv.registrationFee,
+            paymentMethod: inv.paymentMethod || 'Espèces',
+            status: inv.status,
+            rawInvoice: inv,
+          });
+        }
       }
 
       // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé
@@ -178,22 +189,28 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) motif = "📝 Droits d'Inscription";
 
         const amt = inv.paidAmount !== undefined ? inv.paidAmount : inv.amount;
-        list.push({
-          id: `${inv.id}-tx`,
-          invoiceId: inv.id,
-          invoiceNumber: inv.invoiceNumber,
-          matriculeCode,
-          studentName: inv.studentName,
-          studentGrade: inv.studentGrade,
-          studentGender: inv.studentGender,
-          enrollmentType,
-          motif,
-          paymentDate: matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
-          amount: amt,
-          paymentMethod: inv.paymentMethod || 'Espèces',
-          status: inv.status,
-          rawInvoice: inv,
-        });
+        if (amt > 0) {
+          const fbKey = `${inv.invoiceNumber || inv.id}-${motif}-${amt}`;
+          if (!seenTxKeys.has(fbKey)) {
+            seenTxKeys.add(fbKey);
+            list.push({
+              id: `${inv.id}-tx`,
+              invoiceId: inv.id,
+              invoiceNumber: inv.invoiceNumber,
+              matriculeCode,
+              studentName: inv.studentName,
+              studentGrade: inv.studentGrade,
+              studentGender: inv.studentGender,
+              enrollmentType,
+              motif,
+              paymentDate: matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
+              amount: amt,
+              paymentMethod: inv.paymentMethod || 'Espèces',
+              status: inv.status,
+              rawInvoice: inv,
+            });
+          }
+        }
       }
     });
 

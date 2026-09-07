@@ -913,19 +913,63 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
     const seenIds = new Set<string>();
     const seenNumbers = new Set<string>();
+    const seenStudentIds = new Set<string>();
+    const seenStudentNumbers = new Set<string>();
     const uniqueInvoices: Invoice[] = [];
 
-    // Priorité absolue aux encaissements enregistrés en local
-    for (const inv of allCandidates) {
+    // Priorité absolue aux factures officielles réelles (REC-2026-xxx)
+    const sortedCandidates = [...allCandidates].sort((a, b) => {
+      const aIsRec = (a.invoiceNumber || '').startsWith('REC-') ? 1 : 0;
+      const bIsRec = (b.invoiceNumber || '').startsWith('REC-') ? 1 : 0;
+      return bIsRec - aIsRec;
+    });
+
+    for (const inv of sortedCandidates) {
       if (!inv || !inv.invoiceNumber) continue;
       if (deletedIds.has(inv.id) || deletedIds.has(inv.studentId) || deletedIds.has(inv.invoiceNumber)) continue;
-      if (!seenIds.has(inv.id) && !seenNumbers.has(inv.invoiceNumber)) {
+
+      const numDigits = inv.invoiceNumber.replace(/\D/g, '');
+      const recKey = numDigits ? `REC-2026-${parseInt(numDigits, 10).toString().padStart(3, '0')}` : '';
+      const idKey = numDigits ? `ID-${parseInt(numDigits, 10).toString().padStart(3, '0')}` : '';
+
+      // Sécurité anti-doublon absolue : ne jamais enregistrer deux fois le même reçu ou élève
+      const alreadySeen =
+        seenIds.has(inv.id) ||
+        seenNumbers.has(inv.invoiceNumber) ||
+        (recKey && seenNumbers.has(recKey)) ||
+        (idKey && seenNumbers.has(idKey)) ||
+        (inv.studentId && seenStudentIds.has(inv.studentId));
+
+      if (!alreadySeen) {
         seenIds.add(inv.id);
         seenNumbers.add(inv.invoiceNumber);
+        if (recKey) seenNumbers.add(recKey);
+        if (idKey) seenNumbers.add(idKey);
+        if (inv.studentId) {
+          seenStudentIds.add(inv.studentId);
+          seenIds.add(inv.studentId);
+        }
 
         // Si l'élève a été modifié, mettre à jour les coordonnées dans la facture
         const matchingStu = studentMap.get(inv.studentId) || studentMap.get(inv.invoiceNumber);
         if (matchingStu) {
+          if (matchingStu.id) {
+            seenStudentIds.add(matchingStu.id);
+            seenIds.add(matchingStu.id);
+          }
+          if (matchingStu.studentNumber) {
+            seenStudentNumbers.add(matchingStu.studentNumber);
+            seenNumbers.add(matchingStu.studentNumber);
+          }
+
+          // Nettoyage strict des versements fictifs si la scolarité n'a pas encore été perçue
+          const isTuitionUnpaid =
+            matchingStu.tuitionStatus === 'unpaid' ||
+            (typeof matchingStu.paidAmount === 'number' && matchingStu.paidAmount <= (inv.registrationFee || 0)) ||
+            (matchingStu.tuitionAmount && matchingStu.balanceRemaining !== undefined && matchingStu.balanceRemaining >= matchingStu.tuitionAmount);
+
+          const sanitizedInstallments = isTuitionUnpaid ? {} : (matchingStu.installments || inv.installments || {});
+
           uniqueInvoices.push({
             ...inv,
             studentName: matchingStu.fullName || `${matchingStu.firstName} ${matchingStu.lastName}`.trim(),
@@ -939,7 +983,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
             discountAmount: matchingStu.discountAmount !== undefined ? matchingStu.discountAmount : inv.discountAmount,
             netAmount: matchingStu.netAmount !== undefined ? matchingStu.netAmount : inv.netAmount,
             balanceRemaining: matchingStu.balanceRemaining !== undefined ? matchingStu.balanceRemaining : inv.balanceRemaining,
-            installments: matchingStu.installments || inv.installments,
+            installments: sanitizedInstallments,
             paymentMethod: matchingStu.paymentMethod || inv.paymentMethod,
           });
         } else {
@@ -948,7 +992,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       }
     }
 
-    // Auto-réconciliation réciproque : si des élèves existent sans facture associée, créer la facture correspondante
+    // Auto-réconciliation réciproque : UNIQUEMENT pour les élèves sans AUCUNE facture existante
     for (const stu of localStudents) {
       if (!stu || !stu.studentNumber) continue;
       if (deletedIds.has(stu.id) || deletedIds.has(stu.studentNumber)) continue;
@@ -958,39 +1002,58 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
         continue;
       }
 
-      const idKey = stu.id || stu.studentNumber;
-      const numKey = stu.studentNumber || stu.id;
-      if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
-        const numVal = parseInt(stu.studentNumber?.replace(/\D/g, '') || '1', 10);
-        const reconstructedInvoice: Invoice = {
-          id: `inv-${numVal.toString().padStart(3, '0')}`,
-          invoiceNumber: stu.studentNumber,
-          studentId: stu.id,
-          studentName: stu.fullName || `${stu.firstName} ${stu.lastName}`.trim(),
-          studentAvatar: stu.avatar,
-          studentGrade: stu.grade,
-          studentGender: stu.gender,
-          guardianName: stu.guardianName,
-          guardianPhone: stu.whatsappPhone || stu.guardianPhone,
-          feeType: "Frais d'inscription & Scolarité",
-          registrationFee: stu.registrationFee,
-          amount: stu.tuitionAmount || 0,
-          discountAmount: stu.discountAmount || 0,
-          netAmount: stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0),
-          paidAmount: stu.paidAmount || 0,
-          balanceRemaining: stu.balanceRemaining !== undefined ? stu.balanceRemaining : Math.max(0, (stu.tuitionAmount || 0) - (stu.paidAmount || 0)),
-          paymentMethod: stu.paymentMethod || 'Espèces en caisse',
-          enrollmentType: stu.enrollmentType || 'nouveau',
-          installments: stu.installments,
-          issueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
-          dueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
-          status: (stu.balanceRemaining === 0 || stu.tuitionStatus === 'paid') ? 'paid' : (stu.paidAmount && stu.paidAmount > 0) ? 'partial' : 'sent',
-        };
+      const numVal = parseInt(stu.studentNumber?.replace(/\D/g, '') || '1', 10);
+      const recFormat = `REC-2026-${numVal.toString().padStart(3, '0')}`;
+      const idCode = stu.studentNumber;
 
-        seenIds.add(idKey);
-        seenNumbers.add(numKey);
-        uniqueInvoices.push(reconstructedInvoice);
+      // Si l'élève a DÉJÀ une facture enregistrée, NE JAMAIS CRÉER DE DOUBLON !
+      if (
+        seenStudentIds.has(stu.id) ||
+        seenStudentNumbers.has(idCode) ||
+        seenIds.has(stu.id) ||
+        seenNumbers.has(idCode) ||
+        seenNumbers.has(recFormat)
+      ) {
+        continue;
       }
+
+      const isTuitionUnpaid =
+        stu.tuitionStatus === 'unpaid' ||
+        (typeof stu.paidAmount === 'number' && stu.paidAmount <= (stu.registrationFee || 0)) ||
+        (stu.tuitionAmount && stu.balanceRemaining !== undefined && stu.balanceRemaining >= stu.tuitionAmount);
+
+      const reconstructedInvoice: Invoice = {
+        id: `inv-${numVal.toString().padStart(3, '0')}`,
+        invoiceNumber: recFormat,
+        studentId: stu.id,
+        studentName: stu.fullName || `${stu.firstName} ${stu.lastName}`.trim(),
+        studentAvatar: stu.avatar,
+        studentGrade: stu.grade,
+        studentGender: stu.gender,
+        guardianName: stu.guardianName,
+        guardianPhone: stu.whatsappPhone || stu.guardianPhone,
+        feeType: "Frais d'inscription & Scolarité",
+        registrationFee: stu.registrationFee,
+        amount: stu.tuitionAmount || 0,
+        discountAmount: stu.discountAmount || 0,
+        netAmount: stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0),
+        paidAmount: stu.paidAmount || 0,
+        balanceRemaining: stu.balanceRemaining !== undefined ? stu.balanceRemaining : Math.max(0, (stu.tuitionAmount || 0) - (stu.paidAmount || 0)),
+        paymentMethod: stu.paymentMethod || 'Espèces en caisse',
+        enrollmentType: stu.enrollmentType || 'nouveau',
+        installments: isTuitionUnpaid ? {} : (stu.installments || {}),
+        issueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
+        dueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
+        status: (stu.balanceRemaining === 0 || stu.tuitionStatus === 'paid') ? 'paid' : (stu.paidAmount && stu.paidAmount > 0) ? 'partial' : 'sent',
+      };
+
+      seenIds.add(stu.id);
+      seenIds.add(reconstructedInvoice.id);
+      seenNumbers.add(idCode);
+      seenNumbers.add(recFormat);
+      seenStudentIds.add(stu.id);
+      seenStudentNumbers.add(idCode);
+      uniqueInvoices.push(reconstructedInvoice);
     }
 
     // Auto-consolidation des souscriptions d'internat pour le journal des encaissements
@@ -1576,10 +1639,19 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
               finalName = 'LAWANI MOUHAMED';
             }
           }
+          const persistentAvatar =
+            (u.authCode ? localStorage.getItem(`schoolflow_user_avatar_${u.authCode.toUpperCase()}`) : null) ||
+            (def.authCode ? localStorage.getItem(`schoolflow_user_avatar_${def.authCode.toUpperCase()}`) : null) ||
+            (finalName ? localStorage.getItem(`schoolflow_user_avatar_${finalName}`) : null) ||
+            (def.roleId ? localStorage.getItem(`schoolflow_user_avatar_${def.roleId}`) : null) ||
+            u.avatarUrl ||
+            def.avatarUrl;
+
           codeMap.set(u.authCode, {
             ...def,
             ...u,
             fullName: finalName,
+            avatarUrl: persistentAvatar,
             role: def.roleId === 'fondateur' ? 'Fondateur & Promoteur (Supervision Suprême)' : def.roleId === 'directeur' ? 'Directeur des Études (Admin)' : (u.role || def.role),
             roleId: def.roleId || u.roleId,
             matricule: def.roleId === 'fondateur' ? 'FND-001' : def.roleId === 'directeur' ? 'DIR-001' : (u.matricule || def.matricule),
@@ -1593,9 +1665,16 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
         } else {
           // Nouvel utilisateur ajouté dynamiquement par l'admin dans la page Administration
           const sanitizedName = (u.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
+          const userCode = (u.authCode || u.id || '').toUpperCase();
+          const persistentUserAvatar =
+            (userCode ? localStorage.getItem(`schoolflow_user_avatar_${userCode}`) : null) ||
+            (sanitizedName ? localStorage.getItem(`schoolflow_user_avatar_${sanitizedName}`) : null) ||
+            u.avatarUrl;
+
           codeMap.set(u.authCode || u.id, {
             ...u,
             fullName: sanitizedName || u.fullName,
+            avatarUrl: persistentUserAvatar,
             email: sanitizedEmail !== undefined ? sanitizedEmail : u.email,
           });
         }
@@ -1610,7 +1689,14 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
     }
 
     // Premier chargement : strictement Fondateur et Directeur (les autres profils doivent être créés en Administration)
-    const initialStaff = baseDefaults;
+    const initialStaff = baseDefaults.map((def) => {
+      const pAvatar =
+        (def.authCode ? localStorage.getItem(`schoolflow_user_avatar_${def.authCode.toUpperCase()}`) : null) ||
+        (def.fullName ? localStorage.getItem(`schoolflow_user_avatar_${def.fullName}`) : null) ||
+        (def.roleId ? localStorage.getItem(`schoolflow_user_avatar_${def.roleId}`) : null) ||
+        def.avatarUrl;
+      return { ...def, avatarUrl: pAvatar };
+    });
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
     if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(initialStaff));

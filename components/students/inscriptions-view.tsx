@@ -1330,20 +1330,26 @@ export function InscriptionsView({
     return canvas;
   };
 
-  // Send receipt photo/image via WhatsApp (100% Natif, Instantané, avec Vrais Logos et Sans Échec)
-  const handleCaptureAndShareWhatsApp = async (customPhone?: string, stuName?: string) => {
-    const rawPhone = customPhone || whatsappPhone || '+225 07 48 92 11 00';
-    const digitsOnly = rawPhone.replace(/\D/g, '');
-    let cleanPhone = digitsOnly;
-    if (digitsOnly.startsWith('225') && digitsOnly.length >= 12) {
-      cleanPhone = digitsOnly;
-    } else if (digitsOnly.length === 10) {
-      cleanPhone = `225${digitsOnly}`;
-    } else if (digitsOnly.length === 8) {
-      cleanPhone = `22507${digitsOnly}`;
-    } else {
-      cleanPhone = digitsOnly.startsWith('225') ? digitsOnly : `225${digitsOnly}`;
+  // Formateur robuste pour WhatsApp (formats Côte d'Ivoire & International)
+  const formatCleanWhatsApp = (phone: string): string => {
+    let d = (phone || '').replace(/\D/g, '');
+    if (d.startsWith('225')) {
+      if (d.length === 11) d = '22507' + d.slice(3);
+      return d;
     }
+    if (d.length === 10) return '225' + d;
+    if (d.length === 8) return '22507' + d;
+    return d ? (d.startsWith('225') ? d : `225${d}`) : '';
+  };
+
+  // Send receipt photo/image via WhatsApp (100% Natif, Instantané, avec Vrais Logos et Sans Échec)
+  const handleCaptureAndShareWhatsApp = async (
+    customPhone?: string,
+    stuName?: string,
+    shouldOpenWindow: boolean = true
+  ) => {
+    const rawPhone = customPhone || whatsappPhone || '+225 07 48 92 11 00';
+    const cleanPhone = formatCleanWhatsApp(rawPhone) || '2250748921100';
 
     const name = stuName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
     setSuccessToast("📸 Génération du reçu et ouverture de WhatsApp...");
@@ -1352,10 +1358,12 @@ export function InscriptionsView({
       `Bonjour, voici le reçu officiel de paiement (${receiptNumber}) pour ${name} — ${schoolState.name}.`
     )}`;
 
-    // Ouvrir immédiatement l'onglet WhatsApp du parent en direct
-    try {
-      window.open(whatsappUrl, '_blank');
-    } catch (e) {}
+    // Ouvrir immédiatement l'onglet WhatsApp du parent en direct si demandé (pour clic bouton direct)
+    if (shouldOpenWindow) {
+      try {
+        window.open(whatsappUrl, '_blank');
+      } catch (e) {}
+    }
 
     try {
       const installmentsList = [
@@ -3348,7 +3356,7 @@ export function InscriptionsView({
               {/* Bouton WhatsApp Principal Direct */}
               <div className="space-y-1">
                 <a
-                  href={`https://wa.me/${(successModalData.whatsappPhone || successModalData.guardianPhone || '').replace(/\D/g, '').replace(/^0+/, '').replace(/^(\d{10})$/, '225$1')}?text=${encodeURIComponent(
+                  href={`https://wa.me/${formatCleanWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone)}?text=${encodeURIComponent(
                     `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
                   )}`}
                   target="_blank"
@@ -3356,7 +3364,8 @@ export function InscriptionsView({
                   onClick={() => {
                     handleCaptureAndShareWhatsApp(
                       successModalData.whatsappPhone || successModalData.guardianPhone,
-                      successModalData.fullName
+                      successModalData.fullName,
+                      false
                     );
                   }}
                   className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"

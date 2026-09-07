@@ -124,6 +124,26 @@ export function DocumentsView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
 
+  // Synchronisation dynamique de la largeur du défilement haut avec le tableau
+  useEffect(() => {
+    const updateScrollWidth = () => {
+      if (tableScrollRef.current && topScrollRef.current) {
+        const scrollWidth = tableScrollRef.current.scrollWidth;
+        const inner = topScrollRef.current.firstElementChild as HTMLElement;
+        if (inner) {
+          inner.style.width = `${Math.max(scrollWidth, 1250)}px`;
+        }
+      }
+    };
+    updateScrollWidth();
+    const t = setTimeout(updateScrollWidth, 300);
+    window.addEventListener('resize', updateScrollWidth);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', updateScrollWidth);
+    };
+  }, [students]);
+
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [selectedClass, setSelectedClass] = useState('Toutes les classes');
   const [selectedStatus, setSelectedStatus] = useState('all'); // all, complete, incomplete
