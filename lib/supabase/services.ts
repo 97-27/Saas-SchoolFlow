@@ -181,7 +181,28 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 
     if (error || !data) return [];
 
-    return data.map((d: any) => {
+    const seen = new Set<string>();
+    const uniqueData: any[] = [];
+    for (const d of data) {
+      const numKey = (d.student_number || '').trim().toUpperCase();
+      const nameKey = (d.full_name || `${d.last_name || ''} ${d.first_name || ''}`).trim().toLowerCase().replace(/\s+/g, ' ');
+      const matKey = (d.matricule || '').trim().toUpperCase();
+
+      if (
+        (numKey && seen.has(numKey)) ||
+        (nameKey && seen.has(nameKey)) ||
+        (matKey && matKey !== '' && seen.has(matKey))
+      ) {
+        continue;
+      }
+
+      if (numKey) seen.add(numKey);
+      if (nameKey) seen.add(nameKey);
+      if (matKey) seen.add(matKey);
+      uniqueData.push(d);
+    }
+
+    return uniqueData.map((d: any) => {
       let meta: any = {};
       let cleanAddress = d.address || '';
       try {
@@ -449,7 +470,16 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
 
     if (error || !data) return [];
 
-    return data.map((d: any) => ({
+    const seenInv = new Set<string>();
+    const uniqueInvs: any[] = [];
+    for (const d of data) {
+      const invKey = (d.invoice_number || d.id || '').trim().toUpperCase();
+      if (invKey && seenInv.has(invKey)) continue;
+      if (invKey) seenInv.add(invKey);
+      uniqueInvs.push(d);
+    }
+
+    return uniqueInvs.map((d: any) => ({
       id: d.id,
       invoiceNumber: d.invoice_number,
       studentId: d.student_id,
