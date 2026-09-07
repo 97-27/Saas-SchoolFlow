@@ -101,6 +101,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
       const inst = inv.installments;
 
+      const rawInvNumber = inv.invoiceNumber || inv.id || '';
+      const displayInvoiceNumber = matchedStudent?.studentNumber || rawInvNumber.replace(/^REC(?:U)?[-_ ]?(?:2026[-_ ]?)?/i, 'ID-') || rawInvNumber;
+
       let foundVersements = false;
 
       // 1. Vérification des versements détaillés de l'échéancier
@@ -136,7 +139,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             list.push({
               id: `${inv.id}-${key}`,
               invoiceId: inv.id,
-              invoiceNumber: inv.invoiceNumber,
+              invoiceNumber: displayInvoiceNumber,
               matriculeCode,
               studentName: inv.studentName,
               studentGrade: inv.studentGrade,
@@ -163,7 +166,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           list.push({
             id: `${inv.id}-reg`,
             invoiceId: inv.id,
-            invoiceNumber: inv.invoiceNumber,
+            invoiceNumber: displayInvoiceNumber,
             matriculeCode,
             studentName: inv.studentName,
             studentGrade: inv.studentGrade,
@@ -196,7 +199,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             list.push({
               id: `${inv.id}-tx`,
               invoiceId: inv.id,
-              invoiceNumber: inv.invoiceNumber,
+              invoiceNumber: displayInvoiceNumber,
               matriculeCode,
               studentName: inv.studentName,
               studentGrade: inv.studentGrade,

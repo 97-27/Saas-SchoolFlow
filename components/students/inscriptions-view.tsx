@@ -90,12 +90,19 @@ export function InscriptionsView({
       .filter((n) => !isNaN(n) && n > 0);
     prevMaxSeqRef.current = initialNums.length > 0 ? Math.max(...initialNums) : 0;
 
-    const handleUpdate = () => {
+    const handleUpdate = (e?: any) => {
       const live = getLiveStudents(initialStudents, schoolSlug);
-      setStudents(live);
+      // Fusionner immédiatement l'élève reçu par diffusion d'événement pour réactivité instantanée
+      const eventStudent = e?.detail?.student;
+      let combinedLive = [...live];
+      if (eventStudent && !combinedLive.some((s) => s.id === eventStudent.id || s.studentNumber === eventStudent.studentNumber)) {
+        combinedLive.push(eventStudent);
+      }
+
+      setStudents(combinedLive);
       setSchoolState(getLiveSchool(schoolSlug, school));
 
-      const nums = live
+      const nums = combinedLive
         .map((s) => {
           const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
           return match ? parseInt(match[0], 10) : 0;
@@ -103,9 +110,9 @@ export function InscriptionsView({
         .filter((n) => !isNaN(n) && n > 0);
       const currentMax = nums.length > 0 ? Math.max(...nums) : 0;
 
-      // Détecter si un collaborateur vient de valider un reçu
+      // Détecter si un collaborateur vient de valider une inscription
       if (prevMaxSeqRef.current > 0 && currentMax > prevMaxSeqRef.current) {
-        const latestStu = live.find((s) => {
+        const latestStu = combinedLive.find((s) => {
           const num = parseInt((s?.studentNumber || s?.id || '')?.replace(/\D/g, ''), 10);
           return num === currentMax;
         });
@@ -114,16 +121,16 @@ export function InscriptionsView({
         const nextNumber = currentMax + 1;
 
         setCollaboratorAlert({
-          message: `Un collaborateur vient de valider le reçu ${stuNum} (${stuName}) ! Votre formulaire a été automatiquement ajusté au prochain reçu n° REC-2026-${String(nextNumber).padStart(3, '0')} (ID-${String(nextNumber).padStart(3, '0')}) pour éviter toute collision.`,
+          message: `Un collaborateur vient de valider l'inscription ${stuNum} (${stuName}) ! Votre fiche d'inscription a été automatiquement ajustée sur le prochain identifiant ID-${String(nextNumber).padStart(3, '0')} pour éviter toute collision.`,
           studentNumber: stuNum,
           fullName: stuName,
           newSeq: nextNumber,
         });
 
-        // Si l'utilisateur avait sélectionné l'ID qui vient d'être pris par le collaborateur, basculer immédiatement
+        // Si l'utilisateur avait sélectionné l'ID qui vient d'être pris par le collaborateur, basculer immédiatement en mode nouveau
         setSelectedStudentId((prev) => {
           if (prev === stuNum || prev === latestStu?.id) {
-            return null; // Bascule automatiquement sur le nouveau reçu
+            return null; // Bascule automatiquement sur le nouveau formulaire
           }
           return prev;
         });
@@ -395,7 +402,7 @@ export function InscriptionsView({
     const seqNum = currentSelectedStudent
       ? parseInt((currentSelectedStudent.studentNumber || currentSelectedStudent.id || '').replace(/\D/g, ''), 10) || nextSeq
       : nextSeq;
-    return `REC-2026-${seqNum.toString().padStart(3, '0')}`;
+    return `ID-${seqNum.toString().padStart(3, '0')}`;
   }, [currentSelectedStudent, nextSeq]);
 
   const netAmount = Math.max(0, tuitionAmount - discountAmount);
@@ -636,7 +643,7 @@ export function InscriptionsView({
       setGender(stu.gender || 'female');
       setGrade(stu.grade || '6ème');
       setEnrollmentType(stu.enrollmentType || 'nouveau');
-      setCustomMatricule(stu.matricule || stu.studentNumber || '');
+      setCustomMatricule(stu.matricule || '');
       setAddress(stu.address || `${schoolState.city || 'Abidjan'}`);
       setGuardianName(stu.guardianName || '');
       setWhatsappPhone(stu.whatsappPhone || stu.guardianPhone || '');
@@ -812,13 +819,24 @@ export function InscriptionsView({
 
   // Confirm and save student + invoice in persistent live store
   const handleConfirmAndSave = () => {
+    // Récupération en temps réel des élèves les plus récents pour éviter toute collision d'ID entre collaborateurs
+    const freshStudents = getLiveStudents(initialStudents, schoolSlug);
+    const existingNums = freshStudents
+      .map((s) => {
+        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      })
+      .filter((n) => !isNaN(n) && n > 0);
+    const freshMax = existingNums.length > 0 ? Math.max(...existingNums) : 0;
+    const computedNextSeq = Math.max(nextSeq, freshMax + 1);
+
     const studentIdToSave = currentSelectedStudent
       ? currentSelectedStudent.id
-      : `stu-${nextSeq.toString().padStart(3, '0')}`;
+      : `stu-${computedNextSeq.toString().padStart(3, '0')}`;
 
     const studentNumberToSave = currentSelectedStudent
       ? currentSelectedStudent.studentNumber
-      : currentIdStr;
+      : `ID-${computedNextSeq.toString().padStart(3, '0')}`;
 
     const matriculeToSave = currentMatricule;
 
@@ -996,10 +1014,8 @@ export function InscriptionsView({
     const finalStuMat = targetStudent ? (targetStudent.matricule || '') : (currentMatricule || customMatricule.trim());
 
     const finalReceiptNum = targetReceiptNum || (targetStudent
-      ? (targetStudent.studentNumber?.startsWith('ID-')
-          ? targetStudent.studentNumber.replace('ID-', 'REC-2026-')
-          : `REC-2026-${(targetStudent.studentNumber || '').replace(/\D/g, '').padStart(3, '0')}`)
-      : receiptNumber);
+      ? (targetStudent.studentNumber || currentIdStr)
+      : currentIdStr);
 
     const finalRegistrationFee = targetStudent ? targetStudent.registrationFee : registrationFee;
     const finalTuitionAmount = targetStudent ? targetStudent.tuitionAmount : tuitionAmount;
@@ -1390,10 +1406,8 @@ export function InscriptionsView({
     const name = stuName || activeStudent?.fullName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
     
     const activeReceiptNumber = targetReceiptNum || (activeStudent
-      ? (activeStudent.studentNumber?.startsWith('ID-')
-          ? activeStudent.studentNumber.replace('ID-', 'REC-2026-')
-          : `REC-2026-${(activeStudent.studentNumber || '').replace(/\D/g, '').padStart(3, '0')}`)
-      : receiptNumber);
+      ? (activeStudent.studentNumber || currentIdStr)
+      : currentIdStr);
 
     setSuccessToast("📸 Génération du reçu et ouverture de WhatsApp...");
 
@@ -1590,10 +1604,10 @@ export function InscriptionsView({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
-                Identifiant & Matricule :
+                {currentMatricule ? 'Identifiant & Matricule :' : 'Identifiant :'}
               </span>
               <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
-                {currentIdStr} • {currentMatricule || (customMatricule.trim() ? customMatricule.trim() : (selectedStudentId ? '—' : '—'))}
+                {currentIdStr}{currentMatricule ? ` • ${currentMatricule}` : ''}
               </span>
             </div>
 
@@ -3189,11 +3203,19 @@ export function InscriptionsView({
             {/* Récapitulatif clair */}
             <div className="space-y-2.5 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                <span className="text-slate-500">Identifiant & Matricule :</span>
+                <span className="text-slate-500">Identifiant :</span>
                 <span className="font-mono font-extrabold text-slate-900">
-                  {currentIdStr} • {currentMatricule || (customMatricule.trim() || 'Attribué à l’enregistrement')}
+                  {currentIdStr}
                 </span>
               </div>
+              {currentMatricule ? (
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                  <span className="text-slate-500">Matricule officiel :</span>
+                  <span className="font-mono font-extrabold text-slate-900">
+                    {currentMatricule}
+                  </span>
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
                 <span className="text-slate-500">Nom & Prénom de l&apos;élève :</span>
@@ -3343,11 +3365,17 @@ export function InscriptionsView({
             {/* Récapitulatif structuré de l'élève sous forme de carte claire */}
             <div className="bg-slate-50/90 rounded-2xl border border-slate-200 p-3.5 text-left text-xs space-y-2">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                <span className="text-slate-500 font-medium">Élève & Matricule :</span>
+                <span className="text-slate-500 font-medium">Élève & Identifiant :</span>
                 <span className="font-extrabold text-slate-900 font-heading">
-                  {successModalData.fullName} <span className="font-mono font-bold text-slate-500">({successModalData.matricule || successModalData.studentNumber})</span>
+                  {successModalData.fullName} <span className="font-mono font-bold text-emerald-700">({successModalData.studentNumber})</span>
                 </span>
               </div>
+              {successModalData.matricule ? (
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
+                  <span className="text-slate-500 font-medium">Matricule Officiel :</span>
+                  <span className="font-mono font-bold text-slate-800">{successModalData.matricule}</span>
+                </div>
+              ) : null}
 
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
                 <span className="text-slate-500 font-medium">Classe & Statut :</span>
@@ -3400,7 +3428,7 @@ export function InscriptionsView({
               <div className="space-y-1">
                 <a
                   href={`https://wa.me/${formatCleanWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone)}?text=${encodeURIComponent(
-                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber?.startsWith('ID-') ? successModalData.studentNumber.replace('ID-', 'REC-2026-') : successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
+                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

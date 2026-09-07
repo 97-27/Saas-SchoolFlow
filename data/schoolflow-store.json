@@ -223,7 +223,7 @@
     "invoices": [
       {
         "id": "db13ee80-7e6b-4930-a1b9-9959e10853db",
-        "invoiceNumber": "REC-2026-005",
+        "invoiceNumber": "ID-005",
         "studentId": "3a334c8b-de6d-4d70-9fe5-babd76337618",
         "schoolSlug": "epc-manoi",
         "studentName": "DOUMBIA Zakaria Abdul-Razak",
@@ -247,7 +247,7 @@
       },
       {
         "id": "7712280e-7edb-483a-b5ee-f24066f27ae7",
-        "invoiceNumber": "REC-2026-004",
+        "invoiceNumber": "ID-004",
         "studentId": "a2c5bfd7-9773-40b6-af70-564c4c66d429",
         "schoolSlug": "epc-manoi",
         "studentName": "COULIBALY Lyam Katchenin Amra Rahim",
@@ -271,7 +271,7 @@
       },
       {
         "id": "731059f8-c77e-45d5-823c-d5bf94c134b1",
-        "invoiceNumber": "REC-2026-003",
+        "invoiceNumber": "ID-003",
         "studentId": "65184026-b9ef-437b-875a-d0f4141ef5f1",
         "schoolSlug": "epc-manoi",
         "studentName": "Doh Tariq Imram Marvyn COULIBALY",
@@ -295,7 +295,7 @@
       },
       {
         "id": "6eb242e9-9816-4cce-a399-2f83a43abbd4",
-        "invoiceNumber": "REC-2026-006",
+        "invoiceNumber": "ID-006",
         "studentId": "a130b4a0-0f97-491d-81d0-b65a2c63ada4",
         "schoolSlug": "epc-manoi",
         "studentName": "LAWANI Nansran Anzizan",
@@ -569,7 +569,7 @@
     "invoices": [
       {
         "id": "8b65560c-c9b2-41e0-892f-3a75c42eeed1",
-        "invoiceNumber": "REC-2026-005",
+        "invoiceNumber": "ID-005",
         "studentId": "dd01fd6d-3aa4-47de-8f0d-e0fd22a404f5",
         "schoolSlug": "college-excellence",
         "studentName": "DOUMBIA Zakaria Abdul-Razak",
@@ -617,7 +617,7 @@
       },
       {
         "id": "c1d2c920-3489-4731-8c5a-7a4da69a0135",
-        "invoiceNumber": "REC-2026-006",
+        "invoiceNumber": "ID-006",
         "studentId": "723fed49-9d0a-47b8-be2a-7e853d91e2ea",
         "schoolSlug": "college-excellence",
         "studentName": "LAWANI Nansran Anzizan",
@@ -641,7 +641,7 @@
       },
       {
         "id": "e5b35b57-72e7-41fe-bc35-c097b2706317",
-        "invoiceNumber": "REC-2026-002",
+        "invoiceNumber": "ID-002",
         "studentId": "405201aa-53f3-434e-8fb1-f9776c92012f",
         "schoolSlug": "college-excellence",
         "studentName": "Fatmah Gnele Elif COULIBALY",
@@ -665,7 +665,7 @@
       },
       {
         "id": "e91c4cdf-3125-4721-a58e-89afa8a2accd",
-        "invoiceNumber": "REC-2026-003",
+        "invoiceNumber": "ID-003",
         "studentId": "f1015a43-0d1e-470a-acbf-309f7b336a78",
         "schoolSlug": "college-excellence",
         "studentName": "COULIBALY Doh Tariq Imram Marvyn",
@@ -689,7 +689,7 @@
       },
       {
         "id": "637a5464-ddd6-4e61-b064-fa13b580018e",
-        "invoiceNumber": "REC-2026-004",
+        "invoiceNumber": "ID-004",
         "studentId": "b152cbd7-645c-4e02-ba74-f243b11e1a86",
         "schoolSlug": "college-excellence",
         "studentName": "COULIBALY Lyam Katchenin Amra Rahim",
@@ -713,7 +713,7 @@
       },
       {
         "id": "c7553ad5-95ca-426d-8275-833edb7f434d",
-        "invoiceNumber": "REC-2026-001",
+        "invoiceNumber": "ID-001",
         "studentId": "0f053c51-8364-4fe6-8e62-04c3365791e5",
         "schoolSlug": "college-excellence",
         "studentName": "COULIBALY Zouleikha Tiegbana Houriya",

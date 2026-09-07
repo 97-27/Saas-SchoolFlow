@@ -449,7 +449,7 @@ export function BoardingView({
     if (!activeBoarder) return false;
 
     const initialName = `${activeBoarder.student.firstName} ${activeBoarder.student.lastName}`.trim();
-    const initialMatricule = activeBoarder.student.studentNumber || activeBoarder.student.matricule || '';
+    const initialMatricule = activeBoarder.student.matricule || '';
     const initialClass = activeBoarder.student.grade || (activeBoarder.student as any).className || '6ème';
     const initialGender = activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M';
     const initialPavilion = activeBoarder.pavilion || 'Pavillon A (Garçons)';

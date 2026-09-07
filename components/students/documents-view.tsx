@@ -110,6 +110,18 @@ export function DocumentsView({
     }
   };
 
+  const loadDocsStatus = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(DOCS_STATUS_KEY);
+      if (saved) {
+        setDocRecords((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      }
+    } catch (err) {
+      console.error('Erreur lecture doc status', err);
+    }
+  };
+
   useEffect(() => {
     setStudents(getLiveStudents(initialStudents, schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
@@ -169,30 +181,38 @@ export function DocumentsView({
 
   // Filtered & Sorted students
   const filteredStudents = useMemo(() => {
-    const list = students.filter((s) => {
-      const q = searchQuery.toLowerCase().trim();
+    const list = (students || []).filter((s) => {
+      if (!s) return false;
+      const q = (searchQuery || '').toLowerCase().trim();
+      const sNum = (s.studentNumber || s.id || '').toLowerCase();
+      const sMat = (s.matricule || '').toLowerCase();
+      const sLast = (s.lastName || '').toLowerCase();
+      const sFirst = (s.firstName || '').toLowerCase();
+      const sFull = (s.fullName || `${sLast} ${sFirst}`).toLowerCase();
+
       const matchesSearch =
         q === '' ||
-        s.studentNumber.toLowerCase().includes(q) ||
-        (s.matricule && s.matricule.toLowerCase().includes(q)) ||
-        s.lastName.toLowerCase().includes(q) ||
-        s.firstName.toLowerCase().includes(q) ||
-        s.fullName.toLowerCase().includes(q);
+        sNum.includes(q) ||
+        sMat.includes(q) ||
+        sLast.includes(q) ||
+        sFirst.includes(q) ||
+        sFull.includes(q);
 
+      const sGrade = (s.grade || '').toLowerCase();
       const matchesClass =
         selectedClass === 'Toutes les classes' ||
-        s.grade.toLowerCase() === selectedClass.toLowerCase();
+        sGrade === selectedClass.toLowerCase();
 
-      const doc = docRecords[s.id] || {
+      const doc = (s.id && docRecords[s.id]) || {
         hasBirthCertificate: false,
         hasReportCard: false,
         hasRegistrationForm: false,
         otherDocs: [],
       };
       const isComplete =
-        doc.hasBirthCertificate &&
+        Boolean(doc.hasBirthCertificate &&
         doc.hasReportCard &&
-        doc.hasRegistrationForm;
+        doc.hasRegistrationForm);
 
       const matchesStatus =
         selectedStatus === 'all' ||
@@ -204,8 +224,8 @@ export function DocumentsView({
 
     // Tri par ID décroissant
     return list.sort((a, b) => {
-      const numA = parseInt(a.studentNumber.replace(/\D/g, ''), 10) || 0;
-      const numB = parseInt(b.studentNumber.replace(/\D/g, ''), 10) || 0;
+      const numA = parseInt((a?.studentNumber || a?.id || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt((b?.studentNumber || b?.id || '').replace(/\D/g, ''), 10) || 0;
       return numB - numA;
     });
   }, [students, searchQuery, selectedClass, selectedStatus, docRecords]);
@@ -222,7 +242,8 @@ export function DocumentsView({
     let pendingReportCount = 0;
     let pendingRegistrationCount = 0;
 
-    students.forEach((stu) => {
+    (students || []).forEach((stu) => {
+      if (!stu || !stu.id) return;
       const doc = docRecords[stu.id] || {
         studentId: stu.id,
         hasBirthCertificate: false,
@@ -762,7 +783,7 @@ export function DocumentsView({
                       </td>
 
                       <td className="py-3.5 px-3 font-mono font-bold text-slate-700 text-[11px] whitespace-nowrap">
-                        {stu.matricule || '26014801A'}
+                        {stu.matricule || '—'}
                       </td>
 
                       <td className="py-3.5 px-3 whitespace-nowrap">

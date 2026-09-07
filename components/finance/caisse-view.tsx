@@ -515,7 +515,7 @@ export function CaisseView({
                       <td className="py-3.5 pl-5 pr-3">
                         <input type="checkbox" checked={isSelected} onChange={() => toggleSelectOne(inv.id)} className="rounded border-slate-300 text-emerald-600 h-4 w-4 cursor-pointer" />
                       </td>
-                      <td className="py-3.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">{inv.invoiceNumber}</td>
+                      <td className="py-3.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">{matchedStudent?.studentNumber || inv.invoiceNumber?.replace(/^REC(?:U)?[-_ ]?(?:2026[-_ ]?)?/i, 'ID-') || inv.invoiceNumber}</td>
                       <td className="py-3.5 px-3 font-mono text-slate-600 whitespace-nowrap">{matriculeStr}</td>
                       <td className="py-3.5 px-3 font-extrabold uppercase text-slate-900 whitespace-nowrap">{formatFullNameNomFirst(inv.studentName)}</td>
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">{inv.studentGrade}</td>
@@ -630,7 +630,7 @@ export function CaisseView({
                     Quittance de Paiement Officielle
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Réf : {showReceiptModal.invoiceNumber} • {showReceiptModal.studentName}
+                    Réf : {showReceiptModal.invoiceNumber?.replace(/^REC(?:U)?[-_ ]?(?:2026[-_ ]?)?/i, 'ID-') || showReceiptModal.invoiceNumber} • {showReceiptModal.studentName}
                   </p>
                 </div>
               </div>

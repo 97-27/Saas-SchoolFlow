@@ -1073,8 +1073,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       }
 
       const numVal = parseInt(stu.studentNumber?.replace(/\D/g, '') || '1', 10);
-      const recFormat = `REC-2026-${numVal.toString().padStart(3, '0')}`;
-      const idCode = stu.studentNumber;
+      const recFormat = numVal ? `ID-${numVal.toString().padStart(3, '0')}` : (stu.studentNumber || 'ID-001');
+      const idCode = stu.studentNumber || recFormat;
 
       // Si l'élève a DÉJÀ une facture enregistrée, NE JAMAIS CRÉER DE DOUBLON !
       if (

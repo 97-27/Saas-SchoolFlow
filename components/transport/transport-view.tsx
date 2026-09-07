@@ -1138,8 +1138,8 @@ export function TransportView({
                   <strong className="text-slate-950 font-heading text-xs sm:text-sm">{selectedStudentForReceipt.fullName}</strong>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold block">Matricule & Classe :</span>
-                  <span className="font-mono font-bold text-slate-900">{selectedStudentForReceipt.matricule || selectedStudentForReceipt.studentNumber} • {selectedStudentForReceipt.grade}</span>
+                  <span className="text-[10px] text-slate-400 font-bold block">{selectedStudentForReceipt.matricule ? 'ID / Matr. & Classe :' : 'ID & Classe :'}</span>
+                  <span className="font-mono font-bold text-slate-900">{selectedStudentForReceipt.studentNumber}{selectedStudentForReceipt.matricule ? ` (${selectedStudentForReceipt.matricule})` : ''} • {selectedStudentForReceipt.grade}</span>
                 </div>
                 <div className="col-span-2">
                   <span className="text-[10px] text-slate-400 font-bold block">Arrêt de Ramassage :</span>

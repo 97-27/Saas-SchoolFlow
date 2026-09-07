@@ -1155,7 +1155,7 @@ export function StudentTable({
                   expected: 100000,
                   date: inst?.versement1?.date || viewingStudent.paymentDate || '2026-08-27',
                   method: inst?.versement1?.method || viewingStudent.paymentMethod || 'Espèces',
-                  receipt: `REC-2026-${viewingStudent.studentNumber?.slice(-3) || '001'}-1`,
+                  receipt: `${viewingStudent.studentNumber || 'ID-001'}-1`,
                   status: v1 >= 100000 ? 'paid' : v1 > 0 ? 'partial' : 'pending',
                 },
                 {
@@ -1164,7 +1164,7 @@ export function StudentTable({
                   expected: 50000,
                   date: inst?.versement2?.date || (v2 > 0 ? '2026-10-15' : 'Échéance : 15/10/2026'),
                   method: inst?.versement2?.method || 'Wave Money',
-                  receipt: v2 > 0 ? `REC-2026-${viewingStudent.studentNumber?.slice(-3) || '001'}-2` : '—',
+                  receipt: v2 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-2` : '—',
                   status: v2 >= 50000 ? 'paid' : v2 > 0 ? 'partial' : 'pending',
                 },
                 {
@@ -1173,7 +1173,7 @@ export function StudentTable({
                   expected: 40000,
                   date: inst?.versement3?.date || (v3 > 0 ? '2026-12-10' : 'Échéance : 10/12/2026'),
                   method: inst?.versement3?.method || 'Espèces',
-                  receipt: v3 > 0 ? `REC-2026-${viewingStudent.studentNumber?.slice(-3) || '001'}-3` : '—',
+                  receipt: v3 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-3` : '—',
                   status: v3 >= 40000 ? 'paid' : v3 > 0 ? 'partial' : 'pending',
                 },
                 {
@@ -1182,7 +1182,7 @@ export function StudentTable({
                   expected: 35000,
                   date: inst?.versement4?.date || (v4 > 0 ? '2027-02-15' : 'Échéance : 15/02/2027'),
                   method: inst?.versement4?.method || 'Orange Money',
-                  receipt: v4 > 0 ? `REC-2026-${viewingStudent.studentNumber?.slice(-3) || '001'}-4` : '—',
+                  receipt: v4 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-4` : '—',
                   status: v4 >= 35000 ? 'paid' : v4 > 0 ? 'partial' : 'pending',
                 },
                 {
@@ -1191,7 +1191,7 @@ export function StudentTable({
                   expected: 25000,
                   date: inst?.versement5?.date || (v5 > 0 ? '2027-04-10' : 'Échéance : 10/04/2027'),
                   method: inst?.versement5?.method || 'Espèces',
-                  receipt: v5 > 0 ? `REC-2026-${viewingStudent.studentNumber?.slice(-3) || '001'}-5` : '—',
+                  receipt: v5 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-5` : '—',
                   status: v5 >= 25000 ? 'paid' : v5 > 0 ? 'partial' : 'pending',
                 },
               ];
