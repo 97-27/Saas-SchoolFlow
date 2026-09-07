@@ -874,11 +874,14 @@ export function InscriptionsView({
       isCanteen: isCanteen,
       isTransport: isTransport,
       notes: `Prestations : Internat (${isBoarding ? 'Oui' : 'Non'}), Cantine (${isCanteen ? 'Oui' : 'Non'}), Transport (${isTransport ? 'Oui' : 'Non'}), Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousue (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
+      updatedAt: new Date().toISOString(),
     };
+
+    const savedReceiptNumber = receiptNumber;
 
     const newInvoice: Invoice = {
       id: `inv-${studentNumberToSave.replace(/\D/g, '').padStart(3, '0')}`,
-      invoiceNumber: studentNumberToSave,
+      invoiceNumber: savedReceiptNumber,
       studentId: newStudent.id,
       studentName: newStudent.fullName,
       studentAvatar:
@@ -971,13 +974,53 @@ export function InscriptionsView({
   const generateOfficialReceiptCanvas = async (
     name: string,
     phone: string,
-    installmentsList: Array<{ label: string; amount: number; method: string; date: string }>
+    installmentsList: Array<{ label: string; amount: number; method: string; date: string }>,
+    targetStudent?: Student | null,
+    targetReceiptNum?: string
   ): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
     canvas.width = 1200;
     canvas.height = 1680;
     const ctx = canvas.getContext('2d');
     if (!ctx) return canvas;
+
+    // Résolution précise des données cibles (Élève réel pour lequel le reçu est généré)
+    const finalStuName = targetStudent ? targetStudent.fullName : (name || 'NOM ET PRÉNOM');
+    const finalStuGender = targetStudent ? targetStudent.gender : gender;
+    const finalStuGrade = targetStudent ? targetStudent.grade : grade;
+    const finalStuStatus = targetStudent ? (targetStudent.enrollmentType || 'nouveau') : enrollmentType;
+    const finalStuParent = targetStudent ? (targetStudent.guardianName || 'Non renseigné') : (guardianName || 'Non renseigné');
+    const finalStuPhone = targetStudent ? (targetStudent.whatsappPhone || targetStudent.guardianPhone || phone || 'Non renseigné') : (phone || 'Non renseigné');
+    const finalStuDate = targetStudent ? (targetStudent.paymentDate || targetStudent.enrollmentDate || paymentDate) : paymentDate;
+    const finalStuId = targetStudent ? (targetStudent.studentNumber || targetStudent.id) : currentIdStr;
+    const finalStuMat = targetStudent ? (targetStudent.matricule || '') : (currentMatricule || customMatricule.trim());
+
+    const finalReceiptNum = targetReceiptNum || (targetStudent
+      ? (targetStudent.studentNumber?.startsWith('ID-')
+          ? targetStudent.studentNumber.replace('ID-', 'REC-2026-')
+          : `REC-2026-${(targetStudent.studentNumber || '').replace(/\D/g, '').padStart(3, '0')}`)
+      : receiptNumber);
+
+    const finalRegistrationFee = targetStudent ? targetStudent.registrationFee : registrationFee;
+    const finalTuitionAmount = targetStudent ? targetStudent.tuitionAmount : tuitionAmount;
+    const finalDiscountAmount = targetStudent ? (targetStudent.discountAmount || 0) : discountAmount;
+    const finalPaidAmount = targetStudent ? targetStudent.paidAmount : paidAmount;
+    const finalRemainingAmount = targetStudent ? (targetStudent.balanceRemaining ?? Math.max(0, finalTuitionAmount - finalPaidAmount)) : remainingAmount;
+
+    const finalBoarding = targetStudent ? targetStudent.isBoarding : isBoarding;
+    const finalCanteen = targetStudent ? targetStudent.isCanteen : isCanteen;
+    const finalTransport = targetStudent ? targetStudent.isTransport : isTransport;
+
+    let finalInstallmentsList = installmentsList;
+    if (targetStudent && targetStudent.installments) {
+      finalInstallmentsList = [
+        { label: '1er Versement', amount: targetStudent.installments.versement1?.amount || 0, method: targetStudent.installments.versement1?.paymentMethod || 'Espèces en caisse', date: targetStudent.installments.versement1?.date || finalStuDate },
+        { label: '2ème Versement', amount: targetStudent.installments.versement2?.amount || 0, method: targetStudent.installments.versement2?.paymentMethod || 'Espèces en caisse', date: targetStudent.installments.versement2?.date || finalStuDate },
+        { label: '3ème Versement', amount: targetStudent.installments.versement3?.amount || 0, method: targetStudent.installments.versement3?.paymentMethod || 'Espèces en caisse', date: targetStudent.installments.versement3?.date || finalStuDate },
+        { label: '4ème Versement', amount: targetStudent.installments.versement4?.amount || 0, method: targetStudent.installments.versement4?.paymentMethod || 'Espèces en caisse', date: targetStudent.installments.versement4?.date || finalStuDate },
+        { label: '5ème Versement', amount: targetStudent.installments.versement5?.amount || 0, method: targetStudent.installments.versement5?.paymentMethod || 'Espèces en caisse', date: targetStudent.installments.versement5?.date || finalStuDate },
+      ];
+    }
 
     // Helper pour dessiner des rectangles aux coins élégamment arrondis
     const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
@@ -1075,40 +1118,32 @@ export function InscriptionsView({
       ctx.fillText("CÔTE D'IVOIRE", 1070, 150);
     }
 
-    // Textes École au centre : Nom complet en Ligne 1, Sigle en Ligne 2, Devise, Slogan, Contacts, Code
+    // Textes École au centre
     ctx.textAlign = 'center';
 
-    // Ligne 1 : Nom complet de l'école seul
+    // Ligne 1 : Nom officiel complet
     ctx.fillStyle = '#0f172a';
-    const fullName = (schoolState.name || 'EPC MARKAZ AHLI SOUNNAH').toUpperCase();
-    ctx.font = fullName.length > 45 ? 'bold 18px Outfit, sans-serif' : 'bold 21px Outfit, sans-serif';
-    ctx.fillText(fullName, 600, 78);
+    ctx.font = '900 24px Outfit, sans-serif';
+    ctx.fillText((schoolState.receiptHeaderFullName || schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
 
-    // Ligne 2 : Sigle de l'établissement sous le nom complet
-    if (schoolState.shortName) {
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 15px monospace';
-      ctx.fillText(schoolState.shortName.toUpperCase(), 600, 102);
-    }
+    // Ligne 2 : Sigle / Nom court
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 18px Outfit, sans-serif';
+    ctx.fillText((schoolState.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
 
-    // Ligne 3 : Devise
-    ctx.fillStyle = '#065f46';
-    ctx.font = 'italic bold 14px Outfit, sans-serif';
-    ctx.fillText(schoolState.receiptHeaderMotto || schoolState.motto || '« Excellence Académique • Rigueur • Éducation de Référence »', 600, 126);
-
-    // Ligne 4 : Slogan
+    // Ligne 3 : Slogan / Devise
     if (schoolState.receiptHeaderSlogan || schoolState.slogan) {
       ctx.fillStyle = '#b45309';
       ctx.font = 'italic bold 13px Outfit, sans-serif';
       ctx.fillText(schoolState.receiptHeaderSlogan || schoolState.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux', 600, 148);
     }
 
-    // Ligne 5 : Contacts & Situation
+    // Ligne 4 : Contacts & Situation
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
     ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 170);
 
-    // Ligne 6 : Badge Code Établissement arrondi au centre
+    // Ligne 5 : Badge Code Établissement
     drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
@@ -1129,7 +1164,7 @@ export function InscriptionsView({
     ctx.textAlign = 'right';
     ctx.fillStyle = '#6ee7b7';
     ctx.font = 'bold 21px monospace';
-    ctx.fillText(`Quittance N° : ${receiptNumber}`, 1130, 341);
+    ctx.fillText(`Quittance N° : ${finalReceiptNum}`, 1130, 341);
 
     // --- COORDONNÉES ÉLÈVE & PARENT ARRONDI (radius 16) ---
     drawRoundRect(45, 375, 1110, 215, 16);
@@ -1146,35 +1181,34 @@ export function InscriptionsView({
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Identifiant :', 70, 415);
     ctx.font = 'bold 18px monospace';
-    const displayMat = currentMatricule || (customMatricule.trim() ? customMatricule.trim() : (currentSelectedStudent?.matricule || ''));
-    ctx.fillText(`${currentIdStr}${displayMat ? ` (Matr. ${displayMat})` : ''}`, 180, 415);
+    ctx.fillText(`${finalStuId}${finalStuMat ? ` (Matr. ${finalStuMat})` : ''}`, 180, 415);
 
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText("Date d'encaissement :", 730, 415);
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(formatDate(paymentDate), 920, 415);
+    ctx.fillText(formatDate(finalStuDate), 920, 415);
 
     // Ligne 2 : Nom de l'élève & Classe
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Nom & Prénom :', 70, 460);
     ctx.font = 'bold 22px Outfit, sans-serif';
-    ctx.fillText(`${(name || 'NOM ET PRÉNOM').toUpperCase()} (${gender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 210, 460);
+    ctx.fillText(`${finalStuName.toUpperCase()} (${finalStuGender === 'female' ? '♀ Fille' : '♂ Garçon'})`, 210, 460);
 
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Classe & Statut :', 730, 460);
     ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(`${grade} (${getEnrollmentStatusLabel(enrollmentType, gender)})`, 880, 460);
+    ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 880, 460);
 
     // Ligne 3 : Parent & Téléphone
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Parent / Tuteur :', 70, 505);
     ctx.font = 'bold 18px Inter, sans-serif';
-    ctx.fillText(guardianName || 'Non renseigné', 210, 505);
+    ctx.fillText(finalStuParent, 210, 505);
 
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('WhatsApp :', 730, 505);
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(phone || 'Non renseigné', 840, 505);
+    ctx.fillText(finalStuPhone, 840, 505);
 
     // Ligne 4 : Prestations & Services Souscrits
     ctx.fillStyle = '#0f172a';
@@ -1182,7 +1216,7 @@ export function InscriptionsView({
     ctx.fillText('Prestations :', 70, 550);
     ctx.font = 'bold 14px Inter, sans-serif';
     ctx.fillText(
-      `Internat : ${isBoarding ? 'Oui (Interne)' : 'Non (Externe)'}   •   Cantine : ${isCanteen ? 'Souscrit ✓' : 'Non ✕'}   •   Transport : ${isTransport ? 'Souscrit ✓' : 'Non ✕'}   •   Frais Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
+      `Internat : ${finalBoarding ? 'Oui (Interne)' : 'Non (Externe)'}   •   Cantine : ${finalCanteen ? 'Souscrit ✓' : 'Non ✕'}   •   Transport : ${finalTransport ? 'Souscrit ✓' : 'Non ✕'}   •   Frais Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
       175,
       550
     );
@@ -1220,20 +1254,20 @@ export function InscriptionsView({
       y += 48;
     };
 
-    drawRow("Frais d'inscription", formatFCFA(registrationFee));
-    drawRow(`Scolarité annuelle (${grade})`, formatFCFA(tuitionAmount));
-    if (discountAmount > 0) {
-      drawRow('Réduction / Bourse accordée', `-${formatFCFA(discountAmount)}`);
+    drawRow("Frais d'inscription", formatFCFA(finalRegistrationFee));
+    drawRow(`Scolarité annuelle (${finalStuGrade})`, formatFCFA(finalTuitionAmount));
+    if (finalDiscountAmount > 0) {
+      drawRow('Réduction / Bourse accordée', `-${formatFCFA(finalDiscountAmount)}`);
     }
-    if (paidAmount > 0) {
-      drawRow('Versements Scolarité Encaissés', formatFCFA(paidAmount), false, true, false);
+    if (finalPaidAmount > 0) {
+      drawRow('Versements Scolarité Encaissés', formatFCFA(finalPaidAmount), false, true, false);
     }
     drawRow(
       'Reste à Payer Scolarité (Solde)',
-      remainingAmount > 0 ? `${formatFCFA(remainingAmount)} (À régler)` : '0 FCFA (Soldé)',
+      finalRemainingAmount > 0 ? `${formatFCFA(finalRemainingAmount)} (À régler)` : '0 FCFA (Soldé)',
       true,
-      remainingAmount === 0,
-      remainingAmount > 0
+      finalRemainingAmount === 0,
+      finalRemainingAmount > 0
     );
 
     // --- DÉTAIL DES 5 VERSEMENTS ARRONDI ---
@@ -1250,7 +1284,7 @@ export function InscriptionsView({
     ctx.fillText('5 TRANCHES', 1130, y + 2);
 
     y += 36;
-    installmentsList.forEach((inst) => {
+    finalInstallmentsList.forEach((inst) => {
       drawRoundRect(45, y - 20, 1110, 36, 6);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
@@ -1295,7 +1329,7 @@ export function InscriptionsView({
     ctx.fillText('✓ ENCAISSEMENT VALIDÉ & CERTIFIÉ', 70, y + 44);
     ctx.fillStyle = '#64748b';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`Quittance officielle N° ${receiptNumber}`, 70, y + 74);
+    ctx.fillText(`Quittance officielle N° ${finalReceiptNum}`, 70, y + 74);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#0f172a';
@@ -1318,11 +1352,10 @@ export function InscriptionsView({
     // Bas de page officiel
     y += 145;
     ctx.fillStyle = '#64748b';
-    ctx.font = 'italic bold 14px Inter, sans-serif';
+    ctx.font = '13px Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
-      schoolState.receiptFooterNote ||
-        'Tout versement donne droit à un reçu numéroté immédiat. Conservez ce reçu officiel de paiement.',
+      `Document émis électroniquement par SchoolFlow Africa le ${formatDate(finalStuDate)} • Quittance N° ${finalReceiptNum} • Valeur juridique intégrale`,
       600,
       y
     );
@@ -1346,16 +1379,26 @@ export function InscriptionsView({
   const handleCaptureAndShareWhatsApp = async (
     customPhone?: string,
     stuName?: string,
-    shouldOpenWindow: boolean = true
+    shouldOpenWindow: boolean = true,
+    targetStudent?: Student | null,
+    targetReceiptNum?: string
   ) => {
-    const rawPhone = customPhone || whatsappPhone || '+225 07 48 92 11 00';
+    const activeStudent = targetStudent || successModalData;
+    const rawPhone = customPhone || (activeStudent?.whatsappPhone || activeStudent?.guardianPhone) || whatsappPhone || '+225 07 48 92 11 00';
     const cleanPhone = formatCleanWhatsApp(rawPhone) || '2250748921100';
 
-    const name = stuName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
+    const name = stuName || activeStudent?.fullName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
+    
+    const activeReceiptNumber = targetReceiptNum || (activeStudent
+      ? (activeStudent.studentNumber?.startsWith('ID-')
+          ? activeStudent.studentNumber.replace('ID-', 'REC-2026-')
+          : `REC-2026-${(activeStudent.studentNumber || '').replace(/\D/g, '').padStart(3, '0')}`)
+      : receiptNumber);
+
     setSuccessToast("📸 Génération du reçu et ouverture de WhatsApp...");
 
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-      `Bonjour, voici le reçu officiel de paiement (${receiptNumber}) pour ${name} — ${schoolState.name}.`
+      `Bonjour, voici le reçu officiel de paiement (${activeReceiptNumber}) pour ${name} — ${schoolState.name}.`
     )}`;
 
     // Ouvrir immédiatement l'onglet WhatsApp du parent en direct si demandé (pour clic bouton direct)
@@ -1374,7 +1417,7 @@ export function InscriptionsView({
         { label: '5ème Versement', amount: versement5Amount, method: versement5Method, date: versement5Date },
       ];
 
-      const canvas = await generateOfficialReceiptCanvas(name, rawPhone, installmentsList);
+      const canvas = await generateOfficialReceiptCanvas(name, rawPhone, installmentsList, activeStudent, activeReceiptNumber);
 
       canvas.toBlob(async (blob: Blob | null) => {
         if (!blob) {
@@ -1382,7 +1425,7 @@ export function InscriptionsView({
           return;
         }
 
-        const fileName = `Recu-Paiement-${receiptNumber}-${name.replace(/\s+/g, '_')}.png`;
+        const fileName = `Recu-Paiement-${activeReceiptNumber}-${name.replace(/\s+/g, '_')}.png`;
         const file = new File([blob], fileName, { type: 'image/png' });
         const imageUrl = URL.createObjectURL(blob);
 
@@ -1394,7 +1437,7 @@ export function InscriptionsView({
           try {
             await navigator.share({
               title: `Reçu de Paiement - ${name}`,
-              text: `Reçu officiel de paiement (${receiptNumber}) pour ${name} — ${schoolState.name}`,
+              text: `Reçu officiel de paiement (${activeReceiptNumber}) pour ${name} — ${schoolState.name}`,
               files: [file],
             });
             setSuccessToast(`✓ Photo du reçu partagée avec succès sur WhatsApp !`);
@@ -1422,7 +1465,7 @@ export function InscriptionsView({
           name,
         });
 
-        setSuccessToast(`📷 Photo HD du reçu générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
+        setSuccessToast(`📷 Photo HD du reçu (${activeReceiptNumber}) générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
       }, 'image/png');
     } catch (err) {
       console.error('Erreur génération reçu image:', err);
@@ -3357,7 +3400,7 @@ export function InscriptionsView({
               <div className="space-y-1">
                 <a
                   href={`https://wa.me/${formatCleanWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone)}?text=${encodeURIComponent(
-                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
+                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber?.startsWith('ID-') ? successModalData.studentNumber.replace('ID-', 'REC-2026-') : successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -3365,7 +3408,8 @@ export function InscriptionsView({
                     handleCaptureAndShareWhatsApp(
                       successModalData.whatsappPhone || successModalData.guardianPhone,
                       successModalData.fullName,
-                      false
+                      false,
+                      successModalData
                     );
                   }}
                   className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"

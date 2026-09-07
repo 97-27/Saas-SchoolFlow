@@ -343,9 +343,9 @@ export function syncSchoolDataWithServer(slug: string): void {
           }
         }
 
-        // 3. Synchroniser les élèves (Protection absolue des données existantes)
+        // 3. Synchroniser les élèves (Protection absolue et fusion intelligente)
         if (data.students !== undefined && Array.isArray(data.students)) {
-          const filteredStudents = data.students.filter(
+          const incomingStudents = data.students.filter(
             (s: any) =>
               !delSet.has(s.id) &&
               (!s.studentNumber || !delSet.has(s.studentNumber)) &&
@@ -358,30 +358,72 @@ export function syncSchoolDataWithServer(slug: string): void {
             if (currentLocal) prevStudents = JSON.parse(currentLocal);
           } catch (e) {}
 
-          // Ne JAMAIS écraser des données existantes si le serveur envoie une liste vide
-          if (filteredStudents.length === 0 && prevStudents.length > 0) {
+          // Map intelligente par identifiant
+          const studentMap = new Map<string, Student>();
+
+          // A. Charger les élèves serveur
+          incomingStudents.forEach((st: Student) => {
+            const key = st.studentNumber || st.id;
+            studentMap.set(key, st);
+          });
+
+          // B. Fusionner avec le stockage local (Sauvegarde des nouveaux inscrits et des modifications de date récentes)
+          let hasLocalNewStudents = false;
+          prevStudents.forEach((localStu: Student) => {
+            if (
+              delSet.has(localStu.id) ||
+              (localStu.studentNumber && delSet.has(localStu.studentNumber)) ||
+              (localStu.matricule && delSet.has(localStu.matricule))
+            ) {
+              return;
+            }
+            const key = localStu.studentNumber || localStu.id;
+            if (!studentMap.has(key)) {
+              // Nouvel élève local pas encore sur le serveur : le conserver absolument !
+              studentMap.set(key, localStu);
+              hasLocalNewStudents = true;
+            } else {
+              // Élève déjà présent : si la version locale a un updatedAt plus récent, conserver la version locale
+              const incomingStu = studentMap.get(key)!;
+              const localTime = localStu.updatedAt ? new Date(localStu.updatedAt).getTime() : 0;
+              const incomingTime = incomingStu.updatedAt ? new Date(incomingStu.updatedAt).getTime() : 0;
+              if (localTime > incomingTime) {
+                studentMap.set(key, { ...incomingStu, ...localStu });
+                hasLocalNewStudents = true;
+              }
+            }
+          });
+
+          const mergedStudents = Array.from(studentMap.values()).sort((a, b) => {
+            const numA = parseInt((a.studentNumber || a.id).replace(/\D/g, ''), 10) || 0;
+            const numB = parseInt((b.studentNumber || b.id).replace(/\D/g, ''), 10) || 0;
+            return numA - numB;
+          });
+
+          // Si des élèves locaux n'étaient pas sur le serveur, les synchroniser en arrière-plan vers l'API
+          if (hasLocalNewStudents) {
             fetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug, students: prevStudents }),
+              body: JSON.stringify({ slug, students: mergedStudents }),
             }).catch(() => {});
-          } else if (filteredStudents.length > 0) {
-            const newStr = JSON.stringify(filteredStudents);
-            if (currentLocal !== newStr) {
-              localStorage.setItem(schoolKey, newStr);
-              localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
-              if (isPilot) {
-                localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
-                localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
-              }
-              hasChanges = true;
+          }
+
+          const newStr = JSON.stringify(mergedStudents);
+          if (currentLocal !== newStr) {
+            localStorage.setItem(schoolKey, newStr);
+            localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
+              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
             }
+            hasChanges = true;
           }
         }
 
-        // 4. Synchroniser les factures / encaissements (Protection absolue)
+        // 4. Synchroniser les factures / encaissements (Fusion intelligente)
         if (data.invoices !== undefined && Array.isArray(data.invoices)) {
-          const filteredInvoices = data.invoices.filter(
+          const incomingInvoices = data.invoices.filter(
             (inv: any) =>
               !delSet.has(inv.id) &&
               (!inv.studentId || !delSet.has(inv.studentId)) &&
@@ -394,23 +436,51 @@ export function syncSchoolDataWithServer(slug: string): void {
             if (currentLocal) prevInvoices = JSON.parse(currentLocal);
           } catch (e) {}
 
-          if (filteredInvoices.length === 0 && prevInvoices.length > 0) {
+          const invoiceMap = new Map<string, Invoice>();
+          incomingInvoices.forEach((inv: Invoice) => {
+            const key = inv.invoiceNumber || inv.id;
+            invoiceMap.set(key, inv);
+          });
+
+          let hasLocalNewInvoices = false;
+          prevInvoices.forEach((localInv: Invoice) => {
+            if (
+              delSet.has(localInv.id) ||
+              (localInv.studentId && delSet.has(localInv.studentId)) ||
+              (localInv.invoiceNumber && delSet.has(localInv.invoiceNumber))
+            ) {
+              return;
+            }
+            const key = localInv.invoiceNumber || localInv.id;
+            if (!invoiceMap.has(key)) {
+              invoiceMap.set(key, localInv);
+              hasLocalNewInvoices = true;
+            }
+          });
+
+          const mergedInvoices = Array.from(invoiceMap.values()).sort((a, b) => {
+            const numA = parseInt((a.invoiceNumber || a.id).replace(/\D/g, ''), 10) || 0;
+            const numB = parseInt((b.invoiceNumber || b.id).replace(/\D/g, ''), 10) || 0;
+            return numA - numB;
+          });
+
+          if (hasLocalNewInvoices) {
             fetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug, invoices: prevInvoices }),
+              body: JSON.stringify({ slug, invoices: mergedInvoices }),
             }).catch(() => {});
-          } else if (filteredInvoices.length > 0) {
-            const newStr = JSON.stringify(filteredInvoices);
-            if (currentLocal !== newStr) {
-              localStorage.setItem(invSchoolKey, newStr);
-              localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
-              if (isPilot) {
-                localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
-                localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
-              }
-              hasChanges = true;
+          }
+
+          const newStr = JSON.stringify(mergedInvoices);
+          if (currentLocal !== newStr) {
+            localStorage.setItem(invSchoolKey, newStr);
+            localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
+            if (isPilot) {
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
             }
+            hasChanges = true;
           }
         }
 
@@ -1180,6 +1250,7 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       schoolSlug: slug,
       schoolId: slug,
       enrollmentType: student.enrollmentType || 'nouveau',
+      updatedAt: student.updatedAt || new Date().toISOString(),
     };
     const filteredStudents = prevStudents.filter(
       (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
@@ -1225,9 +1296,10 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
-    // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan
-    saveStudentToSupabase(studentWithSlug, slug).catch(() => {});
-    saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
+    // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan (étudiant d'abord puis facture)
+    saveStudentToSupabase(studentWithSlug, slug)
+      .then(() => saveInvoiceToSupabase(invoiceWithSlug, slug))
+      .catch(() => {});
     if (typeof fetch !== 'undefined') {
       fetch('/api/sync', {
         method: 'POST',
@@ -1267,6 +1339,7 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       ...student,
       schoolSlug: schoolSlug || 'epc-manoi',
       schoolId: schoolSlug || 'epc-manoi',
+      updatedAt: student.updatedAt || new Date().toISOString(),
     };
     const updatedStudents = [
       studentWithSlug,
@@ -1461,8 +1534,9 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     }
 
     // 4. Synchronisation en arrière-plan avec Supabase Cloud et API Serveur
-    saveStudentToSupabase(student, schoolSlug).catch(() => {});
-    saveInvoiceToSupabase(updatedInvoice, schoolSlug).catch(() => {});
+    saveStudentToSupabase(studentWithSlug, schoolSlug)
+      .then(() => saveInvoiceToSupabase(updatedInvoice, schoolSlug))
+      .catch(() => {});
     if (typeof fetch !== 'undefined') {
       fetch('/api/sync', {
         method: 'POST',

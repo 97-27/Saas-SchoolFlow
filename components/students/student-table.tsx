@@ -117,6 +117,21 @@ export function StudentTable({
     }
   };
 
+  const normalizeDateToIso = (dStr?: string): string => {
+    if (!dStr) return '2026-09-07';
+    const trimmed = dStr.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+      const [d, m, y] = trimmed.split('/');
+      return `${y}-${m}-${d}`;
+    }
+    try {
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+    } catch (e) {}
+    return '2026-09-07';
+  };
+
   // Open edit modal
   const handleOpenEdit = (student: Student) => {
     setEditingStudent(student);
@@ -124,7 +139,7 @@ export function StudentTable({
     setEditFirstName(student.firstName);
     setEditGrade(student.grade);
     setEditGender(student.gender);
-    setEditPaymentDate(student.enrollmentDate || student.paymentDate || '2026-08-27');
+    setEditPaymentDate(normalizeDateToIso(student.enrollmentDate || student.paymentDate || '2026-09-07'));
     setEditEnrollmentType(student.enrollmentType || 'nouveau');
     setEditStatus(student.status || 'active');
     setEditWhatsapp(student.whatsappPhone);
@@ -138,24 +153,18 @@ export function StudentTable({
     e.preventDefault();
     if (!editingStudent) return;
 
-    const formattedDate = editPaymentDate && editPaymentDate.trim() ? editPaymentDate.trim() : '2026-08-27';
+    const formattedDate = normalizeDateToIso(editPaymentDate);
 
-    // Synchroniser la date du premier versement / inscription dans l'échéancier
+    // Synchroniser la date du premier versement uniquement s'il existe déjà (sans inventer de versement fictif)
     const updatedInstallments = editingStudent.installments ? {
       ...editingStudent.installments,
-      versement1: editingStudent.installments.versement1 ? {
-        ...editingStudent.installments.versement1,
-        date: formattedDate,
-      } : {
-        amount: editingStudent.paidAmount || 100000,
-        date: formattedDate,
-      },
-    } : {
-      versement1: {
-        amount: editingStudent.paidAmount || 100000,
-        date: formattedDate,
-      },
-    };
+      ...(editingStudent.installments.versement1 ? {
+        versement1: {
+          ...editingStudent.installments.versement1,
+          date: formattedDate,
+        },
+      } : {}),
+    } : undefined;
 
     const updated: Student = {
       ...editingStudent,
@@ -173,6 +182,7 @@ export function StudentTable({
       address: editAddress.trim(),
       guardianName: editGuardianName.trim(),
       installments: updatedInstallments,
+      updatedAt: new Date().toISOString(),
     };
 
     setStudents((prev) =>

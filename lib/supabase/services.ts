@@ -132,9 +132,6 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
             school_id: schoolId,
             role_id: 'school_stamp',
             role_title: 'Cachet Officiel',
-            full_name: 'Cachet & Tampon Établissement',
-            auth_code: 'STAMP-2026',
-            avatar_url: school.stampUrl,
             is_active: true,
           });
         }
@@ -170,33 +167,67 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 
     if (error || !data) return [];
 
-    return data.map((d: any) => ({
-      id: d.id,
-      studentNumber: d.student_number,
-      matricule: d.matricule || '',
-      firstName: d.first_name,
-      lastName: d.last_name,
-      fullName: d.full_name,
-      grade: d.grade,
-      gender: d.gender,
-      dateOfBirth: d.date_of_birth || '',
-      address: d.address || '',
-      guardianName: d.guardian_name,
-      guardianPhone: d.guardian_phone,
-      whatsappPhone: d.whatsapp_phone || '',
-      avatar: d.avatar_url || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-      enrollmentType: d.enrollment_type || 'nouveau',
-      registrationFee: Number(d.registration_fee) || 0,
-      tuitionAmount: Number(d.tuition_amount) || 0,
-      discountAmount: Number(d.discount_amount) || 0,
-      netAmount: Number(d.net_amount) || 0,
-      paidAmount: Number(d.paid_amount) || 0,
-      balanceRemaining: Number(d.balance_remaining) || 0,
-      tuitionStatus: d.tuition_status || 'unpaid',
-      attendanceRate: Number(d.attendance_rate) || 100,
-      status: d.status || 'active',
-      paymentDate: d.created_at ? new Date(d.created_at).toLocaleDateString('fr-FR') : '01/09/2026',
-    }));
+    return data.map((d: any) => {
+      let meta: any = {};
+      let cleanAddress = d.address || '';
+      try {
+        const match = cleanAddress.match(/\[SF_META:(.*?)\]/);
+        if (match && match[1]) {
+          meta = JSON.parse(match[1]);
+          cleanAddress = cleanAddress.replace(/\[SF_META:.*?\]/g, '').trim();
+        }
+      } catch (e) {}
+
+      // Formater la date en YYYY-MM-DD strictement valide pour les inputs de type date
+      const parseIsoDate = (dt: any, fallback: string) => {
+        if (!dt) return fallback;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dt)) return dt;
+        try {
+          const parsed = new Date(dt);
+          if (!isNaN(parsed.getTime())) {
+            return parsed.toISOString().split('T')[0];
+          }
+        } catch (e) {}
+        return fallback;
+      };
+
+      const defaultDate = d.created_at ? parseIsoDate(d.created_at, '2026-09-07') : '2026-09-07';
+      const enrollmentDate = parseIsoDate(meta.enrollmentDate, defaultDate);
+      const paymentDate = parseIsoDate(meta.paymentDate, enrollmentDate);
+
+      return {
+        id: d.id,
+        studentNumber: d.student_number,
+        matricule: d.matricule || '',
+        firstName: d.first_name,
+        lastName: d.last_name,
+        fullName: d.full_name,
+        grade: d.grade,
+        gender: d.gender,
+        dateOfBirth: d.date_of_birth || '',
+        address: cleanAddress,
+        guardianName: d.guardian_name,
+        guardianPhone: d.guardian_phone,
+        whatsappPhone: d.whatsapp_phone || '',
+        secondaryPhones: meta.secondaryPhones || [],
+        avatar: d.avatar_url || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+        enrollmentType: d.enrollment_type || 'nouveau',
+        registrationFee: Number(d.registration_fee) || 0,
+        tuitionAmount: Number(d.tuition_amount) || 0,
+        discountAmount: Number(d.discount_amount) || 0,
+        netAmount: Number(d.net_amount) || 0,
+        paidAmount: Number(d.paid_amount) || 0,
+        balanceRemaining: Number(d.balance_remaining) || 0,
+        tuitionStatus: d.tuition_status || 'unpaid',
+        attendanceRate: Number(d.attendance_rate) || 100,
+        status: d.status || 'active',
+        enrollmentDate: enrollmentDate,
+        paymentDate: paymentDate,
+        installments: meta.installments || {},
+        notes: meta.notes || '',
+        updatedAt: meta.updatedAt || d.updated_at || d.created_at || new Date().toISOString(),
+      };
+    });
   } catch (err) {
     console.error('Erreur getStudentsFromSupabase:', err);
     return [];
@@ -227,6 +258,17 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
 
     if (!school) return false;
 
+    const metaObj = {
+      enrollmentDate: student.enrollmentDate || student.paymentDate || '2026-09-07',
+      paymentDate: student.paymentDate || student.enrollmentDate || '2026-09-07',
+      installments: student.installments || {},
+      updatedAt: student.updatedAt || new Date().toISOString(),
+      secondaryPhones: student.secondaryPhones || [],
+      notes: student.notes || '',
+    };
+    const cleanAddress = (student.address || '').replace(/\[SF_META:.*?\]/g, '').trim();
+    const addressWithMeta = `${cleanAddress} [SF_META:${JSON.stringify(metaObj)}]`;
+
     const payload = {
       school_id: school.id,
       student_number: student.studentNumber,
@@ -237,7 +279,7 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       grade: student.grade,
       gender: student.gender,
       date_of_birth: student.dateOfBirth || null,
-      address: student.address,
+      address: addressWithMeta,
       guardian_name: student.guardianName,
       guardian_phone: student.guardianPhone,
       whatsapp_phone: student.whatsappPhone,
@@ -255,17 +297,23 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       updated_at: new Date().toISOString(),
     };
 
-    const { data: existing } = await supabase
+    const { data: existingRows } = await supabase
       .from('students')
       .select('id')
       .eq('school_id', school.id)
-      .eq('student_number', student.studentNumber)
-      .maybeSingle();
+      .eq('student_number', student.studentNumber);
 
     let error = null;
-    if (existing) {
-      const res = await supabase.from('students').update(payload).eq('id', existing.id);
+    if (existingRows && existingRows.length > 0) {
+      const primaryId = existingRows[0].id;
+      const res = await supabase.from('students').update(payload).eq('id', primaryId);
       error = res.error;
+      // Nettoyer d'éventuels doublons résiduels
+      if (existingRows.length > 1) {
+        const extraIds = existingRows.slice(1).map((r) => r.id);
+        await supabase.from('invoices').delete().in('student_id', extraIds);
+        await supabase.from('students').delete().in('id', extraIds);
+      }
     } else {
       const res = await supabase.from('students').insert(payload);
       error = res.error;
@@ -394,16 +442,18 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
       studentGender: d.students?.gender || 'male',
       guardianName: d.students?.guardian_name || '',
       guardianPhone: d.students?.guardian_phone || '',
-      feeType: d.fee_type || 'Scolarité Annuelle',
+      feeType: d.fee_type || "Frais d'inscription & Scolarité",
+      registrationFee: Number(d.registration_fee) || Number(d.students?.registration_fee) || 0,
       amount: Number(d.amount) || 0,
       paidAmount: Number(d.paid_amount) || 0,
       discountAmount: Number(d.discount_amount) || 0,
       netAmount: Number(d.net_amount) || 0,
       balanceRemaining: Number(d.balance_remaining) || 0,
-      paymentMethod: d.payment_method || 'Espèces',
+      paymentMethod: d.payment_method || 'Espèces en caisse',
       enrollmentType: d.students?.enrollment_type || 'nouveau',
-      issueDate: d.issue_date || '2026-09-01',
-      dueDate: d.due_date || '2027-05-30',
+      installments: d.installments || {},
+      issueDate: d.issue_date || '2026-09-07',
+      dueDate: d.due_date || '2026-09-07',
       status: d.status || 'draft',
     }));
   } catch (err) {
@@ -441,14 +491,25 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       validStudentUUID = invoice.studentId;
     } else {
       const studentNum = invoice.invoiceNumber?.replace('REC-2026-', 'ID-') || invoice.studentId;
-      const { data: st } = await supabase
+      const cleanNum = (invoice.studentId || invoice.invoiceNumber || '').replace(/\D/g, '');
+      const numWithPad = cleanNum ? `ID-${cleanNum.padStart(3, '0')}` : '';
+      
+      const { data: stList } = await supabase
         .from('students')
-        .select('id')
-        .eq('school_id', school.id)
-        .or(`student_number.eq.${studentNum},student_number.eq.${invoice.invoiceNumber}`)
-        .maybeSingle();
-      if (st?.id) {
-        validStudentUUID = st.id;
+        .select('id, student_number, full_name')
+        .eq('school_id', school.id);
+
+      if (stList && stList.length > 0) {
+        const matched = stList.find(
+          (s) =>
+            s.student_number === studentNum ||
+            s.student_number === numWithPad ||
+            s.student_number === invoice.invoiceNumber ||
+            (invoice.studentName && s.full_name?.toLowerCase() === invoice.studentName.toLowerCase())
+        );
+        if (matched) {
+          validStudentUUID = matched.id;
+        }
       }
     }
 
@@ -473,17 +534,21 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       status: invoice.status || 'draft',
     };
 
-    const { data: existing } = await supabase
+    const { data: existingRows } = await supabase
       .from('invoices')
       .select('id')
       .eq('school_id', school.id)
-      .eq('invoice_number', invoice.invoiceNumber)
-      .maybeSingle();
+      .eq('invoice_number', invoice.invoiceNumber);
 
     let error = null;
-    if (existing) {
-      const res = await supabase.from('invoices').update(payload).eq('id', existing.id);
+    if (existingRows && existingRows.length > 0) {
+      const primaryId = existingRows[0].id;
+      const res = await supabase.from('invoices').update(payload).eq('id', primaryId);
       error = res.error;
+      if (existingRows.length > 1) {
+        const extraIds = existingRows.slice(1).map((r) => r.id);
+        await supabase.from('invoices').delete().in('id', extraIds);
+      }
     } else {
       const res = await supabase.from('invoices').insert(payload);
       error = res.error;
