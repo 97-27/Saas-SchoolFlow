@@ -1193,11 +1193,11 @@ export function InscriptionsView({
     ctx.textAlign = 'left';
     ctx.fillStyle = '#0f172a';
 
-    // Ligne 1 : ID & Date
+    // Ligne 1 : ID & Date (SANS le matricule officiel — réservé au registre)
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Identifiant :', 70, 415);
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(`${finalStuId}${finalStuMat ? ` (Matr. ${finalStuMat})` : ''}`, 180, 415);
+    ctx.fillText(finalStuId, 180, 415);
 
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText("Date d'encaissement :", 730, 415);
@@ -1215,16 +1215,21 @@ export function InscriptionsView({
     ctx.font = 'bold 18px Inter, sans-serif';
     ctx.fillText(`${finalStuGrade} (${getEnrollmentStatusLabel(finalStuStatus, finalStuGender)})`, 880, 460);
 
-    // Ligne 3 : Parent & Téléphone
+    // Ligne 3 : Parent & Téléphone(s) (Principal + Numéros secondaires si renseignés)
     ctx.font = 'bold 16px Inter, sans-serif';
     ctx.fillText('Parent / Tuteur :', 70, 505);
     ctx.font = 'bold 18px Inter, sans-serif';
     ctx.fillText(finalStuParent, 210, 505);
 
+    const finalSecPhones = (targetStudent?.secondaryPhones && targetStudent.secondaryPhones.length > 0)
+      ? targetStudent.secondaryPhones
+      : secondaryPhones.map((p) => p.trim()).filter(Boolean);
+    const allPhones = [finalStuPhone, ...finalSecPhones].filter((p, i, arr) => Boolean(p) && p !== 'Non renseigné' && arr.indexOf(p) === i);
+
     ctx.font = 'bold 16px Inter, sans-serif';
-    ctx.fillText('WhatsApp :', 730, 505);
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(finalStuPhone, 840, 505);
+    ctx.fillText(allPhones.length > 1 ? 'Contacts Parents :' : 'WhatsApp :', 710, 505);
+    ctx.font = allPhones.length > 2 ? 'bold 13px monospace' : allPhones.length === 2 ? 'bold 15px monospace' : 'bold 18px monospace';
+    ctx.fillText(allPhones.join(' • '), 855, 505);
 
     // Ligne 4 : Prestations & Services Souscrits
     ctx.fillStyle = '#0f172a';
@@ -1411,8 +1416,14 @@ export function InscriptionsView({
 
     setSuccessToast("📸 Génération du reçu et ouverture de WhatsApp...");
 
+    const schoolGreeting = (schoolState.schoolType === 'laique')
+      ? 'Salut'
+      : (schoolState.schoolType === 'non_confessionnelle')
+      ? 'Bonjour'
+      : 'Salam anlaekoum';
+
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-      `Bonjour, voici le reçu officiel de paiement (${activeReceiptNumber}) pour ${name} — ${schoolState.name}.`
+      `${schoolGreeting}, voici le reçu officiel de paiement (${activeReceiptNumber}) pour ${name} — ${schoolState.name}.`
     )}`;
 
     // Ouvrir immédiatement l'onglet WhatsApp du parent en direct si demandé (pour clic bouton direct)
@@ -1604,10 +1615,10 @@ export function InscriptionsView({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
-                {currentMatricule ? 'Identifiant & Matricule :' : 'Identifiant :'}
+                Identifiant Élève :
               </span>
               <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
-                {currentIdStr}{currentMatricule ? ` • ${currentMatricule}` : ''}
+                {currentIdStr}
               </span>
             </div>
 
@@ -1681,10 +1692,15 @@ export function InscriptionsView({
 
             <div>
               <span className="text-[10px] text-slate-500 block uppercase font-bold">
-                Contact WhatsApp Parent :
+                {secondaryPhones.filter(Boolean).length > 0 ? 'Contacts Parents (WhatsApp / Tél) :' : 'Contact WhatsApp Parent :'}
               </span>
               <span className="font-mono font-black text-emerald-900 text-xs sm:text-sm">
                 {whatsappPhone || '—'}
+                {secondaryPhones.filter(Boolean).length > 0 && (
+                  <span className="text-slate-600 font-bold ml-1">
+                    • {secondaryPhones.filter(Boolean).join(' • ')}
+                  </span>
+                )}
               </span>
             </div>
 
@@ -2407,23 +2423,8 @@ export function InscriptionsView({
                     </span>
                   ) : (
                     <span className="text-[10px] text-slate-400 italic">
-                      Laisser vide si non attribué
+                      Délivré par le Ministère (laisser vide si non encore attribué)
                     </span>
-                  )}
-                  {!selectedStudentId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const alphabet = 'ABCDEFGHJKLMNPRSTUVWXYZ';
-                        const letterCode = alphabet[Math.floor(Math.random() * alphabet.length)];
-                        const seq = Math.floor(100000 + Math.random() * 900000);
-                        setCustomMatricule(`26${seq}${letterCode}`);
-                      }}
-                      className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer"
-                      title="Générer automatiquement un matricule standard"
-                    >
-                      Générer auto
-                    </button>
                   )}
                 </div>
               </div>
@@ -3414,11 +3415,21 @@ export function InscriptionsView({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-0.5">
-                <span className="text-slate-500 font-medium">Contact Parent (WhatsApp) :</span>
-                <span className="font-mono font-extrabold text-slate-900">
-                  {successModalData.whatsappPhone || successModalData.guardianPhone || 'Non spécifié'}
-                </span>
+              <div className="flex flex-col gap-1 pt-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Contact Principal (WhatsApp) :</span>
+                  <span className="font-mono font-extrabold text-slate-900">
+                    {successModalData.whatsappPhone || successModalData.guardianPhone || 'Non spécifié'}
+                  </span>
+                </div>
+                {successModalData.secondaryPhones && successModalData.secondaryPhones.length > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-medium">Autres Numéros :</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      {successModalData.secondaryPhones.join(' • ')}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -3428,7 +3439,7 @@ export function InscriptionsView({
               <div className="space-y-1">
                 <a
                   href={`https://wa.me/${formatCleanWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone)}?text=${encodeURIComponent(
-                    `Bonjour, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
+                    `${(schoolState.schoolType === 'laique') ? 'Salut' : (schoolState.schoolType === 'non_confessionnelle') ? 'Bonjour' : 'Salam anlaekoum'}, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

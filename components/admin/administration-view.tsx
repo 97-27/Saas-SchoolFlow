@@ -678,33 +678,26 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       )}
                     </td>
 
-                    {/* 4. Code d'authentification */}
+                    {/* 4. Code d'authentification (Requis pour tous les membres : Fondateur, Directeur et Personnel) */}
                     <td className="py-3 px-2.5 text-center">
-                      {member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001' ? (
-                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-900 border border-emerald-200/80 font-mono font-bold px-2.5 py-1 rounded-lg text-[11px] shadow-2xs whitespace-nowrap">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>👑 Accès Direct (Admin)</span>
+                      <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
+                          {member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : member.roleId === 'directeur' ? 'DIR-2026' : '—')}
                         </span>
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
-                          <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
-                            {member.authCode}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyCode(member.authCode, member.id)}
-                            className="p-0.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
-                            title="Copier le code d'authentification"
-                          >
-                            {copiedId === member.id ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => handleCopyCode(member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026'), member.id)}
+                          className="p-0.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
+                          title="Copier le code d'authentification"
+                        >
+                          {copiedId === member.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </td>
 
                     {/* 5. Statut d'Accès */}
@@ -912,75 +905,44 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               )}
 
-              {/* Contacts & Coordonnées */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-                <h4 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-emerald-600" />
-                  <span>Coordonnées & Informations Personnelles</span>
-                </h4>
-                <div className="space-y-1.5 text-slate-600 pt-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px]">Numéro Téléphone / WhatsApp :</span>
-                    {selectedStaffDetail.phone && selectedStaffDetail.phone.trim() ? (
-                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.phone}</strong>
-                    ) : (
-                      <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px] border border-amber-200/60">
-                        Non renseigné
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px]">Email Professionnel :</span>
-                    {selectedStaffDetail.email &&
-                    selectedStaffDetail.email.trim() &&
-                    !selectedStaffDetail.email.includes('etablissement.ci') &&
-                    !selectedStaffDetail.email.includes('epc-manoi.ci') ? (
-                      <strong className="text-slate-900 font-mono">{selectedStaffDetail.email}</strong>
-                    ) : (
-                      <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px] border border-amber-200/60">
-                        Non renseigné
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 text-[11px]">Adresse de Résidence :</span>
-                    <strong className="text-slate-900">{selectedStaffDetail.address || 'Abidjan, Côte d’Ivoire'}</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Code d'Authentification Sécurisé & Statut (Uniquement pour le personnel collaborateur : Secrétaire, Comptable, Enseignant, etc.) */}
-              {!(selectedStaffDetail.roleId === 'directeur' || selectedStaffDetail.roleId === 'fondateur' || selectedStaffDetail.id === 'staff-founder' || selectedStaffDetail.id === 'staff-001') && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] font-bold text-emerald-900 block flex items-center gap-1.5">
-                      <KeyRound className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Code d&apos;Authentification Officiel :</span>
-                    </span>
-                    <span className="font-mono font-black text-sm text-emerald-950 tracking-widest">
-                      {selectedStaffDetail.authCode}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(selectedStaffDetail.authCode, selectedStaffDetail.id)}
-                      className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copier</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleShareWhatsApp(selectedStaffDetail)}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      <span>WhatsApp</span>
-                    </button>
-                  </div>
+              {/* Coordonnées de Résidence */}
+              {selectedStaffDetail.address && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                  <span className="text-slate-400 text-[11px] block">Adresse de Résidence :</span>
+                  <strong className="text-slate-900 text-xs">{selectedStaffDetail.address}</strong>
                 </div>
               )}
+
+              {/* Code d'Authentification Sécurisé (Requis pour Fondateur, Directeur et Collaborateurs) */}
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold text-emerald-900 block flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Code d&apos;Authentification Officiel :</span>
+                  </span>
+                  <span className="font-mono font-black text-sm text-emerald-950 tracking-widest">
+                    {selectedStaffDetail.authCode || (selectedStaffDetail.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(selectedStaffDetail.authCode || (selectedStaffDetail.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026'), selectedStaffDetail.id)}
+                    className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 font-bold hover:bg-emerald-100 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copier</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShareWhatsApp(selectedStaffDetail)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </button>
+                </div>
+              </div>
 
             </div>
 
@@ -1307,45 +1269,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">
-                    Email Professionnel {editingStaff.roleId === 'fondateur' || editingStaff.roleId === 'directeur' ? '(Vrai Email)' : '*'}
-                  </label>
-                  <input
-                    type="email"
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder={
-                      editingStaff.roleId === 'fondateur'
-                        ? 'Ex : fondateur@votre-ecole.ci (ou vide : Non renseigné)'
-                        : editingStaff.roleId === 'directeur'
-                        ? 'Ex : direction@votre-ecole.ci (ou vide : Non renseigné)'
-                        : 'email@etablissement.ci'
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
-                  />
-                  {(!editEmail || !editEmail.trim()) && (
-                    <p className="text-[10.5px] text-amber-600 font-medium">
-                      ⚠️ Actuellement : Non renseigné. Saisissez votre vrai email pour l’afficher sur votre profil.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Ligne Professionnelle / Téléphone & Adresse */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Ligne Professionnelle / Contact *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    placeholder="+225 07 00 00 00 00"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-slate-900 focus:border-emerald-600"
-                  />
-                </div>
-
-                <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
                   <input
                     type="text"
@@ -1424,40 +1347,28 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   )}
                 </div>
 
-                {!(editingStaff.roleId === 'fondateur' || editingStaff.roleId === 'directeur') ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-700 block text-[11px]">
-                        Code d&apos;Authentification *
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
-                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                      >
-                        Régénérer
-                      </button>
-                    </div>
-
-                    <input
-                      type="text"
-                      required
-                      value={editAuthCodeValue}
-                      onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-1">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
                     <label className="font-bold text-slate-700 block text-[11px]">
-                      Mode d&apos;Accès Officiel
+                      Code d&apos;Authentification *
                     </label>
-                    <div className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5">
-                      <Shield className="w-4 h-4 text-slate-500" />
-                      <span>Connexion directe sécurisée par identifiant</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Régénérer
+                    </button>
                   </div>
-                )}
+
+                  <input
+                    type="text"
+                    required
+                    value={editAuthCodeValue}
+                    onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">

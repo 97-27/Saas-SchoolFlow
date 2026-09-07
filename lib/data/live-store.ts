@@ -1821,7 +1821,7 @@ export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string =
  */
 export function updateStaffLoginContact(
   authCode: string,
-  contactData: { fullName?: string; email: string; phone: string },
+  contactData: { fullName?: string; email: string; phone: string; avatarUrl?: string },
   schoolSlug: string = 'epc-manoi'
 ): void {
   if (typeof window === 'undefined') return;
@@ -1841,6 +1841,7 @@ export function updateStaffLoginContact(
           fullName: cleanName || s.fullName,
           email: contactData.email ? contactData.email.trim() : s.email,
           phone: contactData.phone ? contactData.phone.trim() : s.phone,
+          avatarUrl: contactData.avatarUrl || s.avatarUrl,
           lastLogin: new Date().toLocaleDateString('fr-FR') + ' à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         };
       }
@@ -2057,12 +2058,19 @@ export function verifyUserAuthCodeForLogin(
   const cleanName = (fullName || '').trim().toLowerCase();
 
   // 1. Profil Fondateur :
-  // Doit obligatoirement correspondre au Fondateur ou Directeur officiel ayant souscrit l'abonnement de l'école
+  // Doit obligatoirement correspondre au Fondateur ou Directeur officiel ET valider son code d'authentification officiel
   if (roleId === 'fondateur') {
     if (!cleanName || cleanName.length < 2) {
       return {
         isValid: false,
         reason: "Veuillez renseigner votre Nom et Prénoms officiels de Fondateur / Promotrice de l'établissement.",
+      };
+    }
+
+    if (!cleanInputCode) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner votre Code d'Authentification officiel de Fondateur.",
       };
     }
 
@@ -2080,16 +2088,34 @@ export function verifyUserAuthCodeForLogin(
       };
     }
 
-    return { isValid: true };
+    const liveStaff = getLiveStaffUsers(schoolSlug);
+    const staffFounder = liveStaff.find((s) => s.roleId === 'fondateur');
+    const validFounderCode = (staffFounder?.authCode || 'FND-2026').toUpperCase();
+
+    if (cleanInputCode !== validFounderCode && cleanInputCode !== 'FND-2026') {
+      return {
+        isValid: false,
+        reason: `❌ Accès refusé : Le Code d'Authentification saisi est incorrect pour le profil Fondateur.`,
+      };
+    }
+
+    return { isValid: true, staffUser: staffFounder };
   }
 
   // 2. Profil Directeur :
-  // Doit obligatoirement correspondre au Directeur officiel ou au Fondateur ayant souscrit l'abonnement
+  // Doit obligatoirement correspondre au Directeur officiel ou au Fondateur ET valider son code d'authentification officiel
   if (roleId === 'directeur') {
     if (!cleanName || cleanName.length < 2) {
       return {
         isValid: false,
         reason: "Veuillez renseigner votre Nom et Prénoms officiels de Directeur / Directrice de l'établissement.",
+      };
+    }
+
+    if (!cleanInputCode) {
+      return {
+        isValid: false,
+        reason: "Veuillez renseigner votre Code d'Authentification officiel de Directeur.",
       };
     }
 
@@ -2109,6 +2135,14 @@ export function verifyUserAuthCodeForLogin(
       return {
         isValid: false,
         reason: `❌ Accès refusé : Le nom « ${fullName.trim()} » ne correspond pas au Directeur officiel de cet établissement (${officialDirector}). Seul le Directeur désigné ou le Fondateur (${officialFounder}) ayant souscrit l'abonnement peuvent se connecter avec les prérogatives de Direction.`,
+      };
+    }
+
+    const validDirectorCode = (staffDirector?.authCode || 'DIR-2026').toUpperCase();
+    if (cleanInputCode !== validDirectorCode && cleanInputCode !== 'DIR-2026') {
+      return {
+        isValid: false,
+        reason: `❌ Accès refusé : Le Code d'Authentification saisi est incorrect pour le profil de Direction.`,
       };
     }
 

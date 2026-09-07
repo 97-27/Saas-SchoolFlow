@@ -48,6 +48,7 @@ export const mockSchools: Record<string, School> = {
     studiesDirectorName: 'Direction des Études',
     stampUrl: '',
     receiptFooterNote: 'Tout versement en caisse donne droit à un reçu numéroté immédiat. Aucun remboursement après encaissement.',
+    schoolType: 'islamique',
   },
   'saint-joseph': {
     id: 'sch-002',

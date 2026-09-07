@@ -712,6 +712,142 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   />
                 </div>
               </div>
+
+              {/* Configuration Spéciale : Type d'Établissement & Formule de Salutation Reçus WhatsApp */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 via-slate-50 to-white border border-emerald-200/80 space-y-3.5 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading">
+                        Orientation de l&apos;Établissement & Salutations Reçus WhatsApp
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        SchoolFlow adapte automatiquement le message des reçus transmis aux parents selon la confession de votre école.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    Multi-Écoles & Abonnements
+                  </span>
+                </div>
+
+                {/* Sélecteur de type d'établissement en 3 cartes */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  {/* Option 1 : Confessionnelle Islamique */}
+                  <label
+                    onClick={() => handleInputChange('schoolType', 'islamique')}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
+                      (school.schoolType || 'islamique') === 'islamique'
+                        ? 'bg-emerald-50/90 border-emerald-600 shadow-sm shadow-emerald-600/10 ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 font-heading">
+                        <span>🌙</span> Confessionnelle Islamique
+                      </span>
+                      <input
+                        type="radio"
+                        name="schoolType"
+                        checked={(school.schoolType || 'islamique') === 'islamique'}
+                        onChange={() => handleInputChange('schoolType', 'islamique')}
+                        className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-bold text-emerald-800">
+                        Salutation : « Salam anlaekoum »
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Parfait pour les médersas, écoles franco-arabes et établissements islamiques.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 2 : Non-confessionnelle / Standard */}
+                  <label
+                    onClick={() => handleInputChange('schoolType', 'non_confessionnelle')}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
+                      school.schoolType === 'non_confessionnelle'
+                        ? 'bg-emerald-50/90 border-emerald-600 shadow-sm shadow-emerald-600/10 ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 font-heading">
+                        <span>🏫</span> Non-confessionnelle (Standard)
+                      </span>
+                      <input
+                        type="radio"
+                        name="schoolType"
+                        checked={school.schoolType === 'non_confessionnelle'}
+                        onChange={() => handleInputChange('schoolType', 'non_confessionnelle')}
+                        className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-bold text-slate-800">
+                        Salutation : « Bonjour »
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Formule courtoise et professionnelle universelle pour tous les collèges et lycées.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 3 : École Laïque */}
+                  <label
+                    onClick={() => handleInputChange('schoolType', 'laique')}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
+                      school.schoolType === 'laique'
+                        ? 'bg-emerald-50/90 border-emerald-600 shadow-sm shadow-emerald-600/10 ring-2 ring-emerald-500/20'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 font-heading">
+                        <span>🎓</span> École Laïque
+                      </span>
+                      <input
+                        type="radio"
+                        name="schoolType"
+                        checked={school.schoolType === 'laique'}
+                        onChange={() => handleInputChange('schoolType', 'laique')}
+                        className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[11px] font-bold text-slate-800">
+                        Salutation : « Salut »
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Formule moderne et directe recommandée pour les structures laïques et privées.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Aperçu en direct du message WhatsApp */}
+                <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs shrink-0 mt-0.5 shadow-2xs">
+                    💬
+                  </div>
+                  <div className="text-[11px] leading-relaxed">
+                    <span className="text-slate-400 font-bold block text-[10px] uppercase">
+                      Aperçu du message WhatsApp reçu par le parent :
+                    </span>
+                    <strong className="text-emerald-950 font-medium">
+                      {(school.schoolType || 'islamique') === 'laique'
+                        ? 'Salut'
+                        : (school.schoolType || 'islamique') === 'non_confessionnelle'
+                        ? 'Bonjour'
+                        : 'Salam anlaekoum'}
+                      , voici le reçu officiel de paiement (ID-001) pour KONATE MOHAMED — {school.name || 'Votre Établissement'}.
+                    </strong>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

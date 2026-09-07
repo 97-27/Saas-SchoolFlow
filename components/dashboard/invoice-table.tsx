@@ -83,6 +83,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       studentGrade: string;
       studentGender: 'male' | 'female';
       enrollmentType: 'nouveau' | 'ancien';
+      prestation: string;
       motif: string;
       paymentDate: string;
       amount: number;
@@ -109,14 +110,14 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       // 1. Vérification des versements détaillés de l'échéancier
       if (inst) {
         const vList = [
-          { key: 'v1', obj: inst.versement1, label: '🎓 1er Versement (Scolarité)' },
-          { key: 'v2', obj: inst.versement2, label: '🎓 2ème Versement (Scolarité)' },
-          { key: 'v3', obj: inst.versement3, label: '🎓 3ème Versement (Scolarité)' },
-          { key: 'v4', obj: inst.versement4, label: '🎓 4ème Versement (Scolarité)' },
-          { key: 'v5', obj: inst.versement5, label: '🎓 5ème Versement (Scolarité)' },
+          { key: 'v1', obj: inst.versement1, prestation: '🎓 Scolarité', motif: '1er Versement' },
+          { key: 'v2', obj: inst.versement2, prestation: '🎓 Scolarité', motif: '2ème Versement' },
+          { key: 'v3', obj: inst.versement3, prestation: '🎓 Scolarité', motif: '3ème Versement' },
+          { key: 'v4', obj: inst.versement4, prestation: '🎓 Scolarité', motif: '4ème Versement' },
+          { key: 'v5', obj: inst.versement5, prestation: '🎓 Scolarité', motif: '5ème Versement' },
         ];
 
-        vList.forEach(({ key, obj, label }) => {
+        vList.forEach(({ key, obj, prestation, motif }) => {
           if (obj && typeof obj.amount === 'number' && obj.amount > 0) {
             // Sécurité anti-doublon et anti-versement fictif :
             // Si la scolarité n'a pas encore été payée ou si le montant correspond uniquement aux droits d'inscription
@@ -145,7 +146,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               studentGrade: inv.studentGrade,
               studentGender: inv.studentGender,
               enrollmentType,
-              motif: label,
+              prestation,
+              motif,
               paymentDate: (key === 'v1' && (matchedStudent?.paymentDate || matchedStudent?.enrollmentDate))
                 ? (matchedStudent.paymentDate || matchedStudent.enrollmentDate || obj.date || inv.issueDate)
                 : (obj.date || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate),
@@ -172,7 +174,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             studentGrade: inv.studentGrade,
             studentGender: inv.studentGender,
             enrollmentType,
-            motif: "📝 Droits d'Inscription",
+            prestation: "📝 Frais d'Inscription",
+            motif: "Droits d'Inscription",
             paymentDate: matchedStudent?.enrollmentDate || matchedStudent?.paymentDate || inv.issueDate,
             amount: inv.registrationFee,
             paymentMethod: inv.paymentMethod || 'Espèces',
@@ -185,11 +188,21 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé
       if (!foundVersements && (!inv.registrationFee || inv.registrationFee === 0)) {
         const feeLower = (inv.feeType || '').toLowerCase();
-        let motif = '🎓 1er Versement (Scolarité)';
-        if (feeLower.includes('internat')) motif = '🏠 Internat & Pensionnat';
-        else if (feeLower.includes('cantine')) motif = '🍽️ Cantine Scolaire';
-        else if (feeLower.includes('transport')) motif = '🚌 Transport Scolaire';
-        else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) motif = "📝 Droits d'Inscription";
+        let prestation = '🎓 Scolarité';
+        let motif = '1er Versement';
+        if (feeLower.includes('internat')) {
+          prestation = '🏠 Internat';
+          motif = 'Pensionnat & Hébergement';
+        } else if (feeLower.includes('cantine')) {
+          prestation = '🍽️ Cantine';
+          motif = 'Restauration scolaire';
+        } else if (feeLower.includes('transport')) {
+          prestation = '🚌 Transport';
+          motif = 'Navette scolaire';
+        } else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) {
+          prestation = "📝 Frais d'Inscription";
+          motif = "Droits d'Inscription";
+        }
 
         const amt = inv.paidAmount !== undefined ? inv.paidAmount : inv.amount;
         if (amt > 0) {
@@ -205,6 +218,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               studentGrade: inv.studentGrade,
               studentGender: inv.studentGender,
               enrollmentType,
+              prestation,
               motif,
               paymentDate: matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
               amount: amt,
@@ -612,7 +626,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                   className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                 />
               </th>
-              <th className="py-3 px-3">ID Quittance</th>
+              <th className="py-3 px-3 text-center">ID Élève</th>
               <th className="py-3 px-3">Matricule</th>
               <th className="py-3 px-3">Nom & Prénoms de l&apos;Élève</th>
               <th className="py-3 px-3 text-center">Classe</th>
@@ -620,7 +634,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               <th className="py-3 px-3 text-center">Genre</th>
               <th className="py-3 px-3">Prestation / Motif</th>
               <th className="py-3 px-3">Date de Paiement</th>
-              <th className="py-3 pr-5 px-3 text-right">Montant Versé</th>
+              <th className="py-3 px-3 text-center">Montant Versé</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
@@ -660,8 +674,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       />
                     </td>
 
-                    {/* ID Quittance */}
-                    <td className="py-3.5 px-3 font-semibold text-slate-900 font-mono text-[11px] whitespace-nowrap">
+                    {/* ID Élève */}
+                    <td className="py-3.5 px-3 text-center font-bold text-slate-900 font-mono text-[11px] whitespace-nowrap">
                       {tx.invoiceNumber}
                     </td>
 
@@ -700,21 +714,26 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       <GenderBadge gender={tx.studentGender} />
                     </td>
 
-                    {/* Prestation / Motif dynamique avec motif exact du versement */}
+                    {/* Prestation en haut & Motif juste en bas */}
                     <td className="py-3.5 px-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 font-bold text-[11px] px-2.5 py-1 rounded-lg border shadow-2xs ${
-                        tx.motif.includes('Internat')
-                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                          : tx.motif.includes('Cantine')
-                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : tx.motif.includes('Transport')
-                          ? 'bg-blue-50 text-blue-800 border-blue-200'
-                          : tx.motif.includes("Droits d'Inscription")
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                      }`}>
-                        {tx.motif}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`inline-flex items-center gap-1 font-bold text-[11px] px-2.5 py-0.5 rounded-md border shadow-2xs w-fit ${
+                          tx.prestation.includes('Internat')
+                            ? 'bg-purple-50 text-purple-900 border-purple-200'
+                            : tx.prestation.includes('Cantine')
+                            ? 'bg-amber-50 text-amber-900 border-amber-200'
+                            : tx.prestation.includes('Transport')
+                            ? 'bg-blue-50 text-blue-900 border-blue-200'
+                            : tx.prestation.includes('Inscription')
+                            ? 'bg-teal-50 text-teal-900 border-teal-200'
+                            : 'bg-emerald-50 text-emerald-950 border-emerald-200'
+                        }`}>
+                          {tx.prestation}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-600 pl-0.5">
+                          {tx.motif}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Date de Paiement du Versement */}
@@ -728,8 +747,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                       </span>
                     </td>
 
-                    {/* Montant Versé exact de cette opération */}
-                    <td className="py-3.5 pr-5 px-3 text-right font-extrabold text-slate-900 whitespace-nowrap font-mono font-heading">
+                    {/* Montant Versé exact de cette opération (Parfaitement centré) */}
+                    <td className="py-3.5 px-3 text-center font-extrabold text-slate-900 whitespace-nowrap font-mono font-heading">
                       {formatFCFA(tx.amount)}
                     </td>
                   </tr>

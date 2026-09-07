@@ -214,6 +214,18 @@ export function LoginView({
   const [loginEmail, setLoginEmail] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [authCodeInput, setAuthCodeInput] = useState('');
+  const [loginAvatar, setLoginAvatar] = useState('');
+
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setLoginAvatar(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Formulaire de Nouveau Compte & Abonnement
   const [signupResponsableName, setSignupResponsableName] = useState('');
@@ -380,9 +392,15 @@ export function LoginView({
     let verifiedStaffUser: any = null;
 
     if (selectedRole !== 'parent') {
-      // Pour les collaborateurs (hors Directeur et Fondateur), le code d'authentification officiel est strictement requis
-      if (selectedRole !== 'fondateur' && selectedRole !== 'directeur' && !authCodeInput.trim()) {
-        setErrorMessage(`Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`);
+      // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
+      if (!authCodeInput.trim()) {
+        setErrorMessage(
+          selectedRole === 'fondateur'
+            ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur (ex: FND-2026)."
+            : selectedRole === 'directeur'
+            ? "Veuillez saisir votre Code d'Authentification officiel de Directeur (ex: DIR-2026)."
+            : `Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`
+        );
         return;
       }
 
@@ -439,12 +457,13 @@ export function LoginView({
         ? officialParentPhone
         : (cleanPhone || verifiedStaffUser?.phone || matchedStaff?.phone || '');
 
-      // Enregistrer immédiatement les coordonnées saisies (nom, email pro et téléphone) sur la fiche du collaborateur
-      if (!isParent && cleanAuthCode && (cleanEmail || cleanPhone || formattedInputName)) {
+      // Enregistrer immédiatement les coordonnées saisies (nom, email pro, téléphone et photo) sur la fiche du collaborateur
+      if (!isParent && cleanAuthCode && (cleanEmail || cleanPhone || formattedInputName || loginAvatar)) {
         updateStaffLoginContact(cleanAuthCode, {
           fullName: finalFullName,
           email: finalEmail,
           phone: finalPhone,
+          avatarUrl: loginAvatar || undefined,
         }, schoolSlug);
       }
       const roleBadge =
@@ -474,6 +493,16 @@ export function LoginView({
         isAdmin: isSupremeAdmin,
         matchedChildrenIds: matchedParentStudents.map((s) => s.id),
         avatarUrl: (() => {
+          if (loginAvatar) {
+            try {
+              if (cleanAuthCode) localStorage.setItem(`schoolflow_user_avatar_${cleanAuthCode.toUpperCase()}`, loginAvatar);
+              if (finalFullName) localStorage.setItem(`schoolflow_user_avatar_${finalFullName}`, loginAvatar);
+              if (selectedRole) localStorage.setItem(`schoolflow_user_avatar_${selectedRole}`, loginAvatar);
+              localStorage.setItem('schoolflow_user_avatar_custom', loginAvatar);
+            } catch (e) {}
+            return loginAvatar;
+          }
+
           let persistentAvatar = '';
           try {
             persistentAvatar =
@@ -888,6 +917,37 @@ export function LoginView({
                   </div>
                 </div>
 
+                {/* Photo de Profil (Optionnelle à la connexion, enregistrée définitivement) */}
+                <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative w-11 h-11 rounded-xl bg-white border border-emerald-300 overflow-hidden shrink-0 flex items-center justify-center shadow-2xs">
+                      {loginAvatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={loginAvatar} alt="Photo profil" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-5 h-5 text-emerald-600" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">Photo de Profil</span>
+                      <span className="text-[10px] text-slate-500">
+                        {loginAvatar ? '✓ Photo enregistrée définitivement' : 'Optionnelle — Sauvegardée dès la 1ère connexion'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 text-[11px] font-bold hover:bg-emerald-100 cursor-pointer shadow-2xs transition-all inline-flex items-center gap-1.5">
+                      <span>{loginAvatar ? 'Changer' : 'Ajouter'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 {/* 2. Civilité & Nom et Prénoms */}
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs">
@@ -968,8 +1028,8 @@ export function LoginView({
                   </p>
                 </div>
 
-                {/* 5. Code d'Authentification Officiel (Requis pour Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) */}
-                {selectedRole !== 'fondateur' && selectedRole !== 'directeur' && selectedRole !== 'parent' && (
+                {/* 5. Code d'Authentification Officiel (Requis pour Fondateur, Directeur et tous les Personnels) */}
+                {selectedRole !== 'parent' && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
@@ -977,7 +1037,11 @@ export function LoginView({
                         <span>5. Code d&apos;Authentification Sécurisé *</span>
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        Attribué par la Direction
+                        {selectedRole === 'fondateur'
+                          ? 'Code Fondateur (ex: FND-2026)'
+                          : selectedRole === 'directeur'
+                          ? 'Code Directeur (ex: DIR-2026)'
+                          : 'Attribué par la Direction'}
                       </span>
                     </label>
                     <div className="relative">
@@ -988,23 +1052,21 @@ export function LoginView({
                         autoComplete="off"
                         value={authCodeInput}
                         onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
-                        placeholder="Entrez votre code d'accès attribué (ex: CPT-2026)"
+                        placeholder={
+                          selectedRole === 'fondateur'
+                            ? 'Entrez votre code officiel Fondateur (ex: FND-2026)'
+                            : selectedRole === 'directeur'
+                            ? 'Entrez votre code officiel Directeur (ex: DIR-2026)'
+                            : "Entrez votre code d'accès attribué (ex: CPT-2026)"
+                        }
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
                     </div>
                     <p className="text-[10.5px] text-slate-500">
-                      Entrez le code d&apos;accès configuré par la Direction dans la page Administration.
+                      {selectedRole === 'fondateur' || selectedRole === 'directeur'
+                        ? "Le code d'authentification officiel est strictement requis pour déverrouiller l'accès Administrateur."
+                        : "Entrez le code d'accès configuré par la Direction dans la page Administration."}
                     </p>
-                  </div>
-                )}
-
-                {/* Information Accès Maître Fondateur / Directeur */}
-                {(selectedRole === 'fondateur' || selectedRole === 'directeur') && (
-                  <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-900 shadow-2xs">
-                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span className="text-[11px] font-medium leading-tight">
-                      👑 Accès Administrateur Principal direct activé pour le {selectedRole === 'fondateur' ? 'Fondateur' : 'Directeur'}.
-                    </span>
                   </div>
                 )}
 

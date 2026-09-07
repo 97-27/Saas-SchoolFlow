@@ -181,6 +181,10 @@ export interface School {
   stampUrl?: string;
   receiptFooterNote?: string;
 
+  // Orientation de l'école & Formule de Salutation WhatsApp
+  schoolType?: 'islamique' | 'non_confessionnelle' | 'laique';
+  customGreeting?: string;
+
   // Subscription & Account Status
   status?: 'active' | 'pending' | 'suspended';
   subscriptionPlan?: string;

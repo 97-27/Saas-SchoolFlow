@@ -714,8 +714,8 @@ export function DocumentsView({
           <div className="min-w-[1100px] h-1" />
         </div>
 
-        {/* Table des Dossiers Scolaires */}
-        <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto">
+        {/* Table des Dossiers Scolaires (barre du bas masquée, défilement contrôlé par la barre du haut) */}
+        <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead className="sticky top-0 z-10 shadow-2xs">
               <tr className="bg-slate-100/95 backdrop-blur-xs border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
