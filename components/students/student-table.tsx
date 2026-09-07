@@ -175,21 +175,22 @@ export function StudentTable({
   // Filtered students
   const filteredStudents = useMemo(() => {
     return students.filter((stu) => {
-      const q = searchQuery.toLowerCase();
+      if (!stu) return false;
+      const q = (searchQuery || '').toLowerCase();
       const matchesSearch =
-        searchQuery === '' ||
-        stu.studentNumber.toLowerCase().includes(q) ||
+        q === '' ||
+        (stu.studentNumber?.toLowerCase().includes(q) ?? false) ||
         (stu.matricule && stu.matricule.toLowerCase().includes(q)) ||
-        stu.lastName.toLowerCase().includes(q) ||
-        stu.firstName.toLowerCase().includes(q) ||
-        stu.fullName.toLowerCase().includes(q) ||
-        stu.address.toLowerCase().includes(q) ||
-        stu.whatsappPhone.toLowerCase().includes(q) ||
-        stu.grade.toLowerCase().includes(q);
+        (stu.lastName?.toLowerCase().includes(q) ?? false) ||
+        (stu.firstName?.toLowerCase().includes(q) ?? false) ||
+        (stu.fullName?.toLowerCase().includes(q) ?? false) ||
+        (stu.address?.toLowerCase().includes(q) ?? false) ||
+        (stu.whatsappPhone?.toLowerCase().includes(q) ?? false) ||
+        (stu.grade?.toLowerCase().includes(q) ?? false);
 
       const matchesClass =
         selectedClass === 'Toutes les classes' ||
-        stu.grade.toLowerCase() === selectedClass.toLowerCase();
+        (stu.grade && stu.grade.toLowerCase() === selectedClass.toLowerCase());
 
       const matchesGender =
         selectedGender === 'all' || stu.gender === selectedGender;
@@ -206,8 +207,8 @@ export function StudentTable({
   // Sorted students (Par défaut 'desc' pour voir ID-051 tout en haut)
   const sortedStudents = useMemo(() => {
     return [...filteredStudents].sort((a, b) => {
-      const numA = parseInt(a.studentNumber.replace(/\D/g, ''), 10) || 0;
-      const numB = parseInt(b.studentNumber.replace(/\D/g, ''), 10) || 0;
+      const numA = parseInt((a?.studentNumber || '').replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt((b?.studentNumber || '').replace(/\D/g, ''), 10) || 0;
       return sortOrder === 'desc' ? numB - numA : numA - numB;
     });
   }, [filteredStudents, sortOrder]);
@@ -216,6 +217,7 @@ export function StudentTable({
   const nextStudentNumber = useMemo(() => {
     let maxNum = 0;
     students.forEach((s) => {
+      if (!s || !s.studentNumber) return;
       const match = s.studentNumber.match(/ID-(\d+)/i);
       if (match) {
         const num = parseInt(match[1], 10);
@@ -550,14 +552,14 @@ export function StudentTable({
                       {/* Contact WhatsApp Parent (10 chiffres) */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
                         <a
-                          href={`https://wa.me/${student.whatsappPhone.replace(/[^0-9]/g, '')}`}
+                          href={`https://wa.me/${(student.whatsappPhone || '').replace(/[^0-9]/g, '')}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/80 font-mono text-[11px] font-semibold transition-colors"
                           title="Contacter le parent sur WhatsApp"
                         >
                           <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>{student.whatsappPhone}</span>
+                          <span>{student.whatsappPhone || '—'}</span>
                         </a>
                       </td>
 
@@ -615,7 +617,7 @@ export function StudentTable({
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-extrabold text-base font-heading shrink-0 shadow-xs">
-                  {actionMenuStudent.lastName.charAt(0)}{actionMenuStudent.firstName.charAt(0)}
+                  {(actionMenuStudent.lastName || '').charAt(0)}{(actionMenuStudent.firstName || '').charAt(0)}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -667,7 +669,7 @@ export function StudentTable({
               </button>
 
               <a
-                href={`https://wa.me/${actionMenuStudent.whatsappPhone.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${(actionMenuStudent.whatsappPhone || '').replace(/[^0-9]/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setActionMenuStudent(null)}
@@ -680,7 +682,7 @@ export function StudentTable({
                   <h4 className="text-xs font-bold text-slate-900 group-hover:text-emerald-950 flex items-center gap-1.5">
                     <span>Message WhatsApp Parent</span>
                     <span className="font-mono text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                      {actionMenuStudent.whatsappPhone}
+                      {actionMenuStudent.whatsappPhone || '—'}
                     </span>
                   </h4>
                   <p className="text-[11px] text-slate-500">
@@ -975,7 +977,7 @@ export function StudentTable({
             <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-extrabold text-base font-heading shadow-xs">
-                  {viewingStudent.lastName.charAt(0)}{viewingStudent.firstName.charAt(0)}
+                  {(viewingStudent.lastName || '').charAt(0)}{(viewingStudent.firstName || '').charAt(0)}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -1165,7 +1167,7 @@ export function StudentTable({
                           <p className="font-bold text-slate-900 truncate">{r.title}</p>
                           <p className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
                             <span className="font-mono font-semibold text-slate-700">
-                              📅 {r.date.includes('-') ? formatDate(r.date) : r.date}
+                              📅 {r.date && typeof r.date === 'string' && r.date.includes('-') ? formatDate(r.date) : (r.date || '—')}
                             </span>
                             <span>•</span>
                             <span>{r.method}</span>
@@ -1211,7 +1213,7 @@ export function StudentTable({
               </button>
 
               <a
-                href={`https://wa.me/${viewingStudent.whatsappPhone.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${(viewingStudent.whatsappPhone || '').replace(/[^0-9]/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all cursor-pointer"
