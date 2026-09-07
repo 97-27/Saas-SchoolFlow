@@ -769,14 +769,9 @@ export function SpecialDiscountsView({
 
           {/* Informations Officielles de l'École */}
           <div className="text-center flex-1 space-y-1">
-            <div className="flex items-center justify-center gap-1.5 flex-nowrap w-full overflow-hidden">
-              <h2 className="text-xs sm:text-sm md:text-base font-extrabold text-slate-900 font-heading leading-tight uppercase whitespace-nowrap truncate max-w-[80%]" title={`${currentSchool.name} (${currentSchool.shortName || 'EPC MANOI'})`}>
-                {currentSchool.name}
-              </h2>
-              <span className="shrink-0 inline-block px-2 py-0.5 rounded-md text-[10.5px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300 uppercase tracking-wide whitespace-nowrap">
-                ({currentSchool.shortName || 'EPC MANOI'})
-              </span>
-            </div>
+            <h2 className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-heading leading-tight uppercase text-center" title={`${currentSchool.name} (${currentSchool.shortName || 'EPC MANOI'})`}>
+              {currentSchool.name}{currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
+            </h2>
 
             <p className="text-[11px] font-bold text-emerald-800 italic">
               {currentSchool.receiptHeaderMotto || currentSchool.motto || '« Faisons de nos enfants les élites de demain. »'}

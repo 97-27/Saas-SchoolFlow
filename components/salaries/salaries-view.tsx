@@ -443,17 +443,8 @@ export function SalariesView({
               suppressHydrationWarning
               className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-heading uppercase tracking-tight leading-snug"
             >
-              {currentSchool.name}
+              {currentSchool.name}{currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
             </h3>
-
-            {currentSchool.shortName && (
-              <p
-                suppressHydrationWarning
-                className="text-xs sm:text-sm font-extrabold text-emerald-800 font-heading tracking-wider"
-              >
-                ({currentSchool.shortName})
-              </p>
-            )}
 
             <p
               suppressHydrationWarning

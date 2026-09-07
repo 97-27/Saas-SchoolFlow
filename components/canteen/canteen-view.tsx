@@ -1121,16 +1121,19 @@ export function CanteenView({
                 </div>
 
                 <div className="text-center flex-1 space-y-0.5 min-w-0">
-                  <h2 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading truncate">
+                  <h2 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight">
                     {currentSchool.name}
+                    {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                   </h2>
-                  <p className="text-[11px] font-extrabold text-emerald-800 font-heading">
-                    {currentSchool.shortName || 'EPC MANOI'}
-                  </p>
-                  <p className="text-[9.5px] italic text-slate-600">
+                  <p className="text-[9.5px] italic text-emerald-900 font-semibold leading-tight">
                     « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                   </p>
-                  <p className="text-[8.5px] text-slate-400 font-mono">
+                  {currentSchool.slogan && (
+                    <p className="text-[9px] font-medium text-amber-700 italic leading-tight">
+                      ✦ {currentSchool.slogan}
+                    </p>
+                  )}
+                  <p className="text-[8.5px] text-slate-500 font-mono leading-tight">
                     Code : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
                   </p>
                 </div>

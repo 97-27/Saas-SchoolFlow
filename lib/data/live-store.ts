@@ -899,6 +899,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           guardianName: stu.guardianName,
           guardianPhone: stu.whatsappPhone || stu.guardianPhone,
           feeType: "Frais d'inscription & Scolarité",
+          registrationFee: stu.registrationFee,
           amount: stu.tuitionAmount || 0,
           discountAmount: stu.discountAmount || 0,
           netAmount: stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0),
@@ -907,8 +908,8 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           paymentMethod: stu.paymentMethod || 'Espèces en caisse',
           enrollmentType: stu.enrollmentType || 'nouveau',
           installments: stu.installments,
-          issueDate: stu.paymentDate || '2026-08-27',
-          dueDate: stu.paymentDate || '2026-08-27',
+          issueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
+          dueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
           status: (stu.balanceRemaining === 0 || stu.tuitionStatus === 'paid') ? 'paid' : (stu.paidAmount && stu.paidAmount > 0) ? 'partial' : 'sent',
         };
 
@@ -1167,6 +1168,7 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       studentGender: student.gender,
       guardianName: student.guardianName,
       guardianPhone: student.whatsappPhone || student.guardianPhone,
+      registrationFee: student.registrationFee !== undefined ? student.registrationFee : existingInv.registrationFee,
       amount: student.tuitionAmount,
       discountAmount: student.discountAmount || 0,
       netAmount: student.netAmount || (student.tuitionAmount - (student.discountAmount || 0)),
@@ -1175,6 +1177,8 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       enrollmentType: student.enrollmentType || existingInv.enrollmentType,
       installments: student.installments || existingInv.installments,
       paymentMethod: student.paymentMethod || existingInv.paymentMethod,
+      issueDate: student.paymentDate || student.enrollmentDate || existingInv.issueDate,
+      dueDate: student.paymentDate || student.enrollmentDate || existingInv.dueDate,
     } : {
       id: `inv-${student.studentNumber.replace(/\D/g, '').padStart(3, '0')}`,
       invoiceNumber: student.studentNumber,
@@ -1188,6 +1192,7 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       guardianName: student.guardianName,
       guardianPhone: student.whatsappPhone || student.guardianPhone,
       feeType: "Frais d'inscription & Scolarité",
+      registrationFee: student.registrationFee,
       amount: student.tuitionAmount,
       discountAmount: student.discountAmount || 0,
       netAmount: student.netAmount || (student.tuitionAmount - (student.discountAmount || 0)),
@@ -1196,8 +1201,8 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       paymentMethod: student.paymentMethod || 'Espèces en caisse',
       enrollmentType: student.enrollmentType || 'nouveau',
       installments: student.installments,
-      issueDate: student.paymentDate || '2026-08-27',
-      dueDate: student.paymentDate || '2026-08-27',
+      issueDate: student.paymentDate || student.enrollmentDate || '2026-08-27',
+      dueDate: student.paymentDate || student.enrollmentDate || '2026-08-27',
       status: student.tuitionStatus === 'paid' ? 'paid' : student.paidAmount > 0 ? 'partial' : 'sent',
     };
 

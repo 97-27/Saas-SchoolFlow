@@ -197,6 +197,12 @@ export function InscriptionsView({
   ]);
 
   const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr());
+
+  // Synchronisation stricte de la date : quand la date d'inscription est modifiée, le 1er versement s'aligne immédiatement
+  const handlePaymentDateChange = (newDate: string) => {
+    setPaymentDate(newDate);
+    setVersement1Date(newDate);
+  };
   const [paymentMethod, setPaymentMethod] = useState<'especes' | 'virement' | 'en_ligne'>('especes');
   const [onlineOperator, setOnlineOperator] = useState<'mtn' | 'moov' | 'orange' | 'wave'>('orange');
 
@@ -397,6 +403,175 @@ export function InscriptionsView({
 
   const isSubmitAllowed = selectedStudentId ? hasNewVersement : formValidation.isAllComplete;
 
+  // Clé de persistance du brouillon du formulaire d'inscription (sessionStorage + localStorage)
+  const draftStorageKey = `schoolflow_inscription_draft_${schoolSlug || 'college-excellence'}`;
+  const isDraftHydrated = useRef(false);
+
+  // 1. Restaurer le brouillon lors du chargement ou de la navigation vers la page
+  useEffect(() => {
+    if (typeof window === 'undefined' || isDraftHydrated.current) return;
+    try {
+      const saved = sessionStorage.getItem(draftStorageKey) || localStorage.getItem(draftStorageKey);
+      if (saved && !selectedStudentId) {
+        const draft = JSON.parse(saved);
+        if (draft.lastName) setLastName(draft.lastName);
+        if (draft.firstName) setFirstName(draft.firstName);
+        if (draft.gender) setGender(draft.gender);
+        if (draft.grade) setGrade(draft.grade);
+        if (draft.enrollmentType) setEnrollmentType(draft.enrollmentType);
+        if (draft.customMatricule) setCustomMatricule(draft.customMatricule);
+        if (draft.address) setAddress(draft.address);
+        if (draft.guardianName) setGuardianName(draft.guardianName);
+        if (draft.whatsappPhone) setWhatsappPhone(draft.whatsappPhone);
+        if (draft.secondaryPhones) setSecondaryPhones(draft.secondaryPhones);
+        if (draft.isBoarding !== undefined) setIsBoarding(draft.isBoarding);
+        if (draft.isCanteen !== undefined) setIsCanteen(draft.isCanteen);
+        if (draft.isTransport !== undefined) setIsTransport(draft.isTransport);
+        if (draft.fraisAnnexesPaid !== undefined) setFraisAnnexesPaid(draft.fraisAnnexesPaid);
+        if (draft.tenueCousuePaid !== undefined) setTenueCousuePaid(draft.tenueCousuePaid);
+        if (draft.registrationFee !== undefined) setRegistrationFee(draft.registrationFee);
+        if (draft.tuitionAmount !== undefined) setTuitionAmount(draft.tuitionAmount);
+        if (draft.discountAmount !== undefined) setDiscountAmount(draft.discountAmount);
+        if (draft.paidAmount !== undefined) setPaidAmount(draft.paidAmount);
+        if (draft.remainingAmount !== undefined) setRemainingAmount(draft.remainingAmount);
+        if (draft.paymentDate) setPaymentDate(draft.paymentDate);
+        if (draft.paymentMethod) setPaymentMethod(draft.paymentMethod);
+        if (draft.onlineOperator) setOnlineOperator(draft.onlineOperator);
+        if (draft.versement1Amount !== undefined) setVersement1Amount(draft.versement1Amount);
+        if (draft.versement1Method) setVersement1Method(draft.versement1Method);
+        if (draft.versement1Date) setVersement1Date(draft.versement1Date);
+        if (draft.versement2Amount !== undefined) setVersement2Amount(draft.versement2Amount);
+        if (draft.versement2Method) setVersement2Method(draft.versement2Method);
+        if (draft.versement2Date) setVersement2Date(draft.versement2Date);
+        if (draft.versement3Amount !== undefined) setVersement3Amount(draft.versement3Amount);
+        if (draft.versement3Method) setVersement3Method(draft.versement3Method);
+        if (draft.versement3Date) setVersement3Date(draft.versement3Date);
+        if (draft.versement4Amount !== undefined) setVersement4Amount(draft.versement4Amount);
+        if (draft.versement4Method) setVersement4Method(draft.versement4Method);
+        if (draft.versement4Date) setVersement4Date(draft.versement4Date);
+        if (draft.versement5Amount !== undefined) setVersement5Amount(draft.versement5Amount);
+        if (draft.versement5Method) setVersement5Method(draft.versement5Method);
+        if (draft.versement5Date) setVersement5Date(draft.versement5Date);
+      }
+    } catch (e) {
+      console.warn('Erreur restauration brouillon inscription:', e);
+    } finally {
+      isDraftHydrated.current = true;
+    }
+  }, [draftStorageKey, selectedStudentId]);
+
+  // 2. Mettre en cache instantanément les modifications dans sessionStorage et localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined' || selectedStudentId || !isDraftHydrated.current) return;
+
+    const hasAnyContent = Boolean(
+      lastName ||
+      firstName ||
+      guardianName ||
+      whatsappPhone ||
+      address ||
+      customMatricule ||
+      tuitionAmount > 0 ||
+      paidAmount > 0
+    );
+
+    if (!hasAnyContent) return;
+
+    const draft = {
+      lastName,
+      firstName,
+      gender,
+      grade,
+      enrollmentType,
+      customMatricule,
+      address,
+      guardianName,
+      whatsappPhone,
+      secondaryPhones,
+      isBoarding,
+      isCanteen,
+      isTransport,
+      fraisAnnexesPaid,
+      tenueCousuePaid,
+      registrationFee,
+      tuitionAmount,
+      discountAmount,
+      paidAmount,
+      remainingAmount,
+      paymentDate,
+      paymentMethod,
+      onlineOperator,
+      versement1Amount,
+      versement1Method,
+      versement1Date,
+      versement2Amount,
+      versement2Method,
+      versement2Date,
+      versement3Amount,
+      versement3Method,
+      versement3Date,
+      versement4Amount,
+      versement4Method,
+      versement4Date,
+      versement5Amount,
+      versement5Method,
+      versement5Date,
+    };
+
+    try {
+      sessionStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    } catch (e) {}
+  }, [
+    selectedStudentId,
+    draftStorageKey,
+    lastName,
+    firstName,
+    gender,
+    grade,
+    enrollmentType,
+    customMatricule,
+    address,
+    guardianName,
+    whatsappPhone,
+    secondaryPhones,
+    isBoarding,
+    isCanteen,
+    isTransport,
+    fraisAnnexesPaid,
+    tenueCousuePaid,
+    registrationFee,
+    tuitionAmount,
+    discountAmount,
+    paidAmount,
+    remainingAmount,
+    paymentDate,
+    paymentMethod,
+    onlineOperator,
+    versement1Amount,
+    versement1Method,
+    versement1Date,
+    versement2Amount,
+    versement2Method,
+    versement2Date,
+    versement3Amount,
+    versement3Method,
+    versement3Date,
+    versement4Amount,
+    versement4Method,
+    versement4Date,
+    versement5Amount,
+    versement5Method,
+    versement5Date,
+  ]);
+
+  const clearDraft = () => {
+    try {
+      sessionStorage.removeItem(draftStorageKey);
+      localStorage.removeItem(draftStorageKey);
+    } catch (e) {}
+  };
+
   // Charger les coordonnées et les frais d'un élève sélectionné
   const handleSelectStudent = (stu: Student) => {
     if (!stu) return;
@@ -420,7 +595,7 @@ export function InscriptionsView({
         ? stu.balanceRemaining
         : Math.max(0, (stu.netAmount || stu.tuitionAmount || 0) - (stu.paidAmount || 0));
       setRemainingAmount(rem);
-      const defaultDate = stu.paymentDate || getTodayDateStr();
+      const defaultDate = stu.enrollmentDate || stu.paymentDate || getTodayDateStr();
       setPaymentDate(defaultDate);
 
       // Charger les 5 versements de l'élève
@@ -478,6 +653,7 @@ export function InscriptionsView({
 
   // Réinitialiser le formulaire pour créer un Nouveau Reçu (mode nouvelle inscription : remise intégrale à zéro)
   const handleStartNewReceipt = () => {
+    clearDraft();
     const today = getTodayDateStr();
     setSelectedStudentId(null);
     setInitialVersementsSnapshot(null);
@@ -593,12 +769,14 @@ export function InscriptionsView({
 
     const matriculeToSave = currentMatricule;
 
+    const finalPaymentDate = paymentDate || getTodayDateStr();
+
     const installments: StudentInstallments = {
-      versement1: versement1Amount > 0 ? { amount: versement1Amount, paymentMethod: versement1Method, date: versement1Date } : undefined,
-      versement2: versement2Amount > 0 ? { amount: versement2Amount, paymentMethod: versement2Method, date: versement2Date } : undefined,
-      versement3: versement3Amount > 0 ? { amount: versement3Amount, paymentMethod: versement3Method, date: versement3Date } : undefined,
-      versement4: versement4Amount > 0 ? { amount: versement4Amount, paymentMethod: versement4Method, date: versement4Date } : undefined,
-      versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date } : undefined,
+      versement1: versement1Amount > 0 ? { amount: versement1Amount, paymentMethod: versement1Method, date: versement1Date || finalPaymentDate } : undefined,
+      versement2: versement2Amount > 0 ? { amount: versement2Amount, paymentMethod: versement2Method, date: versement2Date || finalPaymentDate } : undefined,
+      versement3: versement3Amount > 0 ? { amount: versement3Amount, paymentMethod: versement3Method, date: versement3Date || finalPaymentDate } : undefined,
+      versement4: versement4Amount > 0 ? { amount: versement4Amount, paymentMethod: versement4Method, date: versement4Date || finalPaymentDate } : undefined,
+      versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date || finalPaymentDate } : undefined,
     };
 
     // En mode consultation, préserver scrupuleusement l'identité de l'élève (modifications d'identité réservées à la page "Vue d'ensemble")
@@ -625,7 +803,7 @@ export function InscriptionsView({
       whatsappPhone: whatsappPhone.trim(),
       secondaryPhones: secondaryPhones.map((p) => p.trim()).filter(Boolean),
       address: address.trim() || `${schoolState.city}`,
-      enrollmentDate: paymentDate,
+      enrollmentDate: finalPaymentDate,
       attendanceRate: currentSelectedStudent?.attendanceRate || 95,
       status: 'active',
       enrollmentType: finalEnrollmentType,
@@ -636,7 +814,7 @@ export function InscriptionsView({
       paidAmount: paidAmount,
       balanceRemaining: remainingAmount,
       tuitionStatus: remainingAmount === 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
-      paymentDate: paymentDate,
+      paymentDate: finalPaymentDate,
       paymentMethod: getPaymentMethodLabel(),
       installments: installments,
       isBoarding: isBoarding,
@@ -669,13 +847,14 @@ export function InscriptionsView({
       enrollmentType: enrollmentType,
       paymentMethod: getPaymentMethodLabel(),
       installments: installments,
-      issueDate: paymentDate,
-      dueDate: paymentDate,
+      issueDate: finalPaymentDate,
+      dueDate: finalPaymentDate,
       status: remainingAmount === 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'sent',
     };
 
     // Save to persistent storage and broadcast event
     saveRegisteredStudent(newStudent, newInvoice, schoolSlug);
+    clearDraft();
 
     // Mettre à jour immédiatement la liste locale des élèves pour recalculer le prochain ID/Reçu
     const refreshedStudents = getLiveStudents(initialStudents, schoolSlug);
@@ -843,43 +1022,39 @@ export function InscriptionsView({
       ctx.fillText("CÔTE D'IVOIRE", 1070, 150);
     }
 
-    // Textes École au centre : Nom complet, Sigle en dessous, Devise, Contacts
+    // Textes École au centre : Nom complet et Sigle SUR LA MÊME LIGNE, Devise, Slogan, Contacts, Code
     ctx.textAlign = 'center';
 
-    // Ligne 1 : Nom complet de l'école
+    // Ligne 1 : Nom complet de l'école + Sigle entre parenthèses
     ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 24px Outfit, sans-serif';
-    ctx.fillText((schoolState.name || 'EPC MARKAZ AHLI SOUNNAH').toUpperCase(), 600, 80);
+    const schoolDisplayName = `${(schoolState.name || 'EPC MARKAZ AHLI SOUNNAH').toUpperCase()}${schoolState.shortName ? ` (${schoolState.shortName.toUpperCase()})` : ''}`;
+    ctx.font = schoolDisplayName.length > 45 ? 'bold 19px Outfit, sans-serif' : 'bold 22px Outfit, sans-serif';
+    ctx.fillText(schoolDisplayName, 600, 85);
 
-    // Ligne 2 : Sigle de l'école en dessous
-    ctx.fillStyle = '#047857';
-    ctx.font = 'bold 18px Outfit, sans-serif';
-    ctx.fillText(`(${schoolState.shortName || 'EPC MANOI'})`, 600, 108);
-
-    // Ligne 3 : Devise
+    // Ligne 2 : Devise
     ctx.fillStyle = '#065f46';
     ctx.font = 'italic bold 15px Outfit, sans-serif';
-    ctx.fillText(schoolState.receiptHeaderMotto || schoolState.motto || '« Excellence Académique • Rigueur • Éducation de Référence »', 600, 134);
+    ctx.fillText(schoolState.receiptHeaderMotto || schoolState.motto || '« Excellence Académique • Rigueur • Éducation de Référence »', 600, 115);
 
-    // Ligne 4 : Slogan
+    // Ligne 3 : Slogan
     if (schoolState.receiptHeaderSlogan || schoolState.slogan) {
       ctx.fillStyle = '#b45309';
       ctx.font = 'italic bold 14px Outfit, sans-serif';
-      ctx.fillText(schoolState.receiptHeaderSlogan || schoolState.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux', 600, 158);
+      ctx.fillText(schoolState.receiptHeaderSlogan || schoolState.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux', 600, 142);
     }
 
-    // Ligne 5 : Contacts & Situation
+    // Ligne 4 : Contacts & Situation
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 185);
+    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 168);
 
-    // Ligne 6 : Badge Code MENA arrondi au centre
-    drawRoundRect(400, 204, 400, 32, 8);
+    // Ligne 5 : Badge Code Établissement arrondi au centre
+    drawRoundRect(380, 185, 440, 32, 8);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 15px monospace';
-    ctx.fillText(`Code Établissement : ${schoolState.menaCode || schoolState.ministryCode || 'MENA-04829-CI'}`, 600, 226);
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(`Code Établissement : ${schoolState.menaCode || schoolState.ministryCode || 'MENA-04829-CI'}`, 600, 206);
 
     // --- BANDEAU TITRE DU REÇU ARRONDI (radius 12) ---
     drawRoundRect(45, 305, 1110, 56, 12);
@@ -941,13 +1116,21 @@ export function InscriptionsView({
     ctx.font = 'bold 18px monospace';
     ctx.fillText(phone || 'Non renseigné', 840, 505);
 
-    // Ligne 4 : Prestations de rentrée
+    // Ligne 4 : Droits d'inscription & Prestations
+    const isRegistrationPaid = (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0);
     ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText('Prestations :', 70, 550);
-    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText("Droits d'inscr. :", 70, 550);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillStyle = isRegistrationPaid ? '#047857' : '#be123c';
+    ctx.fillText(`${isRegistrationPaid ? '☑ Payés' : '☐ Non payés'}${registrationFee > 0 ? ` (${formatFCFA(registrationFee)})` : ''}`, 200, 550);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Prestations :', 500, 550);
+    ctx.font = 'bold 13.5px Inter, sans-serif';
     ctx.fillText(
-      `Internat : ${isBoarding ? 'Oui (Pensionnaire)' : 'Non (Externe)'}  •  Cantine : ${isCanteen ? 'Oui ✓' : 'Non ✕'}  •  Transport : ${isTransport ? 'Oui ✓' : 'Non ✕'}  •  Frais Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}  •  Tenue : ${tenueCousuePaid ? 'Payé ✓' : 'Non payé ✕'}`,
-      175,
+      `Internat : ${isBoarding ? 'Oui' : 'Non'}  •  Cantine : ${isCanteen ? 'Oui ✓' : 'Non ✕'}  •  Transport : ${isTransport ? 'Oui ✓' : 'Non ✕'}  •  Annexes : ${fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}`,
+      610,
       550
     );
 
@@ -1226,28 +1409,22 @@ export function InscriptionsView({
 
             {/* Informations de l'école au centre : Nom complet et Sigle STRICTEMENT SUR LA MÊME LIGNE */}
             <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
-              <div className="flex items-center justify-center gap-1.5 flex-nowrap w-full overflow-hidden">
-                <h2
-                  className="font-black uppercase tracking-tight text-slate-950 font-heading text-[11px] sm:text-xs md:text-sm lg:text-[14px] whitespace-nowrap truncate max-w-[80%]"
-                  title={`${schoolState.name} (${schoolState.shortName || 'EPC MANOI'})`}
-                >
-                  {schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
-                </h2>
-                {schoolState.shortName && (
-                  <span className="shrink-0 font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded text-[10px] sm:text-xs tracking-wide uppercase whitespace-nowrap">
-                    ({schoolState.shortName})
-                  </span>
-                )}
-              </div>
-              <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
+              <h2
+                className="font-black uppercase tracking-tight text-slate-950 font-heading text-[11px] sm:text-xs md:text-sm lg:text-[14px] leading-tight text-center"
+                title={`${schoolState.name} (${schoolState.shortName || 'EPC MANOI'})`}
+              >
+                {schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+                {schoolState.shortName ? ` (${schoolState.shortName})` : ''}
+              </h2>
+              <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] leading-tight">
                 « {schoolState.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
               </p>
               {schoolState.slogan && (
-                <p className="font-medium text-amber-700 italic text-[9px] sm:text-[10px] truncate">
+                <p className="font-medium text-amber-700 italic text-[9px] sm:text-[10px] leading-tight">
                   ✦ {schoolState.slogan}
                 </p>
               )}
-              <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px] truncate">
+              <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px]">
                 {schoolState.district || `${schoolState.city} — ${schoolState.country}`} • Tél : {schoolState.phone || '+225 27 22 44 11 00'}
               </p>
               <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[9px] sm:text-[10px]">
@@ -1396,6 +1573,36 @@ export function InscriptionsView({
               <span className="text-slate-800 font-semibold truncate block" title={address}>
                 {address || '—'}
               </span>
+            </div>
+
+            {/* Case à cocher Droits d'inscription */}
+            <div className="col-span-2 py-1.5 px-3 rounded-xl bg-slate-100/90 border border-slate-200/90 flex items-center justify-between">
+              <span className="text-[10px] text-slate-600 uppercase font-bold tracking-tight">
+                Droits d&apos;inscription :
+              </span>
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-4 h-4 rounded flex items-center justify-center border text-[11px] font-black transition-all ${
+                    (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
+                      ? 'bg-emerald-600 border-emerald-700 text-white shadow-2xs'
+                      : 'bg-white border-slate-300 text-transparent'
+                  }`}
+                >
+                  {(registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0) ? '✓' : ''}
+                </div>
+                <span
+                  className={`text-xs font-black font-heading ${
+                    (registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
+                      ? 'text-emerald-800'
+                      : 'text-rose-700'
+                  }`}
+                >
+                  {(registrationFee > 0 && paidAmount >= registrationFee) || (registrationFee === 0 && paidAmount > 0)
+                    ? 'Payés'
+                    : 'Non payés'}
+                  {registrationFee > 0 ? ` (${formatFCFA(registrationFee)})` : ''}
+                </span>
+              </div>
             </div>
 
             <div className="col-span-2 pt-2 border-t border-slate-200/70 flex items-center justify-between">
@@ -1979,7 +2186,7 @@ export function InscriptionsView({
                               {formatFCFA(stu.tuitionAmount)}
                             </span>
                             <span className="text-[10px] font-semibold text-slate-400">
-                              {formatDate(stu.paymentDate || '2026-08-27')}
+                              {formatDate(stu.enrollmentDate || stu.paymentDate || '—')}
                             </span>
                           </div>
                         </button>
@@ -2570,7 +2777,7 @@ export function InscriptionsView({
                   </label>
                   <FrenchDateInput
                     value={paymentDate}
-                    onChange={setPaymentDate}
+                    onChange={handlePaymentDateChange}
                   />
                 </div>
 

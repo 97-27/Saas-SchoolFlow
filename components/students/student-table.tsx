@@ -124,7 +124,7 @@ export function StudentTable({
     setEditFirstName(student.firstName);
     setEditGrade(student.grade);
     setEditGender(student.gender);
-    setEditPaymentDate(student.paymentDate || '2026-08-27');
+    setEditPaymentDate(student.enrollmentDate || student.paymentDate || '2026-08-27');
     setEditEnrollmentType(student.enrollmentType || 'nouveau');
     setEditStatus(student.status || 'active');
     setEditWhatsapp(student.whatsappPhone);
@@ -146,6 +146,7 @@ export function StudentTable({
       grade: editGrade,
       gender: editGender,
       paymentDate: editPaymentDate,
+      enrollmentDate: editPaymentDate,
       enrollmentType: editEnrollmentType,
       status: editStatus,
       whatsappPhone: editWhatsapp.trim(),
@@ -564,7 +565,7 @@ export function StudentTable({
                       <td className="py-3.5 px-3 text-center text-slate-700 font-medium whitespace-nowrap font-sans">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{formatDate(student.paymentDate || '2026-08-27')}</span>
+                          <span>{formatDate(student.enrollmentDate || student.paymentDate || '2026-08-27')}</span>
                         </span>
                       </td>
 

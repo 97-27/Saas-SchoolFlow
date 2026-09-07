@@ -1374,13 +1374,11 @@ export function CommunicationView({
                 <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
                   <h2
                     className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm md:text-base block w-full leading-tight break-words"
-                    title={currentSchool.name}
+                    title={`${currentSchool.name} (${currentSchool.shortName || 'EPC MANOI'})`}
                   >
                     {currentSchool.name || 'EPC MARKAZ AHLI SOUNNAH'}
+                    {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                   </h2>
-                  <p className="font-extrabold text-emerald-800 text-[11px] sm:text-xs tracking-wide">
-                    ({currentSchool.shortName || 'EPC MANOI'})
-                  </p>
                   <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
                     « {currentSchool.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
                   </p>

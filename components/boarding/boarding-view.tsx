@@ -1843,23 +1843,26 @@ export function BoardingView({
                 )}
               </div>
 
-              {/* Centre : Hiérarchie stricte avec textes agrandis et lisibles */}
+              {/* Centre : Hiérarchie stricte avec nom et sigle sur la même ligne */}
               <div className="text-center flex-1 space-y-0.5 min-w-0">
-                <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight truncate">
+                <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight">
                   {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+                  {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                 </h1>
-                <p className="text-xs font-extrabold text-emerald-800 tracking-wide font-heading">
-                  {currentSchool.shortName || 'EPC MANOI'}
-                </p>
-                <p className="text-[10px] sm:text-[11px] italic text-slate-700 font-semibold">
+                <p className="text-[10px] sm:text-[11px] italic text-emerald-900 font-semibold leading-tight">
                   « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                 </p>
-                <p className="text-[9.5px] sm:text-[10px] font-medium text-slate-600">
-                  {currentSchool.slogan || 'L’Excellence au service de l’Éducation'}
+                {currentSchool.slogan && (
+                  <p className="text-[9.5px] sm:text-[10px] font-medium text-amber-700 italic leading-tight">
+                    ✦ {currentSchool.slogan}
+                  </p>
+                )}
+                <p className="text-[9.5px] sm:text-[10px] font-medium text-slate-600 leading-tight">
+                  {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
                 </p>
-                <p className="text-[9px] sm:text-[9.5px] text-slate-500 font-mono font-bold">
-                  Code Établissement : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
-                </p>
+                <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[9px] font-mono font-bold text-slate-700">
+                  <span>Code Établissement : {currentSchool.ministryCode || '321119'}</span>
+                </div>
               </div>
 
               {/* Emblème Droit */}

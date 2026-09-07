@@ -43,9 +43,13 @@ export function NewStudentModal({
   const [guardianName, setGuardianName] = useState('');
   const [whatsappPhone, setWhatsappPhone] = useState('+225 07 ');
   const [tuitionAmount, setTuitionAmount] = useState<number>(250000);
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [paidAmount, setPaidAmount] = useState<number>(250000);
-  const [paymentDate, setPaymentDate] = useState('2026-08-27');
+  // Helper pour obtenir la date du jour (format YYYY-MM-DD)
+  const getTodayDateStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr);
 
   // Compute matricule from student number
   const seqNum = useMemo(() => {
@@ -93,6 +97,7 @@ export function NewStudentModal({
       discountAmount: discountAmount,
       netAmount: netAmount,
       paidAmount: paidAmount,
+      enrollmentDate: paymentDate,
       paymentDate: paymentDate,
       attendanceRate: 100,
       status: 'active',
@@ -449,21 +454,26 @@ export function NewStudentModal({
                   </span>
                 </div>
 
-                {/* Textes officiels centrés avec nom strictement sur toute la ligne */}
-                <div className="flex-1 min-w-0 px-2 overflow-hidden text-center">
+                {/* Textes officiels centrés avec nom et sigle sur la même ligne */}
+                <div className="flex-1 min-w-0 px-2 text-center space-y-0.5">
                   <h2
-                    className="text-xs sm:text-sm md:text-base font-extrabold text-slate-950 font-heading uppercase tracking-wide whitespace-nowrap overflow-hidden text-ellipsis block w-full leading-tight"
-                    title={school.name}
+                    className="text-xs sm:text-sm md:text-base font-black text-slate-950 font-heading uppercase tracking-tight leading-tight block w-full text-center"
+                    title={`${school.name} (${school.shortName || 'SF'})`}
                   >
-                    {school.name}
+                    {school.name}{school.shortName ? ` (${school.shortName})` : ''}
                   </h2>
-                  <p className="text-[10px] sm:text-[11px] font-bold text-emerald-800 italic mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <p className="text-[10px] sm:text-[11px] font-bold text-emerald-800 italic leading-tight">
                     « {school.motto || 'Discipline • Rigueur • Réussite'} »
                   </p>
-                  <p className="text-[9px] sm:text-[10px] text-slate-600 mt-0.5 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
+                  {school.slogan && (
+                    <p className="text-[9px] sm:text-[10px] font-medium text-amber-700 italic leading-tight">
+                      ✦ {school.slogan}
+                    </p>
+                  )}
+                  <p className="text-[9px] sm:text-[10px] text-slate-600 font-medium leading-tight">
                     {school.district || `${school.city} — ${school.country}`} • Tél : {school.phone || '+225 27 22 44 11 00'}
                   </p>
-                  <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[8px] sm:text-[9px] font-mono font-bold text-slate-700">
+                  <div className="inline-flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[8px] sm:text-[9px] font-mono font-bold text-slate-700">
                     <span>{school.approvalNumber || 'Arrêté N° 0452/MENA/DES'}</span>
                     <span>•</span>
                     <span>Code : {school.ministryCode || 'MENA-04829-CI'}</span>
