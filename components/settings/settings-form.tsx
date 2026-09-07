@@ -141,9 +141,9 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         stampUrl: prev.stampUrl || live.stampUrl || '',
       }));
       setSubscriptionStatus(getSchoolSubscription(initialSchool.slug || 'epc-manoi'));
-      if (live.logoUrl) setLogoPreview(live.logoUrl);
-      if (live.countryEmblemUrl) setEmblemPreview(live.countryEmblemUrl);
-      if (live.stampUrl) setStampPreview(live.stampUrl);
+      if (live.logoUrl) setLogoPreview((prev) => prev || live.logoUrl || '');
+      if (live.countryEmblemUrl) setEmblemPreview((prev) => prev || live.countryEmblemUrl || '');
+      if (live.stampUrl) setStampPreview((prev) => prev || live.stampUrl || '');
     };
 
     syncWithLive();
@@ -163,7 +163,13 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     e.preventDefault();
     setIsSubmitting(true);
     // Sauvegarde persistance globale dans le live-store
-    saveLiveSchool(school);
+    const finalSchool: School = {
+      ...school,
+      logoUrl: logoPreview || school.logoUrl || '',
+      countryEmblemUrl: emblemPreview || school.countryEmblemUrl || '',
+      stampUrl: stampPreview || school.stampUrl || '',
+    };
+    saveLiveSchool(finalSchool);
     setTimeout(() => {
       setIsSubmitting(false);
       setIsSaved(true);
@@ -184,9 +190,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         const compressed = await compressImageFile(file, 512, 0.85);
         if (!compressed) return;
         setLogoPreview(compressed);
-        const updated = { ...school, logoUrl: compressed };
-        setSchool(updated);
-        saveLiveSchool(updated);
+        setSchool((prev) => {
+          const updated = { ...prev, logoUrl: compressed };
+          saveLiveSchool(updated);
+          return updated;
+        });
         setActionFeedback('✓ Nouveau logo optimisé, enregistré et synchronisé avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
       } catch (err) {
@@ -197,9 +205,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
   const handleLogoErase = () => {
     setLogoPreview('');
-    const updated = { ...school, logoUrl: '' };
-    setSchool(updated);
-    saveLiveSchool(updated);
+    setSchool((prev) => {
+      const updated = { ...prev, logoUrl: '' };
+      saveLiveSchool(updated);
+      return updated;
+    });
     setActionFeedback('✓ Logo réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
@@ -212,9 +222,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         const compressed = await compressImageFile(file, 512, 0.85);
         if (!compressed) return;
         setEmblemPreview(compressed);
-        const updated = { ...school, countryEmblemUrl: compressed };
-        setSchool(updated);
-        saveLiveSchool(updated);
+        setSchool((prev) => {
+          const updated = { ...prev, countryEmblemUrl: compressed };
+          saveLiveSchool(updated);
+          return updated;
+        });
         setActionFeedback('✓ Emblème national optimisé, enregistré et synchronisé avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
       } catch (err) {
@@ -225,9 +237,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
   const handleEmblemErase = () => {
     setEmblemPreview('');
-    const updated = { ...school, countryEmblemUrl: '' };
-    setSchool(updated);
-    saveLiveSchool(updated);
+    setSchool((prev) => {
+      const updated = { ...prev, countryEmblemUrl: '' };
+      saveLiveSchool(updated);
+      return updated;
+    });
     setActionFeedback('✓ Emblème réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
@@ -240,9 +254,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
         const compressed = await compressImageFile(file, 512, 0.85);
         if (!compressed) return;
         setStampPreview(compressed);
-        const updated = { ...school, stampUrl: compressed };
-        setSchool(updated);
-        saveLiveSchool(updated);
+        setSchool((prev) => {
+          const updated = { ...prev, stampUrl: compressed };
+          saveLiveSchool(updated);
+          return updated;
+        });
         setActionFeedback('✓ Cachet officiel scanné optimisé et enregistré avec succès.');
         setTimeout(() => setActionFeedback(null), 4000);
       } catch (err) {
@@ -253,9 +269,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
   const handleStampErase = () => {
     setStampPreview('');
-    const updated = { ...school, stampUrl: '' };
-    setSchool(updated);
-    saveLiveSchool(updated);
+    setSchool((prev) => {
+      const updated = { ...prev, stampUrl: '' };
+      saveLiveSchool(updated);
+      return updated;
+    });
     setActionFeedback('✓ Cachet officiel réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
   };
@@ -444,7 +462,6 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={logoPreview}
                           alt="Logo de l'école"
-                          onError={() => setLogoPreview('')}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain border-2 border-emerald-500/40 shadow-md bg-white p-1"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
@@ -522,7 +539,6 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         <img
                           src={emblemPreview}
                           alt="Emblème officiel du pays"
-                          onError={() => setEmblemPreview('')}
                           className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-contain p-1 border-2 border-amber-500/40 shadow-md bg-white"
                         />
                         <div className="absolute inset-0 rounded-2xl bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">

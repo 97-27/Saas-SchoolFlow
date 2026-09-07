@@ -19,6 +19,20 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
 
     if (error || !data) return null;
 
+    // Récupérer le cachet officiel sauvegardé
+    let stampUrl = '';
+    try {
+      const { data: stampRow } = await supabase
+        .from('staff_users')
+        .select('avatar_url')
+        .eq('school_id', data.id)
+        .eq('role_id', 'school_stamp')
+        .maybeSingle();
+      if (stampRow?.avatar_url) {
+        stampUrl = stampRow.avatar_url;
+      }
+    } catch (e) {}
+
     return {
       id: data.id,
       slug: data.slug,
@@ -28,6 +42,7 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
       slogan: data.slogan || 'La Lumière du Savoir',
       logoUrl: data.logo_url || '',
       countryEmblemUrl: data.country_emblem_url || '',
+      stampUrl: stampUrl,
       logoColor: data.logo_color || '#059669',
       city: data.city || 'Abidjan',
       country: data.country || 'Côte d’Ivoire',
@@ -85,14 +100,49 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
       payload.country_emblem_url = school.countryEmblemUrl;
     }
 
-    const { error } = await supabase
+    const { data: upsertedSchool, error } = await supabase
       .from('schools')
-      .upsert(payload, { onConflict: 'slug' });
+      .upsert(payload, { onConflict: 'slug' })
+      .select('id')
+      .maybeSingle();
 
     if (error) {
       console.error('Erreur saveSchoolToSupabase:', error.message);
       return false;
     }
+
+    // Sauvegarder le cachet officiel dans Supabase Cloud si fourni
+    const schoolId = upsertedSchool?.id;
+    if (schoolId && school.stampUrl && school.stampUrl.trim() !== '') {
+      try {
+        const { data: existingStamp } = await supabase
+          .from('staff_users')
+          .select('id')
+          .eq('school_id', schoolId)
+          .eq('role_id', 'school_stamp')
+          .maybeSingle();
+
+        if (existingStamp?.id) {
+          await supabase
+            .from('staff_users')
+            .update({ avatar_url: school.stampUrl })
+            .eq('id', existingStamp.id);
+        } else {
+          await supabase.from('staff_users').insert({
+            school_id: schoolId,
+            role_id: 'school_stamp',
+            role_title: 'Cachet Officiel',
+            full_name: 'Cachet & Tampon Établissement',
+            auth_code: 'STAMP-2026',
+            avatar_url: school.stampUrl,
+            is_active: true,
+          });
+        }
+      } catch (stampErr) {
+        console.warn('Erreur sauvegarde stamp dans Supabase:', stampErr);
+      }
+    }
+
     return true;
   } catch (err) {
     console.error('Erreur saveSchoolToSupabase catch:', err);
@@ -445,6 +495,7 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       .from('staff_users')
       .select('*')
       .eq('school_id', school.id)
+      .neq('role_id', 'school_stamp')
       .order('created_at', { ascending: true });
 
     if (error || !data) return [];
