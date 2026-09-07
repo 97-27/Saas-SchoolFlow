@@ -180,6 +180,9 @@ export interface School {
   status?: 'active' | 'pending' | 'suspended';
   subscriptionPlan?: string;
   subscriptionPrice?: number;
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+  subscriptionActive?: boolean;
   createdAt?: string;
 }
 

@@ -1195,12 +1195,35 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     }
 
     // 2. Mise à jour ou création de la facture correspondante
+    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug || 'epc-manoi'}`;
+    const rawInvSchool = localStorage.getItem(invSchoolKey);
+    const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
     
     const existingInv = prevInvoices.find(
       (inv) => inv.studentId === student.id || inv.invoiceNumber === student.studentNumber
+    ) || prevInvSchool.find(
+      (inv) => inv.studentId === student.id || inv.invoiceNumber === student.studentNumber
     );
+
+    const finalDate = student.paymentDate || student.enrollmentDate || '2026-08-27';
+
+    // Synchroniser l'échéancier des versements avec la date d'inscription
+    const updatedInstallments = student.installments ? {
+      ...student.installments,
+      versement1: student.installments.versement1 ? {
+        ...student.installments.versement1,
+        date: finalDate,
+      } : undefined,
+    } : existingInv?.installments ? {
+      ...existingInv.installments,
+      versement1: existingInv.installments.versement1 ? {
+        ...existingInv.installments.versement1,
+        date: finalDate,
+      } : undefined,
+    } : undefined;
 
     const updatedInvoice: Invoice = existingInv ? {
       ...existingInv,
@@ -1218,10 +1241,10 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       paidAmount: student.paidAmount,
       balanceRemaining: student.balanceRemaining !== undefined ? student.balanceRemaining : Math.max(0, (student.netAmount || student.tuitionAmount) - student.paidAmount),
       enrollmentType: student.enrollmentType || existingInv.enrollmentType,
-      installments: student.installments || existingInv.installments,
+      installments: updatedInstallments || existingInv.installments,
       paymentMethod: student.paymentMethod || existingInv.paymentMethod,
-      issueDate: student.paymentDate || student.enrollmentDate || existingInv.issueDate,
-      dueDate: student.paymentDate || student.enrollmentDate || existingInv.dueDate,
+      issueDate: finalDate,
+      dueDate: finalDate,
     } : {
       id: `inv-${student.studentNumber.replace(/\D/g, '').padStart(3, '0')}`,
       invoiceNumber: student.studentNumber,
@@ -1243,9 +1266,14 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       balanceRemaining: student.balanceRemaining !== undefined ? student.balanceRemaining : Math.max(0, (student.netAmount || student.tuitionAmount) - student.paidAmount),
       paymentMethod: student.paymentMethod || 'Espèces en caisse',
       enrollmentType: student.enrollmentType || 'nouveau',
-      installments: student.installments,
-      issueDate: student.paymentDate || student.enrollmentDate || '2026-08-27',
-      dueDate: student.paymentDate || student.enrollmentDate || '2026-08-27',
+      installments: updatedInstallments || {
+        versement1: {
+          amount: student.paidAmount || 100000,
+          date: finalDate,
+        },
+      },
+      issueDate: finalDate,
+      dueDate: finalDate,
       status: student.tuitionStatus === 'paid' ? 'paid' : student.paidAmount > 0 ? 'partial' : 'sent',
     };
 
@@ -1257,9 +1285,6 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     ];
     localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
 
-    const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug || 'epc-manoi'}`;
-    const rawInvSchool = localStorage.getItem(invSchoolKey);
-    const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
     const nextInvSchool = [
       updatedInvoice,
       ...prevInvSchool.filter(
@@ -2116,38 +2141,59 @@ export function getRegisteredSchools(): School[] {
 export function registerSchoolWithSubscription(school: School): void {
   if (typeof window === 'undefined') return;
   try {
+    const startDateStr = new Date().toISOString().split('T')[0];
+    const endDateStr =
+      school.subscriptionPlan === 'mensuel'
+        ? '2026-10-01'
+        : school.subscriptionPlan === 'triennal'
+        ? '2029-06-30'
+        : '2027-06-30';
+
+    const schoolWithDates: School = {
+      ...school,
+      status: 'active',
+      subscriptionActive: true,
+      subscriptionPlan: school.subscriptionPlan || 'annuel',
+      subscriptionPrice: school.subscriptionPrice || 250000,
+      subscriptionStartDate: school.subscriptionStartDate || startDateStr,
+      subscriptionEndDate: school.subscriptionEndDate || endDateStr,
+      openingDate: school.openingDate || '2026-09-07',
+      closingDate: school.closingDate || '2027-06-30',
+      academicYear: school.academicYear || '2026-2027',
+    };
+
     const current = getRegisteredSchools();
-    const filtered = current.filter((s) => s.slug !== school.slug && s.id !== school.id);
-    const updated = [school, ...filtered];
+    const filtered = current.filter((s) => s.slug !== schoolWithDates.slug && s.id !== schoolWithDates.id);
+    const updated = [schoolWithDates, ...filtered];
     localStorage.setItem(REGISTERED_SCHOOLS_KEY, JSON.stringify(updated));
 
     // Mettre à jour le statut d'abonnement actif
     const subStatus: SchoolSubscriptionStatus = {
       isDeleted: false,
-      plan: (school.subscriptionPlan as any) || 'annuel',
+      plan: (schoolWithDates.subscriptionPlan as any) || 'annuel',
       planName:
-        school.subscriptionPlan === 'mensuel'
+        schoolWithDates.subscriptionPlan === 'mensuel'
           ? 'Formule Mensuelle (30 000 FCFA / mois)'
-          : school.subscriptionPlan === 'triennal'
+          : schoolWithDates.subscriptionPlan === 'triennal'
           ? 'Formule 3 Ans Scolaires (750 000 FCFA)'
           : 'Formule Annuelle (250 000 FCFA)',
-      priceFCFA: school.subscriptionPrice || 250000,
+      priceFCFA: schoolWithDates.subscriptionPrice || 250000,
       startDate: new Date().toLocaleDateString('fr-FR'),
-      endDate: '30/06/2027',
+      endDate: schoolWithDates.subscriptionPlan === 'mensuel' ? '01/10/2026' : schoolWithDates.subscriptionPlan === 'triennal' ? '30/06/2029' : '30/06/2027',
       isDataReset: false,
-      subscriberEmail: school.email,
-      subscriberName: school.directorName || school.founderName,
-      subscriberPhone: school.phone,
+      subscriberEmail: schoolWithDates.email,
+      subscriberName: schoolWithDates.directorName || schoolWithDates.founderName,
+      subscriberPhone: schoolWithDates.phone,
     };
-    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${school.slug}`, JSON.stringify(subStatus));
+    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${schoolWithDates.slug}`, JSON.stringify(subStatus));
 
     // Sauvegarder les paramètres
-    saveLiveSchool(school);
+    saveLiveSchool(schoolWithDates);
 
     broadcastLiveUpdate({
       action: 'school_registered',
-      school,
-      schoolSlug: school.slug,
+      school: schoolWithDates,
+      schoolSlug: schoolWithDates.slug,
     });
   } catch (e) {
     console.error('Erreur enregistrement école avec abonnement:', e);

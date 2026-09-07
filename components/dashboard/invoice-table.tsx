@@ -124,7 +124,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               studentGender: inv.studentGender,
               enrollmentType,
               motif: label,
-              paymentDate: obj.date || inv.issueDate,
+              paymentDate: (key === 'v1' && (matchedStudent?.paymentDate || matchedStudent?.enrollmentDate))
+                ? (matchedStudent.paymentDate || matchedStudent.enrollmentDate || obj.date || inv.issueDate)
+                : (obj.date || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate),
               amount: obj.amount,
               paymentMethod: obj.paymentMethod || obj.method || inv.paymentMethod || 'Espèces',
               status: inv.status,
@@ -146,7 +148,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           studentGender: inv.studentGender,
           enrollmentType,
           motif: "📝 Droits d'Inscription",
-          paymentDate: inv.issueDate,
+          paymentDate: matchedStudent?.enrollmentDate || matchedStudent?.paymentDate || inv.issueDate,
           amount: inv.registrationFee,
           paymentMethod: inv.paymentMethod || 'Espèces',
           status: inv.status,
@@ -174,7 +176,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
           studentGender: inv.studentGender,
           enrollmentType,
           motif,
-          paymentDate: inv.issueDate,
+          paymentDate: matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
           amount: amt,
           paymentMethod: inv.paymentMethod || 'Espèces',
           status: inv.status,

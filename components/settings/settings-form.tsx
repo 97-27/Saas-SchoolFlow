@@ -5,6 +5,7 @@ import { School } from '@/lib/data/types';
 import {
   getLiveSchool,
   saveLiveSchool,
+  registerSchoolWithSubscription,
   deleteSchoolAccount,
   resetSchoolData,
   getSchoolSubscription,
@@ -276,6 +277,24 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     });
     setActionFeedback('✓ Cachet officiel réinitialisé.');
     setTimeout(() => setActionFeedback(null), 4000);
+  };
+
+  const handleSwitchSubscriptionPlan = (newPlan: 'mensuel' | 'annuel' | 'triennal') => {
+    const price = newPlan === 'mensuel' ? 30000 : newPlan === 'annuel' ? 250000 : 750000;
+    const endDate = newPlan === 'mensuel' ? '2026-10-01' : newPlan === 'annuel' ? '2027-06-30' : '2029-06-30';
+    const updated: School = {
+      ...school,
+      subscriptionPlan: newPlan,
+      subscriptionPrice: price,
+      subscriptionActive: true,
+      subscriptionStartDate: school.subscriptionStartDate || '2026-09-01',
+      subscriptionEndDate: endDate,
+    };
+    setSchool(updated);
+    saveLiveSchool(updated);
+    registerSchoolWithSubscription(updated);
+    setActionFeedback(`✓ Formule d'abonnement ${newPlan === 'mensuel' ? 'Mensuelle (30 000 FCFA)' : newPlan === 'annuel' ? 'Annuelle (250 000 FCFA)' : 'Triennale (750 000 FCFA)'} activée avec succès !`);
+    setTimeout(() => setActionFeedback(null), 5000);
   };
 
   const [resetModalTab, setResetModalTab] = useState<'modules' | 'interfaces'>('modules');
@@ -876,22 +895,30 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">
-                    Date de rentrée des classes
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>Date de rentrée des classes</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {formatDate(school.openingDate || '2026-09-07')}
+                    </span>
                   </label>
                   <FrenchDateInput
                     value={school.openingDate || '2026-09-07'}
                     onChange={(val) => handleInputChange('openingDate', val)}
+                    align="left"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700">
-                    Date de clôture de l&apos;année
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>Date de clôture de l&apos;année</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {formatDate(school.closingDate || '2027-06-30')}
+                    </span>
                   </label>
                   <FrenchDateInput
                     value={school.closingDate || '2027-06-30'}
                     onChange={(val) => handleInputChange('closingDate', val)}
+                    align="right"
                   />
                 </div>
               </div>
@@ -1315,50 +1342,158 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 </div>
               )}
 
-              {/* 1. Formules d'Abonnement Disponibles */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 font-heading">
-                  1. Formule d&apos;Abonnement de l&apos;Établissement
-                </h4>
+              {/* 1. Formules d'Abonnement Disponibles & Dates de Validité */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-200">
+                  <div>
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 font-heading">
+                      1. Formule d&apos;Abonnement & Dates de Validité
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Gérez la formule active de votre établissement et consultez les dates de votre souscription.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-500">Souscrit le :</span>
+                    <span className="font-mono text-[11px] font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                      {formatDate(school.subscriptionStartDate || school.createdAt || '2026-09-01')}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500">Échéance :</span>
+                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {formatDate(school.subscriptionEndDate || (school.subscriptionPlan === 'mensuel' ? '2026-10-01' : school.subscriptionPlan === 'triennal' ? '2029-06-30' : '2027-06-30'))}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Mensuel */}
-                  <div className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-emerald-300 transition-all shadow-xs flex flex-col justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Formule Mensuelle</span>
-                      <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Abonnement 1 Mois</h5>
-                      <div className="mt-2 text-xl font-extrabold text-slate-900 font-heading">
-                        30 000 <span className="text-xs font-normal text-slate-500">FCFA / mois</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-1">Idéal pour les paiements mois par mois sans engagement.</p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const isCurrent = school.subscriptionPlan === 'mensuel';
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all shadow-xs flex flex-col justify-between relative ${
+                        isCurrent
+                          ? 'border-2 border-emerald-600 bg-emerald-50/30 shadow-md'
+                          : 'border-slate-200 bg-white hover:border-emerald-300'
+                      }`}>
+                        {isCurrent && (
+                          <div className="absolute -top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shadow-xs">
+                            En Cours Actif
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Formule Mensuelle</span>
+                          <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Abonnement 1 Mois</h5>
+                          <div className="mt-2 text-xl font-extrabold text-slate-900 font-heading">
+                            30 000 <span className="text-xs font-normal text-slate-500">FCFA / mois</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1">Idéal pour les paiements mois par mois sans engagement.</p>
+                        </div>
 
-                  {/* Annuel (Recommandé & Actif) */}
-                  <div className="p-4 rounded-2xl border-2 border-emerald-600 bg-emerald-50/30 transition-all shadow-md relative flex flex-col justify-between">
-                    <div className="absolute -top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shadow-xs">
-                      En Cours Actif
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Formule Annuelle</span>
-                      <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Année Scolaire {school.academicYear || '2026-2027'}</h5>
-                      <div className="mt-2 text-xl font-extrabold text-emerald-800 font-heading">
-                        250 000 <span className="text-xs font-normal text-slate-600">FCFA / an</span>
+                        <div className="pt-3 mt-3 border-t border-slate-100">
+                          {isCurrent ? (
+                            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Formule Active</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchSubscriptionPlan('mensuel')}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 transition-colors cursor-pointer text-center"
+                            >
+                              Activer cette formule
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-1">Accès complet illimité pour tous les membres et parents.</p>
-                    </div>
-                  </div>
+                    );
+                  })()}
+
+                  {/* Annuel (Recommandé) */}
+                  {(() => {
+                    const isCurrent = !school.subscriptionPlan || school.subscriptionPlan === 'annuel';
+                    return (
+                      <div className={`p-4 rounded-2xl border-2 transition-all shadow-md relative flex flex-col justify-between ${
+                        isCurrent
+                          ? 'border-emerald-600 bg-emerald-50/30'
+                          : 'border-slate-200 bg-white hover:border-emerald-300'
+                      }`}>
+                        {isCurrent && (
+                          <div className="absolute -top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shadow-xs">
+                            En Cours Actif
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Formule Annuelle (Recommandée)</span>
+                          <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Année Scolaire {school.academicYear || '2026-2027'}</h5>
+                          <div className="mt-2 text-xl font-extrabold text-emerald-800 font-heading">
+                            250 000 <span className="text-xs font-normal text-slate-600">FCFA / an</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1">Accès complet illimité pour tous les membres et parents.</p>
+                        </div>
+
+                        <div className="pt-3 mt-3 border-t border-slate-100">
+                          {isCurrent ? (
+                            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Formule Active</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchSubscriptionPlan('annuel')}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer text-center shadow-xs"
+                            >
+                              Activer cette formule
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Triennal 3 Ans */}
-                  <div className="p-4 rounded-2xl border border-amber-300 bg-amber-50/20 hover:border-amber-400 transition-all shadow-xs flex flex-col justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Formule Triennale (3 Ans)</span>
-                      <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Pack 3 Années Scolaires</h5>
-                      <div className="mt-2 text-xl font-extrabold text-amber-900 font-heading">
-                        750 000 <span className="text-xs font-normal text-slate-600">FCFA</span>
+                  {(() => {
+                    const isCurrent = school.subscriptionPlan === 'triennal';
+                    return (
+                      <div className={`p-4 rounded-2xl border transition-all shadow-xs flex flex-col justify-between relative ${
+                        isCurrent
+                          ? 'border-2 border-emerald-600 bg-emerald-50/30 shadow-md'
+                          : 'border-amber-300 bg-amber-50/20 hover:border-amber-400'
+                      }`}>
+                        {isCurrent && (
+                          <div className="absolute -top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white shadow-xs">
+                            En Cours Actif
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Formule Triennale (3 Ans)</span>
+                          <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Pack 3 Années Scolaires</h5>
+                          <div className="mt-2 text-xl font-extrabold text-amber-900 font-heading">
+                            750 000 <span className="text-xs font-normal text-slate-600">FCFA</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1">Sérénité totale sur 3 années sans interruption de service.</p>
+                        </div>
+
+                        <div className="pt-3 mt-3 border-t border-slate-100">
+                          {isCurrent ? (
+                            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Formule Active</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchSubscriptionPlan('triennal')}
+                              className="w-full py-2 px-3 rounded-xl text-xs font-bold text-slate-800 bg-amber-100 hover:bg-amber-200 transition-colors cursor-pointer text-center"
+                            >
+                              Activer cette formule
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-1">Sérénité totale sur 3 années sans interruption de service.</p>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
 

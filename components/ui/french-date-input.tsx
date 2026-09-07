@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
 interface FrenchDateInputProps {
   value: string; // Format 'YYYY-MM-DD' or 'DD/MM/YYYY'
@@ -9,6 +9,8 @@ interface FrenchDateInputProps {
   className?: string;
   disabled?: boolean;
   placeholder?: string;
+  align?: 'left' | 'right' | 'auto';
+  showDirectInput?: boolean;
 }
 
 const MONTHS_NAMES_FR = [
@@ -34,11 +36,14 @@ export function FrenchDateInput({
   className = '',
   disabled = false,
   placeholder = 'JJ/MM/AAAA',
+  align = 'auto',
+  showDirectInput = true,
 }: FrenchDateInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Parse existing value
+  // Parse existing value into year, month, day
   const parsed = useMemo(() => {
     const now = new Date();
     let y = now.getFullYear();
@@ -65,11 +70,26 @@ export function FrenchDateInput({
     return { year: y, month: m, day: d };
   }, [value]);
 
+  // Formatted display string DD/MM/YYYY
+  const displayDateStr = useMemo(() => {
+    if (!value) return '';
+    const dayStr = String(parsed.day).padStart(2, '0');
+    const monthStr = String(parsed.month).padStart(2, '0');
+    return `${dayStr}/${monthStr}/${parsed.year}`;
+  }, [value, parsed]);
+
+  // Local text input state for direct keyboard typing
+  const [inputText, setInputText] = useState(displayDateStr);
+
+  useEffect(() => {
+    setInputText(displayDateStr);
+  }, [displayDateStr]);
+
   // View state in calendar (year and month 0-11)
   const [viewYear, setViewYear] = useState<number>(parsed.year);
   const [viewMonth, setViewMonth] = useState<number>(parsed.month - 1);
 
-  // Synchroniser view state quand value change à l'extérieur
+  // Synchroniser view state quand value change
   useEffect(() => {
     setViewYear(parsed.year);
     setViewMonth(parsed.month - 1);
@@ -87,13 +107,6 @@ export function FrenchDateInput({
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
-
-  const displayDateStr = useMemo(() => {
-    if (!value) return '';
-    const dayStr = String(parsed.day).padStart(2, '0');
-    const monthStr = String(parsed.month).padStart(2, '0');
-    return `${dayStr}/${monthStr}/${parsed.year}`;
-  }, [value, parsed]);
 
   const handlePrevMonth = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -129,16 +142,70 @@ export function FrenchDateInput({
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, '0');
     const d = String(today.getDate()).padStart(2, '0');
-    onChange(`${y}-${m}-${d}`);
+    const isoString = `${y}-${m}-${d}`;
+    onChange(isoString);
     setViewYear(y);
     setViewMonth(today.getMonth());
     setIsOpen(false);
   };
 
+  // Traitement de la saisie manuelle au clavier (supporte JJ/MM/AAAA ou JJ-MM-AAAA)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setInputText(raw);
+
+    // Format JJ/MM/AAAA ou JJ-MM-AAAA
+    const frMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (frMatch) {
+      const d = parseInt(frMatch[1], 10);
+      const m = parseInt(frMatch[2], 10);
+      const y = parseInt(frMatch[3], 10);
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1970 && y <= 2100) {
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        onChange(iso);
+        setViewYear(y);
+        setViewMonth(m - 1);
+      }
+    }
+
+    // Format AAAA-MM-JJ
+    const isoMatch = raw.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+    if (isoMatch) {
+      const y = parseInt(isoMatch[1], 10);
+      const m = parseInt(isoMatch[2], 10);
+      const d = parseInt(isoMatch[3], 10);
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1970 && y <= 2100) {
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        onChange(iso);
+        setViewYear(y);
+        setViewMonth(m - 1);
+      }
+    }
+  };
+
+  const handleInputBlur = () => {
+    // Si la saisie n'a pas été validée, rétablir la dernière date valide
+    if (!inputText.trim()) {
+      setInputText(displayDateStr);
+      return;
+    }
+    const frMatch = inputText.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (frMatch) {
+      const d = parseInt(frMatch[1], 10);
+      const m = parseInt(frMatch[2], 10);
+      const y = parseInt(frMatch[3], 10);
+      if (d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1970 && y <= 2100) {
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        onChange(iso);
+        return;
+      }
+    }
+    setInputText(displayDateStr);
+  };
+
   // Calcul de la grille des jours du mois
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
-    // En JS 0 = Dimanche, 1 = Lundi ... 6 = Samedi. Pour commencer Lundi:
     let startDayOfWeek = firstDayOfMonth.getDay() - 1;
     if (startDayOfWeek === -1) startDayOfWeek = 6;
 
@@ -192,7 +259,7 @@ export function FrenchDateInput({
       });
     }
 
-    // Jours du mois suivant pour compléter les 5 ou 6 semaines (multiples de 7)
+    // Jours du mois suivant
     const remaining = (7 - (cells.length % 7)) % 7;
     for (let n = 1; n <= remaining; n++) {
       const nextMonth = viewMonth === 11 ? 0 : viewMonth + 1;
@@ -213,83 +280,104 @@ export function FrenchDateInput({
     return cells;
   }, [viewYear, viewMonth, parsed]);
 
+  // Positionnement du popup pour éviter tout rognage
+  const popupAlignmentClass = useMemo(() => {
+    if (align === 'right') return 'right-0 left-auto';
+    if (align === 'left') return 'left-0 right-auto';
+    // auto : aligne à droite sur grand écran pour éviter de déborder d'une colonne de droite
+    return 'right-0 sm:right-0 left-auto';
+  }, [align]);
+
   return (
     <div className={`relative inline-block w-full ${className}`} ref={containerRef}>
-      {/* Bouton de Déclencheur Principal */}
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl bg-white border border-slate-200 hover:border-emerald-500/70 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono font-bold text-slate-800 shadow-2xs cursor-pointer ${
-          disabled ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''
+      {/* Champ de saisie direct + bouton d'ouverture de calendrier */}
+      <div
+        className={`w-full flex items-center justify-between rounded-xl bg-white border border-slate-200 transition-all shadow-2xs ${
+          disabled ? 'opacity-50 cursor-not-allowed bg-slate-100' : 'hover:border-emerald-500/70 focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500'
         } ${isOpen ? 'ring-2 ring-emerald-500/20 border-emerald-500' : ''}`}
       >
-        <div className="flex items-center gap-2">
-          <CalendarIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-          <span className={displayDateStr ? 'text-slate-900 font-bold' : 'text-slate-400 font-normal'}>
-            {displayDateStr || placeholder}
-          </span>
-        </div>
-      </button>
+        <input
+          ref={inputRef}
+          type="text"
+          disabled={disabled}
+          value={inputText}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 text-xs font-mono font-bold text-slate-900 bg-transparent focus:outline-none placeholder:text-slate-400 placeholder:font-normal"
+        />
 
-      {/* POPUP DU CALENDRIER STYLE CAPTURE */}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setIsOpen(!isOpen)}
+          title="Ouvrir le calendrier"
+          className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-r-xl transition-colors cursor-pointer shrink-0"
+        >
+          <CalendarIcon className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* POPUP DU CALENDRIER SÉCURISÉ CONTRE LE ROGNAGE */}
       {isOpen && (
-        <div className="absolute right-0 sm:right-auto left-auto sm:left-0 mt-2 z-50 w-80 max-w-[calc(100vw-32px)] p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800">
-          {/* Header Calendrier: < Month Year > */}
-          <div className="flex items-center justify-between px-1 mb-3">
+        <div
+          className={`absolute ${popupAlignmentClass} mt-1.5 z-50 w-72 max-w-[calc(100vw-24px)] p-3 bg-white rounded-2xl border border-slate-200 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-800`}
+          style={{ minWidth: '260px' }}
+        >
+          {/* Header Calendrier: < Mois Année > */}
+          <div className="flex items-center justify-between px-1 mb-2.5">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Mois précédent"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <span className="text-xs sm:text-sm font-bold text-slate-900 font-heading">
+            <span className="text-xs font-bold text-slate-900 font-heading">
               {MONTHS_NAMES_FR[viewMonth]} {viewYear}
             </span>
 
             <button
               type="button"
               onClick={handleNextMonth}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Mois suivant"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          {/* En-tête des Jours: Mo Tu We Th Fr Sa Su -> Lu Ma Me Je Ve Sa Di */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1.5">
+          {/* En-tête des Jours: Lu Ma Me Je Ve Sa Di */}
+          <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {WEEKDAYS_FR.map((wd) => (
-              <span key={wd} className="text-[11px] font-bold text-slate-400 py-0.5">
+              <span key={wd} className="text-[10px] font-bold text-slate-400 py-0.5">
                 {wd}
               </span>
             ))}
           </div>
 
-          {/* Grille des Jours avec Cercle Noir (style officiel) */}
+          {/* Grille des Jours */}
           <div className="grid grid-cols-7 gap-1 text-center">
             {calendarGrid.map((c, idx) => (
               <div key={idx} className="flex flex-col items-center justify-center p-0.5">
                 <button
                   type="button"
                   onClick={() => handleSelectDay(c.day, c.month, c.year)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs transition-all relative cursor-pointer ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] transition-all relative cursor-pointer ${
                     c.isSelected
-                      ? 'bg-slate-900 text-white font-bold shadow-sm scale-105'
+                      ? 'bg-slate-900 text-white font-bold shadow-xs scale-105'
                       : c.isCurrentMonth
-                      ? 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium'
+                      ? 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 font-medium'
                       : 'text-slate-300 hover:bg-slate-50 font-normal'
                   }`}
                 >
                   {c.day}
-                  {/* Point indicateur discret */}
                   {(c.isToday || (c.isSelected && !c.isCurrentMonth)) && (
                     <span
                       className={`absolute bottom-0.5 w-1 h-1 rounded-full ${
-                        c.isSelected ? 'bg-emerald-400' : 'bg-slate-900'
+                        c.isSelected ? 'bg-emerald-400' : 'bg-emerald-600'
                       }`}
                     />
                   )}
@@ -299,18 +387,19 @@ export function FrenchDateInput({
           </div>
 
           {/* Raccourcis bas de calendrier */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
             <button
               type="button"
               onClick={handleSetToday}
-              className="px-2.5 py-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold transition-colors cursor-pointer"
             >
               Aujourd&apos;hui
             </button>
+
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 font-semibold transition-colors cursor-pointer"
             >
               Fermer
             </button>

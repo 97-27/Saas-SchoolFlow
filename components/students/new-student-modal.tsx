@@ -99,8 +99,15 @@ export function NewStudentModal({
       discountAmount: discountAmount,
       netAmount: netAmount,
       paidAmount: paidAmount,
-      enrollmentDate: paymentDate,
-      paymentDate: paymentDate,
+      enrollmentDate: paymentDate || '2026-08-27',
+      paymentDate: paymentDate || '2026-08-27',
+      installments: {
+        versement1: {
+          amount: paidAmount,
+          date: paymentDate || '2026-08-27',
+          method: 'Espèces en caisse',
+        },
+      },
       attendanceRate: 100,
       status: 'active',
       tuitionStatus: paidAmount >= netAmount ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
@@ -417,13 +424,19 @@ export function NewStudentModal({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Date du versement</span>
+                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Date d&apos;inscription & versement</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {paymentDate ? formatDate(paymentDate) : 'JJ/MM/AAAA'}
+                    </span>
                   </label>
                   <FrenchDateInput
                     value={paymentDate}
                     onChange={setPaymentDate}
+                    align="right"
                   />
                 </div>
               </div>

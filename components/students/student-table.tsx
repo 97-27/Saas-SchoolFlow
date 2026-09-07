@@ -138,6 +138,25 @@ export function StudentTable({
     e.preventDefault();
     if (!editingStudent) return;
 
+    const formattedDate = editPaymentDate && editPaymentDate.trim() ? editPaymentDate.trim() : '2026-08-27';
+
+    // Synchroniser la date du premier versement / inscription dans l'échéancier
+    const updatedInstallments = editingStudent.installments ? {
+      ...editingStudent.installments,
+      versement1: editingStudent.installments.versement1 ? {
+        ...editingStudent.installments.versement1,
+        date: formattedDate,
+      } : {
+        amount: editingStudent.paidAmount || 100000,
+        date: formattedDate,
+      },
+    } : {
+      versement1: {
+        amount: editingStudent.paidAmount || 100000,
+        date: formattedDate,
+      },
+    };
+
     const updated: Student = {
       ...editingStudent,
       lastName: editLastName.trim().toUpperCase(),
@@ -145,14 +164,15 @@ export function StudentTable({
       fullName: `${editLastName.trim().toUpperCase()} ${editFirstName.trim()}`,
       grade: editGrade,
       gender: editGender,
-      paymentDate: editPaymentDate,
-      enrollmentDate: editPaymentDate,
+      paymentDate: formattedDate,
+      enrollmentDate: formattedDate,
       enrollmentType: editEnrollmentType,
       status: editStatus,
       whatsappPhone: editWhatsapp.trim(),
       guardianPhone: editWhatsapp.trim(),
       address: editAddress.trim(),
       guardianName: editGuardianName.trim(),
+      installments: updatedInstallments,
     };
 
     setStudents((prev) =>
@@ -162,7 +182,7 @@ export function StudentTable({
     // Save to local storage and sync invoice across dashboard and caisse
     updateRegisteredStudent(updated, schoolSlug);
 
-    setSuccessMessage(`Coordonnées et statut de l'élève ${updated.fullName} mis à jour avec succès !`);
+    setSuccessMessage(`Coordonnées et date d'inscription de l'élève ${updated.fullName} mises à jour avec succès !`);
     setTimeout(() => setSuccessMessage(null), 5000);
     setEditingStudent(null);
   };
@@ -844,13 +864,19 @@ export function StudentTable({
 
                 {/* Date d'inscription */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Date d&apos;inscription *</span>
+                  <label className="font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Date d&apos;inscription *</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {editPaymentDate ? formatDate(editPaymentDate) : 'JJ/MM/AAAA'}
+                    </span>
                   </label>
                   <FrenchDateInput
                     value={editPaymentDate}
                     onChange={setEditPaymentDate}
+                    align="right"
                   />
                 </div>
               </div>
