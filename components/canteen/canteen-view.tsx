@@ -7,6 +7,7 @@ import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveCanteenData } from '@/lib/data/live-store';
 import { deleteInvoiceFromSupabase } from '@/lib/supabase/services';
+import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   UtensilsCrossed,
   Download,
@@ -809,16 +810,22 @@ export function CanteenView({
         </div>
       </div>
 
-      {/* Toast */}
+      {/* Toast Centré au Milieu de l'Écran */}
       {toastMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{toastMessage}</span>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <span className="leading-snug text-left flex-1">{toastMessage}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button type="button" onClick={() => setToastMessage(null)} className="text-emerald-700 font-bold ml-4">
-            ✕
-          </button>
         </div>
       )}
 
@@ -1265,11 +1272,10 @@ export function CanteenView({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block">Date du Paiement *</label>
-                <input
-                  type="date"
+                <FrenchDateInput
                   value={monthsPaymentDate}
-                  onChange={(e) => setMonthsPaymentDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-slate-900 bg-white"
+                  onChange={setMonthsPaymentDate}
+                  className="w-full text-xs"
                 />
               </div>
               <div className="space-y-1">

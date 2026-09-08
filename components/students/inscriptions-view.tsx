@@ -979,6 +979,7 @@ export function InscriptionsView({
     setSuccessModalData(newStudent);
     setShowConfirmModal(false);
     setSuccessToast(`Élève ${newStudent.fullName} (${newStudent.studentNumber}) enregistré(e) avec succès !`);
+    setTimeout(() => setSuccessToast(null), 3000);
   };
 
   // Suppression définitive du reçu et de l'élève sélectionné
@@ -2177,20 +2178,22 @@ export function InscriptionsView({
         </div>
       </div>
 
-      {/* Toast Notification */}
+      {/* Toast Notification Centrée au Milieu de l'Écran */}
       {successToast && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{successToast}</span>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <span className="leading-snug text-left flex-1">{successToast}</span>
+            <button
+              type="button"
+              onClick={() => setSuccessToast(null)}
+              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setSuccessToast(null)}
-            className="text-emerald-700 hover:text-emerald-900 font-bold ml-4 cursor-pointer"
-          >
-            ✕
-          </button>
         </div>
       )}
 

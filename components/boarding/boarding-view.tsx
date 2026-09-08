@@ -234,10 +234,30 @@ export function BoardingView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school]);
 
+  // Sauvegarde unifiée et atomique des souscriptions et paiements d'internat
+  const saveBoardingDataUnified = (
+    updatedSubs: Array<{
+      studentId: string;
+      studentName?: string;
+      matricule?: string;
+      className?: string;
+      gender?: 'M' | 'F';
+      parentContact?: string;
+      pavilion: string;
+      roomNumber: string;
+      monthlyRate: number;
+      paymentDate?: string;
+    }>,
+    updatedPayments: Record<string, Record<string, boolean>>
+  ) => {
+    setCustomSubscriptions(updatedSubs);
+    setMonthlyPayments(updatedPayments);
+    saveLiveBoardingData(updatedSubs, updatedPayments, boardingCapacity, schoolSlug);
+  };
+
   // Sauvegarde persistante des paiements
   const savePaymentsToStorage = (updatedPayments: Record<string, Record<string, boolean>>) => {
-    setMonthlyPayments(updatedPayments);
-    saveLiveBoardingData(customSubscriptions, updatedPayments, boardingCapacity, schoolSlug);
+    saveBoardingDataUnified(customSubscriptions, updatedPayments);
   };
 
   // Sauvegarde persistante des souscriptions
@@ -255,8 +275,7 @@ export function BoardingView({
       paymentDate?: string;
     }>
   ) => {
-    setCustomSubscriptions(updatedSubs);
-    saveLiveBoardingData(updatedSubs, monthlyPayments, boardingCapacity, schoolSlug);
+    saveBoardingDataUnified(updatedSubs, monthlyPayments);
   };
 
   // Pensionnaires unifiés : Inscriptions avec option Internat + Souscriptions directes
@@ -679,7 +698,7 @@ export function BoardingView({
       ? activeBoarder.student.id
       : `stud-int-${Date.now()}`;
 
-    // 1. Sauvegarder les mois cochés
+    // 1. Préparer les mois cochés
     const updatedPayments = {
       ...monthlyPayments,
       [targetStudentId]: activeMonthsChecked,
@@ -690,7 +709,6 @@ export function BoardingView({
     if (formMatricule.trim()) {
       updatedPayments[formMatricule.trim()] = activeMonthsChecked;
     }
-    savePaymentsToStorage(updatedPayments);
 
     // 2. Mettre à jour / ajouter dans customSubscriptions
     const existingIndex = customSubscriptions.findIndex((s) => s.studentId === targetStudentId);
@@ -713,7 +731,9 @@ export function BoardingView({
     } else {
       updatedSubs.unshift(subRecord);
     }
-    saveSubscriptionsToStorage(updatedSubs);
+
+    // Sauvegarde atomique globale (aucune perte ni écrasement)
+    saveBoardingDataUnified(updatedSubs, updatedPayments);
 
     // 3. Mettre à jour isBoarding: true sur l'élève existant s'il existe (SANS JAMAIS CRÉER DE FAUX ÉLÈVE DANS STUDENTS)
     if (matchedExistingStudent) {
@@ -837,18 +857,15 @@ export function BoardingView({
       };
       updateRegisteredStudent(updatedStudent, schoolSlug);
 
-      // 2. Nettoyer les customSubscriptions
+      // 2. Nettoyer les customSubscriptions et monthlyPayments de manière atomique
       const updatedSubs = customSubscriptions.filter(
         (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
       );
-      saveSubscriptionsToStorage(updatedSubs);
-
-      // 3. Nettoyer les monthlyPayments
       const updatedPayments = { ...monthlyPayments };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];
       if (matricule) delete updatedPayments[matricule];
-      savePaymentsToStorage(updatedPayments);
+      saveBoardingDataUnified(updatedSubs, updatedPayments);
 
       // 4. Supprimer la quittance d'internat du journal
       const invoiceId = `inv-boarding-${studentId}`;
@@ -878,7 +895,7 @@ export function BoardingView({
       setShowDeleteBoardingModal(false);
       setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
       setToastMessage(`✓ L'élève ${activeBoarder.student.fullName} a été retiré de l'internat.`);
-      setTimeout(() => setToastMessage(null), 4000);
+      setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {
       console.error('Erreur lors du retrait de l\'internat:', err);
     } finally {
@@ -895,17 +912,15 @@ export function BoardingView({
       const studentNumber = activeBoarder.student.studentNumber;
       const matricule = activeBoarder.student.matricule;
 
-      // Nettoyer les subscriptions et monthly payments
+      // Nettoyer les subscriptions et monthly payments de manière atomique
       const updatedSubs = customSubscriptions.filter(
         (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
       );
-      saveSubscriptionsToStorage(updatedSubs);
-
       const updatedPayments = { ...monthlyPayments };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];
       if (matricule) delete updatedPayments[matricule];
-      savePaymentsToStorage(updatedPayments);
+      saveBoardingDataUnified(updatedSubs, updatedPayments);
 
       // Supprimer définitivement l'élève et tous ses reçus
       const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
@@ -914,7 +929,7 @@ export function BoardingView({
       setShowDeleteBoardingModal(false);
       setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
       setToastMessage(`✓ Reçu et dossier de ${activeBoarder.student.fullName} définitivement supprimés.`);
-      setTimeout(() => setToastMessage(null), 4000);
+      setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {
       console.error('Erreur suppression totale pensionnaire:', err);
     } finally {
@@ -1513,18 +1528,22 @@ export function BoardingView({
 
   return (
     <div className="space-y-6 sm:space-y-7 animate-fadeIn">
-      {/* Toast Notification */}
+      {/* Toast Notification Centrée au Milieu de l'Écran */}
       {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-emerald-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-emerald-500 animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
-          <button
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="text-white/70 hover:text-white ml-2 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <span className="leading-snug text-left flex-1">{toastMessage}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1733,7 +1752,20 @@ export function BoardingView({
           ═══════════════════════════════════════════════════════════════ */}
       {successReceiptModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95 text-center">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95 text-center relative">
+            {/* Bouton croix pour fermer en haut à droite */}
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessReceiptModalData(null);
+                handleNextReceipt();
+              }}
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
+              title="Fermer la confirmation"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
             <div className="w-14 h-14 rounded-3xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center shadow-xs">
               <CheckCircle2 className="w-8 h-8" />
             </div>
@@ -1787,18 +1819,18 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* Boutons d'Action : WhatsApp Direct & Réinitialisation à zéro avec OK */}
+            {/* Boutons d'Action : WhatsApp Direct & Passage automatique au reçu prochain */}
             <div className="space-y-2 pt-2">
               <button
                 type="button"
                 onClick={() => {
                   handleDirectWhatsAppShare();
                 }}
-                className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer transform hover:-translate-y-0.5"
+                className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer transform hover:-translate-y-0.5"
               >
-                <Smartphone className="w-5 h-5 text-white shrink-0" />
-                <span>
-                  📱 Envoyer le reçu par WhatsApp ({formParentContact || 'Numéro parent'})
+                <Smartphone className="w-4 h-4 text-white shrink-0" />
+                <span className="truncate whitespace-nowrap">
+                  Envoyer le reçu par WhatsApp <span className="font-mono text-emerald-100 font-bold">({formParentContact || 'Numéro parent'})</span>
                 </span>
               </button>
 
@@ -1806,12 +1838,12 @@ export function BoardingView({
                 type="button"
                 onClick={() => {
                   setSuccessReceiptModalData(null);
-                  handleStartNewSubscription();
+                  handleNextReceipt();
                 }}
                 className="w-full py-3 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
               >
                 <Check className="w-4 h-4 text-emerald-600" />
-                <span>OK (Élève suivant / Réinitialiser à zéro)</span>
+                <span>OK (Reçu prochain / Élève suivant)</span>
               </button>
             </div>
           </div>

@@ -47,69 +47,84 @@ export function RevenueSummary({
 
     if (typeof window !== 'undefined') {
       // Calcul Internat
-      // Calcul Internat
+      // Calcul Internat (Strictement synchronisé avec la page Internat)
       try {
         const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
         const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
         const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
-        const boardingSubsList: Array<{ studentId: string; matricule?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
-        const boardingSubsMap = new Map<string, number>();
+        const boardingSubsList: Array<{ studentId: string; studentName?: string; matricule?: string; className?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
+
+        const seenBoardingIdentifiers = new Set<string>();
+
+        // 1. Calculer à partir de chaque souscription d'internat réelle
         boardingSubsList.forEach((sub) => {
-          if (sub.studentId) boardingSubsMap.set(sub.studentId, sub.monthlyRate || 50000);
-          if (sub.matricule) boardingSubsMap.set(sub.matricule, sub.monthlyRate || 50000);
-        });
-
-        const seenBoardingIds = new Set<string>();
-
-        // 1. Tous les élèves inscrits avec souscription ou paiement d'internat
-        students.forEach((stu) => {
-          const hasOptedBoarding = Boolean(
-            boardingSubsMap.has(stu.id) ||
-            (stu.studentNumber && boardingSubsMap.has(stu.studentNumber)) ||
-            (stu.matricule && boardingSubsMap.has(stu.matricule))
+          if (!sub || !sub.studentId) return;
+          const stu = students.find(
+            (s) => s.id === sub.studentId || s.studentNumber === sub.studentId || (sub.matricule && s.matricule === sub.matricule)
           );
-          if (hasOptedBoarding) {
-            seenBoardingIds.add(stu.id);
-            boardingStudentsCount += 1;
-            const rate = boardingSubsMap.get(stu.id) || (stu.studentNumber && boardingSubsMap.get(stu.studentNumber)) || (stu.matricule && boardingSubsMap.get(stu.matricule)) || 50000;
-            const months =
-              monthlyPayments[stu.id] ||
-              (stu.studentNumber ? monthlyPayments[stu.studentNumber] : {}) ||
-              (stu.matricule ? monthlyPayments[stu.matricule] : {}) ||
-              {};
-            const paidCount = Object.values(months).filter(Boolean).length;
-            if (paidCount > 0) {
-              boardingAmount += paidCount * rate;
-            }
+
+          const idKey = sub.studentId;
+          const numKey = stu?.studentNumber;
+          const matKey = sub.matricule || stu?.matricule;
+
+          if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
+            return;
           }
+
+          seenBoardingIdentifiers.add(idKey);
+          if (numKey) seenBoardingIdentifiers.add(numKey);
+          if (matKey) seenBoardingIdentifiers.add(matKey);
+
+          boardingStudentsCount += 1;
+
+          const rate = sub.monthlyRate || 50000;
+          const months =
+            monthlyPayments[sub.studentId] ||
+            (stu?.id ? monthlyPayments[stu.id] : {}) ||
+            (numKey ? monthlyPayments[numKey] : {}) ||
+            (matKey ? monthlyPayments[matKey] : {}) ||
+            {};
+          const paidCount = Object.values(months).filter(Boolean).length;
+          let studentBoardingPaid = paidCount * rate;
+
+          // Vérifier si une quittance d'internat avec versement direct existe
+          const directInvoice = invoices.find((inv) =>
+            (inv.studentId === sub.studentId || inv.studentId === numKey || (matKey && inv.studentId === matKey)) &&
+            ((inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-'))
+          );
+          if (directInvoice && directInvoice.paidAmount && directInvoice.paidAmount > studentBoardingPaid) {
+            studentBoardingPaid = directInvoice.paidAmount;
+          }
+
+          boardingAmount += studentBoardingPaid;
         });
 
-        // 2. Souscriptions manuelles d'internat
-        boardingSubsList.forEach((sub) => {
-          if (sub.studentId && !seenBoardingIds.has(sub.studentId)) {
-            seenBoardingIds.add(sub.studentId);
-            boardingStudentsCount += 1;
-            const rate = sub.monthlyRate || 50000;
-            const months =
-              monthlyPayments[sub.studentId] ||
-              (sub.matricule ? monthlyPayments[sub.matricule] : {}) ||
-              {};
-            const paidCount = Object.values(months).filter(Boolean).length;
-            if (paidCount > 0) {
-              boardingAmount += paidCount * rate;
-            }
-          }
-        });
+        // 2. Vérifier les élèves inscrits avec option internat active hors customSubscriptions
+        students.forEach((stu) => {
+          if (!stu) return;
+          const idKey = stu.id;
+          const numKey = stu.studentNumber;
+          const matKey = stu.matricule;
 
-        // 3. Prise en compte directe de toute quittance d'internat
-        invoices.forEach((inv) => {
-          const isInt = (inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-');
-          if (isInt && inv.paidAmount && inv.paidAmount > 0) {
-            if (!seenBoardingIds.has(inv.studentId)) {
-              seenBoardingIds.add(inv.studentId);
-              boardingStudentsCount += 1;
-              boardingAmount += inv.paidAmount;
-            }
+          if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
+            return;
+          }
+
+          const months =
+            monthlyPayments[stu.id] ||
+            (numKey ? monthlyPayments[numKey] : {}) ||
+            (matKey ? monthlyPayments[matKey] : {}) ||
+            {};
+          const paidCount = Object.values(months).filter(Boolean).length;
+
+          if (stu.isBoarding || paidCount > 0) {
+            seenBoardingIdentifiers.add(idKey);
+            if (numKey) seenBoardingIdentifiers.add(numKey);
+            if (matKey) seenBoardingIdentifiers.add(matKey);
+
+            boardingStudentsCount += 1;
+            const rate = 50000;
+            boardingAmount += paidCount * rate;
           }
         });
       } catch (e) {}
