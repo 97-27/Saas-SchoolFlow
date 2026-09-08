@@ -180,6 +180,35 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
         } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
           // 3. Suppression propagée
           deleteLiveStudents(payload.deletedIds, cleanSlug);
+        } else if (payload.action === 'force_store_refresh' && Array.isArray(payload.students)) {
+          // 4. Réinitialisation et alignement officiel forcé de tous les postes
+          const students: Student[] = payload.students;
+          const invoices: Invoice[] = payload.invoices || [];
+
+          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+          localStorage.setItem(schoolKey, JSON.stringify(students));
+          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
+          if (isPilot) {
+            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(students));
+            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(students));
+          }
+
+          const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+          localStorage.setItem(invSchoolKey, JSON.stringify(invoices));
+          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(invoices));
+          if (isPilot) {
+            localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(invoices));
+            localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(invoices));
+          }
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                action: 'force_store_refresh',
+                isRemoteSync: true,
+              },
+            })
+          );
         }
       } catch (err) {
         // Ignorer les formats non conformes
@@ -426,13 +455,13 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
     syncSchoolDataWithServer(slug);
   });
 
-  // 2. Rafraîchissement automatique ultra-rapide chaque seconde (1000ms) pour répercuter instantanément les reçus entre collaborateurs
+  // 2. Rafraîchissement d'arrière-plan modéré (toutes les 60s) pour préserver les quotas et éviter toute saturation
   if (activeSyncInterval) clearInterval(activeSyncInterval);
   activeSyncInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       syncSchoolDataWithServer(slug);
     }
-  }, 1000);
+  }, 60000);
 }
 
 /**
@@ -533,9 +562,13 @@ export function syncSchoolDataWithServer(slug: string): void {
             }
             const key = localStu.studentNumber || localStu.id;
             if (!studentMap.has(key)) {
-              // Nouvel élève local pas encore sur le serveur : le conserver absolument !
-              studentMap.set(key, localStu);
-              hasLocalNewStudents = true;
+              // Si le serveur a renvoyé la liste officielle, on ne conserve un élève local non répertorié
+              // que s'il est expressément en attente de synchronisation active
+              const isPending = (localStu as any).isPendingSync === true;
+              if (isPending) {
+                studentMap.set(key, localStu);
+                hasLocalNewStudents = true;
+              }
             } else {
               // Élève déjà présent : si la version locale a un updatedAt plus récent, conserver la version locale
               const incomingStu = studentMap.get(key)!;
@@ -607,8 +640,11 @@ export function syncSchoolDataWithServer(slug: string): void {
             }
             const key = localInv.invoiceNumber || localInv.id;
             if (!invoiceMap.has(key)) {
-              invoiceMap.set(key, localInv);
-              hasLocalNewInvoices = true;
+              const isPending = (localInv as any).isPendingSync === true;
+              if (isPending) {
+                invoiceMap.set(key, localInv);
+                hasLocalNewInvoices = true;
+              }
             }
           });
 
