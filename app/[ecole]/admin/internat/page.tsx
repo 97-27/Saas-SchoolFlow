@@ -9,7 +9,7 @@ export default async function InternatPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <BoardingView

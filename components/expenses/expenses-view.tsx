@@ -198,7 +198,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(list));
-        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        if (schoolSlug === 'epc-manoi' ) {
           localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(list));
         }
       } catch (e) {}

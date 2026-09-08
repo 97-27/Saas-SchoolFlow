@@ -14,6 +14,9 @@ import {
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Stockage serveur persistant pour synchroniser les données entre appareils
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_FILE = path.join(DATA_DIR, 'schoolflow-store.json');
@@ -45,19 +48,12 @@ ensureDataFile();
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const slug = searchParams.get('slug') || 'epc-manoi';
+    const rawSlug = searchParams.get('slug') || 'epc-manoi';
+    const slug = rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug;
     const forceSupabase = searchParams.get('forceSupabase') === 'true';
 
     ensureDataFile();
     let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
-
-    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
-    if (isPilot && (!schoolData?.students || schoolData.students.length === 0)) {
-      const partnerSlug = slug === 'epc-manoi' ? 'college-excellence' : 'epc-manoi';
-      if (memoryStore[partnerSlug]?.students?.length > 0) {
-        schoolData = { ...memoryStore[partnerSlug] };
-      }
-    }
 
     // Si la mémoire est vide ou sans élèves ou si un rechargement forcé depuis Supabase est demandé
     if (!schoolData || !schoolData.students || schoolData.students.length === 0 || forceSupabase) {
@@ -94,10 +90,6 @@ export async function GET(request: NextRequest) {
           schoolData.staffUsers = sbStaff;
         }
         memoryStore[slug] = schoolData;
-        if (isPilot) {
-          memoryStore['epc-manoi'] = schoolData;
-          memoryStore['college-excellence'] = schoolData;
-        }
       } catch (sbErr) {
         console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
       }
@@ -121,11 +113,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      slug,
-      data: Object.keys(schoolData).length > 0 ? schoolData : null,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        slug,
+        data: Object.keys(schoolData).length > 0 ? schoolData : null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
@@ -134,11 +135,23 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { slug, students, invoices, schoolSettings, staffUsers, deletedStudentIds } = body;
-
-    if (!slug) {
-      return NextResponse.json({ success: false, error: 'Slug manquant' }, { status: 400 });
-    }
+    const {
+      slug: rawSlug,
+      students,
+      invoices,
+      schoolSettings,
+      staffUsers,
+      deletedStudentIds,
+      transportSubscriptions,
+      transportPayments,
+      canteenSubscriptions,
+      canteenPayments,
+      canteenWeeklyMenu,
+      boardingSubscriptions,
+      boardingPayments,
+      boardingCapacity,
+    } = body;
+    const slug = (rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug) || 'epc-manoi';
 
     ensureDataFile();
     const currentSchool = memoryStore[slug] || {};
@@ -156,8 +169,6 @@ export async function POST(request: NextRequest) {
         deleteInvoiceFromSupabase(delId, slug).catch(() => {});
       }
     }
-    // Note: ne pas appeler deleteStudentFromSupabase sur les autoBannedIds à chaque POST
-    // pour éviter des requêtes Postgres inutiles répétées.
 
     const delSet = new Set(existingDeleted);
     const cleanStudents = Array.isArray(students)
@@ -188,24 +199,22 @@ export async function POST(request: NextRequest) {
       ...(cleanInvoices !== undefined ? { invoices: cleanInvoices } : {}),
       ...(mergedSettings !== undefined ? { schoolSettings: mergedSettings } : {}),
       ...(staffUsers !== undefined ? { staffUsers } : {}),
+      ...(transportSubscriptions !== undefined ? { transportSubscriptions } : {}),
+      ...(transportPayments !== undefined ? { transportPayments } : {}),
+      ...(canteenSubscriptions !== undefined ? { canteenSubscriptions } : {}),
+      ...(canteenPayments !== undefined ? { canteenPayments } : {}),
+      ...(canteenWeeklyMenu !== undefined ? { canteenWeeklyMenu } : {}),
+      ...(boardingSubscriptions !== undefined ? { boardingSubscriptions } : {}),
+      ...(boardingPayments !== undefined ? { boardingPayments } : {}),
+      ...(boardingCapacity !== undefined ? { boardingCapacity } : {}),
     };
     memoryStore[slug] = updatedEntry;
 
-    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
-    if (isPilot) {
-      memoryStore['epc-manoi'] = { ...updatedEntry, slug: 'epc-manoi' };
-      memoryStore['college-excellence'] = { ...updatedEntry, slug: 'college-excellence' };
-    }
-
-    // Sauvegarde Supabase Cloud — sélective uniquement pour ne pas dépasser les quotas du tier gratuit.
-    // Les enregistrements individuels (élèves/factures) sont déjà sauvegardés dans Supabase
-    // au moment de leur création/modification via saveStudentToSupabase() dans live-store.ts.
-    // Ici, on ne sauvegarde QUE les paramètres de l'école et un max de 3 enregistrements récents.
+    // Sauvegarde Supabase Cloud
     try {
       if (mergedSettings) {
         saveSchoolToSupabase(mergedSettings).catch(() => {});
       }
-      // Sauvegarde ciblée : seulement les 3 élèves les plus récemment modifiés (pas tous)
       if (cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0) {
         const sorted = [...cleanStudents].sort((a: any, b: any) => {
           const da = new Date(a.updatedAt || a.enrollmentDate || 0).getTime();
@@ -230,11 +239,20 @@ export async function POST(request: NextRequest) {
       // Fallback mémoire si fs est en lecture seule
     }
 
-    return NextResponse.json({
-      success: true,
-      slug,
-      message: 'Données synchronisées avec succès',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        slug,
+        message: 'Données synchronisées avec succès',
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

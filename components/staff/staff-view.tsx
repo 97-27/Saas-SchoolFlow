@@ -304,7 +304,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
           return sanitized.length > 0 ? sanitized : initialTeachers;
         }
         // Pour les nouveaux établissements ou après reset, liste vierge
-        if (schoolSlug !== 'epc-manoi' && schoolSlug !== 'college-excellence') {
+        if (schoolSlug !== 'epc-manoi' ) {
           return [];
         }
       } catch (e) {
@@ -342,7 +342,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(updatedList));
-        if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+        if (schoolSlug === 'epc-manoi' ) {
           localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(updatedList));
         }
       } catch (e) {

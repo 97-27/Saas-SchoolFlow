@@ -21,6 +21,7 @@ import {
   getLiveInvoices,
   getLiveSchool,
   DATA_UPDATED_EVENT,
+  startCrossDeviceSync,
 } from '@/lib/data/live-store';
 
 interface DashboardViewProps {
@@ -38,16 +39,22 @@ export function DashboardView({
   initialInvoices,
   initialKPIs,
 }: DashboardViewProps) {
-  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
-  const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, schoolSlug));
-  const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(schoolSlug, school));
+  const cleanSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
+  const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, cleanSlug));
+  const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, cleanSlug));
+  const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(cleanSlug, school));
 
   // Synchronisation en direct avec le stockage local & événements
   useEffect(() => {
+    const activeSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
+
+    // Démarrer immédiatement la synchronisation SSE universelle et le rafraîchissement serveur
+    startCrossDeviceSync(activeSlug);
+
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents, schoolSlug));
-      setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
-      setSchoolState(getLiveSchool(schoolSlug, school));
+      setStudents(getLiveStudents(initialStudents, activeSlug));
+      setInvoices(getLiveInvoices(initialInvoices, activeSlug));
+      setSchoolState(getLiveSchool(activeSlug, school));
     };
 
     handleUpdate();

@@ -5,7 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveTransportData } from '@/lib/data/live-store';
 import { deleteInvoiceFromSupabase } from '@/lib/supabase/services';
 import {
   Bus,
@@ -128,6 +128,14 @@ export function TransportView({
       setStudents(getLiveStudents(mockStudents, schoolSlug));
       setInvoices(getLiveInvoices([], schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      if (typeof window !== 'undefined') {
+        try {
+          const savedPayments = localStorage.getItem(TRANSPORT_PAYMENTS_KEY);
+          if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
+          const savedCustom = localStorage.getItem(TRANSPORT_SUBSCRIPTIONS_KEY);
+          if (savedCustom) setCustomTransportMap(JSON.parse(savedCustom));
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -315,11 +323,7 @@ export function TransportView({
     };
 
     setCustomTransportMap(nextMap);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
-      } catch (e) {}
-    }
+    saveLiveTransportData(nextMap, monthlyPayments, schoolSlug);
   };
 
   // Basculer le statut d'un mois
@@ -369,13 +373,7 @@ export function TransportView({
 
     setMonthlyPayments(newPayments);
     setCustomTransportMap(newTransportMap);
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(newPayments));
-        localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(newTransportMap));
-      } catch (e) {}
-    }
+    saveLiveTransportData(newTransportMap, newPayments, schoolSlug);
 
     // Synchronisation de la quittance / facture de transport dans le journal des encaissements
     const paidMonths = Object.keys(selectedStudentForMonths.monthsState || {}).filter(
@@ -462,9 +460,18 @@ export function TransportView({
       } catch (e) {}
     }
 
-    // Créer la transaction de transport pour Septembre
+    // Créer la transaction de transport pour Septembre et enregistrer l'élève
     const targetStu = students.find((s) => s.id === newSubStudentId);
     if (targetStu) {
+      const updatedStu = {
+        ...targetStu,
+        isTransport: true,
+        address: targetStu.address?.includes('Transport (Oui)')
+          ? targetStu.address
+          : `${targetStu.address || ''} | Transport (Oui)`.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      updateRegisteredStudent(updatedStu, schoolSlug);
       const todayStr = new Date().toISOString().split('T')[0];
       const paidAmt = Math.max(0, rate - discount);
       const totalExigible = (rate * 9) - discount;
@@ -495,6 +502,7 @@ export function TransportView({
       saveLivePaymentInvoice(transportInvoice, schoolSlug);
     }
 
+    saveLiveTransportData(nextCustom, nextPayments, schoolSlug);
     setIsNewSubModalOpen(false);
     setToastMessage('✓ Nouvelle souscription au transport enregistrée avec succès.');
     setTimeout(() => setToastMessage(null), 4000);

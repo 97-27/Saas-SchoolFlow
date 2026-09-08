@@ -9,7 +9,7 @@ interface InscriptionsPageProps {
 export default async function InscriptionsPage({ params }: InscriptionsPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <InscriptionsView

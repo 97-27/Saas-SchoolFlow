@@ -33,7 +33,7 @@ export function NewStudentModal({
   onClose,
   onStudentCreated,
   nextStudentNumber,
-  school = mockSchools['college-excellence'],
+  school = mockSchools['epc-manoi'],
 }: NewStudentModalProps) {
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');

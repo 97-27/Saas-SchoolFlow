@@ -1,4 +1,5 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 
 interface AdminLayoutProps {
@@ -12,6 +13,10 @@ export default async function AdminLayout({
 }: AdminLayoutProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
+
+  if (ecoleSlug === 'college-excellence') {
+    redirect('/epc-manoi/admin');
+  }
 
   return (
     <DashboardShell

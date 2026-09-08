@@ -9,7 +9,7 @@ interface DashboardPageProps {
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <DashboardView

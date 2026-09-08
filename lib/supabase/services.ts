@@ -8,26 +8,36 @@ import { cleanDisplayAddress } from '@/lib/utils/formatters';
  * ══════════════════════════════════════════════════════════════════
  */
 
+// ── Cache mémoire pour éviter les lookups répétés sur la table schools ──
+const schoolIdCache = new Map<string, string>(); // slug → UUID
+
+async function getSchoolId(slug: string): Promise<string | null> {
+  const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
+  if (schoolIdCache.has(cleanSlug)) return schoolIdCache.get(cleanSlug)!;
+  try {
+    const { data } = await supabase
+      .from('schools')
+      .select('id')
+      .eq('slug', cleanSlug)
+      .maybeSingle();
+    if (data?.id) {
+      schoolIdCache.set(cleanSlug, data.id);
+      return data.id;
+    }
+  } catch (e) {}
+  return null;
+}
+
 // 1. GESTION DES ÉCOLES (SCHOOLS)
 export async function getSchoolFromSupabase(slug: string): Promise<School | null> {
   if (!isSupabaseConfigured) return null;
   try {
-    const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+    const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
     let { data, error } = await supabase
       .from('schools')
       .select('*')
-      .eq('slug', slug)
+      .eq('slug', cleanSlug)
       .maybeSingle();
-
-    if (!data && isPilot) {
-      const fallbackSlug = slug === 'epc-manoi' ? 'college-excellence' : 'epc-manoi';
-      const { data: fbData } = await supabase
-        .from('schools')
-        .select('*')
-        .eq('slug', fallbackSlug)
-        .maybeSingle();
-      data = fbData;
-    }
 
     if (!data) return null;
 
@@ -80,6 +90,7 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
 
 export async function saveSchoolToSupabase(school: School): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
+  if (!school.slug || school.slug === 'college-excellence') return true; // Refuser de sauvegarder l'école exemple college-excellence
   try {
     const payload: Record<string, any> = {
       slug: school.slug,
@@ -163,8 +174,8 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
 export async function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
-    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const slugs = [cleanSlug];
 
     const { data: schools } = await supabase
       .from('schools')
@@ -278,26 +289,24 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 export async function saveStudentToSupabase(student: Student, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    let { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
+    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    // Utiliser le cache pour éviter une requête school à chaque appel
+    let schoolId = await getSchoolId(cleanSlug);
 
-    if (!school) {
+    if (!schoolId) {
       // Créer l'école si inexistante
       const { data: newSchool } = await supabase
         .from('schools')
-        .insert({
-          slug: schoolSlug,
-          name: schoolSlug.toUpperCase(),
-        })
+        .insert({ slug: cleanSlug, name: cleanSlug.toUpperCase() })
         .select('id')
         .single();
-      school = newSchool;
+      if (newSchool?.id) {
+        schoolId = newSchool.id;
+        schoolIdCache.set(cleanSlug, newSchool.id);
+      }
     }
 
-    if (!school) return false;
+    if (!schoolId) return false;
 
     const metaObj = {
       enrollmentDate: student.enrollmentDate || student.paymentDate || '2026-09-07',
@@ -312,7 +321,7 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
     const addressWithMeta = `${cleanAddress} [SF_META:${JSON.stringify(metaObj)}]`;
 
     const payload = {
-      school_id: school.id,
+      school_id: schoolId,
       student_number: student.studentNumber,
       matricule: student.matricule,
       first_name: student.firstName || student.fullName.split(' ')[0] || '',
@@ -339,31 +348,48 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       updated_at: new Date().toISOString(),
     };
 
-    const { data: existingRows } = await supabase
-      .from('students')
-      .select('id')
-      .eq('school_id', school.id)
-      .eq('student_number', student.studentNumber);
-
-    let error = null;
-    if (existingRows && existingRows.length > 0) {
-      const primaryId = existingRows[0].id;
-      const res = await supabase.from('students').update(payload).eq('id', primaryId);
-      error = res.error;
-      // Nettoyer d'éventuels doublons résiduels
-      if (existingRows.length > 1) {
-        const extraIds = existingRows.slice(1).map((r) => r.id);
-        await supabase.from('invoices').delete().in('student_id', extraIds);
-        await supabase.from('students').delete().in('id', extraIds);
+    // Vérifier si l'élève existe déjà (par id UUID direct ou par student_number)
+    let existingId: string | null = null;
+    if (student.id && isUUID(student.id)) {
+      const { data: byId } = await supabase
+        .from('students')
+        .select('id')
+        .eq('id', student.id)
+        .limit(1);
+      if (byId && byId.length > 0) {
+        existingId = byId[0].id;
       }
-    } else {
-      const res = await supabase.from('students').insert(payload);
-      error = res.error;
     }
 
-    if (error) {
-      console.error('Erreur saveStudentToSupabase:', error.message);
-      return false;
+    if (!existingId && student.studentNumber) {
+      const { data: byNum } = await supabase
+        .from('students')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('student_number', student.studentNumber)
+        .limit(1);
+      if (byNum && byNum.length > 0) {
+        existingId = byNum[0].id;
+      }
+    }
+
+    if (existingId) {
+      const { error: updateErr } = await supabase
+        .from('students')
+        .update(payload)
+        .eq('id', existingId);
+      if (updateErr) {
+        console.error('Erreur saveStudentToSupabase update:', updateErr.message);
+        return false;
+      }
+    } else {
+      const { error: insertErr } = await supabase
+        .from('students')
+        .insert(payload);
+      if (insertErr) {
+        console.error('Erreur saveStudentToSupabase insert:', insertErr.message);
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -379,39 +405,36 @@ const isUUID = (str: string): boolean => {
 export async function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured || !identifier) return false;
   try {
-    const { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
-
-    if (!school) return false;
+    // Utiliser le cache pour éviter une requête school répétée
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
 
     if (isUUID(identifier)) {
       // Supprimer d'abord les factures liées pour respecter les contraintes d'intégrité
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', identifier);
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('id', identifier);
-      const { error } = await supabase.from('students').delete().eq('school_id', school.id).eq('id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('id', identifier);
+      const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', identifier);
       if (!error) return true;
     } else {
       // Trouver l'ID UUID de l'élève par son matricule ou numéro d'élève
-      const { data: found } = await supabase
+      const { data: foundRows } = await supabase
         .from('students')
         .select('id')
-        .eq('school_id', school.id)
+        .eq('school_id', schoolId)
         .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
-        .maybeSingle();
+        .limit(1);
 
-      if (found?.id) {
-        await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', found.id);
-        const { error } = await supabase.from('students').delete().eq('school_id', school.id).eq('id', found.id);
+      if (foundRows && foundRows.length > 0) {
+        const studentIdToDelete = foundRows[0].id;
+        await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', studentIdToDelete);
+        const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', studentIdToDelete);
         if (!error) return true;
       }
 
       // Nettoyage de sécurité direct
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('invoice_number', identifier);
-      await supabase.from('students').delete().eq('school_id', school.id).eq('student_number', identifier);
-      await supabase.from('students').delete().eq('school_id', school.id).eq('matricule', identifier);
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('invoice_number', identifier);
+      await supabase.from('students').delete().eq('school_id', schoolId).eq('student_number', identifier);
+      await supabase.from('students').delete().eq('school_id', schoolId).eq('matricule', identifier);
     }
     return true;
   } catch (err) {
@@ -423,27 +446,23 @@ export async function deleteStudentFromSupabase(identifier: string, schoolSlug: 
 export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured || !identifier) return false;
   try {
-    const { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
-
-    if (!school) return false;
+    // Utiliser le cache pour éviter une requête school répétée
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
 
     if (isUUID(identifier)) {
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('id', identifier);
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('id', identifier);
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', identifier);
     } else {
-      await supabase.from('invoices').delete().eq('school_id', school.id).eq('invoice_number', identifier);
-      const { data: found } = await supabase
+      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('invoice_number', identifier);
+      const { data: foundRows } = await supabase
         .from('students')
         .select('id')
-        .eq('school_id', school.id)
+        .eq('school_id', schoolId)
         .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
-        .maybeSingle();
-      if (found?.id) {
-        await supabase.from('invoices').delete().eq('school_id', school.id).eq('student_id', found.id);
+        .limit(1);
+      if (foundRows && foundRows.length > 0) {
+        await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', foundRows[0].id);
       }
     }
     return true;
@@ -458,8 +477,8 @@ export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: 
 export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoice[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
-    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const slugs = [cleanSlug];
 
     const { data: schools } = await supabase
       .from('schools')
@@ -519,61 +538,64 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
 export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    let { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
+    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    // Utiliser le cache pour éviter une requête school à chaque appel
+    let schoolId = await getSchoolId(cleanSlug);
 
-    if (!school) {
+    if (!schoolId) {
       const { data: newSchool } = await supabase
         .from('schools')
-        .insert({
-          slug: schoolSlug,
-          name: schoolSlug.toUpperCase(),
-        })
+        .insert({ slug: cleanSlug, name: cleanSlug.toUpperCase() })
         .select('id')
         .single();
-      school = newSchool;
+      if (newSchool?.id) {
+        schoolId = newSchool.id;
+        schoolIdCache.set(cleanSlug, newSchool.id);
+      }
     }
 
-    if (!school) return false;
+    if (!schoolId) return false;
 
-    // Résoudre l'UUID réel de l'élève pour respecter la clé étrangère Supabase
+    // Résoudre l'UUID réel de l'élève — requête ciblée (pas de chargement de TOUS les étudiants)
     let validStudentUUID: string | null = null;
     if (invoice.studentId && isUUID(invoice.studentId)) {
       validStudentUUID = invoice.studentId;
     } else {
-      const studentNum = invoice.invoiceNumber?.replace('REC-2026-', 'ID-') || invoice.studentId;
+      // Essayer d'abord par student_number dérivé du numéro de facture
+      const studentNum = invoice.invoiceNumber?.replace('REC-2026-', 'ID-') || invoice.studentId || '';
       const cleanNum = (invoice.studentId || invoice.invoiceNumber || '').replace(/\D/g, '');
       const numWithPad = cleanNum ? `ID-${cleanNum.padStart(3, '0')}` : '';
-      
-      const { data: stList } = await supabase
-        .from('students')
-        .select('id, student_number, full_name')
-        .eq('school_id', school.id);
 
-      if (stList && stList.length > 0) {
-        const matched = stList.find(
-          (s) =>
-            s.student_number === studentNum ||
-            s.student_number === numWithPad ||
-            s.student_number === invoice.invoiceNumber ||
-            (invoice.studentName && s.full_name?.toLowerCase() === invoice.studentName.toLowerCase())
-        );
-        if (matched) {
-          validStudentUUID = matched.id;
-        }
+      const candidates = [studentNum, numWithPad].filter(Boolean);
+      if (candidates.length > 0) {
+        const { data: foundRows } = await supabase
+          .from('students')
+          .select('id')
+          .eq('school_id', schoolId)
+          .in('student_number', candidates)
+          .limit(1);
+        if (foundRows && foundRows.length > 0) validStudentUUID = foundRows[0].id;
+      }
+
+      // Fallback par nom si toujours pas trouvé
+      if (!validStudentUUID && invoice.studentName) {
+        const { data: byNameRows } = await supabase
+          .from('students')
+          .select('id')
+          .eq('school_id', schoolId)
+          .ilike('full_name', invoice.studentName)
+          .limit(1);
+        if (byNameRows && byNameRows.length > 0) validStudentUUID = byNameRows[0].id;
       }
     }
 
     if (!validStudentUUID) {
-      console.warn('saveInvoiceToSupabase: impossible de lier la facture à un élève existant pour', invoice.invoiceNumber);
+      console.warn('saveInvoiceToSupabase: impossible de lier la facture à un élève pour', invoice.invoiceNumber);
       return false;
     }
 
     const payload: Record<string, any> = {
-      school_id: school.id,
+      school_id: schoolId,
       invoice_number: invoice.invoiceNumber,
       student_id: validStudentUUID,
       fee_type: invoice.feeType || "Frais d'inscription & Scolarité",
@@ -588,29 +610,44 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       status: invoice.status || 'draft',
     };
 
-    const { data: existingRows } = await supabase
-      .from('invoices')
-      .select('id')
-      .eq('school_id', school.id)
-      .eq('invoice_number', invoice.invoiceNumber);
-
-    let error = null;
-    if (existingRows && existingRows.length > 0) {
-      const primaryId = existingRows[0].id;
-      const res = await supabase.from('invoices').update(payload).eq('id', primaryId);
-      error = res.error;
-      if (existingRows.length > 1) {
-        const extraIds = existingRows.slice(1).map((r) => r.id);
-        await supabase.from('invoices').delete().in('id', extraIds);
-      }
-    } else {
-      const res = await supabase.from('invoices').insert(payload);
-      error = res.error;
+    // Vérifier si la facture existe déjà
+    let existingInvoiceId: string | null = null;
+    if (invoice.id && isUUID(invoice.id)) {
+      const { data: byId } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('id', invoice.id)
+        .limit(1);
+      if (byId && byId.length > 0) existingInvoiceId = byId[0].id;
     }
 
-    if (error) {
-      console.warn('saveInvoiceToSupabase warning:', error.message);
-      return false;
+    if (!existingInvoiceId && invoice.invoiceNumber) {
+      const { data: byNum } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('invoice_number', invoice.invoiceNumber)
+        .limit(1);
+      if (byNum && byNum.length > 0) existingInvoiceId = byNum[0].id;
+    }
+
+    if (existingInvoiceId) {
+      const { error: updateErr } = await supabase
+        .from('invoices')
+        .update(payload)
+        .eq('id', existingInvoiceId);
+      if (updateErr) {
+        console.warn('saveInvoiceToSupabase update warning:', updateErr.message);
+        return false;
+      }
+    } else {
+      const { error: insertErr } = await supabase
+        .from('invoices')
+        .insert(payload);
+      if (insertErr) {
+        console.warn('saveInvoiceToSupabase insert warning:', insertErr.message);
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -623,21 +660,37 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any[]> {
   if (!isSupabaseConfigured) return [];
   try {
-    const isPilot = schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
-    const slugs = isPilot ? ['epc-manoi', 'college-excellence'] : [schoolSlug];
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const slugs = [cleanSlug];
 
-    const { data: schools } = await supabase
-      .from('schools')
-      .select('id')
-      .in('slug', slugs);
+    // Utiliser le cache pour éviter des requêtes répétées sur schools
+    const schoolIds: string[] = [];
+    const missingSlugs: string[] = [];
+    for (const slug of slugs) {
+      const cached = schoolIdCache.get(slug);
+      if (cached) schoolIds.push(cached);
+      else missingSlugs.push(slug);
+    }
+    if (missingSlugs.length > 0) {
+      const { data: schools } = await supabase
+        .from('schools')
+        .select('id, slug')
+        .in('slug', missingSlugs);
+      if (schools) {
+        for (const s of schools) {
+          schoolIdCache.set(s.slug, s.id);
+          schoolIds.push(s.id);
+        }
+      }
+    }
 
-    if (!schools || schools.length === 0) return [];
-    const schoolIds = schools.map((s: any) => s.id);
+    if (schoolIds.length === 0) return [];
+    const schoolIds_ = schoolIds;
 
     const { data, error } = await supabase
       .from('staff_users')
       .select('*')
-      .in('school_id', schoolIds)
+      .in('school_id', schoolIds_)
       .neq('role_id', 'school_stamp')
       .order('created_at', { ascending: true });
 
@@ -679,16 +732,12 @@ export async function saveStaffUserToSupabase(staff: {
 }, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    const { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
-
-    if (!school) return false;
+    // Cache pour éviter la requête school répétée
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
 
     const payload = {
-      school_id: school.id,
+      school_id: schoolId,
       full_name: staff.fullName,
       email: staff.email,
       phone: staff.phone,
@@ -699,25 +748,31 @@ export async function saveStaffUserToSupabase(staff: {
       is_active: staff.status === 'Actif',
     };
 
-    const { data: existing } = await supabase
+    // Vérifier si le membre du personnel existe déjà
+    const { data: existingStaff } = await supabase
       .from('staff_users')
       .select('id')
-      .eq('school_id', school.id)
+      .eq('school_id', schoolId)
       .eq('auth_code', staff.authCode)
-      .maybeSingle();
+      .limit(1);
 
-    let error = null;
-    if (existing) {
-      const res = await supabase.from('staff_users').update(payload).eq('id', existing.id);
-      error = res.error;
+    if (existingStaff && existingStaff.length > 0) {
+      const { error: updateErr } = await supabase
+        .from('staff_users')
+        .update(payload)
+        .eq('id', existingStaff[0].id);
+      if (updateErr) {
+        console.warn('saveStaffUserToSupabase update warning:', updateErr.message);
+        return false;
+      }
     } else {
-      const res = await supabase.from('staff_users').insert(payload);
-      error = res.error;
-    }
-
-    if (error) {
-      console.warn('saveStaffUserToSupabase warning:', error.message);
-      return false;
+      const { error: insertErr } = await supabase
+        .from('staff_users')
+        .insert(payload);
+      if (insertErr) {
+        console.warn('saveStaffUserToSupabase insert warning:', insertErr.message);
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -729,18 +784,13 @@ export async function saveStaffUserToSupabase(staff: {
 export async function deleteStaffUserFromSupabase(authCode: string, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
-    const { data: school } = await supabase
-      .from('schools')
-      .select('id')
-      .eq('slug', schoolSlug)
-      .single();
-
-    if (!school) return false;
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
 
     const { error } = await supabase
       .from('staff_users')
       .delete()
-      .eq('school_id', school.id)
+      .eq('school_id', schoolId)
       .eq('auth_code', authCode);
 
     if (error) {

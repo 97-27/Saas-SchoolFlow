@@ -23,6 +23,15 @@ const STAFF_USERS_STORAGE_KEY = 'schoolflow_staff_users_v2';
 const VALIDATED_BULLETINS_KEY = 'schoolflow_validated_class_bulletins_v1';
 export const DOCS_STATUS_KEY = 'schoolflow_documents_status_v5';
 export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
+if (typeof window !== 'undefined') {
+  try {
+    localStorage.removeItem('schoolflow_registered_students_v1_college-excellence');
+    localStorage.removeItem('schoolflow_registered_invoices_v1_college-excellence');
+    localStorage.removeItem('schoolflow_school_settings_v1_college-excellence');
+    localStorage.removeItem('schoolflow_staff_users_v2_college-excellence');
+  } catch (e) {}
+}
+
 export const REALTIME_SYNC_CHANNEL_NAME = 'schoolflow_realtime_sync_v2';
 
 // ════════════════════════════════════════════════════════════════
@@ -74,7 +83,7 @@ let currentSseSlug = '';
 
 export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
-  const cleanSlug = slug || 'epc-manoi';
+  const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
   if (activeEventSource && currentSseSlug === cleanSlug) return;
 
   if (activeEventSource) {
@@ -103,7 +112,7 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           return; // Ignore les messages émis par cette même fenêtre
         }
 
-        const isPilot = cleanSlug === 'epc-manoi' || cleanSlug === 'college-excellence';
+        const isPilot = cleanSlug === 'epc-manoi';
 
         // 1. Nouvel élève & nouveau reçu enregistré par un collaborateur distant
         if (payload.action === 'student_registered' && payload.student) {
@@ -122,7 +131,6 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
           if (isPilot) {
             localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
-            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedStudents));
           }
 
           if (invoice) {
@@ -138,7 +146,6 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
             localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
             if (isPilot) {
               localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvoices));
             }
           }
 
@@ -166,7 +173,6 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
           if (isPilot) {
             localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-            localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvoices));
           }
 
           window.dispatchEvent(
@@ -177,11 +183,145 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
               },
             })
           );
+        } else if (payload.action === 'student_updated' && payload.student) {
+          // 3. Mise à jour d'un élève (frais, statut, classe, infos personnelles) par un collaborateur
+          const student: Student = payload.student;
+          const invoice: Invoice = payload.invoice;
+
+          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+          const rawSchool = localStorage.getItem(schoolKey);
+          const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+          const updatedStudents = prevSchool.map((s) =>
+            s.id === student.id || (s.studentNumber && s.studentNumber === student.studentNumber)
+              ? { ...s, ...student }
+              : s
+          );
+
+          localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
+          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+          if (isPilot) {
+            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
+          }
+
+          if (invoice) {
+            const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+            const rawInvSchool = localStorage.getItem(invSchoolKey);
+            const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+            const updatedInvoices = prevInvSchool.map((inv) =>
+              inv.id === invoice.id || (inv.invoiceNumber && inv.invoiceNumber === invoice.invoiceNumber)
+                ? { ...inv, ...invoice }
+                : inv
+            );
+
+            localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+            if (isPilot) {
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+            }
+          }
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'school_settings_updated' && payload.school) {
+          // 4. Mise à jour des paramètres de l'école (nom, contact, devise, etc.)
+          const schoolJson = JSON.stringify(payload.school);
+          localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${cleanSlug}`, schoolJson);
+          if (isPilot) {
+            localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, schoolJson);
+            localStorage.setItem('schoolflow_active_school_settings_v1', schoolJson);
+          }
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'staff_users_updated' && Array.isArray(payload.staffUsers)) {
+          // 5. Mise à jour du personnel et des accès
+          const staffJson = JSON.stringify(payload.staffUsers);
+          localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_${cleanSlug}`, staffJson);
+          if (isPilot) {
+            localStorage.setItem(STAFF_USERS_STORAGE_KEY, staffJson);
+          }
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'grades_portal_updated' && payload.portalStatus) {
+          // 6. Ouverture / Fermeture portail des notes
+          const portalJson = JSON.stringify(payload.portalStatus);
+          localStorage.setItem(`${GRADES_PORTAL_KEY}_${cleanSlug}`, portalJson);
+          localStorage.setItem(GRADES_PORTAL_KEY, portalJson);
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'transport_updated') {
+          if (payload.customTransportMap) {
+            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(payload.customTransportMap));
+          }
+          if (payload.monthlyPayments) {
+            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(payload.monthlyPayments));
+          }
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: { ...payload, isRemoteSync: true },
+            })
+          );
+        } else if (payload.action === 'canteen_updated') {
+          if (payload.customCanteenMap) {
+            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(payload.customCanteenMap));
+          }
+          if (payload.monthlyPayments) {
+            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+          }
+          if (payload.weeklyMenu) {
+            localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(payload.weeklyMenu));
+          }
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: { ...payload, isRemoteSync: true },
+            })
+          );
+        } else if (payload.action === 'boarding_updated') {
+          if (payload.customSubscriptions) {
+            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(payload.customSubscriptions));
+          }
+          if (payload.monthlyPayments) {
+            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+          }
+          if (payload.boardingCapacity !== undefined) {
+            localStorage.setItem(`schoolflow_boarding_capacity_${cleanSlug}`, payload.boardingCapacity.toString());
+          }
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: { ...payload, isRemoteSync: true },
+            })
+          );
         } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
-          // 3. Suppression propagée
+          // 7. Suppression propagée
           deleteLiveStudents(payload.deletedIds, cleanSlug);
         } else if (payload.action === 'force_store_refresh' && Array.isArray(payload.students)) {
-          // 4. Réinitialisation et alignement officiel forcé de tous les postes
+          // 8. Réinitialisation et alignement officiel forcé de tous les postes
           const students: Student[] = payload.students;
           const invoices: Invoice[] = payload.invoices || [];
 
@@ -190,7 +330,6 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
           if (isPilot) {
             localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(students));
-            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(students));
           }
 
           const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
@@ -198,7 +337,6 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(invoices));
           if (isPilot) {
             localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(invoices));
-            localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(invoices));
           }
 
           window.dispatchEvent(
@@ -284,7 +422,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
 
   try {
     const cleanSlug = schoolSlug || 'epc-manoi';
-    const isPilot = cleanSlug === 'epc-manoi' || cleanSlug === 'college-excellence';
+    const isPilot = cleanSlug === 'epc-manoi';
 
     // 0. Récupérer tous les élèves existants pour extraire l'intégralité de leurs identifiants (id, studentNumber, matricule)
     const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
@@ -337,7 +475,6 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
 
     if (isPilot) {
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(remainingSchool));
-      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(remainingSchool));
     }
 
     // 2. Filtrer et nettoyer le stockage local des factures / scolarités sur TOUTES les clés
@@ -362,7 +499,6 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
 
     if (isPilot) {
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(remainingInvSchool));
-      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(remainingInvSchool));
     }
 
     // 3. Supprimer immédiatement dans Supabase Cloud pour tous les appareils
@@ -455,13 +591,13 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
     syncSchoolDataWithServer(slug);
   });
 
-  // 2. Rafraîchissement d'arrière-plan modéré (toutes les 60s) pour préserver les quotas et éviter toute saturation
+  // 2. Rafraîchissement d'arrière-plan modéré (toutes les 5 minutes) pour préserver les quotas Postgres et éviter toute saturation
   if (activeSyncInterval) clearInterval(activeSyncInterval);
   activeSyncInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       syncSchoolDataWithServer(slug);
     }
-  }, 60000);
+  }, 300000); // 5 minutes au lieu de 60s pour réduire les requêtes Postgres
 }
 
 /**
@@ -479,7 +615,7 @@ export function syncSchoolDataWithServer(slug: string): void {
       if (result && result.success && result.data) {
         const data = result.data;
         let hasChanges = false;
-        const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+        const isPilot = slug === 'epc-manoi';
 
         // 1. Fusionner les identifiants supprimés depuis le serveur
         if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds) && data.deletedStudentIds.length > 0) {
@@ -519,7 +655,6 @@ export function syncSchoolDataWithServer(slug: string): void {
             localStorage.setItem(localSettingsKey, newStr);
             if (isPilot) {
               localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, newStr);
-              localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, newStr);
               localStorage.setItem('schoolflow_active_school_settings_v1', newStr);
             }
             hasChanges = true;
@@ -602,7 +737,6 @@ export function syncSchoolDataWithServer(slug: string): void {
             localStorage.setItem(STUDENTS_STORAGE_KEY, newStr);
             if (isPilot) {
               localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, newStr);
-              localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, newStr);
             }
             hasChanges = true;
           }
@@ -668,7 +802,6 @@ export function syncSchoolDataWithServer(slug: string): void {
             localStorage.setItem(INVOICES_STORAGE_KEY, newStr);
             if (isPilot) {
               localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, newStr);
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, newStr);
             }
             hasChanges = true;
           }
@@ -687,10 +820,47 @@ export function syncSchoolDataWithServer(slug: string): void {
             localStorage.setItem(STAFF_USERS_STORAGE_KEY, newStr);
             if (isPilot) {
               localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_epc-manoi`, newStr);
-              localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_college-excellence`, newStr);
             }
             hasChanges = true;
           }
+        }
+
+        // 6. Synchroniser Transport
+        if (data.transportSubscriptions) {
+          localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(data.transportSubscriptions));
+          hasChanges = true;
+        }
+        if (data.transportPayments) {
+          localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(data.transportPayments));
+          hasChanges = true;
+        }
+
+        // 7. Synchroniser Cantine
+        if (data.canteenSubscriptions) {
+          localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(data.canteenSubscriptions));
+          hasChanges = true;
+        }
+        if (data.canteenPayments) {
+          localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(data.canteenPayments));
+          hasChanges = true;
+        }
+        if (data.canteenWeeklyMenu) {
+          localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(data.canteenWeeklyMenu));
+          hasChanges = true;
+        }
+
+        // 8. Synchroniser Internat
+        if (data.boardingSubscriptions) {
+          localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(data.boardingSubscriptions));
+          hasChanges = true;
+        }
+        if (data.boardingPayments) {
+          localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(data.boardingPayments));
+          hasChanges = true;
+        }
+        if (data.boardingCapacity !== undefined) {
+          localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, data.boardingCapacity.toString());
+          hasChanges = true;
         }
 
         if (hasChanges) {
@@ -726,7 +896,7 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
       country: 'Côte d’Ivoire',
       district: 'Abidjan',
       ministryCode: '321119',
-      founderName: slug === 'epc-manoi' || slug === 'college-excellence' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur',
+      founderName: slug === 'epc-manoi' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur',
       directorName: 'LAWANI MOUHAMED',
       studiesDirectorName: 'Direction des Études',
       status: 'active',
@@ -753,17 +923,17 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
       }
     }
 
-    // 3. Si c'est l'école officielle par défaut (epc-manoi / college-excellence)
-    if (!raw && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+    // 3. Si c'est l'école officielle par défaut (epc-manoi)
+    if (!raw && (slug === 'epc-manoi')) {
       raw =
         localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`) ||
-        localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`) ||
+        
         localStorage.getItem('schoolflow_active_school_settings_v1');
     }
 
     if (raw) {
       const local = JSON.parse(raw);
-      const fallback = defaultSchool || mockSchools['epc-manoi'] || mockSchools['college-excellence'];
+      const fallback = defaultSchool || mockSchools['epc-manoi'] ;
       return {
         ...fallback,
         ...local,
@@ -773,7 +943,7 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
         name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
         shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
         founderName:
-          (slug === 'epc-manoi' || slug === 'college-excellence')
+          (slug === 'epc-manoi')
             ? 'LAWANI MOUSSA'
             : (local.founderName && !local.founderName.toUpperCase().includes('MOUHAMED')
                 ? local.founderName
@@ -883,9 +1053,8 @@ export function saveLiveSchool(school: School, targetSlug?: string): void {
       localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${school.slug}`, json);
     }
 
-    if (school.slug === 'epc-manoi' || school.slug === 'college-excellence' || activeSlug === 'epc-manoi' || activeSlug === 'college-excellence') {
+    if (school.slug === 'epc-manoi' || activeSlug === 'epc-manoi') {
       localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, json);
-      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`, json);
       localStorage.setItem('schoolflow_active_school_settings_v1', json);
     }
 
@@ -983,7 +1152,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // 2. Charger depuis la clé globale UNIQUEMENT pour l'établissement pilote (EPC MANOI)
     let globalStudents: Student[] = [];
     let fallbackStudents: Student[] = [];
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+    if (slug === 'epc-manoi') {
       const rawGlobal = localStorage.getItem(STUDENTS_STORAGE_KEY);
       globalStudents = rawGlobal ? JSON.parse(rawGlobal) : [];
 
@@ -996,6 +1165,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       ...schoolStudents,
       ...fallbackStudents,
       ...globalStudents,
+      ...(initialStudents || []),
     ];
 
     const seenIds = new Set<string>();
@@ -1053,7 +1223,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // Réconciliation automatique : si des factures locales existent sans objet élève correspondant, les réintégrer immédiatement
     try {
       const rawInvoicesSchool = localStorage.getItem(`${INVOICES_STORAGE_KEY}_${slug}`);
-      const isPilotSchool = slug === 'epc-manoi' || slug === 'college-excellence';
+      const isPilotSchool = slug === 'epc-manoi';
       const rawInvoicesGlobal = isPilotSchool ? localStorage.getItem(INVOICES_STORAGE_KEY) : null;
       const candidateInvoices: Invoice[] = [
         ...(rawInvoicesSchool ? JSON.parse(rawInvoicesSchool) : []),
@@ -1150,7 +1320,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 
     // Si le stockage n'a JAMAIS été initialisé (aucun enregistrement, premier lancement à froid)
     const hasExplicitRecord = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(STUDENTS_STORAGE_KEY) !== null);
-    if (!hasExplicitRecord && uniqueStudents.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+    if (!hasExplicitRecord && uniqueStudents.length === 0 && (slug === 'epc-manoi')) {
       const status = getSchoolSubscription('epc-manoi');
       if (!status.isDataReset) {
         for (const stu of initialStudents) {
@@ -1209,7 +1379,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
     // 3. Clés démo
     let fallbackInvoices: Invoice[] = [];
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+    if (slug === 'epc-manoi') {
       const rawManoi = localStorage.getItem(`${INVOICES_STORAGE_KEY}_epc-manoi`);
       const manoiInvoices: Invoice[] = rawManoi ? JSON.parse(rawManoi) : [];
       fallbackInvoices = manoiInvoices;
@@ -1219,6 +1389,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       ...schoolInvoices,
       ...fallbackInvoices,
       ...globalInvoices,
+      ...(initialInvoices || []),
     ];
 
     // Récupérer les élèves en direct pour synchroniser les métadonnées
@@ -1451,7 +1622,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
     // Fallback aux factures initiales uniquement si le stockage n'a JAMAIS été initialisé
     const hasInitializedInvoices = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(INVOICES_STORAGE_KEY) !== null);
-    if (!hasInitializedInvoices && uniqueInvoices.length === 0 && (slug === 'epc-manoi' || slug === 'college-excellence')) {
+    if (!hasInitializedInvoices && uniqueInvoices.length === 0 && (slug === 'epc-manoi')) {
       const status = getSchoolSubscription('epc-manoi');
       if (!status.isDataReset) {
         for (const inv of initialInvoices) {
@@ -1526,9 +1697,8 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     );
     localStorage.setItem(schoolKey, JSON.stringify([studentWithSlug, ...filteredSchool]));
 
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+    if (slug === 'epc-manoi') {
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify([studentWithSlug, ...filteredSchool]));
-      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify([studentWithSlug, ...filteredSchool]));
     }
 
     // 3. Sauvegarder la facture dans la clé globale
@@ -1550,9 +1720,8 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     );
     localStorage.setItem(invSchoolKey, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
 
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+    if (slug === 'epc-manoi') {
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
-      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
     }
 
     // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan (étudiant d'abord puis facture)
@@ -1614,9 +1783,8 @@ export function saveLivePaymentInvoice(invoice: Invoice, schoolSlug: string = 'e
     const updatedInvSchool = [invoiceWithSlug, ...filteredInvSchool];
     localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvSchool));
 
-    if (slug === 'epc-manoi' || slug === 'college-excellence') {
+    if (slug === 'epc-manoi') {
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvSchool));
-      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvSchool));
     }
 
     // 3. Synchronisation Supabase Cloud & API Serveur en arrière-plan
@@ -1679,9 +1847,8 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     ];
     localStorage.setItem(schoolKey, JSON.stringify(updatedSchool));
 
-    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+    if (schoolSlug === 'epc-manoi') {
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedSchool));
-      localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedSchool));
     }
 
     // 2. Mise à jour ou création de la facture correspondante
@@ -1783,14 +1950,13 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     ];
     localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
 
-    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+    if (schoolSlug === 'epc-manoi') {
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(nextInvSchool));
-      localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(nextInvSchool));
     }
 
     // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
     try {
-      const isPilot = !schoolSlug || schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence';
+      const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
       const BOARDING_KEY = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${schoolSlug}`;
       const CANTEEN_KEY = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${schoolSlug}`;
       const TRANSPORT_KEY = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${schoolSlug}`;
@@ -1951,7 +2117,7 @@ const LEGACY_MOCK_STAFF_IDS = new Set([
 ]);
 
 export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): StaffUser[] {
-  if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+  if (schoolSlug === 'epc-manoi') {
     return defaultStaffUsers;
   }
   const school = getLiveSchool(schoolSlug);
@@ -2002,7 +2168,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
   try {
     const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
     let raw = localStorage.getItem(storageKey);
-    if (!raw && (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence')) {
+    if (!raw && (schoolSlug === 'epc-manoi')) {
       raw = localStorage.getItem(STAFF_USERS_STORAGE_KEY);
     }
 
@@ -2028,11 +2194,11 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           const def = codeMap.get(u.authCode)!;
           let finalName = (u.fullName || def.fullName).replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
           if (def.roleId === 'fondateur') {
-            if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence' || finalName.toUpperCase().includes('MOUHAMED')) {
+            if (schoolSlug === 'epc-manoi' || finalName.toUpperCase().includes('MOUHAMED')) {
               finalName = 'LAWANI MOUSSA';
             }
           } else if (def.roleId === 'directeur') {
-            if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+            if (schoolSlug === 'epc-manoi') {
               finalName = 'LAWANI MOUHAMED';
             }
           }
@@ -2079,7 +2245,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
 
       const mergedList = Array.from(codeMap.values());
       localStorage.setItem(storageKey, JSON.stringify(mergedList));
-      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      if (schoolSlug === 'epc-manoi') {
         localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(mergedList));
       }
       return mergedList;
@@ -2095,7 +2261,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
       return { ...def, avatarUrl: pAvatar };
     });
     localStorage.setItem(storageKey, JSON.stringify(initialStaff));
-    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+    if (schoolSlug === 'epc-manoi') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(initialStaff));
     }
     return initialStaff;
@@ -2109,7 +2275,7 @@ export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc
   try {
     const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
     localStorage.setItem(storageKey, JSON.stringify(users));
-    if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+    if (schoolSlug === 'epc-manoi') {
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
     }
 
@@ -2768,7 +2934,6 @@ export function verifySchoolSubscriptionForLogin(
   // Établissement principal EPC MANOI & Espace de travail de Mouhamed toujours autorisé et actif
   if (
     schoolSlug === 'epc-manoi' ||
-    schoolSlug === 'college-excellence' ||
     !schoolSlug ||
     clean.includes('manoi') ||
     clean.includes('mohamed') ||
@@ -2870,7 +3035,7 @@ export function isSchoolDeleted(slug?: string): boolean {
     const deletedList: string[] = JSON.parse(rawDeleted);
     if (deletedList.includes('all')) return true;
     if (slug && deletedList.includes(slug)) return true;
-    if (deletedList.includes('epc-manoi') || deletedList.includes('college-excellence')) return true;
+    if (deletedList.includes('epc-manoi')) return true;
     return false;
   } catch (e) {
     return false;
@@ -3064,7 +3229,7 @@ export function resetSchoolData(
         },
       ];
       localStorage.setItem(storageStaffKey, JSON.stringify(onlyAdminStaff));
-      if (slug === 'epc-manoi' || slug === 'college-excellence') {
+      if (slug === 'epc-manoi') {
         localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(onlyAdminStaff));
       }
     }
@@ -3075,7 +3240,6 @@ export function resetSchoolData(
     status.lastResetAt = new Date().toISOString();
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${slug}`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
-    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
     // 14. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
@@ -3099,7 +3263,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     // 1. Ajouter aux écoles supprimées
     const rawDeleted = localStorage.getItem(DELETED_SCHOOLS_KEY);
     const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-    const updatedDeleted = Array.from(new Set([...prevDeleted, slug, 'epc-manoi', 'college-excellence', 'all']));
+    const updatedDeleted = Array.from(new Set([...prevDeleted, slug, 'epc-manoi', 'all']));
     localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(updatedDeleted));
 
     // 2. Supprimer toutes les données associées
@@ -3138,7 +3302,6 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem('schoolflow_documents_status_v5');
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
-    localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}college-excellence`);
     localStorage.removeItem('schoolflow_teachers_data_v2');
     localStorage.removeItem(`schoolflow_teachers_data_v2_${slug}`);
     localStorage.removeItem('schoolflow_teachers_v1');
@@ -3152,7 +3315,6 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     status.deletedAt = new Date().toISOString();
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${slug}`, JSON.stringify(status));
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
-    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}college-excellence`, JSON.stringify(status));
 
     // 4. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
@@ -3174,7 +3336,7 @@ export function restoreSchoolAccount(slug: string = 'epc-manoi'): void {
     const rawDeleted = localStorage.getItem(DELETED_SCHOOLS_KEY);
     if (rawDeleted) {
       const prevDeleted: string[] = JSON.parse(rawDeleted);
-      const filtered = prevDeleted.filter((s) => s !== slug && s !== 'epc-manoi' && s !== 'college-excellence' && s !== 'all');
+      const filtered = prevDeleted.filter((s) => s !== slug && s !== 'epc-manoi' && s !== 'all');
       localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(filtered));
     }
     const status = getSchoolSubscription(slug);
@@ -3335,3 +3497,120 @@ export function getAllStudentDocumentRecords(): Record<string, StudentDocumentRe
   }
 }
 
+
+/**
+ * Sauvegarde et diffuse en temps réel les souscriptions et paiements de transport
+ */
+export function saveLiveTransportData(
+  customTransportMap: any,
+  monthlyPayments: any,
+  schoolSlug: string = 'epc-manoi'
+): void {
+  if (typeof window === 'undefined') return;
+  const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  try {
+    localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(customTransportMap));
+    localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(monthlyPayments));
+
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        transportSubscriptions: customTransportMap,
+        transportPayments: monthlyPayments,
+      }),
+    }).catch(() => {});
+
+    broadcastLiveUpdate({
+      action: 'transport_updated',
+      customTransportMap,
+      monthlyPayments,
+      schoolSlug: slug,
+    });
+  } catch (e) {
+    console.error('Erreur saveLiveTransportData:', e);
+  }
+}
+
+/**
+ * Sauvegarde et diffuse en temps réel les souscriptions, paiements et menus de cantine
+ */
+export function saveLiveCanteenData(
+  customCanteenMap: any,
+  monthlyPayments: any,
+  weeklyMenu?: any,
+  schoolSlug: string = 'epc-manoi'
+): void {
+  if (typeof window === 'undefined') return;
+  const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  try {
+    localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(customCanteenMap));
+    localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(monthlyPayments));
+    if (weeklyMenu) {
+      localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(weeklyMenu));
+    }
+
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        canteenSubscriptions: customCanteenMap,
+        canteenPayments: monthlyPayments,
+        ...(weeklyMenu ? { canteenWeeklyMenu: weeklyMenu } : {}),
+      }),
+    }).catch(() => {});
+
+    broadcastLiveUpdate({
+      action: 'canteen_updated',
+      customCanteenMap,
+      monthlyPayments,
+      weeklyMenu,
+      schoolSlug: slug,
+    });
+  } catch (e) {
+    console.error('Erreur saveLiveCanteenData:', e);
+  }
+}
+
+/**
+ * Sauvegarde et diffuse en temps réel les souscriptions et paiements d'internat
+ */
+export function saveLiveBoardingData(
+  customSubscriptions: any,
+  monthlyPayments: any,
+  capacity?: number,
+  schoolSlug: string = 'epc-manoi'
+): void {
+  if (typeof window === 'undefined') return;
+  const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  try {
+    localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(customSubscriptions));
+    localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(monthlyPayments));
+    if (capacity !== undefined) {
+      localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, capacity.toString());
+    }
+
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        boardingSubscriptions: customSubscriptions,
+        boardingPayments: monthlyPayments,
+        ...(capacity !== undefined ? { boardingCapacity: capacity } : {}),
+      }),
+    }).catch(() => {});
+
+    broadcastLiveUpdate({
+      action: 'boarding_updated',
+      customSubscriptions,
+      monthlyPayments,
+      boardingCapacity: capacity,
+      schoolSlug: slug,
+    });
+  } catch (e) {
+    console.error('Erreur saveLiveBoardingData:', e);
+  }
+}

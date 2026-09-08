@@ -13,7 +13,7 @@ export function ComingSoon({
   title,
   description,
   moduleNumber,
-  schoolSlug = 'college-excellence',
+  schoolSlug = 'epc-manoi',
 }: ComingSoonProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[420px] p-6 sm:p-10 text-center bg-white rounded-2xl border border-slate-200/70 shadow-xs">

@@ -7,7 +7,7 @@ interface LoginPageProps {
 
 export default async function DirectLoginPage({ params }: LoginPageProps) {
   const resolvedParams = await params;
-  const school = mockSchools[resolvedParams.ecole] || mockSchools['college-excellence'];
+  const school = mockSchools[resolvedParams.ecole] || mockSchools['epc-manoi'];
 
   return <LoginView schoolSlug={resolvedParams.ecole} initialSchool={school} />;
 }

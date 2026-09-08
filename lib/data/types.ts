@@ -1,4 +1,4 @@
-export type InvoiceStatus = 'paid' | 'sent' | 'draft' | 'overdue' | 'partial';
+export type InvoiceStatus = 'paid' | 'sent' | 'draft' | 'overdue' | 'partial' | 'unpaid' | 'late' | 'pending';
 
 export interface InstallmentRecord {
   amount: number; // Montant versé en FCFA

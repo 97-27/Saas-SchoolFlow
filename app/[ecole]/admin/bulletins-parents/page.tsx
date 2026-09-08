@@ -9,7 +9,7 @@ export default async function ParentBulletinsPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <ParentBulletinsView

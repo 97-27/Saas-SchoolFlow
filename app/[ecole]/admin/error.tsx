@@ -13,7 +13,7 @@ export default function AdminError({
   reset: () => void;
 }) {
   const params = useParams();
-  const ecoleSlug = (params?.ecole as string) || 'college-excellence';
+  const ecoleSlug = (params?.ecole as string) || 'epc-manoi';
 
   useEffect(() => {
     console.error('Admin Module Error Boundary:', error);

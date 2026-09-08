@@ -12,7 +12,7 @@ export default async function DocumentsPage({
   const resolvedParams = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <DocumentsView

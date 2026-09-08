@@ -91,7 +91,7 @@ interface SalariesViewProps {
 }
 
 export function SalariesView({
-  schoolSlug = 'college-excellence',
+  schoolSlug = 'epc-manoi',
   initialSchool,
 }: SalariesViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(
@@ -164,7 +164,7 @@ export function SalariesView({
     setSalaries(newList);
     try {
       localStorage.setItem(`${STORAGE_KEY}_${schoolSlug}`, JSON.stringify(newList));
-      if (schoolSlug === 'epc-manoi' || schoolSlug === 'college-excellence') {
+      if (schoolSlug === 'epc-manoi' ) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
       }
       window.dispatchEvent(new Event(DATA_UPDATED_EVENT));

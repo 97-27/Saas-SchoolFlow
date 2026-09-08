@@ -5,7 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData } from '@/lib/data/live-store';
 import { saveStudentToSupabase, saveInvoiceToSupabase, deleteInvoiceFromSupabase } from '@/lib/supabase/services';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -237,12 +237,7 @@ export function BoardingView({
   // Sauvegarde persistante des paiements
   const savePaymentsToStorage = (updatedPayments: Record<string, Record<string, boolean>>) => {
     setMonthlyPayments(updatedPayments);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_PAYMENTS_KEY, JSON.stringify(updatedPayments));
-        window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'boarding_payment_updated' } }));
-      } catch (e) {}
-    }
+    saveLiveBoardingData(customSubscriptions, updatedPayments, boardingCapacity, schoolSlug);
   };
 
   // Sauvegarde persistante des souscriptions
@@ -261,12 +256,7 @@ export function BoardingView({
     }>
   ) => {
     setCustomSubscriptions(updatedSubs);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(BOARDING_SUBSCRIPTIONS_KEY, JSON.stringify(updatedSubs));
-        window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'boarding_subscription_updated' } }));
-      } catch (e) {}
-    }
+    saveLiveBoardingData(updatedSubs, monthlyPayments, boardingCapacity, schoolSlug);
   };
 
   // Pensionnaires unifiés : Inscriptions avec option Internat + Souscriptions directes

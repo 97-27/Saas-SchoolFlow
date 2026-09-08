@@ -10,7 +10,7 @@ interface ParametresPageProps {
 export default async function ParametresPage({ params }: ParametresPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <div className="space-y-6 pb-12">

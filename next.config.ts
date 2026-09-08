@@ -5,6 +5,20 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  async redirects() {
+    return [
+      {
+        source: '/college-excellence',
+        destination: '/epc-manoi/admin',
+        permanent: true,
+      },
+      {
+        source: '/college-excellence/:path*',
+        destination: '/epc-manoi/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

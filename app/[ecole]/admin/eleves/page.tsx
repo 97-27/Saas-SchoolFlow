@@ -9,7 +9,7 @@ interface ElevesPageProps {
 export default async function ElevesPage({ params }: ElevesPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['college-excellence'];
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
 
   return (
     <div className="pb-12">

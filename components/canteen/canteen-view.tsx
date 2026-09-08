@@ -5,7 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveCanteenData } from '@/lib/data/live-store';
 import { deleteInvoiceFromSupabase } from '@/lib/supabase/services';
 import {
   UtensilsCrossed,
@@ -174,6 +174,16 @@ export function CanteenView({
       setStudents(getLiveStudents(mockStudents, schoolSlug));
       setInvoices(getLiveInvoices([], schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      if (typeof window !== 'undefined') {
+        try {
+          const savedPayments = localStorage.getItem(CANTEEN_PAYMENTS_KEY);
+          if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
+          const savedCustom = localStorage.getItem(CANTEEN_SUBSCRIPTIONS_KEY);
+          if (savedCustom) setCustomDietMap(JSON.parse(savedCustom));
+          const savedMenu = localStorage.getItem(CANTEEN_MENU_KEY);
+          if (savedMenu) setWeeklyMenu(JSON.parse(savedMenu));
+        } catch (e) {}
+      }
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -367,11 +377,7 @@ export function CanteenView({
     };
 
     setCustomDietMap(nextMap);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
-      } catch (e) {}
-    }
+    saveLiveCanteenData(nextMap, monthlyPayments, undefined, schoolSlug);
   };
 
   // Basculer un mois pour l'élève en édition
@@ -419,13 +425,7 @@ export function CanteenView({
       },
     };
     setCustomDietMap(nextCustom);
-
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(CANTEEN_PAYMENTS_KEY, JSON.stringify(nextPayments));
-        localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextCustom));
-      } catch (e) {}
-    }
+    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug);
 
     // Synchronisation de la quittance / facture de cantine dans le journal des encaissements
     const paidMonths = Object.keys(selectedStudentForMonths.monthsState || {}).filter(
@@ -512,9 +512,18 @@ export function CanteenView({
       } catch (e) {}
     }
 
-    // Créer la transaction de cantine pour Septembre
+    // Créer la transaction de cantine pour Septembre et mettre à jour le statut élève
     const targetStu = students.find((s) => s.id === newSubStudentId);
     if (targetStu) {
+      const updatedStu = {
+        ...targetStu,
+        isCanteen: true,
+        address: targetStu.address?.includes('Cantine (Oui)')
+          ? targetStu.address
+          : `${targetStu.address || ''} | Cantine (Oui)`.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      updateRegisteredStudent(updatedStu, schoolSlug);
       const todayStr = new Date().toISOString().split('T')[0];
       const paidAmt = Math.max(0, rate - discount);
       const totalExigible = (rate * 9) - discount;
@@ -545,6 +554,7 @@ export function CanteenView({
       saveLivePaymentInvoice(canteenInvoice, schoolSlug);
     }
 
+    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug);
     setIsNewSubModalOpen(false);
     setToastMessage('✓ Nouvelle souscription à la cantine enregistrée avec succès.');
     setTimeout(() => setToastMessage(null), 4000);
@@ -588,11 +598,7 @@ export function CanteenView({
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];
       setMonthlyPayments(nextPayments);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(CANTEEN_PAYMENTS_KEY, JSON.stringify(nextPayments));
-        } catch (e) {}
-      }
+      saveLiveCanteenData(nextMap, nextPayments, undefined, schoolSlug);
 
       // d. Supprimer les factures/quittances de cantine
       const invoiceId = `inv-canteen-${studentId}`;

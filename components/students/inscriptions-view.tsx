@@ -54,7 +54,7 @@ interface InscriptionsViewProps {
 export function InscriptionsView({
   initialStudents,
   school,
-  schoolSlug = 'college-excellence',
+  schoolSlug = 'epc-manoi',
 }: InscriptionsViewProps) {
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(schoolSlug, school));
@@ -508,7 +508,7 @@ export function InscriptionsView({
   const isSubmitAllowed = formValidation.isAllComplete;
 
   // Clé de persistance du brouillon du formulaire d'inscription (sessionStorage + localStorage)
-  const draftStorageKey = `schoolflow_inscription_draft_${schoolSlug || 'college-excellence'}`;
+  const draftStorageKey = `schoolflow_inscription_draft_${schoolSlug || 'epc-manoi'}`;
   const isDraftHydrated = useRef(false);
 
   // 1. Restaurer le brouillon lors du chargement ou de la navigation vers la page

@@ -50,19 +50,19 @@ export function StudentTable({
   schoolSlug,
   academicYear: propAcademicYear,
   schoolName: propSchoolName,
-  school = mockSchools['college-excellence'],
+  school = mockSchools['epc-manoi'],
 }: StudentTableProps) {
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
   const [currentSchool, setCurrentSchool] = useState<School>(() =>
-    getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
+    getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['epc-manoi'])
   );
 
   useEffect(() => {
     const handleUpdate = () => {
       setStudents(getLiveStudents(initialStudents, schoolSlug));
       setCurrentSchool(
-        getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['college-excellence'])
+        getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['epc-manoi'])
       );
     };
     handleUpdate();
