@@ -462,6 +462,39 @@
         "isBoarding": true,
         "notes": "",
         "updatedAt": "2026-09-08T07:40:45.730Z"
+      },
+      {
+        "id": "5403c5e0-f2bb-482d-ac6f-a8443c038da3",
+        "studentNumber": "ID-015",
+        "matricule": "",
+        "firstName": "Mouthmainat Adesewa",
+        "lastName": "ADENIYI",
+        "fullName": "ADENIYI Mouthmainat Adesewa",
+        "grade": "CP2",
+        "gender": "female",
+        "avatar": "",
+        "dateOfBirth": "2015-05-12",
+        "address": "Bouake",
+        "guardianName": "Mr Adeniyi",
+        "guardianPhone": "+225 05 64 13 51 48",
+        "whatsappPhone": "+225 05 64 13 51 48",
+        "secondaryPhones": [],
+        "enrollmentType": "nouveau",
+        "registrationFee": 25000,
+        "tuitionAmount": 60000,
+        "discountAmount": 0,
+        "netAmount": 60000,
+        "paidAmount": 0,
+        "balanceRemaining": 60000,
+        "tuitionStatus": "unpaid",
+        "attendanceRate": 95,
+        "status": "active",
+        "enrollmentDate": "2026-09-07",
+        "paymentDate": "2026-09-07",
+        "installments": {},
+        "isBoarding": true,
+        "notes": "",
+        "updatedAt": "2026-09-08T07:40:45.867Z"
       }
     ],
     "invoices": [
@@ -1141,15 +1174,9 @@
     "deletedStudentIds": [
       "ID-2026002",
       "MAT-2026",
-      "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e",
-      "stu-016",
-      "ID-016",
-      "stu-017",
-      "ID-017",
-      "5403c5e0-f2bb-482d-ac6f-a8443c038da3",
-      "ID-015"
+      "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e"
     ],
-    "updatedAt": "2026-09-08T19:15:12.734Z",
+    "updatedAt": "2026-09-08T21:50:10.455Z",
     "slug": "epc-manoi"
   }
 }

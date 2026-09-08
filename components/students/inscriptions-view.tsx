@@ -163,9 +163,9 @@ export function InscriptionsView({
   // Form State for Live Inscription & Real-Time Receipt (Cases vides par défaut pour une nouvelle inscription)
   const [lastName, setLastName] = useState('');
   const [firstName, setFirstName] = useState('');
-  const [gender, setGender] = useState<'female' | 'male'>('female');
-  const [grade, setGrade] = useState('6ème');
-  const [enrollmentType, setEnrollmentType] = useState<'nouveau' | 'ancien'>('nouveau');
+  const [gender, setGender] = useState<'female' | 'male' | ''>('');
+  const [grade, setGrade] = useState('');
+  const [enrollmentType, setEnrollmentType] = useState<'nouveau' | 'ancien' | ''>('');
   const [address, setAddress] = useState('');
   const [guardianName, setGuardianName] = useState('');
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -454,7 +454,6 @@ export function InscriptionsView({
   const formValidation = useMemo(() => {
     const isNomValid = Boolean(lastName.trim());
     const isPrenomValid = Boolean(firstName.trim());
-    const isMatriculeValid = true;
     const isGenreValid = Boolean(gender);
     const isClasseValid = Boolean(grade && grade.trim());
     const isStatutValid = Boolean(enrollmentType);
@@ -475,6 +474,9 @@ export function InscriptionsView({
     const missingFields: string[] = [];
     if (!isNomValid) missingFields.push('Nom de l’élève');
     if (!isPrenomValid) missingFields.push('Prénom de l’élève');
+    if (!isGenreValid) missingFields.push('Genre (Fille ou Garçon)');
+    if (!isClasseValid) missingFields.push('Classe demandée');
+    if (!isStatutValid) missingFields.push('Statut de l’élève (Nouveau ou Ancien)');
     if (!isParentValid) missingFields.push('Nom du Parent / Tuteur');
     if (!isWhatsappValid) missingFields.push('Contact WhatsApp Parent');
     if (!isAdresseValid) missingFields.push('Adresse de résidence');
@@ -483,7 +485,6 @@ export function InscriptionsView({
       isAllComplete,
       isNomValid,
       isPrenomValid,
-      isMatriculeValid,
       isGenreValid,
       isClasseValid,
       isStatutValid,
@@ -762,9 +763,9 @@ export function InscriptionsView({
     setInitialVersementsSnapshot(null);
     setLastName('');
     setFirstName('');
-    setGender('female');
-    setGrade('6ème');
-    setEnrollmentType('nouveau');
+    setGender('' as any);
+    setGrade('');
+    setEnrollmentType('' as any);
     setAddress('');
     setGuardianName('');
     setWhatsappPhone('');
@@ -2558,6 +2559,7 @@ export function InscriptionsView({
                   onChange={(e) => setGrade(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold cursor-pointer transition-all"
                 >
+                  <option value="">-- Sélectionner la classe * --</option>
                   {availableClasses
                     .filter((c) => c !== 'Toutes les classes')
                     .map((c) => (
@@ -3080,7 +3082,6 @@ export function InscriptionsView({
                     {[
                       { label: 'Nom', valid: formValidation.isNomValid },
                       { label: 'Prénom', valid: formValidation.isPrenomValid },
-                      { label: 'Matricule', valid: formValidation.isMatriculeValid },
                       { label: 'Genre', valid: formValidation.isGenreValid },
                       { label: 'Classe', valid: formValidation.isClasseValid },
                       { label: 'Statut', valid: formValidation.isStatutValid },
@@ -3308,9 +3309,9 @@ export function InscriptionsView({
               </div>
 
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
-                <span className="text-slate-500">Prestations & Services :</span>
+                <span className="text-slate-500">Autres frais :</span>
                 <span className="font-semibold text-slate-800 text-right">
-                  Internat : {isBoarding ? 'Oui (Interne)' : 'Non (Externe)'} • Cantine : {isCanteen ? 'Oui ✓' : 'Non ✕'} • Transport : {isTransport ? 'Oui ✓' : 'Non ✕'} • Frais Annexes ({fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}) • Tenue ({tenueCousuePaid ? 'Payé ✓' : 'Non payé ✕'})
+                  Frais Annexes ({fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}) • Tenue tout cousu ({tenueCousuePaid ? 'Payé ✓' : 'Non payé ✕'})
                 </span>
               </div>
 

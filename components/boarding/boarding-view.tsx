@@ -304,7 +304,12 @@ export function BoardingView({
         if (foundStudent.studentNumber) seenNumbers.add(foundStudent.studentNumber);
         if (foundStudent.matricule) seenNumbers.add(foundStudent.matricule);
 
-        const studentMonths = monthlyPayments[cs.studentId] || (foundStudent.id ? monthlyPayments[foundStudent.id] : {}) || {};
+        const studentMonths =
+          monthlyPayments[cs.studentId] ||
+          (foundStudent?.id ? monthlyPayments[foundStudent.id] : {}) ||
+          (foundStudent?.studentNumber ? monthlyPayments[foundStudent.studentNumber] : {}) ||
+          (cs.matricule ? monthlyPayments[cs.matricule] : {}) ||
+          {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
         const rate = cs.monthlyRate || 50000;
         const totalPaid = paidMonthsCount * rate;
@@ -344,9 +349,14 @@ export function BoardingView({
         if (s.studentNumber) seenNumbers.add(s.studentNumber);
         if (s.matricule) seenNumbers.add(s.matricule);
 
-        const studentMonths = monthlyPayments[s.id] || (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) || {};
+        const studentMonths =
+          monthlyPayments[s.id] ||
+          (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) ||
+          (s.matricule ? monthlyPayments[s.matricule] : {}) ||
+          {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const rate = 50000;
+        const sub = customSubscriptions.find((cs) => cs.studentId === s.id || cs.studentId === s.studentNumber || (s.matricule && cs.matricule === s.matricule));
+        const rate = sub?.monthlyRate || 50000;
         const totalPaid = paidMonthsCount * rate;
         const totalDue = rate * 9;
         const remainingBalance = Math.max(0, totalDue - totalPaid);
@@ -669,6 +679,12 @@ export function BoardingView({
       ...monthlyPayments,
       [targetStudentId]: activeMonthsChecked,
     };
+    if (matchedExistingStudent?.studentNumber) {
+      updatedPayments[matchedExistingStudent.studentNumber] = activeMonthsChecked;
+    }
+    if (formMatricule.trim()) {
+      updatedPayments[formMatricule.trim()] = activeMonthsChecked;
+    }
     savePaymentsToStorage(updatedPayments);
 
     // 2. Mettre à jour / ajouter dans customSubscriptions
@@ -1470,7 +1486,21 @@ export function BoardingView({
 
   // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai - 100 Places Max)
   const totalBoarders = boarders.length;
-  const totalCollected = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
+  const totalCollected = useMemo(() => {
+    let sum = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
+    Object.entries(monthlyPayments).forEach(([id, months]) => {
+      const alreadyInBoarders = boarders.some(
+        (b) => b.student.id === id || b.student.studentNumber === id || (b.student.matricule && b.student.matricule === id)
+      );
+      if (!alreadyInBoarders && months && typeof months === 'object') {
+        const count = MONTHS_LIST.filter((m) => (months as any)[m]).length;
+        const sub = customSubscriptions.find((c) => c.studentId === id || c.matricule === id);
+        const rate = sub?.monthlyRate || 50000;
+        sum += count * rate;
+      }
+    });
+    return sum;
+  }, [boarders, monthlyPayments, customSubscriptions]);
   const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
   const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
   const girlsCount = boarders.filter((b) => b.student.gender === 'female' || (b.student.gender as any) === 'F').length;

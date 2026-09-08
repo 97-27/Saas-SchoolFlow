@@ -707,21 +707,16 @@ export function syncSchoolDataWithServer(slug: string): void {
             }
             const key = localStu.studentNumber || localStu.id;
             if (!studentMap.has(key)) {
-              // Si le serveur a renvoyé la liste officielle, on ne conserve un élève local non répertorié
-              // que s'il est expressément en attente de synchronisation active
-              const isPending = (localStu as any).isPendingSync === true;
-              if (isPending) {
-                studentMap.set(key, localStu);
-                hasLocalNewStudents = true;
-              }
+              // Conserver impérativement l'élève créé ou modifié localement
+              studentMap.set(key, localStu);
+              hasLocalNewStudents = true;
             } else {
               // Élève déjà présent : si la version locale a un updatedAt plus récent, conserver la version locale
               const incomingStu = studentMap.get(key)!;
               const localTime = localStu.updatedAt ? new Date(localStu.updatedAt).getTime() : 0;
               const incomingTime = incomingStu.updatedAt ? new Date(incomingStu.updatedAt).getTime() : 0;
-              if (localTime > incomingTime) {
+              if (localTime >= incomingTime) {
                 studentMap.set(key, { ...incomingStu, ...localStu });
-                hasLocalNewStudents = true;
               }
             }
           });
@@ -794,11 +789,12 @@ export function syncSchoolDataWithServer(slug: string): void {
             }
             const key = localInv.invoiceNumber || localInv.id;
             if (!invoiceMap.has(key)) {
-              const isPending = (localInv as any).isPendingSync === true;
-              if (isPending) {
-                invoiceMap.set(key, localInv);
-                hasLocalNewInvoices = true;
-              }
+              // Conserver impérativement la facture créée localement
+              invoiceMap.set(key, localInv);
+              hasLocalNewInvoices = true;
+            } else {
+              const incomingInv = invoiceMap.get(key)!;
+              invoiceMap.set(key, { ...incomingInv, ...localInv });
             }
           });
 

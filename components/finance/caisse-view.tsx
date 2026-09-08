@@ -260,8 +260,8 @@ export function CaisseView({
         </div>
       </div>
 
-      {/* 2. LES 3 BLOCS KPI RÉORGANISÉS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+      {/* 2. LES 2 BLOCS KPI ENCAISSEMENTS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         {/* BLOC 1 : TOTAL ENCAISSÉ EN CAISSE (ESPÈCES) */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div>
@@ -311,34 +311,6 @@ export function CaisseView({
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
             <span>Transactions numériques</span>
             <span className="font-semibold text-blue-800">{enLigneCount} transactions</span>
-          </div>
-        </div>
-
-        {/* BLOC 3 : RESTE À PERCEVOIR (SOMME RESTANTE EN FCFA CALCULÉE) */}
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between bg-rose-50/15">
-          <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 shadow-xs">
-                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-rose-900 font-sans truncate">
-                Reste à Percevoir
-              </h3>
-            </div>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-2xl sm:text-3xl font-extrabold text-rose-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(totalScolariteEnRetard)}
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Somme restante à payer sur les dossiers élèves
-            </p>
-          </div>
-          <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-rose-700 font-medium flex items-center justify-between">
-            <span>Élèves avec solde restant</span>
-            <span className="font-bold bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
-              {unpaidCount} élèves
-            </span>
           </div>
         </div>
       </div>

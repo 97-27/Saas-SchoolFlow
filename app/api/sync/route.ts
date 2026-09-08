@@ -218,6 +218,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Si des élèves sont envoyés pour enregistrement, s'assurer qu'aucun d'eux n'est bloqué par existingDeleted
+    if (Array.isArray(students)) {
+      const activeIds = new Set<string>();
+      students.forEach((s: any) => {
+        if (s.id) activeIds.add(s.id);
+        if (s.studentNumber) activeIds.add(s.studentNumber);
+        if (s.matricule) activeIds.add(s.matricule);
+      });
+      existingDeleted = existingDeleted.filter((id) => !activeIds.has(id));
+    }
+
     const delSet = new Set(existingDeleted);
     let cleanStudents = Array.isArray(students)
       ? students.filter((s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule))
