@@ -164,38 +164,75 @@ export function DashboardView({
     const returningBoys = returningStudentsList.filter((s) => s.gender === 'male').length;
     const returningPct = totalCount > 0 ? ((returningCount / totalCount) * 100).toFixed(1) : '0';
 
-    let boardingSubsSet = new Set<string>();
+    const seenBoarderKeys = new Set<string>();
+    let boardingCount = 0;
+    let boardingGirls = 0;
+    let boardingBoys = 0;
+
     if (typeof window !== 'undefined') {
       try {
-        const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+        const deletedIds = getDeletedStudentIds();
+        const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem(`schoolflow_boarding_subscriptions_v3_${cleanSlug}`);
         if (rawBoarding) {
           const subs: any[] = JSON.parse(rawBoarding);
           subs.forEach((b) => {
-            if (b.studentId) boardingSubsSet.add(b.studentId);
-            if (b.matricule) boardingSubsSet.add(b.matricule);
+            if (!deletedIds.has(b.studentId) && !(b.matricule && deletedIds.has(b.matricule))) {
+              const key = b.studentId || b.matricule || b.studentName;
+              if (key && !seenBoarderKeys.has(key)) {
+                seenBoarderKeys.add(key);
+                boardingCount++;
+                if (b.gender === 'F') boardingGirls++;
+                else boardingBoys++;
+              }
+            }
           });
         }
       } catch (e) {}
     }
 
-    const boardingList = students.filter(
-      (s) =>
-        s.isBoarding ||
-        s.notes?.toLowerCase().includes('internat (oui)') ||
-        s.address?.toLowerCase().includes('internat (oui)') ||
-        boardingSubsSet.has(s.id) ||
-        (s.studentNumber && boardingSubsSet.has(s.studentNumber)) ||
-        (s.matricule && boardingSubsSet.has(s.matricule))
-    );
-    const boardingCount = boardingList.length;
-    const boardingGirls = boardingList.filter((s) => s.gender === 'female').length;
-    const boardingBoys = boardingList.filter((s) => s.gender === 'male').length;
+    students.forEach((s) => {
+      const isBoarder = s.isBoarding || s.notes?.toLowerCase().includes('internat (oui)') || s.address?.toLowerCase().includes('internat (oui)');
+      if (isBoarder) {
+        const key = s.id || s.studentNumber || s.fullName;
+        if (key && !seenBoarderKeys.has(key) && !seenBoarderKeys.has(s.studentNumber) && !seenBoarderKeys.has(s.matricule)) {
+          seenBoarderKeys.add(key);
+          boardingCount++;
+          if (s.gender === 'female') boardingGirls++;
+          else boardingBoys++;
+        }
+      }
+    });
 
-    // Calculs financiers réels
-    const totalCollected = invoices.reduce(
+    // Calculs financiers réels (Factures + paiements directs d'internat consolidés)
+    let totalCollected = invoices.reduce(
       (acc, inv) => acc + (inv.paidAmount || 0),
       0
     );
+
+    if (typeof window !== 'undefined') {
+      try {
+        const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+        const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+        if (rawBoardingPay && rawBoardingSubs) {
+          const monthlyPayments: Record<string, Record<string, boolean>> = JSON.parse(rawBoardingPay);
+          const subs: Array<{ studentId: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
+          const rateMap = new Map<string, number>();
+          subs.forEach((sub) => rateMap.set(sub.studentId, sub.monthlyRate || 50000));
+
+          const invoiceStudentIdsWithBoarding = new Set(
+            invoices.filter((i) => i.feeType?.toLowerCase().includes('internat') || i.id?.includes('boarding')).map((i) => i.studentId)
+          );
+
+          Object.entries(monthlyPayments).forEach(([stuId, months]) => {
+            if (!invoiceStudentIdsWithBoarding.has(stuId)) {
+              const paidCount = Object.values(months).filter(Boolean).length;
+              const rate = rateMap.get(stuId) || 50000;
+              totalCollected += paidCount * rate;
+            }
+          });
+        }
+      } catch (e) {}
+    }
 
     const totalOverdue = invoices.reduce((acc, inv) => {
       if (typeof inv.balanceRemaining === 'number') {

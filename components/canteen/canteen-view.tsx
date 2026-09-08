@@ -1216,7 +1216,7 @@ export function CanteenView({
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Réduction / Remise (FCFA)</label>
+                <label className="font-bold text-slate-700 block">Réduction / Remise</label>
                 <input
                   type="number"
                   value={selectedStudentForMonths.discountAmount || 0}
@@ -1313,7 +1313,7 @@ export function CanteenView({
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>Enregistrer les Cotisations & Tarif</span>
+                <span>Enregistrer le tarif</span>
               </button>
             </div>
           </div>
@@ -1409,7 +1409,7 @@ export function CanteenView({
                     Service Demi-Pension
                   </span>
                   <span className="font-extrabold font-heading text-xs sm:text-sm">
-                    REÇU DE COTISATION CANTINE SCOLAIRE
+                    REÇU OFFICIEL DE CANTINE SCOLAIRE
                   </span>
                 </div>
                 <div className="text-right">
@@ -1450,7 +1450,7 @@ export function CanteenView({
                   <tbody className="divide-y divide-slate-100 text-slate-800">
                     <tr>
                       <td className="py-2 px-3">
-                        <div className="font-bold text-slate-900">Cotisations Cantine Mensuelle</div>
+                        <div className="font-bold text-slate-900">Cantine Scolaire Mensuelle</div>
                         <div className="text-[10px] text-slate-400">
                           Tarif : {formatFCFA(selectedStudentForReceipt.monthlyRate)} / mois
                         </div>

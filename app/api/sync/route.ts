@@ -89,8 +89,15 @@ export async function GET(request: NextRequest) {
         if (sbInvoices !== null && Array.isArray(sbInvoices)) {
           schoolData.invoices = sbInvoices;
         }
-        if (sbStaff !== null && Array.isArray(sbStaff)) {
-          schoolData.staffUsers = sbStaff;
+        if (sbStaff !== null && Array.isArray(sbStaff) && sbStaff.length > 0) {
+          const staffMap = new Map<string, any>();
+          (schoolData.staffUsers || []).forEach((u: any) => {
+            if (u && u.authCode) staffMap.set(u.authCode.toUpperCase(), u);
+          });
+          sbStaff.forEach((u: any) => {
+            if (u && u.authCode) staffMap.set(u.authCode.toUpperCase(), { ...staffMap.get(u.authCode.toUpperCase()), ...u });
+          });
+          schoolData.staffUsers = Array.from(staffMap.values());
         }
         memoryStore[slug] = schoolData;
       } catch (sbErr) {

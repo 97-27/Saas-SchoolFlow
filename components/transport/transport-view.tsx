@@ -118,6 +118,50 @@ export function TransportView({
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
+  // Lignes et circuits de transport personnalisables par l'établissement
+  const [customLines, setCustomLines] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`schoolflow_transport_lines_${schoolSlug}`);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [
+      'Ligne 1 : Abobo Gare - Carrefour Diallo - Établissement',
+      'Ligne 2 : Angré 8e Tranche - Petro Ivoire - Établissement',
+      'Ligne 3 : Riviera Palmeraie - Rond-point Faya',
+      'Ligne 4 : Plateau Dokui - Abobo Samaké',
+    ];
+  });
+  const [newLineName, setNewLineName] = useState('');
+
+  const handleAddCustomLine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newLineName.trim()) return;
+    const updated = [...customLines, newLineName.trim()];
+    setCustomLines(updated);
+    setNewLineName('');
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`schoolflow_transport_lines_${schoolSlug}`, JSON.stringify(updated));
+      } catch (e) {}
+    }
+    setToastMessage(`✓ Ligne « ${newLineName.trim()} » ajoutée avec succès !`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleDeleteCustomLine = (indexToDelete: number) => {
+    const updated = customLines.filter((_, idx) => idx !== indexToDelete);
+    setCustomLines(updated);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`schoolflow_transport_lines_${schoolSlug}`, JSON.stringify(updated));
+      } catch (e) {}
+    }
+    setToastMessage('✓ Ligne supprimée.');
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   // Synchronisation des élèves et des factures/quittances
   useEffect(() => {
     const activeSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
@@ -843,32 +887,41 @@ export function TransportView({
           </div>
         </div>
 
-        {/* Card 3 : Flotte & Sécurité */}
+        {/* Card 3 : Flotte & Lignes de Transport */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/70 shadow-xs hover:shadow-md transition-all flex flex-col justify-between bg-amber-50/15">
           <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 shadow-xs">
-                <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 shadow-xs">
+                  <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-amber-900 font-sans truncate">
+                  Flotte & Lignes de Transport
+                </h3>
               </div>
-              <h3 className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-amber-900 font-sans truncate">
-                Flotte de Cars Scolaires
-              </h3>
+              <button
+                type="button"
+                onClick={() => setIsItinerairesModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 transition-all cursor-pointer"
+              >
+                + Gérer les lignes
+              </button>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-amber-900 tracking-tight font-heading whitespace-nowrap">
-                {subscribers.length === 0 ? '0 Ligne configurée' : '4 Lignes Actives'}
+                {customLines.length === 0 ? '0 Ligne configurée' : `${customLines.length} Ligne${customLines.length > 1 ? 's' : ''} Active${customLines.length > 1 ? 's' : ''}`}
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              {subscribers.length === 0
-                ? 'Aucune ligne active pour le moment — Cliquez sur Itinéraires pour configurer vos circuits.'
-                : 'Cars climatisés, géolocalisés avec accompagnatrices'}
+              {customLines.length === 0
+                ? 'Aucune ligne configurée — Cliquez sur « Gérer les lignes » pour ajouter vos circuits.'
+                : 'Lignes personnalisées par l’établissement avec circuits dédiés.'}
             </p>
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-amber-800 font-medium flex items-center justify-between">
-            <span>Contrôle technique</span>
+            <span>Configuration des circuits</span>
             <span className="font-bold">
-              {subscribers.length === 0 ? 'En attente' : '✓ À jour & Certifié'}
+              {customLines.length > 0 ? '✓ Personnalisée & Active' : 'À définir'}
             </span>
           </div>
         </div>
@@ -1157,7 +1210,7 @@ export function TransportView({
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Réduction / Remise (FCFA)</label>
+                <label className="font-bold text-slate-700 block">Réduction / Remise</label>
                 <input
                   type="number"
                   value={selectedStudentForMonths.discountAmount || 0}
@@ -1254,7 +1307,7 @@ export function TransportView({
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>Enregistrer les Cotisations & Tarif</span>
+                <span>Enregistrer le tarif</span>
               </button>
             </div>
           </div>
@@ -1350,7 +1403,7 @@ export function TransportView({
                     Service Transport Scolaire
                   </span>
                   <span className="font-extrabold font-heading text-xs sm:text-sm">
-                    REÇU DE COTISATION NAVETTES SCOLAIRES
+                    REÇU OFFICIEL DE TRANSPORT SCOLAIRE
                   </span>
                 </div>
                 <div className="text-right">
@@ -1391,7 +1444,7 @@ export function TransportView({
                   <tbody className="divide-y divide-slate-100 text-slate-800">
                     <tr>
                       <td className="py-2 px-3">
-                        <div className="font-bold text-slate-900">Cotisations Transport Mensuel</div>
+                        <div className="font-bold text-slate-900">Transport Scolaire Mensuel</div>
                         <div className="text-[10px] text-slate-400">
                           Tarif : {formatFCFA(selectedStudentForReceipt.monthlyRate)} / mois
                         </div>
@@ -1616,21 +1669,21 @@ export function TransportView({
         </div>
       )}
 
-      {/* ================= MODALE 3 : ITINÉRAIRES & HORAIRES DES CARS ================= */}
+      {/* ================= MODALE 3 : GESTION DES LIGNES & ITINÉRAIRES DE TRANSPORT ================= */}
       {isItinerairesModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 sm:p-8 space-y-6 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                  <Bus className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold shrink-0">
+                  <Bus className="w-6 h-6 text-amber-700" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-950 font-heading">
-                    Plan des Itinéraires & Horaires des Cars
+                  <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading">
+                    Personnaliser les Lignes de Transport
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Circuits de ramassage scolaire 2026-2027 • {currentSchool.name}
+                    Définissez vous-mêmes les circuits et lignes actives de votre établissement
                   </p>
                 </div>
               </div>
@@ -1643,52 +1696,72 @@ export function TransportView({
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
-                  <Navigation className="w-6 h-6" />
-                </div>
-                <div className="space-y-1 max-w-md mx-auto">
-                  <h4 className="font-extrabold text-slate-900 text-sm">
-                    Circuits de Ramassage Définis sur Mesure
-                  </h4>
-                  <p className="text-slate-500 text-xs">
-                    Aucune ligne fictive pré-assignée. Les itinéraires et arrêts de montée sont configurés directement lors de chaque souscription d&apos;élève selon son quartier de résidence (ex: Abobo Biabou 2, etc.).
-                  </p>
-                </div>
+            {/* Formulaire d'ajout d'une nouvelle ligne */}
+            <form onSubmit={handleAddCustomLine} className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200 space-y-3">
+              <label className="text-xs font-bold text-amber-950 block">
+                Ajouter une nouvelle ligne de transport :
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  value={newLineName}
+                  onChange={(e) => setNewLineName(e.target.value)}
+                  placeholder="Ex: Ligne 1 : Abobo Gare - Carrefour Diallo - Établissement"
+                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border border-amber-300 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md shadow-amber-600/30 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>Enregistrer</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Liste des lignes actives personnalisées */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Lignes Actives Enregistrées ({customLines.length})
+                </span>
+                <span className="text-[10px] text-slate-400">Modifiables à tout moment</span>
               </div>
 
-              {/* Arrêts actuels des élèves inscrits */}
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-slate-950 uppercase tracking-wider text-xs">
-                    Arrêts Déclarés par les Élèves Inscrits ({subscribers.length})
-                  </span>
-                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                    Points réels
-                  </span>
+              {customLines.length === 0 ? (
+                <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-400 text-xs italic">
+                  Aucune ligne active n&apos;est encore enregistrée. Saisissez le nom d&apos;un circuit ci-dessus et cliquez sur Enregistrer.
                 </div>
-                {subscribers.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-2">
-                    Aucun élève n&apos;est encore abonné au transport pour le moment.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {Array.from(new Set(subscribers.map((s) => s.pickupStop).filter(Boolean))).map((st) => (
-                      <span key={st} className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-800">
-                        📍 {st}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
+                  {customLines.map((line, idx) => (
+                    <div key={idx} className="p-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center shrink-0 text-[10px]">
+                          {idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-800 truncate">{line}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomLine(idx)}
+                        title="Supprimer cette ligne"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setIsItinerairesModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all cursor-pointer"
               >
                 Fermer
               </button>

@@ -838,14 +838,26 @@ export function syncSchoolDataWithServer(slug: string): void {
         }
 
         // 5. Synchroniser le personnel
-        if (data.staffUsers && Array.isArray(data.staffUsers)) {
-          const filteredStaff = data.staffUsers.filter(
-            (u: any) => !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode)
-          );
+        if (data.staffUsers && Array.isArray(data.staffUsers) && data.staffUsers.length > 0) {
           const staffSchoolKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
-          const currentLocal = localStorage.getItem(staffSchoolKey);
-          const newStr = JSON.stringify(filteredStaff);
-          if (currentLocal !== newStr) {
+          const currentLocalRaw = localStorage.getItem(staffSchoolKey) || localStorage.getItem(STAFF_USERS_STORAGE_KEY);
+          let currentLocalList: any[] = [];
+          try {
+            if (currentLocalRaw) currentLocalList = JSON.parse(currentLocalRaw);
+          } catch (e) {}
+
+          const staffMap = new Map<string, any>();
+          currentLocalList.forEach((s: any) => {
+            if (s && s.authCode) staffMap.set(s.authCode.toUpperCase(), s);
+          });
+          data.staffUsers.forEach((u: any) => {
+            if (u && u.authCode && !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode)) {
+              staffMap.set(u.authCode.toUpperCase(), { ...staffMap.get(u.authCode.toUpperCase()), ...u });
+            }
+          });
+          const mergedStaff = Array.from(staffMap.values());
+          const newStr = JSON.stringify(mergedStaff);
+          if (currentLocalRaw !== newStr) {
             localStorage.setItem(staffSchoolKey, newStr);
             localStorage.setItem(STAFF_USERS_STORAGE_KEY, newStr);
             if (isPilot) {
@@ -2336,15 +2348,25 @@ export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
     }
 
-    // Synchronisation en arrière-plan avec Supabase Cloud
+    // Synchronisation en arrière-plan avec Supabase Cloud et l'API serveur
+    const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        staffUsers: users,
+      }),
+    }).catch(() => {});
+
     for (const u of users) {
-      saveStaffUserToSupabase(u, schoolSlug).catch(() => {});
+      saveStaffUserToSupabase(u, slug).catch(() => {});
     }
 
     broadcastLiveUpdate({
       action: 'staff_users_updated',
       staffUsers: users,
-      schoolSlug,
+      schoolSlug: slug,
     });
   } catch (e) {}
 }
@@ -2828,11 +2850,18 @@ export function verifyUserAuthCodeForLogin(
 
   // Si la Direction n'a pas encore créé de membre pour ce rôle : blocage strict
   if (staffForRole.length === 0) {
+    const codeOwner = liveStaff.find((s) => s.authCode.trim().toUpperCase() === cleanInputCode);
+    if (codeOwner) {
+      return {
+        isValid: false,
+        reason: `❌ Poste incorrect : Ce code d'authentification appartient au profil « ${codeOwner.role} » (${codeOwner.fullName}). Veuillez sélectionner ce profil pour vous connecter.`,
+      };
+    }
     return {
       isValid: false,
-      reason: `❌ Accès strictement bloqué : Aucun compte n'a encore été créé pour le poste de ${
+      reason: `❌ Accès strictement refusé : Aucun compte n'a encore été créé pour le poste de « ${
         roleNameMap[roleId] || 'Personnel'
-      } par la Direction dans la page Administration. Tant que la Direction n'a pas ajouté vos coordonnées (Nom, Contact, Code d'accès), la connexion reste bloquée.`,
+      } » par la Direction dans la page Administration. Tant que la Direction n'a pas ajouté votre fiche et votre code d'accès, la connexion reste bloquée.`,
     };
   }
 
@@ -2842,11 +2871,18 @@ export function verifyUserAuthCodeForLogin(
   );
 
   if (!matchedStaff) {
+    const codeOwner = liveStaff.find((s) => s.authCode.trim().toUpperCase() === cleanInputCode);
+    if (codeOwner) {
+      return {
+        isValid: false,
+        reason: `❌ Poste incorrect : Ce code d'accès appartient au profil « ${codeOwner.role} » (${codeOwner.fullName}). Veuillez sélectionner ce poste pour vous connecter.`,
+      };
+    }
     return {
       isValid: false,
-      reason: `❌ Accès refusé : Le code d'authentification saisi est incorrect ou ne correspond à aucun profil actif pour le poste de ${
+      reason: `❌ Accès refusé : Ce code d'authentification est invalide ou n'a pas encore été configuré par la Direction pour le poste de « ${
         roleNameMap[roleId] || 'Personnel'
-      }. Veuillez vérifier votre code auprès de la Direction de l'école.`,
+      } ». Veuillez contacter la Direction de l'école.`,
     };
   }
 

@@ -926,10 +926,10 @@ export function InscriptionsView({
       paymentDate: finalPaymentDate,
       paymentMethod: getPaymentMethodLabel(),
       installments: installments,
-      isBoarding: isBoarding,
-      isCanteen: isCanteen,
-      isTransport: isTransport,
-      notes: `Prestations : Internat (${isBoarding ? 'Oui' : 'Non'}), Cantine (${isCanteen ? 'Oui' : 'Non'}), Transport (${isTransport ? 'Oui' : 'Non'}), Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousue (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
+      isBoarding: currentSelectedStudent?.isBoarding || false,
+      isCanteen: currentSelectedStudent?.isCanteen || false,
+      isTransport: currentSelectedStudent?.isTransport || false,
+      notes: `Autres frais : Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousu (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1315,38 +1315,8 @@ export function InscriptionsView({
       ctx.fillStyle = '#0f172a';
     }
 
-    // Ligne 4 : 4 Blocs de Prestations & Services avec Icônes/Emojis et Badges de Statut (sans vêtements)
+    // Ligne 4 : 2 Blocs Autres frais (Frais Annexes & Tenue tout cousu)
     const servicesList = [
-      {
-        title: '🏢 Internat',
-        active: finalBoarding,
-        activeLabel: 'Pensionnaire',
-        inactiveLabel: 'Externe',
-        activeBg: '#d1fae5',
-        activeText: '#065f46',
-        inactiveBg: '#f1f5f9',
-        inactiveText: '#475569',
-      },
-      {
-        title: '🍲 Cantine',
-        active: finalCanteen,
-        activeLabel: 'Souscrit',
-        inactiveLabel: 'Sans cantine',
-        activeBg: '#d1fae5',
-        activeText: '#065f46',
-        inactiveBg: '#f1f5f9',
-        inactiveText: '#475569',
-      },
-      {
-        title: '🚌 Transport',
-        active: finalTransport,
-        activeLabel: 'Souscrit',
-        inactiveLabel: 'Sans transport',
-        activeBg: '#d1fae5',
-        activeText: '#065f46',
-        inactiveBg: '#f1f5f9',
-        inactiveText: '#475569',
-      },
       {
         title: '🎒 Frais Annexes',
         active: fraisAnnexesPaid,
@@ -1357,13 +1327,23 @@ export function InscriptionsView({
         inactiveBg: '#ffe4e6',
         inactiveText: '#9f1239',
       },
+      {
+        title: '👕 Tenue tout cousu',
+        active: tenueCousuePaid,
+        activeLabel: 'Payé',
+        inactiveLabel: 'Non payé',
+        activeBg: '#d1fae5',
+        activeText: '#065f46',
+        inactiveBg: '#ffe4e6',
+        inactiveText: '#9f1239',
+      },
     ];
 
     const cardY = 526;
-    const cardW = 255;
+    const cardW = 530;
     const cardH = 58;
-    const gap = 20;
-    const startX = 65;
+    const gap = 30;
+    const startX = 55;
 
     servicesList.forEach((srv, idx) => {
       const bx = startX + idx * (cardW + gap);
@@ -1382,7 +1362,7 @@ export function InscriptionsView({
       ctx.fillText(srv.title, bx + cardW / 2, cardY + 20);
 
       // Badge Statut
-      const badgeW = 155;
+      const badgeW = 200;
       const badgeH = 22;
       const badgeX = bx + (cardW - badgeW) / 2;
       const badgeY = cardY + 28;
@@ -1936,63 +1916,32 @@ export function InscriptionsView({
             </div>
           </div>
 
-          {/* Statuts des Prestations : Internat, Cantine, Transport, Frais Annexes & Tenue Tout Cousue (Bien centrés et équilibrés) */}
+          {/* Statuts des Autres frais : Frais Annexes & Tenue Tout Cousu */}
           <div className="col-span-2 pt-2 border-t border-slate-200">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 text-center">
-              Prestations & Services Complémentaires
+              Autres frais
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {/* 1. Internat */}
-              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🏢 Internat</span>
-                {isBoarding ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                    <Check className="w-3 h-3 text-emerald-700" />
-                    Pensionnaire
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                    Externe
-                  </span>
-                )}
-              </div>
-
-              {/* 2. Cantine */}
-              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🍲 Cantine</span>
-                {isCanteen ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                    <Check className="w-3 h-3 text-emerald-700" />
-                    Souscrit
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                    <X className="w-3 h-3 text-slate-400" />
-                    Sans cantine
-                  </span>
-                )}
-              </div>
-
-              {/* 3. Transport */}
-              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
-                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🚌 Transport</span>
-                {isTransport ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                    <Check className="w-3 h-3 text-emerald-700" />
-                    Souscrit
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                    <X className="w-3 h-3 text-slate-400" />
-                    Sans transport
-                  </span>
-                )}
-              </div>
-
-              {/* 4. Frais Annexes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* 1. Frais Annexes */}
               <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
                 <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🎒 Frais Annexes</span>
                 {fraisAnnexesPaid ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    <Check className="w-3 h-3 text-emerald-700" />
+                    Payé
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                    <X className="w-3 h-3 text-rose-600" />
+                    Non payé
+                  </span>
+                )}
+              </div>
+
+              {/* 2. Tenue tout cousu */}
+              <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">👕 Tenue tout cousu</span>
+                {tenueCousuePaid ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
                     <Check className="w-3 h-3 text-emerald-700" />
                     Payé
@@ -2743,88 +2692,18 @@ export function InscriptionsView({
               />
             </div>
 
-            {/* 5. Prestations Complémentaires : Internat, Cantine, Transport, Frais Annexes & Tenue */}
+            {/* 5. Autres frais : Frais Annexes & Tenue tout cousu */}
             <div className="p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200/90 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Prestations Complémentaires & Services :</span>
+                  <span>Autres frais :</span>
                 </span>
-                <span className="text-[10px] text-slate-400 font-medium">Reçu & Modules Associés</span>
+                <span className="text-[10px] text-slate-400 font-medium">Reçu & Règlements</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* 1. Internat / Pensionnat */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-800">Internat</span>
-                    <span className="text-[10px] text-slate-400">(Hébergement)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsBoarding(true)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                        isBoarding
-                          ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      🏢 Interne
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsBoarding(false)}
-                      className={`px-2 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                        !isBoarding
-                          ? 'bg-slate-800 text-white border-slate-900 shadow-2xs'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      🏠 Externe
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Cantine Scolaire */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-800">Cantine</span>
-                    <span className="text-[10px] text-slate-400">(Restauration)</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsCanteen(!isCanteen)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      isCanteen
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}
-                  >
-                    {isCanteen ? '🍲 Souscrit ✓' : '✕ Sans cantine'}
-                  </button>
-                </div>
-
-                {/* 3. Transport Scolaire */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-800">Transport</span>
-                    <span className="text-[10px] text-slate-400">(Ramassage)</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsTransport(!isTransport)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      isTransport
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}
-                  >
-                    {isTransport ? '🚌 Souscrit ✓' : '✕ Sans transport'}
-                  </button>
-                </div>
-
-                {/* 4. Frais Annexes */}
+                {/* 1. Frais Annexes */}
                 <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
                   <span className="text-xs font-bold text-slate-800">
                     Frais Annexes
@@ -2839,6 +2718,24 @@ export function InscriptionsView({
                     }`}
                   >
                     {fraisAnnexesPaid ? '✓ Payé' : '✕ Non payé'}
+                  </button>
+                </div>
+
+                {/* 2. Tenue tout cousu */}
+                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
+                  <span className="text-xs font-bold text-slate-800">
+                    Tenue tout cousu
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setTenueCousuePaid(!tenueCousuePaid)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      tenueCousuePaid
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    }`}
+                  >
+                    {tenueCousuePaid ? '✓ Payé' : '✕ Non payé'}
                   </button>
                 </div>
               </div>
