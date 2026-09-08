@@ -156,10 +156,8 @@ export async function POST(request: NextRequest) {
         deleteInvoiceFromSupabase(delId, slug).catch(() => {});
       }
     }
-    for (const banId of autoBannedIds) {
-      deleteStudentFromSupabase(banId, slug).catch(() => {});
-      deleteInvoiceFromSupabase(banId, slug).catch(() => {});
-    }
+    // Note: ne pas appeler deleteStudentFromSupabase sur les autoBannedIds à chaque POST
+    // pour éviter des requêtes Postgres inutiles répétées.
 
     const delSet = new Set(existingDeleted);
     const cleanStudents = Array.isArray(students)
@@ -199,24 +197,24 @@ export async function POST(request: NextRequest) {
       memoryStore['college-excellence'] = { ...updatedEntry, slug: 'college-excellence' };
     }
 
-    // Sauvegarde asynchrone dans Supabase Cloud pour la persistance multi-appareils
+    // Sauvegarde Supabase Cloud — sélective uniquement pour ne pas dépasser les quotas du tier gratuit.
+    // Les enregistrements individuels (élèves/factures) sont déjà sauvegardés dans Supabase
+    // au moment de leur création/modification via saveStudentToSupabase() dans live-store.ts.
+    // Ici, on ne sauvegarde QUE les paramètres de l'école et un max de 3 enregistrements récents.
     try {
       if (mergedSettings) {
         saveSchoolToSupabase(mergedSettings).catch(() => {});
       }
-      if (cleanStudents && Array.isArray(cleanStudents)) {
-        for (const st of cleanStudents) {
+      // Sauvegarde ciblée : seulement les 3 élèves les plus récemment modifiés (pas tous)
+      if (cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0) {
+        const sorted = [...cleanStudents].sort((a: any, b: any) => {
+          const da = new Date(a.updatedAt || a.enrollmentDate || 0).getTime();
+          const db = new Date(b.updatedAt || b.enrollmentDate || 0).getTime();
+          return db - da;
+        });
+        const recentStudents = sorted.slice(0, 3);
+        for (const st of recentStudents) {
           saveStudentToSupabase(st, slug).catch(() => {});
-        }
-      }
-      if (cleanInvoices && Array.isArray(cleanInvoices)) {
-        for (const inv of cleanInvoices) {
-          saveInvoiceToSupabase(inv, slug).catch(() => {});
-        }
-      }
-      if (staffUsers && Array.isArray(staffUsers)) {
-        for (const staff of staffUsers) {
-          saveStaffUserToSupabase(staff, slug).catch(() => {});
         }
       }
     } catch (sbSaveErr) {
