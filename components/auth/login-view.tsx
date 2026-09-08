@@ -211,6 +211,8 @@ export function LoginView({
   const [selectedRole, setSelectedRole] = useState<UserRole>('directeur');
   const [civility, setCivility] = useState<'Mr' | 'Mme' | 'Mlle'>('Mr');
   const [userName, setUserName] = useState('');
+  const [schoolSigle, setSchoolSigle] = useState(initialSchool.shortName || initialSchool.name || 'EPC MANOI');
+  const [showAuthCode, setShowAuthCode] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [authCodeInput, setAuthCodeInput] = useState('');
@@ -297,9 +299,13 @@ export function LoginView({
   }, [schoolSlug]);
 
   useEffect(() => {
-    setCurrentSchool(getLiveSchool(schoolSlug, initialSchool));
+    const liveSc = getLiveSchool(schoolSlug, initialSchool);
+    setCurrentSchool(liveSc);
+    if (liveSc?.shortName) setSchoolSigle(liveSc.shortName);
     const handleUpdate = () => {
-      setCurrentSchool(getLiveSchool(schoolSlug, initialSchool));
+      const updatedSc = getLiveSchool(schoolSlug, initialSchool);
+      setCurrentSchool(updatedSc);
+      if (updatedSc?.shortName) setSchoolSigle(updatedSc.shortName);
       setIsDeletedSchool(isSchoolDeleted(schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -396,9 +402,9 @@ export function LoginView({
       if (!authCodeInput.trim()) {
         setErrorMessage(
           selectedRole === 'fondateur'
-            ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur (ex: FND-2026)."
+            ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur."
             : selectedRole === 'directeur'
-            ? "Veuillez saisir votre Code d'Authentification officiel de Directeur (ex: DIR-2026)."
+            ? "Veuillez saisir votre Code d'Authentification officiel de Directeur."
             : `Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`
         );
         return;
@@ -887,6 +893,30 @@ export function LoginView({
             {/* ═══════════════════════════════════════════════════════════════ */}
             {authMode === 'login' && (
               <form onSubmit={handleLoginSubmit} className="space-y-4 animate-in fade-in">
+                {/* 0. Sigle de l'Établissement */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Sigle de l&apos;Établissement *</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      {currentSchool.name || 'Établissement Actif'}
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <Building2 className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      required
+                      value={schoolSigle}
+                      onChange={(e) => setSchoolSigle(e.target.value.toUpperCase())}
+                      placeholder="Ex : EPC MANOI"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
+                    />
+                  </div>
+                </div>
+
                 {/* 1. Sélection du Poste */}
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
@@ -898,8 +928,21 @@ export function LoginView({
                     <select
                       value={selectedRole}
                       onChange={(e) => {
-                        setSelectedRole(e.target.value as UserRole);
+                        const newRole = e.target.value as UserRole;
+                        setSelectedRole(newRole);
                         setErrorMessage('');
+                        const staffForNewRole = getLiveStaffUsers(schoolSlug).filter((s) => {
+                          if (newRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
+                          if (newRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
+                          return s.roleId === newRole || s.role === ROLE_CONFIGS[newRole]?.title;
+                        });
+                        if (staffForNewRole.length > 0) {
+                          setUserName(staffForNewRole[0].fullName);
+                          if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
+                          if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
+                        } else if (ROLE_CONFIGS[newRole]?.defaultUserName) {
+                          setUserName(ROLE_CONFIGS[newRole].defaultUserName);
+                        }
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
@@ -950,8 +993,11 @@ export function LoginView({
 
                 {/* 2. Civilité & Nom et Prénoms */}
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-800 block text-xs">
-                    2. Civilité, Nom et Prénoms *
+                  <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                    <span>2. Civilité, Nom et Prénoms *</span>
+                    {selectedRole !== 'parent' && (
+                      <span className="text-[10px] text-slate-500 font-medium">Nom officiel du collaborateur</span>
+                    )}
                   </label>
                   <div className="flex gap-2">
                     <div className="w-[74px] shrink-0">
@@ -979,6 +1025,50 @@ export function LoginView({
                       />
                     </div>
                   </div>
+
+                  {/* Affichage direct des membres du personnel enregistrés pour ce rôle */}
+                  {selectedRole !== 'parent' && (
+                    <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10.5px] font-semibold text-slate-500">Personnel identifié :</span>
+                      {(() => {
+                        const allStaff = getLiveStaffUsers(schoolSlug);
+                        const matchedRoleStaff = allStaff.filter((s) => {
+                          if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
+                          if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
+                          return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
+                        });
+                        const listToRender = matchedRoleStaff.length > 0 ? matchedRoleStaff : [
+                          {
+                            id: `def-${selectedRole}`,
+                            fullName: ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel',
+                            email: '',
+                            phone: '',
+                            avatarUrl: '',
+                          }
+                        ];
+                        return listToRender.map((staff) => (
+                          <button
+                            key={staff.id}
+                            type="button"
+                            onClick={() => {
+                              setUserName(staff.fullName);
+                              if (staff.email) setLoginEmail(staff.email);
+                              if (staff.phone) setParentPhone(staff.phone);
+                              if (staff.avatarUrl) setLoginAvatar(staff.avatarUrl);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs ${
+                              userName.trim().toUpperCase() === staff.fullName.trim().toUpperCase()
+                                ? 'bg-emerald-600 text-white border-emerald-700'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                            }`}
+                            title="Cliquer pour renseigner automatiquement ce nom"
+                          >
+                            <span>👤 {staff.fullName}</span>
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  )}
                 </div>
 
                 {/* 3. Adresse Email Professionnelle (OBLIGATOIRE) */}
@@ -1037,35 +1127,31 @@ export function LoginView({
                         <span>5. Code d&apos;Authentification Sécurisé *</span>
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        {selectedRole === 'fondateur'
-                          ? 'Code Fondateur (ex: FND-2026)'
-                          : selectedRole === 'directeur'
-                          ? 'Code Directeur (ex: DIR-2026)'
-                          : 'Attribué par la Direction'}
+                        Code Secret Requis
                       </span>
                     </label>
                     <div className="relative">
                       <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
-                        type="text"
+                        type={showAuthCode ? "text" : "password"}
                         required
                         autoComplete="off"
                         value={authCodeInput}
                         onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
-                        placeholder={
-                          selectedRole === 'fondateur'
-                            ? 'Entrez votre code officiel Fondateur (ex: FND-2026)'
-                            : selectedRole === 'directeur'
-                            ? 'Entrez votre code officiel Directeur (ex: DIR-2026)'
-                            : "Entrez votre code d'accès attribué (ex: CPT-2026)"
-                        }
-                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
+                        placeholder="Entrer le code"
+                        className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthCode(!showAuthCode)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                        title={showAuthCode ? "Masquer le code secret" : "Afficher le code secret"}
+                      >
+                        {showAuthCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                     <p className="text-[10.5px] text-slate-500">
-                      {selectedRole === 'fondateur' || selectedRole === 'directeur'
-                        ? "Le code d'authentification officiel est strictement requis pour déverrouiller l'accès Administrateur."
-                        : "Entrez le code d'accès configuré par la Direction dans la page Administration."}
+                      Le code d&apos;authentification officiel est strictement confidentiel et requis pour déverrouiller l&apos;accès.
                     </p>
                   </div>
                 )}

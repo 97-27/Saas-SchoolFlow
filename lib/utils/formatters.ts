@@ -165,3 +165,46 @@ export function formatFullNameNomFirst(fullName?: string): string {
   if (!lastName && !firstName) return '—';
   return `${lastName} ${firstName}`.trim();
 }
+
+/**
+ * Cleans any legacy metadata or code artifacts from an address string.
+ * Strips [SF_META:...], ,"notes":"..."}], and stray JSON syntax.
+ * Example: 'Anyama ,"notes":""}] [SF_META:{"enrollmentDate":...}]' -> 'Anyama'
+ */
+export function cleanDisplayAddress(address?: string | null): string {
+  if (!address) return '';
+  let cleaned = String(address);
+  // Remove [SF_META:...]
+  cleaned = cleaned.replace(/\[SF_META:[\s\S]*?\]/g, '');
+  // Remove legacy notes fragments like ,"notes":"..."}] or ,"notes":""}]
+  cleaned = cleaned.replace(/,?\s*["']?notes["']?\s*:\s*["'][^"']*["']\s*\}?\]?/gi, '');
+  // Strip trailing JSON symbols
+  cleaned = cleaned.replace(/[\[\]\{\}"]/g, '');
+  // Strip trailing commas, spaces
+  cleaned = cleaned.replace(/,\s*$/, '').trim();
+  return cleaned;
+}
+
+/**
+ * Returns strictly agreed gender labels for student enrollment status.
+ * Male: "Nouveau" / "Ancien"
+ * Female: "Nouvelle" / "Ancienne"
+ */
+export function formatEnrollmentStatus(enrollmentType?: string | null, gender?: 'male' | 'female' | string | null): {
+  label: string;
+  badge: string;
+  isFemale: boolean;
+  isAncien: boolean;
+} {
+  const isFemale = (gender || '').toLowerCase() === 'female';
+  const isAncien = enrollmentType === 'ancien';
+  const label = isAncien
+    ? (isFemale ? 'Ancienne' : 'Ancien')
+    : (isFemale ? 'Nouvelle' : 'Nouveau');
+  const badge = isAncien
+    ? (isFemale ? '🔄 Ancienne' : '🔄 Ancien')
+    : (isFemale ? '🌟 Nouvelle' : '🌟 Nouveau');
+
+  return { label, badge, isFemale, isAncien };
+}
+

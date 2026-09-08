@@ -220,9 +220,38 @@ export function RevenueSummary({
 
     let v1 = 0, v2 = 0, v3 = 0, v4 = 0, v5 = 0;
 
+    // Indexer les factures et leurs versements par étudiant
+    const studentInvoicesMap = new Map<string, Invoice[]>();
+    invoices.forEach((inv) => {
+      const sId = inv.studentId || inv.invoiceNumber;
+      if (sId) {
+        const list = studentInvoicesMap.get(sId) || [];
+        list.push(inv);
+        studentInvoicesMap.set(sId, list);
+      }
+    });
+
+    const processedStudentIds = new Set<string>();
+
     students.forEach((stu) => {
-      const inst = stu.installments;
-      const paid = stu.paidAmount || 0;
+      processedStudentIds.add(stu.id);
+      if (stu.studentNumber) processedStudentIds.add(stu.studentNumber);
+
+      const studentInvs = [
+        ...(studentInvoicesMap.get(stu.id) || []),
+        ...(studentInvoicesMap.get(stu.studentNumber) || []),
+      ];
+
+      // Récupérer l'échéancier soit de l'élève, soit de ses factures
+      let inst = stu.installments;
+      if (!inst || (!inst.versement1 && !inst.versement2 && !inst.versement3 && !inst.versement4 && !inst.versement5)) {
+        for (const inv of studentInvs) {
+          if (inv.installments && (inv.installments.versement1 || inv.installments.versement2 || inv.installments.versement3 || inv.installments.versement4 || inv.installments.versement5)) {
+            inst = inv.installments;
+            break;
+          }
+        }
+      }
 
       let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
 
@@ -232,8 +261,28 @@ export function RevenueSummary({
         p3 = inst.versement3?.amount || 0;
         p4 = inst.versement4?.amount || 0;
         p5 = inst.versement5?.amount || 0;
-      } else if (paid > 0) {
-        // Versement global sans échéancier détaillé -> affecté au 1er versement UNIQUEMENT pour la part de scolarité
+      }
+
+      // Vérifier aussi si des factures distinctes existent pour des versements additionnels
+      studentInvs.forEach((inv) => {
+        const motifLower = `${inv.feeType || ''} ${inv.notes || ''}`.toLowerCase();
+        const amt = inv.paidAmount || 0;
+        if (amt > 0) {
+          if ((motifLower.includes('2') || motifLower.includes('deuxième') || motifLower.includes('deuxieme')) && motifLower.includes('versement')) {
+            if (p2 === 0) p2 = amt;
+          } else if ((motifLower.includes('3') || motifLower.includes('troisième') || motifLower.includes('troisieme')) && motifLower.includes('versement')) {
+            if (p3 === 0) p3 = amt;
+          } else if ((motifLower.includes('4') || motifLower.includes('quatrième') || motifLower.includes('quatrieme')) && motifLower.includes('versement')) {
+            if (p4 === 0) p4 = amt;
+          } else if ((motifLower.includes('5') || motifLower.includes('cinquième') || motifLower.includes('cinquieme')) && motifLower.includes('versement')) {
+            if (p5 === 0) p5 = amt;
+          }
+        }
+      });
+
+      // Repli si aucun échéancier détaillé n'a été trouvé mais que l'élève a payé de la scolarité
+      if (p1 === 0 && p2 === 0 && p3 === 0 && p4 === 0 && p5 === 0) {
+        const paid = stu.paidAmount || 0;
         const regFee = stu.registrationFee || 0;
         const tuitionPaid = Math.max(0, paid - regFee);
         p1 = tuitionPaid;
@@ -244,6 +293,21 @@ export function RevenueSummary({
       v3 += p3;
       v4 += p4;
       v5 += p5;
+    });
+
+    // Prise en compte d'éventuelles factures d'échéances sans objet élève direct
+    invoices.forEach((inv) => {
+      const sId = inv.studentId || inv.invoiceNumber;
+      if (sId && processedStudentIds.has(sId)) return; // Déjà traité ci-dessus
+
+      const inst = inv.installments;
+      if (inst) {
+        v1 += inst.versement1?.amount || 0;
+        v2 += inst.versement2?.amount || 0;
+        v3 += inst.versement3?.amount || 0;
+        v4 += inst.versement4?.amount || 0;
+        v5 += inst.versement5?.amount || 0;
+      }
     });
 
     const getBadgeStyle = (amount: number) => {

@@ -11,7 +11,7 @@ import {
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
-import { splitFullNameNomFirst, formatFullNameNomFirst } from '@/lib/utils/formatters';
+import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -764,7 +764,7 @@ const normalizeStudent = (stu: any): Student => {
     guardianName: stu?.guardianName || 'Parent',
     guardianPhone: stu?.guardianPhone || stu?.whatsappPhone || '+225 01 02 03 04 05',
     whatsappPhone: stu?.whatsappPhone || stu?.guardianPhone || '+225 01 02 03 04 05',
-    address: stu?.address || 'Abidjan',
+    address: cleanDisplayAddress(stu?.address) || 'Abidjan',
     enrollmentDate: stu?.enrollmentDate || stu?.paymentDate || '2026-09-07',
     paymentDate: stu?.paymentDate || stu?.enrollmentDate || '2026-09-07',
     attendanceRate: typeof stu?.attendanceRate === 'number' ? stu.attendanceRate : 95,
@@ -1315,6 +1315,7 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const studentWithSlug = {
       ...student,
+      address: cleanDisplayAddress(student.address),
       schoolSlug: slug,
       schoolId: slug,
       enrollmentType: student.enrollmentType || 'nouveau',
@@ -1468,6 +1469,7 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const studentWithSlug = {
       ...student,
+      address: cleanDisplayAddress(student.address),
       schoolSlug: schoolSlug || 'epc-manoi',
       schoolId: schoolSlug || 'epc-manoi',
       updatedAt: student.updatedAt || new Date().toISOString(),

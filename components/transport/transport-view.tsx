@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Student, School } from '@/lib/data/types';
+import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import {
   Bus,
   MapPin,
@@ -151,13 +151,17 @@ export function TransportView({
     return {};
   });
 
-  // Synchronisation des élèves
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  // Synchronisation des élèves et des factures/quittances
   useEffect(() => {
     setStudents(getLiveStudents(mockStudents, schoolSlug));
+    setInvoices(getLiveInvoices([], schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
       setStudents(getLiveStudents(mockStudents, schoolSlug));
+      setInvoices(getLiveInvoices([], schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -219,7 +223,7 @@ export function TransportView({
     return students.find((s) => s.id === newSubStudentId) || null;
   }, [students, newSubStudentId]);
 
-  // Liste des abonnés au transport scolaire
+  // Liste des abonnés au transport scolaire (inclus élèves avec transport coché ou facturé)
   const subscribers = useMemo(() => {
     const defaultStops = [
       'Riviera Bonoumin — Carrefour Jacques Prévert',
@@ -231,8 +235,21 @@ export function TransportView({
       '8ème Tranche — Carrefour Soleil Levant',
     ];
 
+    const transportInvoiceStudentIds = new Set(
+      invoices
+        .filter((inv) => inv.feeType === 'Transport' || inv.invoiceNumber?.startsWith('TRP-') || inv.notes?.toLowerCase().includes('transport'))
+        .map((inv) => inv.studentId)
+    );
+
     return students
-      .filter((stu) => Boolean(customTransportMap[stu.id]))
+      .filter((stu) => {
+        const isEnrolled =
+          stu.isTransport === true ||
+          (typeof stu.notes === 'string' && stu.notes.includes('Transport (Oui)')) ||
+          (typeof stu.address === 'string' && stu.address.includes('Transport (Oui)')) ||
+          transportInvoiceStudentIds.has(stu.id);
+        return Boolean(customTransportMap[stu.id]) || isEnrolled;
+      })
       .map((stu, idx) => {
         const custom = customTransportMap[stu.id];
         const stop = custom?.stop || defaultStops[idx % defaultStops.length];
@@ -253,8 +270,21 @@ export function TransportView({
 
         const paidMonths = Object.keys(monthsState).filter((m) => monthsState[m]);
         const paidMonthsCount = paidMonths.length;
-        const grossAmount = paidMonthsCount * monthlyRate;
-        const totalPaidAmount = Math.max(0, grossAmount - discountAmount);
+        let grossAmount = paidMonthsCount * monthlyRate;
+        let totalPaidAmount = Math.max(0, grossAmount - discountAmount);
+
+        // Si aucun mois n'est encore coché manuellement mais qu'un paiement Transport existe dans invoices
+        const matchingInvoices = invoices.filter(
+          (inv) =>
+            (inv.studentId === stu.id || inv.studentName === stu.fullName) &&
+            (inv.feeType === 'Transport' || inv.invoiceNumber?.startsWith('TRP-') || inv.notes?.toLowerCase().includes('transport'))
+        );
+        const invoicePaidTotal = matchingInvoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
+
+        if (totalPaidAmount === 0 && invoicePaidTotal > 0) {
+          totalPaidAmount = invoicePaidTotal;
+          grossAmount = invoicePaidTotal + discountAmount;
+        }
 
         return {
           ...stu,
@@ -268,7 +298,7 @@ export function TransportView({
           totalPaidAmount,
         };
       });
-  }, [students, customTransportMap, monthlyPayments]);
+  }, [students, customTransportMap, monthlyPayments, invoices]);
 
   // Filtrage
   const filteredSubscribers = useMemo(() => {
@@ -554,8 +584,17 @@ export function TransportView({
         } catch (e) {}
       }
 
-      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setToastMessage('✅ Le reçu automatique a été copié dans le presse-papiers et WhatsApp est prêt !');
       setTimeout(() => setToastMessage(null), 7000);
+
+      // Ouverture directe du dialogue WhatsApp avec message récapitulatif
+      const rawPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/\D/g, '');
+      const cleanPhone = rawPhone.length === 10 ? `225${rawPhone}` : rawPhone;
+      const message = `Bonjour,\nVoici le reçu officiel de cotisation au Transport Scolaire pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Arrêt : ${sub.pickupStop}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• Mois réglés : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
+      const waUrl = cleanPhone
+        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
     } catch (e) {
       console.error(e);
     } finally {
@@ -792,7 +831,7 @@ export function TransportView({
         <div
           ref={topScrollRef}
           onScroll={handleTopScroll}
-          className="overflow-x-auto bg-slate-100/90 border-b border-slate-200 scrollbar-thin"
+          className="overflow-x-auto bg-slate-100/90 border-b border-slate-200 scrollbar-thin scrollbar-thumb-emerald-500 scrollbar-track-slate-100"
           style={{ height: '14px' }}
         >
           <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
@@ -802,7 +841,7 @@ export function TransportView({
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto scrollbar-thin"
+          className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
@@ -1117,7 +1156,7 @@ export function TransportView({
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-slate-950 font-heading">
-                    Quittance de Transport Scolaire
+                    Reçu de Transport Scolaire
                   </h3>
                   <p className="text-xs text-slate-500 font-mono">
                     Document officiel d&apos;encaissement • {currentSchool.name}
@@ -1309,7 +1348,7 @@ export function TransportView({
               {/* Cachet Officiel */}
               <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
                 <div className="text-[9px] text-slate-400 italic">
-                  Quittance officielle numérotée émise par le service Transport.
+                  Reçu officiel numéroté émis par le service Transport.
                 </div>
                 <div className="p-2 rounded-xl border border-dashed border-emerald-400 bg-emerald-50 flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />

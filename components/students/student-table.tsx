@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatDate, formatFCFA, splitFullNameNomFirst, formatFullNameNomFirst } from '@/lib/utils/formatters';
+import { formatDate, formatFCFA, splitFullNameNomFirst, formatFullNameNomFirst, formatEnrollmentStatus, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { availableClasses, mockSchools } from '@/lib/data/mock-data';
 import { getStudentDocumentRecord } from '@/lib/data/live-store';
 import { NewStudentModal } from './new-student-modal';
@@ -142,9 +142,9 @@ export function StudentTable({
     setEditPaymentDate(normalizeDateToIso(student.enrollmentDate || student.paymentDate || '2026-09-07'));
     setEditEnrollmentType(student.enrollmentType || 'nouveau');
     setEditStatus(student.status || 'active');
-    setEditWhatsapp(student.whatsappPhone);
-    setEditAddress(student.address);
-    setEditGuardianName(student.guardianName);
+    setEditWhatsapp(student.whatsappPhone || student.guardianPhone || '');
+    setEditAddress(cleanDisplayAddress(student.address));
+    setEditGuardianName(student.guardianName || '');
     setOpenActionId(null);
   };
 
@@ -179,7 +179,7 @@ export function StudentTable({
       status: editStatus,
       whatsappPhone: editWhatsapp.trim(),
       guardianPhone: editWhatsapp.trim(),
-      address: editAddress.trim(),
+      address: cleanDisplayAddress(editAddress),
       guardianName: editGuardianName.trim(),
       installments: updatedInstallments,
       updatedAt: new Date().toISOString(),
@@ -582,7 +582,7 @@ export function StudentTable({
                             ? 'bg-blue-50 text-blue-800 border-blue-200/80 shadow-2xs'
                             : 'bg-emerald-50 text-emerald-800 border-emerald-200/80 shadow-2xs'
                         }`}>
-                          {student.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}
+                          {formatEnrollmentStatus(student.enrollmentType, student.gender).badge}
                         </span>
                       </td>
 
@@ -906,7 +906,7 @@ export function StudentTable({
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <span>🌟 Nouvel Élève</span>
+                    <span>{editGender === 'female' ? '🌟 Nouvelle' : '🌟 Nouveau'}</span>
                   </button>
 
                   <button
@@ -918,7 +918,7 @@ export function StudentTable({
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <span>🔄 Ancien Élève</span>
+                    <span>{editGender === 'female' ? '🔄 Ancienne' : '🔄 Ancien'}</span>
                   </button>
                 </div>
               </div>

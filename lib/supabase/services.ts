@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './client';
 import { School, Student, Invoice } from '@/lib/data/types';
+import { cleanDisplayAddress } from '@/lib/utils/formatters';
 
 /**
  * ══════════════════════════════════════════════════════════════════
@@ -204,12 +205,11 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 
     return uniqueData.map((d: any) => {
       let meta: any = {};
-      let cleanAddress = d.address || '';
+      let cleanAddress = cleanDisplayAddress(d.address || '');
       try {
-        const match = cleanAddress.match(/\[SF_META:(.*?)\]/);
+        const match = (d.address || '').match(/\[SF_META:(.*?)\]/);
         if (match && match[1]) {
           meta = JSON.parse(match[1]);
-          cleanAddress = cleanAddress.replace(/\[SF_META:.*?\]/g, '').trim();
         }
       } catch (e) {}
 
@@ -308,7 +308,7 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       notes: student.notes || '',
       isBoarding: Boolean(student.isBoarding || (student.notes && student.notes.toLowerCase().includes('internat (oui)'))),
     };
-    const cleanAddress = (student.address || '').replace(/\[SF_META:.*?\]/g, '').trim();
+    const cleanAddress = cleanDisplayAddress(student.address || '');
     const addressWithMeta = `${cleanAddress} [SF_META:${JSON.stringify(metaObj)}]`;
 
     const payload = {

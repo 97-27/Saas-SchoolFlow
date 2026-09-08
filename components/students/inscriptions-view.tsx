@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice, StudentInstallments } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import {
   UserPlus,
@@ -497,7 +497,7 @@ export function InscriptionsView({
     address,
   ]);
 
-  const isSubmitAllowed = selectedStudentId ? hasNewVersement : formValidation.isAllComplete;
+  const isSubmitAllowed = formValidation.isAllComplete;
 
   // Clé de persistance du brouillon du formulaire d'inscription (sessionStorage + localStorage)
   const draftStorageKey = `schoolflow_inscription_draft_${schoolSlug || 'college-excellence'}`;
@@ -679,7 +679,7 @@ export function InscriptionsView({
       setGrade(stu.grade || '6ème');
       setEnrollmentType(stu.enrollmentType || 'nouveau');
       setCustomMatricule(stu.matricule || '');
-      setAddress(stu.address || `${schoolState.city || 'Abidjan'}`);
+      setAddress(cleanDisplayAddress(stu.address) || `${schoolState.city || 'Abidjan'}`);
       setGuardianName(stu.guardianName || '');
       setWhatsappPhone(stu.whatsappPhone || stu.guardianPhone || '');
       setSecondaryPhones(stu.secondaryPhones || []);
@@ -841,12 +841,8 @@ export function InscriptionsView({
   // Form submit handler -> Open Confirmation Modal (Validation stricte)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudentId && !formValidation.isAllComplete) {
+    if (!formValidation.isAllComplete) {
       alert(`Veuillez renseigner toutes les coordonnées obligatoires avant d'enregistrer le reçu :\n- ${formValidation.missingFields.join('\n- ')}`);
-      return;
-    }
-    if (selectedStudentId && !hasNewVersement) {
-      alert("L'enregistrement est verrouillé en mode consultation. Seule la saisie d'un nouveau versement débloque l'enregistrement.");
       return;
     }
     setShowConfirmModal(true);
@@ -873,8 +869,6 @@ export function InscriptionsView({
       ? currentSelectedStudent.studentNumber
       : `ID-${computedNextSeq.toString().padStart(3, '0')}`;
 
-    const matriculeToSave = currentMatricule;
-
     const finalPaymentDate = paymentDate || getTodayDateStr();
 
     const installments: StudentInstallments = {
@@ -885,13 +879,13 @@ export function InscriptionsView({
       versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date || finalPaymentDate } : undefined,
     };
 
-    // En mode consultation, préserver scrupuleusement l'identité de l'élève (modifications d'identité réservées à la page "Vue d'ensemble")
-    const finalLastName = currentSelectedStudent ? currentSelectedStudent.lastName : lastName.trim().toUpperCase();
-    const finalFirstName = currentSelectedStudent ? currentSelectedStudent.firstName : firstName.trim();
-    const finalGender = currentSelectedStudent ? currentSelectedStudent.gender : gender;
-    const finalGrade = currentSelectedStudent ? currentSelectedStudent.grade : grade;
-    const finalEnrollmentType = currentSelectedStudent ? (currentSelectedStudent.enrollmentType || enrollmentType) : enrollmentType;
-    const finalMatricule = currentSelectedStudent ? (currentSelectedStudent.matricule || '') : (customMatricule.trim().toUpperCase() || '');
+    // Permettre la modification totale de l'élève (Nom, Prénom, Genre, Classe, Statut, Matricule, Adresse)
+    const finalLastName = lastName.trim().toUpperCase();
+    const finalFirstName = firstName.trim();
+    const finalGender = gender;
+    const finalGrade = grade;
+    const finalEnrollmentType = enrollmentType;
+    const finalMatricule = customMatricule.trim().toUpperCase() || (currentSelectedStudent ? currentSelectedStudent.matricule : '');
 
     const newStudent: Student = {
       id: studentIdToSave,
@@ -899,7 +893,7 @@ export function InscriptionsView({
       matricule: finalMatricule,
       firstName: finalFirstName,
       lastName: finalLastName,
-      fullName: `${finalLastName} ${finalFirstName}`,
+      fullName: `${finalLastName} ${finalFirstName}`.trim(),
       grade: finalGrade,
       gender: finalGender,
       avatar: currentSelectedStudent?.avatar || '',
@@ -908,11 +902,12 @@ export function InscriptionsView({
       guardianPhone: whatsappPhone.trim(),
       whatsappPhone: whatsappPhone.trim(),
       secondaryPhones: secondaryPhones.map((p) => p.trim()).filter(Boolean),
-      address: address.trim() || `${schoolState.city}`,
+      address: cleanDisplayAddress(address) || `${schoolState.city || 'Abidjan'}`,
       enrollmentDate: finalPaymentDate,
       attendanceRate: currentSelectedStudent?.attendanceRate || 95,
       status: 'active',
       enrollmentType: finalEnrollmentType,
+
       registrationFee: registrationFee,
       tuitionAmount: tuitionAmount,
       discountAmount: discountAmount,
@@ -2318,64 +2313,35 @@ export function InscriptionsView({
               </div>
             </div>
 
-            {/* SÉLECTEUR RAPIDE D'ID : MENU DÉROULANT DIRECTEMENT VISIBLE ET CLIQUABLE */}
-            <div className="p-3 bg-gradient-to-r from-emerald-50/90 via-slate-50 to-blue-50/80 rounded-2xl border-2 border-emerald-300 shadow-2xs space-y-2">
+            {/* BLOC NOUVELLES INSCRIPTIONS (Création exclusive — Anciens reçus accessibles uniquement via le sélecteur ID ci-dessus) */}
+            <div className="p-3 bg-gradient-to-r from-emerald-50/90 via-slate-50 to-emerald-50/80 rounded-2xl border-2 border-emerald-300 shadow-2xs space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="direct-student-id-select" className="text-xs font-extrabold text-slate-900 font-heading flex items-center gap-1.5">
+                <label className="text-xs font-extrabold text-slate-900 font-heading flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Sélectionner un Reçu ou Créer une Nouvelle Inscription :</span>
+                  <span>Nouvelles Inscriptions :</span>
                 </label>
                 <span className="text-[11px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
-                  {sortedStudentsById.length} Reçus enregistrés
+                  Prochain : ID-{nextSeq.toString().padStart(3, '0')}
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <select
-                    id="direct-student-id-select"
-                    value={selectedStudentId || 'new'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'new') {
-                        handleStartNewReceipt();
-                      } else {
-                        const found = sortedStudentsById.find((s) => s.id === val || s.studentNumber === val);
-                        if (found) handleSelectStudent(found);
-                      }
-                    }}
-                    className="w-full appearance-none pl-3.5 pr-9 py-2.5 text-xs font-extrabold rounded-xl bg-white border-2 border-emerald-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
-                  >
-                    <option value="new" className="font-extrabold text-emerald-700 bg-emerald-50 py-1">
-                      ✨ + NOUVELLE INSCRIPTION (Créer le prochain Reçu ID-{nextSeq.toString().padStart(3, '0')})
-                    </option>
-                    <option disabled className="text-slate-300">
-                      ────────── HISTORIQUE DE TOUS LES REÇUS (ID-001 À ID ACTUEL) ──────────
-                    </option>
-                    {sortedStudentsById.map((s) => (
-                      <option key={s.id} value={s.id} className="py-1 text-slate-800 font-medium">
-                        ID {(s.studentNumber || s.id || '').replace(/\D/g, '').padStart(3, '0')} : {(s.lastName || '').toUpperCase()} {s.firstName || ''} ({s.grade}) • {formatFCFA(s.tuitionAmount)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-emerald-600 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-
                 <button
                   type="button"
                   onClick={handleStartNewReceipt}
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs ${
                     !selectedStudentId
-                      ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                      ? 'bg-emerald-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-400'
                       : 'bg-white border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50'
                   }`}
-                  title="Créer un nouveau reçu avec le numéro d'ordre suivant"
+                  title="Créer une nouvelle inscription avec réinitialisation complète du formulaire"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span>+ Ajouter un nouveau</span>
+                  <span>+ Nouvelle Inscription</span>
                 </button>
               </div>
             </div>
+
 
             {/* POPUP SÉLECTEUR D'ID DÉTAILLÉ (Recherche textuelle si l'utilisateur clique sur le badge) */}
             {isIdPickerOpen && (
@@ -2539,15 +2505,10 @@ export function InscriptionsView({
                 <input
                   type="text"
                   required
-                  disabled={Boolean(selectedStudentId)}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Ex: KONATE"
-                  className={`w-full px-3.5 py-2 text-xs rounded-xl border font-semibold transition-all ${
-                    selectedStudentId
-                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none uppercase'
-                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 uppercase'
-                  }`}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 uppercase font-semibold transition-all"
                 />
               </div>
 
@@ -2558,15 +2519,10 @@ export function InscriptionsView({
                 <input
                   type="text"
                   required
-                  disabled={Boolean(selectedStudentId)}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Ex: Lassina Mouhamed"
-                  className={`w-full px-3.5 py-2 text-xs rounded-xl border font-semibold transition-all ${
-                    selectedStudentId
-                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
-                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500'
-                  }`}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold transition-all"
                 />
               </div>
             </div>
@@ -2592,15 +2548,10 @@ export function InscriptionsView({
               </div>
               <input
                 type="text"
-                disabled={Boolean(selectedStudentId)}
                 value={customMatricule}
                 onChange={(e) => setCustomMatricule(e.target.value.toUpperCase())}
                 placeholder="Laisser vide si pas encore attribué (ex: 26014801A)..."
-                className={`w-full px-3.5 py-2 text-xs rounded-xl border font-mono font-bold uppercase transition-all ${
-                  selectedStudentId
-                    ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
-                    : 'bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-900'
-                }`}
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-slate-900 font-mono font-bold uppercase transition-all"
               />
             </div>
 
@@ -2614,11 +2565,8 @@ export function InscriptionsView({
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
-                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setGender('female')}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none ${
-                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
-                    } ${
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer select-none ${
                       gender === 'female'
                         ? 'bg-pink-50 text-pink-700 border-pink-300 ring-2 ring-pink-400/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2630,11 +2578,8 @@ export function InscriptionsView({
 
                   <button
                     type="button"
-                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setGender('male')}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none ${
-                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
-                    } ${
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer select-none ${
                       gender === 'male'
                         ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-400/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2652,14 +2597,9 @@ export function InscriptionsView({
                   Classe demandée *
                 </label>
                 <select
-                  disabled={Boolean(selectedStudentId)}
                   value={grade}
                   onChange={(e) => setGrade(e.target.value)}
-                  className={`w-full px-3 py-2 text-xs rounded-xl border font-semibold transition-all ${
-                    selectedStudentId
-                      ? 'bg-slate-100/90 border-slate-200 text-slate-500 cursor-not-allowed select-none'
-                      : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer'
-                  }`}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold cursor-pointer transition-all"
                 >
                   {availableClasses
                     .filter((c) => c !== 'Toutes les classes')
@@ -2679,11 +2619,8 @@ export function InscriptionsView({
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
-                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setEnrollmentType('nouveau')}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none ${
-                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
-                    } ${
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer select-none ${
                       enrollmentType === 'nouveau'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2696,11 +2633,8 @@ export function InscriptionsView({
 
                   <button
                     type="button"
-                    disabled={Boolean(selectedStudentId)}
                     onClick={() => setEnrollmentType('ancien')}
-                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap select-none ${
-                      selectedStudentId ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
-                    } ${
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer select-none ${
                       enrollmentType === 'ancien'
                         ? 'bg-blue-50 text-blue-800 border-blue-300 ring-2 ring-blue-500/20 shadow-2xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
@@ -2712,6 +2646,7 @@ export function InscriptionsView({
                   </button>
                 </div>
               </div>
+
             </div>
 
             {/* 3. Parent / Tuteur & Contact WhatsApp */}
@@ -3309,19 +3244,14 @@ export function InscriptionsView({
                     <ShieldCheck className="w-4 h-4" />
                     <span>
                       {selectedStudentId
-                        ? 'Enregistrer le Nouveau Versement (Reçu mis à jour)'
+                        ? 'Mettre à jour le Reçu Élève'
                         : 'Enregistrer le Reçu'}
                     </span>
                   </>
                 )}
               </button>
-
-              {selectedStudentId && !hasNewVersement && (
-                <p className="text-[11px] text-center text-slate-400 font-medium">
-                  🔒 En mode consultation, l&apos;enregistrement est verrouillé. Ajoutez un versement pour valider le reçu.
-                </p>
-              )}
             </div>
+
           </form>
         </div>
 

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas';
 import { School } from '@/lib/data/types';
 import { defaultSchool } from '@/lib/data/mock-data';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -338,39 +337,289 @@ export function SalariesView({
     }
   };
 
-  const handleShareWhatsApp = async () => {
-    const receiptElement = receiptCardRef.current || document.getElementById('salary-receipt-card');
-    if (!receiptElement) return;
+  // Helper sécurisé pour charger les images sur le canvas sans blocage CORS
+  const loadCanvasImageSafe = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
+      if (!src) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  };
 
+  // Moteur 100% Natif Canvas HD pour le Reçu de Paiement de Salaire
+  const generateSalaryReceiptCanvas = async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1750;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    const logoImgPromise = currentSchool.logoUrl ? loadCanvasImageSafe(currentSchool.logoUrl) : Promise.resolve(null);
+    const stampImgPromise = currentSchool.stampUrl ? loadCanvasImageSafe(currentSchool.stampUrl) : Promise.resolve(null);
+
+    const [logoImg, stampImg] = await Promise.all([logoImgPromise, stampImgPromise]);
+
+    // Fond blanc
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1200, 1750);
+
+    // Cadre externe
+    drawRoundRect(30, 30, 1140, 1690, 24);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    drawRoundRect(38, 38, 1124, 1674, 20);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // En-tête école
+    drawRoundRect(45, 45, 1110, 240, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Logo École
+    if (logoImg) {
+      ctx.save();
+      drawRoundRect(70, 70, 180, 180, 18);
+      ctx.clip();
+      ctx.drawImage(logoImg, 70, 70, 180, 180);
+      ctx.restore();
+    } else {
+      drawRoundRect(70, 70, 180, 180, 18);
+      ctx.fillStyle = '#059669';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 70px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((currentSchool.shortName || 'SF').slice(0, 3), 160, 160);
+    }
+
+    // Coordonnées de l'école (Centre)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#065f46';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.fillText((currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase(), 600, 95);
+
+    ctx.fillStyle = '#047857';
+    ctx.font = 'italic bold 22px sans-serif';
+    ctx.fillText(`« ${currentSchool.motto || 'Discipline • Rigueur • Réussite'} »`, 600, 135);
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(`${currentSchool.receiptHeaderAddress || currentSchool.city || 'Abidjan'} • Tél : ${currentSchool.receiptHeaderPhone || currentSchool.phone || '+225 00 00 00 00'}`, 600, 175);
+
+    ctx.font = 'bold 19px monospace';
+    ctx.fillStyle = '#475569';
+    ctx.fillText(`Code MENA : ${currentSchool.menaCode || '014829K'} • Année Scolaire : ${currentSchool.academicYear || '2026-2027'}`, 600, 215);
+
+    // Titre Reçu
+    drawRoundRect(200, 310, 800, 75, 38);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('BULLETIN & REÇU DE PAIEMENT DE SALAIRE', 600, 347);
+
+    // N° Reçu & Date
+    ctx.font = 'bold 24px monospace';
+    ctx.fillStyle = '#065f46';
+    ctx.textAlign = 'center';
+    ctx.fillText(`N° Reçu : ${selectedSalary.receiptNumber}   •   Date : ${selectedSalary.paymentDate}`, 600, 425);
+
+    // Cadre Informations Salarié
+    drawRoundRect(55, 460, 1090, 240, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('BÉNÉFICIAIRE :', 85, 505);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(`${selectedSalary.civility} ${selectedSalary.staffName}`.toUpperCase(), 270, 505);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('FONCTION :', 85, 555);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(selectedSalary.role, 270, 555);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('MATRICULE :', 85, 605);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText(selectedSalary.matricule, 270, 605);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('PÉRIODE DE PAIE :', 650, 555);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillText(selectedSalary.payPeriod, 850, 555);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('CONTACT :', 650, 605);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText(selectedSalary.phone || '—', 850, 605);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('RÈGLEMENT :', 85, 655);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(selectedSalary.paymentMethod || 'Espèces en caisse', 270, 655);
+
+    // Tableau des Rubriques de Rémunération
+    const tableTop = 730;
+    drawRoundRect(55, tableTop, 1090, 65, 16);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('DÉSIGNATION DE LA RUBRIQUE', 85, tableTop + 38);
+    ctx.textAlign = 'right';
+    ctx.fillText('MONTANT (FCFA)', 1110, tableTop + 38);
+
+    const rows = [
+      { label: 'Salaire de Base (Conventionnel brut)', amt: selectedSalary.baseSalary, isNegative: false },
+      { label: 'Primes, Indemnités & Heures Supplémentaires', amt: selectedSalary.bonuses, isNegative: false },
+      { label: 'Retenues, Avances sur Salaire & Cotisations', amt: selectedSalary.deductions, isNegative: true },
+    ];
+
+    let rowY = tableTop + 65;
+    rows.forEach((r, idx) => {
+      ctx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      ctx.fillRect(55, rowY, 1090, 75);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(55, rowY, 1090, 75);
+
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(r.label, 85, rowY + 45);
+
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 24px monospace';
+      if (r.isNegative && r.amt > 0) {
+        ctx.fillStyle = '#e11d48';
+        ctx.fillText(`- ${formatFCFA(r.amt)}`, 1110, rowY + 45);
+      } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillText(formatFCFA(r.amt), 1110, rowY + 45);
+      }
+      rowY += 75;
+    });
+
+    // Bloc NET VERSÉ (Vert Émeraude)
+    drawRoundRect(55, rowY + 30, 1090, 140, 20);
+    ctx.fillStyle = '#ecfdf5';
+    ctx.fill();
+    ctx.strokeStyle = '#059669';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#065f46';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillText('NET À VERSER AU SALARIÉ (EN FCFA) :', 85, rowY + 105);
+
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 44px monospace';
+    ctx.fillStyle = '#047857';
+    ctx.fillText(formatFCFA(selectedSalary.netSalary), 1110, rowY + 110);
+
+    // Section Signatures & Cachet
+    const sigY = rowY + 210;
+
+    // Signature Salarié
+    drawRoundRect(55, sigY, 520, 220, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('Émargement & Signature du Salarié :', 315, sigY + 40);
+    ctx.font = 'italic 18px sans-serif';
+    ctx.fillText('« Pour acquit et réception de mon salaire »', 315, sigY + 75);
+
+    // Cachet École & Direction
+    drawRoundRect(625, sigY, 520, 220, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText('Le Service Comptabilité / La Direction :', 885, sigY + 40);
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillStyle = '#059669';
+    ctx.fillText('✓ CERTIFIÉ CONFORME & PAYÉ', 885, sigY + 75);
+
+    if (stampImg) {
+      ctx.drawImage(stampImg, 805, sigY + 80, 160, 130);
+    }
+
+    // Bas de page légal
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('Ce document officiel tient lieu de reçu libératoire de salaire pour la période indiquée. Émis via SchoolFlow Africa.', 600, 1680);
+
+    return canvas;
+  };
+
+  const handleShareWhatsApp = async () => {
     setIsCapturingWhatsApp(true);
-    showToast('📸 Capture HD du bulletin de salaire en cours...');
+    showToast('📸 Préparation HD du reçu de salaire en cours...');
 
     try {
-      const canvas = await html2canvas(receiptElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 8000,
-      });
-
-      let blob: Blob | null = null;
-      try {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      } catch (blobErr) {
-        console.warn('toBlob error:', blobErr);
-      }
-
-      if (!blob) {
-        try {
-          const dataUrl = canvas.toDataURL('image/png');
-          const res = await fetch(dataUrl);
-          blob = await res.blob();
-        } catch (fetchErr) {
-          console.warn('dataUrl fallback error:', fetchErr);
-        }
-      }
+      const canvas = await generateSalaryReceiptCanvas();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 
       if (!blob) {
         setIsCapturingWhatsApp(false);
@@ -379,17 +628,7 @@ export function SalariesView({
       }
 
       // 1. Copier automatiquement dans le presse-papier
-      if (navigator.clipboard && (window as any).ClipboardItem) {
-        try {
-          await navigator.clipboard.write([
-            new (window as any).ClipboardItem({
-              'image/png': blob,
-            }),
-          ]);
-        } catch (err) {
-          console.warn('Clipboard write fallback:', err);
-        }
-      }
+      handleCopyReceiptImageToClipboard(blob);
 
       // 2. Afficher la modale de prévisualisation et partage WhatsApp
       const imageUrl = URL.createObjectURL(blob);
@@ -397,20 +636,21 @@ export function SalariesView({
       setWhatsAppPreviewData({
         imageUrl,
         blob,
-        fileName: `Bulletin_Salaire_${selectedSalary.receiptNumber}_${(selectedSalary.staffName || 'Personnel').replace(/\s+/g, '_')}.png`,
+        fileName: `Recu_Salaire_${selectedSalary.receiptNumber}_${(selectedSalary.staffName || 'Personnel').replace(/\s+/g, '_')}.png`,
         phone: selectedSalary.phone || '+225 --',
         cleanPhone,
         name: `${selectedSalary.civility} ${selectedSalary.staffName}`,
       });
 
-      showToast('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      showToast('✅ Le reçu officiel a été copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
       setIsCapturingWhatsApp(false);
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsCapturingWhatsApp(false);
-      showToast('⚠️ Erreur lors de la capture du reçu.');
+      showToast('⚠️ Erreur lors de la préparation du reçu.');
     }
   };
+
 
   const renderSalaryReceiptSlip = (badgeLabel?: string, isPrint = false) => {
     return (
@@ -486,7 +726,7 @@ export function SalariesView({
             BULLETIN & REÇU DE PAIEMENT DE SALAIRE {badgeLabel ? `— ${badgeLabel}` : ''}
           </div>
           <div className="flex items-center justify-center gap-3 text-xs font-mono">
-            <span className="font-bold text-slate-700">N° Quittance :</span>
+            <span className="font-bold text-slate-700">N° Reçu :</span>
             <span className="font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
               {selectedSalary.receiptNumber}
             </span>
@@ -627,7 +867,7 @@ export function SalariesView({
 
         {/* Bas de page légal */}
         <div className="pt-2 text-center text-[9px] text-slate-400 border-t border-slate-100">
-          Ce document officiel tient lieu de quittance libératoire de salaire pour la période indiquée. Émis via SchoolFlow Africa.
+          Ce document officiel tient lieu de reçu libératoire de paiement de salaire pour la période indiquée. Émis via SchoolFlow Africa.
         </div>
       </div>
     );
@@ -658,7 +898,7 @@ export function SalariesView({
             </span>
           </div>
           <p className="text-xs text-slate-500 font-sans">
-            Émission des bulletins de paie certifiés, quittances de salaires et gestion des rémunérations en <strong className="text-slate-800">FCFA</strong>.
+            Émission des bulletins de paie certifiés, reçus de salaires et gestion des rémunérations en <strong className="text-slate-800">FCFA</strong>.
           </p>
         </div>
       </div>
@@ -753,9 +993,10 @@ export function SalariesView({
                 1
               </div>
               <h2 className="text-sm sm:text-base font-bold text-slate-900 font-heading">
-                Paiement de Salaire & Quittance
+                Paiement de Salaire & Reçu
               </h2>
             </div>
+
             <span className="text-[11px] text-slate-500 font-medium">
               Saisie libre & dynamique
             </span>
@@ -1263,10 +1504,10 @@ export function SalariesView({
                 href={
                   whatsAppPreviewData.cleanPhone
                     ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
-                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`
+                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel délivré par le Service Comptabilité & Finances._`
                       )}`
                     : `https://wa.me/?text=${encodeURIComponent(
-                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance officielle délivrée par le Service Comptabilité & Finances._`
+                        `📋 *${(currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n🧾 *BULLETIN & REÇU OFFICIEL DE SALAIRE N° ${selectedSalary.receiptNumber}*\n👤 Bénéficiaire : *${selectedSalary.civility} ${selectedSalary.staffName}* (${selectedSalary.role})\n🆔 Matricule : *${selectedSalary.matricule}*\n📅 Période : *${selectedSalary.payPeriod}*\n💰 *NET VERSÉ : ${formatFCFA(selectedSalary.netSalary)}*\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel délivré par le Service Comptabilité & Finances._`
                       )}`
                 }
                 target="_blank"

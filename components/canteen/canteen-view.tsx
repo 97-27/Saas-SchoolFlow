@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Student, School } from '@/lib/data/types';
+import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import {
   UtensilsCrossed,
   Download,
@@ -158,13 +158,17 @@ export function CanteenView({
     return {};
   });
 
-  // Synchronisation des élèves
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  // Synchronisation des élèves et des factures/quittances
   useEffect(() => {
     setStudents(getLiveStudents(mockStudents, schoolSlug));
+    setInvoices(getLiveInvoices([], schoolSlug));
     setCurrentSchool(getLiveSchool(schoolSlug, school));
 
     const handleUpdate = () => {
       setStudents(getLiveStudents(mockStudents, schoolSlug));
+      setInvoices(getLiveInvoices([], schoolSlug));
       setCurrentSchool(getLiveSchool(schoolSlug, school));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -228,8 +232,21 @@ export function CanteenView({
 
   // Liste des abonnés cantine adaptée aux données réelles enregistrées dans le module
   const subscribers = useMemo(() => {
+    const canteenInvoiceStudentIds = new Set(
+      invoices
+        .filter((inv) => inv.feeType === 'Cantine' || inv.invoiceNumber?.startsWith('CAN-') || inv.notes?.toLowerCase().includes('cantine'))
+        .map((inv) => inv.studentId)
+    );
+
     return students
-      .filter((stu) => Boolean(customDietMap[stu.id]))
+      .filter((stu) => {
+        const isEnrolled =
+          stu.isCanteen === true ||
+          (typeof stu.notes === 'string' && stu.notes.includes('Cantine (Oui)')) ||
+          (typeof stu.address === 'string' && stu.address.includes('Cantine (Oui)')) ||
+          canteenInvoiceStudentIds.has(stu.id);
+        return Boolean(customDietMap[stu.id]) || isEnrolled;
+      })
       .map((stu) => {
         const custom = customDietMap[stu.id];
         const defaultDiet = 'Standard (Sans restriction)';
@@ -252,8 +269,21 @@ export function CanteenView({
 
         const paidMonths = Object.keys(monthsState).filter((m) => monthsState[m]);
         const paidMonthsCount = paidMonths.length;
-        const grossAmount = paidMonthsCount * monthlyRate;
-        const totalPaidAmount = Math.max(0, grossAmount - discountAmount);
+        let grossAmount = paidMonthsCount * monthlyRate;
+        let totalPaidAmount = Math.max(0, grossAmount - discountAmount);
+
+        // Si aucun mois n'est encore coché manuellement mais qu'un paiement Cantine existe dans invoices
+        const matchingInvoices = invoices.filter(
+          (inv) =>
+            (inv.studentId === stu.id || inv.studentName === stu.fullName) &&
+            (inv.feeType === 'Cantine' || inv.invoiceNumber?.startsWith('CAN-') || inv.notes?.toLowerCase().includes('cantine'))
+        );
+        const invoicePaidTotal = matchingInvoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
+
+        if (totalPaidAmount === 0 && invoicePaidTotal > 0) {
+          totalPaidAmount = invoicePaidTotal;
+          grossAmount = invoicePaidTotal + discountAmount;
+        }
 
         return {
           ...stu,
@@ -267,7 +297,7 @@ export function CanteenView({
           totalPaidAmount,
         };
       });
-  }, [students, customDietMap, monthlyPayments]);
+  }, [students, customDietMap, monthlyPayments, invoices]);
 
   // Filtrage
   const filteredSubscribers = useMemo(() => {
@@ -556,8 +586,17 @@ export function CanteenView({
         } catch (e) {}
       }
 
-      setToastMessage('✅ Le reçu automatique a été déjà copié dans votre presse-papiers ! Vous pouvez maintenant aller sur WhatsApp et faire Coller (Ctrl + V).');
+      setToastMessage('✅ Le reçu automatique a été copié dans le presse-papiers et WhatsApp est prêt !');
       setTimeout(() => setToastMessage(null), 7000);
+
+      // Ouverture directe du dialogue WhatsApp avec message récapitulatif
+      const rawPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/\D/g, '');
+      const cleanPhone = rawPhone.length === 10 ? `225${rawPhone}` : rawPhone;
+      const message = `Bonjour,\nVoici le reçu officiel de restauration (Cantine Scolaire) pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Régime : ${sub.dietaryRestrictions}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• Mois réglés : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
+      const waUrl = cleanPhone
+        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
+        : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
     } catch (e) {
       console.error(e);
     } finally {
@@ -816,7 +855,7 @@ export function CanteenView({
         <div
           ref={topScrollRef}
           onScroll={handleTopScroll}
-          className="overflow-x-auto bg-slate-100/90 border-b border-slate-200 scrollbar-thin"
+          className="overflow-x-auto bg-slate-100/90 border-b border-slate-200 scrollbar-thin scrollbar-thumb-emerald-500 scrollbar-track-slate-100"
           style={{ height: '14px' }}
         >
           <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
@@ -826,7 +865,7 @@ export function CanteenView({
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto scrollbar-thin"
+          className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
@@ -1151,7 +1190,7 @@ export function CanteenView({
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-slate-950 font-heading">
-                    Quittance de Restauration Scolaire
+                    Reçu de Restauration Scolaire
                   </h3>
                   <p className="text-xs text-slate-500 font-mono">
                     Document officiel d&apos;encaissement • {currentSchool.name}
@@ -1343,7 +1382,7 @@ export function CanteenView({
               {/* Cachet Officiel */}
               <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-xs">
                 <div className="text-[9px] text-slate-400 italic">
-                  Quittance officielle numérotée émise par l&apos;Économe.
+                  Reçu officiel numéroté émis par l&apos;Économe.
                 </div>
                 <div className="p-2 rounded-xl border border-dashed border-emerald-400 bg-emerald-50 flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />

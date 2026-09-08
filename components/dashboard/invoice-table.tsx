@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice, Student } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
-import { formatFCFA, formatDate, formatDateFrenchLong, formatFullNameNomFirst } from '@/lib/utils/formatters';
+import { formatFCFA, formatDate, formatDateFrenchLong, formatFullNameNomFirst, formatEnrollmentStatus } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -705,7 +705,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
                           ? 'bg-blue-50 text-blue-800 border-blue-200/80 shadow-2xs'
                           : 'bg-emerald-50 text-emerald-800 border-emerald-200/80 shadow-2xs'
                       }`}>
-                        {tx.enrollmentType === 'ancien' ? '🔄 Ancien' : '🌟 Nouveau'}
+                        {formatEnrollmentStatus(tx.enrollmentType, tx.studentGender).badge}
                       </span>
                     </td>
 
