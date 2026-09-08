@@ -1233,12 +1233,12 @@ export function InscriptionsView({
     ctx.fillText(finalStuId, 155, 408);
 
     ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText('Matricule :', 390, 408);
+    ctx.fillText('Matricule :', 280, 408);
     ctx.font = 'bold 17px monospace';
-    ctx.fillText(finalStuMat ? finalStuMat : '—', 485, 408);
+    ctx.fillText(finalStuMat ? finalStuMat : '—', 370, 408);
 
     ctx.font = 'bold 15px Inter, sans-serif';
-    ctx.fillText("Date d'encaissement :", 740, 408);
+    ctx.fillText("Date d'encaissement :", 660, 408);
     ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'right';
     ctx.fillText(formatDate(finalStuDate), 1130, 408);
@@ -1738,9 +1738,9 @@ export function InscriptionsView({
         {/* Détails Élève & Coordonnées Quittance */}
         <div className="relative z-10 rounded-xl bg-slate-50/95 border border-slate-200 p-3.5 space-y-2.5 text-xs sm:text-sm">
           {/* 1. En-tête de Quittance : Identifiant Comptable, Matricule Officiel, Date & Statut Administratif */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pb-2.5 border-b border-slate-200/80 items-center">
-            <div>
-              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
+          <div className="grid grid-cols-2 sm:grid-cols-12 gap-2 sm:gap-3 pb-2.5 border-b border-slate-200/80 items-center">
+            <div className="sm:col-span-2">
+              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider whitespace-nowrap">
                 ID Élève :
               </span>
               <span className="font-mono font-black text-emerald-800 text-xs sm:text-sm">
@@ -1748,8 +1748,8 @@ export function InscriptionsView({
               </span>
             </div>
 
-            <div>
-              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
+            <div className="sm:col-span-3">
+              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider whitespace-nowrap">
                 Matricule Officiel :
               </span>
               <span className="font-mono font-black text-slate-950 text-xs sm:text-sm">
@@ -1757,17 +1757,17 @@ export function InscriptionsView({
               </span>
             </div>
 
-            <div>
-              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">
+            <div className="sm:col-span-4 text-left sm:text-center">
+              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider whitespace-nowrap">
                 Date d&apos;encaissement :
               </span>
-              <span className="font-extrabold text-slate-950 text-xs sm:text-sm font-mono">
+              <span className="font-extrabold text-slate-950 text-xs sm:text-sm font-mono block">
                 {formatDate(paymentDate)}
               </span>
             </div>
 
-            <div className="flex flex-col sm:items-end justify-center">
-              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider mb-0.5">
+            <div className="sm:col-span-3 flex flex-col sm:items-end justify-center">
+              <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider mb-0.5 whitespace-nowrap">
                 Statut Inscription :
               </span>
               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border shadow-2xs whitespace-nowrap ${
@@ -2953,7 +2953,7 @@ export function InscriptionsView({
                   <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Date d&apos;inscription & versement *</span>
+                      <span>Date d&apos;inscription *</span>
                     </span>
                     <span className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                       {paymentDate ? formatDate(paymentDate) : 'JJ/MM/AAAA'}

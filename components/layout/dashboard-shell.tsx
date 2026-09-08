@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
+import { RealtimeNotifier } from './realtime-notifier';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -43,6 +44,9 @@ export function DashboardShell({
             {children}
           </main>
         </div>
+
+        {/* Notificateur Universel Temps Réel Multi-Appareils */}
+        <RealtimeNotifier schoolSlug={schoolSlug} />
       </div>
     </ReadOnlyGuard>
   );
