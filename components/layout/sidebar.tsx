@@ -62,7 +62,7 @@ export function Sidebar({
     pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat')
   );
   const [financeOpen, setFinanceOpen] = useState(
-    pathname.includes('/scolarite') || pathname.includes('/depenses') || pathname.includes('/rapports')
+    pathname.includes('/depenses') || pathname.includes('/rapports')
   );
   const [communicationOpen, setCommunicationOpen] = useState(
     pathname.includes('/communication') || pathname.includes('/bulletins-parents')
@@ -222,15 +222,9 @@ export function Sidebar({
         isOpen: financeOpen,
         onToggle: () => setFinanceOpen(!financeOpen),
         active:
-          pathname.includes('/scolarite') ||
           pathname.includes('/depenses') ||
           pathname.includes('/rapports'),
         subItems: [
-          {
-            title: 'Scolarité & Caisse',
-            href: `${baseUrl}/scolarite`,
-            active: pathname.includes('/scolarite'),
-          },
           {
             title: "Dépenses de l'École",
             href: `${baseUrl}/depenses`,

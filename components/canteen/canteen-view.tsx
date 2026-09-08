@@ -254,12 +254,11 @@ export function CanteenView({
 
     return students
       .filter((stu) => {
-        const isEnrolled =
-          stu.isCanteen === true ||
-          (typeof stu.notes === 'string' && stu.notes.includes('Cantine (Oui)')) ||
-          (typeof stu.address === 'string' && stu.address.includes('Cantine (Oui)')) ||
-          canteenInvoiceStudentIds.has(stu.id);
-        return Boolean(customDietMap[stu.id]) || isEnrolled;
+        const hasCustom = Boolean(customDietMap[stu.id]);
+        const monthsState = monthlyPayments[stu.id] || {};
+        const hasPaidMonths = Object.values(monthsState).some(Boolean);
+        const hasInvoice = canteenInvoiceStudentIds.has(stu.id);
+        return hasCustom || hasPaidMonths || hasInvoice;
       })
       .map((stu) => {
         const custom = customDietMap[stu.id];

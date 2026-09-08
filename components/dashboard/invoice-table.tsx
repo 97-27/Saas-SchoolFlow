@@ -82,7 +82,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     }
   };
 
-  const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('all_dates');
+  const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('day_only');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState('Toutes les classes');
@@ -122,14 +122,22 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
     invoices.forEach((inv) => {
       const matchedStudent = students.find(
-        (s) => s.id === inv.studentId || s.studentNumber === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
+        (s) => s.id === inv.studentId || s.studentNumber === inv.studentId || (inv.studentName && s.fullName?.toLowerCase() === inv.studentName?.toLowerCase())
       );
       const matriculeCode = matchedStudent?.matricule || (inv as any).matricule || '';
       const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
       const inst = inv.installments;
 
       const rawInvNumber = inv.invoiceNumber || inv.id || '';
-      const displayInvoiceNumber = matchedStudent?.studentNumber || rawInvNumber.replace(/^REC(?:U)?[-_ ]?(?:2026[-_ ]?)?/i, 'ID-') || rawInvNumber;
+      let displayInvoiceNumber = matchedStudent?.studentNumber || '';
+      if (!displayInvoiceNumber) {
+        if (/^(?:CAN|TRP|QUI-CAN|QUI-TRP|QUI-INT|ID)-/i.test(rawInvNumber)) {
+          const numPart = rawInvNumber.replace(/\D/g, '');
+          displayInvoiceNumber = numPart ? `ID-${numPart.slice(-3).padStart(3, '0')}` : rawInvNumber;
+        } else {
+          displayInvoiceNumber = rawInvNumber.replace(/^REC(?:U)?[-_ ]?(?:2026[-_ ]?)?/i, 'ID-') || rawInvNumber;
+        }
+      }
 
       let foundVersements = false;
 
@@ -343,7 +351,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     setSelectedClass('Toutes les classes');
     setSelectedStatus('all');
     setSelectedEnrollmentType('all');
-    setDateFilterMode('all_dates');
+    setDateFilterMode('day_only');
   };
 
   const hasActiveFilters =
@@ -351,7 +359,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     selectedClass !== 'Toutes les classes' ||
     selectedStatus !== 'all' ||
     selectedEnrollmentType !== 'all' ||
-    dateFilterMode === 'all_dates';
+    dateFilterMode !== 'day_only';
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs space-y-0 relative">

@@ -459,7 +459,7 @@
         "enrollmentDate": "2026-09-07",
         "paymentDate": "2026-09-07",
         "installments": {},
-        "isBoarding": true,
+        "isBoarding": false,
         "notes": "",
         "updatedAt": "2026-09-08T07:40:45.730Z"
       },
@@ -492,7 +492,7 @@
         "enrollmentDate": "2026-09-07",
         "paymentDate": "2026-09-07",
         "installments": {},
-        "isBoarding": true,
+        "isBoarding": false,
         "notes": "",
         "updatedAt": "2026-09-08T07:40:45.867Z"
       }
@@ -835,6 +835,76 @@
         "status": "sent"
       },
       {
+        "id": "inv-015",
+        "invoiceNumber": "ID-015",
+        "studentId": "stu-015",
+        "studentName": "KARAMOKO Lassina",
+        "studentAvatar": "",
+        "studentGrade": "CM2",
+        "studentGender": "male",
+        "guardianName": "Karamoko Youssouf",
+        "guardianPhone": "+225 07 48 08 21 61",
+        "secondaryPhones": [],
+        "feeType": "Frais d'inscription & Scolarité",
+        "registrationFee": 25000,
+        "amount": 80000,
+        "discountAmount": 0,
+        "netAmount": 80000,
+        "paidAmount": 80000,
+        "balanceRemaining": 0,
+        "enrollmentType": "ancien",
+        "paymentMethod": "Espèces",
+        "installments": {
+          "versement1": {
+            "amount": 25000,
+            "paymentMethod": "Espèces",
+            "date": "2026-08-04"
+          },
+          "versement2": {
+            "amount": 20000,
+            "paymentMethod": "Paiement en ligne (Wave)",
+            "date": "2026-09-08"
+          },
+          "versement3": {
+            "amount": 20000,
+            "paymentMethod": "Virement bancaire",
+            "date": "2026-09-08"
+          },
+          "versement4": {
+            "amount": 15000,
+            "paymentMethod": "Espèces",
+            "date": "2026-09-08"
+          }
+        },
+        "issueDate": "2026-08-04",
+        "dueDate": "2026-08-04",
+        "status": "paid",
+        "schoolSlug": "epc-manoi",
+        "schoolId": "epc-manoi"
+      },
+      {
+        "id": "inv-boarding-stud-int-1788701343988",
+        "invoiceNumber": "INT-9853",
+        "studentId": "stud-int-1788701343988",
+        "studentName": "KOUAME Jean Marc",
+        "studentAvatar": "",
+        "studentGrade": "6ème",
+        "studentGender": "male",
+        "guardianName": "Parent / Tuteur",
+        "guardianPhone": "+225 00 00 00 00",
+        "feeType": "Internat & Pensionnat",
+        "amount": 315000,
+        "discountAmount": 0,
+        "netAmount": 315000,
+        "paidAmount": 70000,
+        "balanceRemaining": 245000,
+        "paymentMethod": "Espèces en caisse",
+        "enrollmentType": "nouveau",
+        "issueDate": "06/09/2026",
+        "dueDate": "06/09/2026",
+        "status": "partial"
+      },
+      {
         "id": "inv-001",
         "invoiceNumber": "REC-2026-001",
         "studentId": "ID-001",
@@ -972,7 +1042,7 @@
         "paidAmount": 40000,
         "balanceRemaining": 90000,
         "paymentMethod": "Espèces en caisse",
-        "enrollmentType": "nouveau",
+        "enrollmentType": "ancien",
         "installments": {},
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
@@ -996,7 +1066,7 @@
         "paidAmount": 65000,
         "balanceRemaining": 0,
         "paymentMethod": "Espèces en caisse",
-        "enrollmentType": "nouveau",
+        "enrollmentType": "ancien",
         "installments": {},
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
@@ -1044,7 +1114,7 @@
         "paidAmount": 0,
         "balanceRemaining": 80000,
         "paymentMethod": "Espèces en caisse",
-        "enrollmentType": "nouveau",
+        "enrollmentType": "ancien",
         "installments": {},
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
@@ -1068,7 +1138,7 @@
         "paidAmount": 0,
         "balanceRemaining": 80000,
         "paymentMethod": "Espèces en caisse",
-        "enrollmentType": "nouveau",
+        "enrollmentType": "ancien",
         "installments": {},
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
@@ -1154,8 +1224,8 @@
         "studentName": "MASSE Cheick Abdul Madjib",
         "studentGrade": "Maternelle (G.S.)",
         "studentGender": "male",
-        "guardianName": "Mr Masse",
-        "guardianPhone": "+225 07 48 47 43 62",
+        "guardianName": "Cisse Makoua",
+        "guardianPhone": "+225 05 04 14 63 78",
         "feeType": "Frais d'inscription & Scolarité",
         "registrationFee": 25000,
         "amount": 65000,
@@ -1169,6 +1239,31 @@
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
         "status": "sent"
+      },
+      {
+        "id": "inv-015",
+        "invoiceNumber": "REC-2026-015",
+        "studentId": "5403c5e0-f2bb-482d-ac6f-a8443c038da3",
+        "studentName": "ADENIYI Mouthmainat Adesewa",
+        "studentAvatar": "/avatars/avatar-female-1.png",
+        "studentGrade": "CP2",
+        "studentGender": "female",
+        "guardianName": "M. ADENIYI",
+        "guardianPhone": "+225 01 02 03 04 05",
+        "feeType": "Frais d'inscription & Scolarité",
+        "registrationFee": 25000,
+        "amount": 60000,
+        "discountAmount": 0,
+        "netAmount": 60000,
+        "paidAmount": 0,
+        "balanceRemaining": 60000,
+        "paymentMethod": "Espèces en caisse",
+        "enrollmentType": "nouveau",
+        "installments": {},
+        "issueDate": "2026-09-07",
+        "dueDate": "2026-09-07",
+        "status": "sent",
+        "schoolSlug": "epc-manoi"
       }
     ],
     "deletedStudentIds": [
@@ -1176,7 +1271,7 @@
       "MAT-2026",
       "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e"
     ],
-    "updatedAt": "2026-09-08T21:50:10.455Z",
+    "updatedAt": "2026-09-08T22:11:24.015Z",
     "slug": "epc-manoi"
   }
 }

@@ -1,6 +1,4 @@
-import React from 'react';
-import { mockInvoices, mockSchools } from '@/lib/data/mock-data';
-import { CaisseView } from '@/components/finance/caisse-view';
+import { redirect } from 'next/navigation';
 
 export default async function ScolaritePage({
   params,
@@ -8,14 +6,7 @@ export default async function ScolaritePage({
   params: Promise<{ ecole: string }> | { ecole: string };
 }) {
   const resolvedParams = await params;
-  const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
-
-  return (
-    <CaisseView
-      initialInvoices={mockInvoices}
-      school={school}
-      schoolSlug={ecoleSlug}
-    />
-  );
+  const ecoleSlug = resolvedParams.ecole || 'epc-manoi';
+  redirect(`/${ecoleSlug}/admin/depenses`);
 }
+

@@ -268,7 +268,10 @@ export function BoardingView({
     const customList = customSubscriptions
       .map((cs) => {
         let foundStudent = students.find(
-          (s) => s.id === cs.studentId || s.studentNumber === cs.matricule || s.matricule === cs.matricule
+          (s) =>
+            s.id === cs.studentId ||
+            (Boolean(cs.studentId) && s.studentNumber === cs.studentId) ||
+            (Boolean(cs.matricule) && Boolean(s.matricule) && s.matricule === cs.matricule)
         );
 
         // Sécurité anti-disparition : si l'élève n'est pas encore dans l'état local students, reconstruction directe depuis cs
@@ -331,18 +334,20 @@ export function BoardingView({
       })
       .filter((b): b is NonNullable<typeof b> => b !== null);
 
-    // 2. Les élèves inscrits ayant souscrit à l'internat (isBoarding ou mention dans les prestations)
+    // 2. Uniquement les élèves inscrits ayant des paiements d'internat déjà enregistrés
     const registeredBoarders = students
       .filter((s) => {
         if (!s) return false;
         if (seenIds.has(s.id) || (s.studentNumber && seenNumbers.has(s.studentNumber)) || (s.matricule && seenNumbers.has(s.matricule))) {
           return false;
         }
-        return Boolean(
-          s.isBoarding ||
-          s.notes?.toLowerCase().includes('internat (oui)') ||
-          s.address?.toLowerCase().includes('internat (oui)')
-        );
+        const studentMonths =
+          monthlyPayments[s.id] ||
+          (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) ||
+          (s.matricule ? monthlyPayments[s.matricule] : {}) ||
+          {};
+        const hasPaidMonths = MONTHS_LIST.some((m) => studentMonths[m]);
+        return hasPaidMonths;
       })
       .map((s) => {
         seenIds.add(s.id);
