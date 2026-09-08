@@ -85,6 +85,11 @@ export function TransportView({
   const [isNewSubModalOpen, setIsNewSubModalOpen] = useState(false);
   const [showDeleteTransportModal, setShowDeleteTransportModal] = useState(false);
   const [isDeletingTransport, setIsDeletingTransport] = useState(false);
+  const [monthsPaymentDate, setMonthsPaymentDate] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [monthsPaymentMethod, setMonthsPaymentMethod] = useState<string>('Espèces');
 
   // Formulaire nouvelle souscription
   const [newSubStudentId, setNewSubStudentId] = useState('');
@@ -448,7 +453,7 @@ export function TransportView({
     const remaining = Math.max(0, totalExigible - totalPaid);
 
     if (totalPaid > 0) {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = monthsPaymentDate || new Date().toISOString().split('T')[0];
       const transportInvoice = {
         id: `inv-transport-${stuId}`,
         invoiceNumber: `TRP-${selectedStudentForMonths.studentNumber?.replace(/\D/g, '') || stuId.replace(/\D/g, '').slice(-4) || '001'}`,
@@ -465,12 +470,14 @@ export function TransportView({
         netAmount: totalExigible,
         paidAmount: totalPaid,
         balanceRemaining: remaining,
-        paymentMethod: 'Espèces',
+        paymentMethod: monthsPaymentMethod || 'Espèces',
         enrollmentType: selectedStudentForMonths.enrollmentType || 'nouveau',
         issueDate: todayStr,
         dueDate: todayStr,
         status: remaining === 0 ? ('paid' as const) : ('partial' as const),
-        notes: paidMonths.length > 0 ? `Mois réglés : ${paidMonths.join(', ')}` : 'Transport Scolaire (Navettes)',
+        notes: paidMonths.length > 0
+          ? `Mois réglés : ${paidMonths.map(m => ['Septembre', 'Octobre', 'Novembre', 'Décembre'].includes(m) ? `${m} 2026` : `${m} 2027`).join(', ')}`
+          : 'Transport Scolaire (Navettes)',
       };
       saveLivePaymentInvoice(transportInvoice, schoolSlug);
     }
@@ -1136,7 +1143,7 @@ export function TransportView({
                         className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all cursor-pointer shadow-2xs"
                       >
                         <ReceiptText className="w-3.5 h-3.5 text-white" />
-                        <span>Modifier & Reçu</span>
+                        <span>Voir le reçu</span>
                       </button>
                     </td>
                   </tr>
@@ -1245,6 +1252,35 @@ export function TransportView({
                   }}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-slate-900"
                 />
+              </div>
+            </div>
+
+            {/* Date et Mode de Règlement du versement */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Date du Paiement *</label>
+                <input
+                  type="date"
+                  value={monthsPaymentDate}
+                  onChange={(e) => setMonthsPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium text-slate-900 bg-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Mode de Règlement *</label>
+                <select
+                  value={monthsPaymentMethod}
+                  onChange={(e) => setMonthsPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold text-slate-900 bg-white cursor-pointer"
+                >
+                  <option value="Espèces">Espèces</option>
+                  <option value="Paiement en ligne (Wave)">Paiement en ligne (Wave)</option>
+                  <option value="Orange Money">Orange Money</option>
+                  <option value="MTN Money">MTN Money</option>
+                  <option value="Moov Money">Moov Money</option>
+                  <option value="Virement bancaire">Virement bancaire</option>
+                  <option value="Chèque">Chèque</option>
+                </select>
               </div>
             </div>
 

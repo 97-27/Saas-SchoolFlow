@@ -61,12 +61,9 @@ export function RevenueSummary({
 
         const seenBoardingIds = new Set<string>();
 
-        // 1. Tous les élèves inscrits avec option Internat
+        // 1. Tous les élèves inscrits avec souscription ou paiement d'internat
         students.forEach((stu) => {
           const hasOptedBoarding = Boolean(
-            stu.isBoarding ||
-            stu.notes?.toLowerCase().includes('internat (oui)') ||
-            stu.address?.toLowerCase().includes('internat (oui)') ||
             boardingSubsMap.has(stu.id) ||
             (stu.studentNumber && boardingSubsMap.has(stu.studentNumber)) ||
             (stu.matricule && boardingSubsMap.has(stu.matricule))
@@ -74,8 +71,12 @@ export function RevenueSummary({
           if (hasOptedBoarding) {
             seenBoardingIds.add(stu.id);
             boardingStudentsCount += 1;
-            const rate = boardingSubsMap.get(stu.id) || boardingSubsMap.get(stu.studentNumber) || 50000;
-            const months = monthlyPayments[stu.id] || (stu.studentNumber ? monthlyPayments[stu.studentNumber] : {}) || {};
+            const rate = boardingSubsMap.get(stu.id) || (stu.studentNumber && boardingSubsMap.get(stu.studentNumber)) || (stu.matricule && boardingSubsMap.get(stu.matricule)) || 50000;
+            const months =
+              monthlyPayments[stu.id] ||
+              (stu.studentNumber ? monthlyPayments[stu.studentNumber] : {}) ||
+              (stu.matricule ? monthlyPayments[stu.matricule] : {}) ||
+              {};
             const paidCount = Object.values(months).filter(Boolean).length;
             if (paidCount > 0) {
               boardingAmount += paidCount * rate;
@@ -83,16 +84,31 @@ export function RevenueSummary({
           }
         });
 
-        // 2. Souscriptions manuelles additionnelles
+        // 2. Souscriptions manuelles d'internat
         boardingSubsList.forEach((sub) => {
           if (sub.studentId && !seenBoardingIds.has(sub.studentId)) {
             seenBoardingIds.add(sub.studentId);
             boardingStudentsCount += 1;
             const rate = sub.monthlyRate || 50000;
-            const months = monthlyPayments[sub.studentId] || {};
+            const months =
+              monthlyPayments[sub.studentId] ||
+              (sub.matricule ? monthlyPayments[sub.matricule] : {}) ||
+              {};
             const paidCount = Object.values(months).filter(Boolean).length;
             if (paidCount > 0) {
               boardingAmount += paidCount * rate;
+            }
+          }
+        });
+
+        // 3. Prise en compte directe de toute quittance d'internat
+        invoices.forEach((inv) => {
+          const isInt = (inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-');
+          if (isInt && inv.paidAmount && inv.paidAmount > 0) {
+            if (!seenBoardingIds.has(inv.studentId)) {
+              seenBoardingIds.add(inv.studentId);
+              boardingStudentsCount += 1;
+              boardingAmount += inv.paidAmount;
             }
           }
         });
@@ -102,52 +118,64 @@ export function RevenueSummary({
       try {
         const rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
         const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
-        if (rawCanteenSubs) {
-          const customDietMap: Record<string, { diet: string; rate: number; discount?: number }> = JSON.parse(rawCanteenSubs);
-          const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
+        const customDietMap: Record<string, { diet: string; rate: number; discount?: number }> = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : {};
+        const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
+        const seenCanteenIds = new Set<string>();
 
-          Object.keys(customDietMap).forEach((stuId) => {
-            const stuExists = students.some((s) => s.id === stuId || s.studentNumber === stuId);
-            if (stuExists) {
-              const custom = customDietMap[stuId];
-              const rate = custom?.rate || 25000;
-              const discount = custom?.discount || 0;
-              const months = monthlyPayments[stuId] || {};
-              const paidCount = Object.values(months).filter(Boolean).length;
-              if (paidCount > 0) {
-                const total = Math.max(0, paidCount * rate - discount);
-                canteenAmount += total;
-                canteenStudentsCount += 1;
-              }
-            }
-          });
-        }
+        Object.keys(customDietMap).forEach((stuId) => {
+          const custom = customDietMap[stuId];
+          const rate = custom?.rate || 25000;
+          const discount = custom?.discount || 0;
+          const months = monthlyPayments[stuId] || {};
+          const paidCount = Object.values(months).filter(Boolean).length;
+          if (paidCount > 0) {
+            seenCanteenIds.add(stuId);
+            canteenStudentsCount += 1;
+            canteenAmount += Math.max(0, paidCount * rate - discount);
+          }
+        });
+
+        // Factures de cantine directes
+        invoices.forEach((inv) => {
+          const isCan = (inv.feeType || '').toLowerCase().includes('cantine') || (inv.invoiceNumber || '').startsWith('CAN-');
+          if (isCan && inv.paidAmount && inv.paidAmount > 0 && !seenCanteenIds.has(inv.studentId)) {
+            seenCanteenIds.add(inv.studentId);
+            canteenStudentsCount += 1;
+            canteenAmount += inv.paidAmount;
+          }
+        });
       } catch (e) {}
 
       // Calcul Transport
       try {
         const rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2');
         const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
-        if (rawTransportSubs) {
-          const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = JSON.parse(rawTransportSubs);
-          const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
+        const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = rawTransportSubs ? JSON.parse(rawTransportSubs) : {};
+        const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
+        const seenTransportIds = new Set<string>();
 
-          Object.keys(customTransportMap).forEach((stuId) => {
-            const stuExists = students.some((s) => s.id === stuId || s.studentNumber === stuId);
-            if (stuExists) {
-              const custom = customTransportMap[stuId];
-              const rate = custom?.rate || 35000;
-              const discount = custom?.discount || 0;
-              const months = monthlyPayments[stuId] || {};
-              const paidCount = Object.values(months).filter(Boolean).length;
-              if (paidCount > 0) {
-                const total = Math.max(0, paidCount * rate - discount);
-                transportAmount += total;
-                transportStudentsCount += 1;
-              }
-            }
-          });
-        }
+        Object.keys(customTransportMap).forEach((stuId) => {
+          const custom = customTransportMap[stuId];
+          const rate = custom?.rate || 35000;
+          const discount = custom?.discount || 0;
+          const months = monthlyPayments[stuId] || {};
+          const paidCount = Object.values(months).filter(Boolean).length;
+          if (paidCount > 0) {
+            seenTransportIds.add(stuId);
+            transportStudentsCount += 1;
+            transportAmount += Math.max(0, paidCount * rate - discount);
+          }
+        });
+
+        // Factures de transport directes
+        invoices.forEach((inv) => {
+          const isTrp = (inv.feeType || '').toLowerCase().includes('transport') || (inv.invoiceNumber || '').startsWith('TRP-');
+          if (isTrp && inv.paidAmount && inv.paidAmount > 0 && !seenTransportIds.has(inv.studentId)) {
+            seenTransportIds.add(inv.studentId);
+            transportStudentsCount += 1;
+            transportAmount += inv.paidAmount;
+          }
+        });
       } catch (e) {}
     }
 

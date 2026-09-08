@@ -360,9 +360,8 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/scolarite') || pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
         subItems: [
-          { title: 'Scolarité & Caisse', href: `${baseUrl}/scolarite`, active: pathname.includes('/scolarite') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],
@@ -406,9 +405,8 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/scolarite') || pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
         subItems: [
-          { title: 'Scolarité & Caisse', href: `${baseUrl}/scolarite`, active: pathname.includes('/scolarite') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],
@@ -431,19 +429,18 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'secretaire') {
-    // 📝 SECRÉTAIRE : Vue d'ensemble, Documents scolaires, Dépenses de l'école, Rapports & statistiques, Scolarité & caisse, Classes & niveaux, Notes diverses, Enseignants & personnel
+    // 📝 SECRÉTAIRE : Vue d'ensemble, Documents scolaires, Dépenses de l'école, Rapports & statistiques, Classes & niveaux, Notes diverses, Enseignants & personnel
     navItems = [
       { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
       { key: 'documents', title: 'Documents Scolaires', href: `${baseUrl}/documents`, icon: FileSpreadsheet, active: pathname.includes('/documents') },
       { key: 'depenses', title: "Dépenses de l'École", href: `${baseUrl}/depenses`, icon: Wallet, active: pathname.includes('/depenses') },
       { key: 'rapports', title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, icon: BarChart3, active: pathname.includes('/rapports') },
-      { key: 'scolarite', title: 'Scolarité & Caisse', href: `${baseUrl}/scolarite`, icon: Receipt, active: pathname.includes('/scolarite') },
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
     ];
   } else if (roleId === 'comptable') {
-    // 💼 COMPTABLE : Élèves (3 pages), Tableau de bord avec Services (3 pages), Comptabilité & Finances (3 pages), Réductions, Salaires, Notes Diverses
+    // 💼 COMPTABLE : Élèves (3 pages), Tableau de bord avec Services (3 pages), Comptabilité & Finances (2 pages), Réductions, Salaires, Notes Diverses
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
       {
@@ -462,9 +459,8 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/scolarite') || pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
         subItems: [
-          { title: 'Scolarité & Caisse', href: `${baseUrl}/scolarite`, active: pathname.includes('/scolarite') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],

@@ -2320,10 +2320,10 @@ export function BoardingView({
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: 21458932A (ou laisser vide)"
-                  value={formMatricule}
-                  onChange={(e) => setFormMatricule(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono text-[11px]"
+                  readOnly
+                  placeholder="— Non attribué —"
+                  value={formMatricule || ''}
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-bold cursor-not-allowed"
                 />
               </div>
 
