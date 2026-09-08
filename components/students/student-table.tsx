@@ -1006,6 +1006,22 @@ export function StudentTable({
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 flex items-center justify-between">
+                  <span>Date d&apos;inscription officielle *</span>
+                  <span className="text-[11px] text-emerald-700 font-semibold">
+                    {formatDate(editPaymentDate)}
+                  </span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={editPaymentDate}
+                  onChange={(e) => setEditPaymentDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-sans font-semibold text-slate-800 transition-all cursor-pointer"
+                />
+              </div>
+
               {/* Actions */}
               <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
                 <button
@@ -1355,14 +1371,15 @@ export function StudentTable({
               <button
                 type="button"
                 onClick={() => {
-                  const ids = studentToDelete.map((s) => s.id);
+                  const ids = studentToDelete.flatMap((s) => [s.id, s.studentNumber, s.matricule].filter(Boolean) as string[]);
                   deleteLiveStudents(ids, schoolSlug);
+                  setStudents((prev) => prev.filter((s) => !ids.includes(s.id) && (!s.studentNumber || !ids.includes(s.studentNumber))));
                   setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
                   setStudentToDelete(null);
                   setSuccessMessage(
-                    ids.length === 1
+                    studentToDelete.length === 1
                       ? "L'élève a été supprimé avec succès de l'ensemble des modules de l'école."
-                      : `${ids.length} élèves ont été supprimés avec succès de l'ensemble des modules de l'école.`
+                      : `${studentToDelete.length} élèves ont été supprimés avec succès de l'ensemble des modules de l'école.`
                   );
                   setTimeout(() => setSuccessMessage(null), 5000);
                 }}

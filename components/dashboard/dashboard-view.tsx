@@ -21,6 +21,7 @@ import {
   getLiveStudents,
   getLiveInvoices,
   getLiveSchool,
+  getDeletedStudentIds,
   DATA_UPDATED_EVENT,
   startCrossDeviceSync,
 } from '@/lib/data/live-store';
@@ -94,13 +95,23 @@ export function DashboardView({
     const activeSlug = cleanSlug;
     setIsSyncing(true);
     try {
-      localStorage.removeItem(`schoolflow_registered_students_v1_${activeSlug}`);
-      localStorage.removeItem('schoolflow_registered_students_v1');
-      localStorage.removeItem(`schoolflow_registered_students_v1_epc-manoi`);
-      localStorage.removeItem(`schoolflow_registered_invoices_v1_${activeSlug}`);
-      localStorage.removeItem('schoolflow_registered_invoices_v1');
-      localStorage.removeItem(`schoolflow_registered_invoices_v1_epc-manoi`);
+      // 1. Envoyer d'abord les données et suppressions locales actuelles pour ne jamais les écraser
+      const currentLocalStudents = getLiveStudents([], activeSlug);
+      const currentLocalInvoices = getLiveInvoices([], activeSlug);
+      const currentDeletedIds = Array.from(getDeletedStudentIds());
 
+      await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: activeSlug,
+          students: currentLocalStudents,
+          invoices: currentLocalInvoices,
+          deletedStudentIds: currentDeletedIds,
+        }),
+      }).catch(() => {});
+
+      // 2. Récupérer les données fraîches synchronisées
       const res = await fetch(`/api/sync?slug=${activeSlug}&forceSupabase=true&t=${Date.now()}`);
       const result = await res.json();
       if (result && result.success && result.data) {

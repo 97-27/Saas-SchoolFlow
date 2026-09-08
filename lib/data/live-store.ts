@@ -3,32 +3,8 @@
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools, mockStudents, mockInvoices } from '@/lib/data/mock-data';
 
-// Liste des identifiants et numéros d'élèves protégés (effectif officiel 15 élèves d'EPC Manoi)
-export const PROTECTED_STUDENT_NUMBERS = new Set<string>([
-  'ID-001', 'ID-002', 'ID-003', 'ID-004', 'ID-005',
-  'ID-006', 'ID-007', 'ID-008', 'ID-009', 'ID-010',
-  'ID-011', 'ID-012', 'ID-013', 'ID-014', 'ID-015',
-  'stu-001', 'stu-002', 'stu-003', 'stu-004', 'stu-005',
-  'stu-006', 'stu-007', 'stu-008', 'stu-009', 'stu-010',
-  'stu-011', 'stu-012', 'stu-013', 'stu-014', 'stu-015',
-  '2f3af897-b354-47b6-a800-c3419c59ec8f',
-  '1b170bd6-389c-4fe0-944c-4868b0a8599b',
-  '61c785b4-be9d-4a35-8b02-66ceffecccdf',
-  '4675d6cc-e2e1-4b41-b53f-51a15e3caf06',
-  '72c96d59-13df-4706-aefa-7bed85ca5138',
-  '32f145bd-eb60-4b2a-b3cb-ea6880ac8378',
-  '890eca4a-f225-4055-8b70-8dd0919d6de4',
-  'e3df83e2-4732-4225-8efe-b56d868949f2',
-  '16f38872-8b28-41f2-a62d-97971cfbcf15',
-  'a52bd665-0a9e-4a51-9def-b3d57ed39131',
-  '1759e059-c2b7-449f-95aa-d2235c09c88a',
-  '5b3a4413-c77e-4c49-bfaa-55bf71b6af1d',
-  '701e331e-b9eb-4e57-8a5e-b065f38d71d2',
-  'a8540b89-b812-448f-9e53-c12d7dea0b4f',
-  'd5864a3d-8a0f-46a2-97bf-acd14ce72f86',
-  '5403c5e0-f2bb-482d-ac6f-a8443c038da3',
-  '98ae1361-9739-4b1f-9a49-7c40f069c998',
-]);
+// Liste des identifiants protégés (vide pour autoriser la suppression effective de tout élève par l'administrateur)
+export const PROTECTED_STUDENT_NUMBERS = new Set<string>();
 import {
   saveSchoolToSupabase,
   saveStudentToSupabase,
@@ -433,21 +409,13 @@ export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
 
 /**
  * Récupère les IDs supprimés par l'administrateur
- * Garantit que les 15 élèves officiels protégés ne peuvent jamais être considérés comme supprimés.
  */
 export function getDeletedStudentIds(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
     const raw = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
     const parsed: string[] = raw ? JSON.parse(raw) : [];
-    // Assainissement strict : retirer tout identifiant d'élève officiel protégé
-    const filtered = parsed.filter((id) => !PROTECTED_STUDENT_NUMBERS.has(id));
-    if (raw && parsed.length !== filtered.length) {
-      try {
-        localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
-      } catch (e) {}
-    }
-    return new Set(filtered);
+    return new Set(parsed);
   } catch (error) {
     return new Set();
   }
@@ -459,8 +427,7 @@ export function getDeletedStudentIds(): Set<string> {
 export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): void {
   if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return;
 
-  // Interdire formellement la suppression des élèves de l'effectif officiel protégé
-  const safeIdsToDelete = idsToDelete.filter((id) => !PROTECTED_STUDENT_NUMBERS.has(id));
+  const safeIdsToDelete = idsToDelete.filter(Boolean);
   if (safeIdsToDelete.length === 0) return;
 
   try {
@@ -1378,12 +1345,19 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       }
     } catch (e) {}
 
-    // GARANTIE ABSOLUE EPC MANOI : s'assurer que les 15 élèves officiels sont TOUJOURS présents dans la liste
+    // Initialisation EPC MANOI : n'ajouter les candidats initiaux que s'ils n'ont JAMAIS été supprimés
     if (slug === 'epc-manoi') {
       const candidates = [...initialStudents, ...mockStudents];
       for (const stu of candidates) {
         if (!isValidStudent(stu)) continue;
         const targetNum = stu.studentNumber;
+        if (
+          deletedIds.has(stu.id) ||
+          (targetNum && deletedIds.has(targetNum)) ||
+          (stu.matricule && deletedIds.has(stu.matricule))
+        ) {
+          continue;
+        }
         const exists = uniqueStudents.some(
           (u) =>
             u.id === stu.id ||
