@@ -333,7 +333,7 @@ export function BoardingView({
           (cs.matricule ? monthlyPayments[cs.matricule] : {}) ||
           {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const rate = cs.monthlyRate || 50000;
+        const rate = typeof cs.monthlyRate === 'number' && cs.monthlyRate > 0 ? cs.monthlyRate : 25000;
         const totalPaid = paidMonthsCount * rate;
         const totalDue = rate * 9; // 9 mois stricts
         const remainingBalance = Math.max(0, totalDue - totalPaid);
@@ -380,7 +380,7 @@ export function BoardingView({
           {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
         const sub = customSubscriptions.find((cs) => cs.studentId === s.id || cs.studentId === s.studentNumber || (s.matricule && cs.matricule === s.matricule));
-        const rate = sub?.monthlyRate || 50000;
+        const rate = sub && typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
         const totalPaid = paidMonthsCount * rate;
         const totalDue = rate * 9;
         const remainingBalance = Math.max(0, totalDue - totalPaid);
@@ -1507,20 +1507,8 @@ export function BoardingView({
   // Statistiques Globales KPI (Sur 9 Mois : Septembre à Mai - 100 Places Max)
   const totalBoarders = boarders.length;
   const totalCollected = useMemo(() => {
-    let sum = boarders.reduce((acc, b) => acc + b.totalPaid, 0);
-    Object.entries(monthlyPayments).forEach(([id, months]) => {
-      const alreadyInBoarders = boarders.some(
-        (b) => b.student.id === id || b.student.studentNumber === id || (b.student.matricule && b.student.matricule === id)
-      );
-      if (!alreadyInBoarders && months && typeof months === 'object') {
-        const count = MONTHS_LIST.filter((m) => (months as any)[m]).length;
-        const sub = customSubscriptions.find((c) => c.studentId === id || c.matricule === id);
-        const rate = sub?.monthlyRate || 50000;
-        sum += count * rate;
-      }
-    });
-    return sum;
-  }, [boarders, monthlyPayments, customSubscriptions]);
+    return boarders.reduce((acc, b) => acc + b.totalPaid, 0);
+  }, [boarders]);
   const totalExigible = boarders.reduce((acc, b) => acc + b.monthlyRate * 9, 0);
   const recoveryRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '0';
   const girlsCount = boarders.filter((b) => b.student.gender === 'female' || (b.student.gender as any) === 'F').length;
@@ -1758,10 +1746,10 @@ export function BoardingView({
               type="button"
               onClick={() => {
                 setSuccessReceiptModalData(null);
-                handleNextReceipt();
+                handleStartNewSubscription();
               }}
               className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
-              title="Fermer la confirmation"
+              title="Fermer et passer au nouveau reçu"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1819,7 +1807,7 @@ export function BoardingView({
               </div>
             </div>
 
-            {/* Boutons d'Action : WhatsApp Direct & Passage automatique au reçu prochain */}
+            {/* Boutons d'Action : WhatsApp Direct & Passage automatique au nouveau reçu */}
             <div className="space-y-2 pt-2">
               <button
                 type="button"
@@ -1838,12 +1826,12 @@ export function BoardingView({
                 type="button"
                 onClick={() => {
                   setSuccessReceiptModalData(null);
-                  handleNextReceipt();
+                  handleStartNewSubscription();
                 }}
                 className="w-full py-3 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
               >
                 <Check className="w-4 h-4 text-emerald-600" />
-                <span>OK (Reçu prochain / Élève suivant)</span>
+                <span>OK (Passer au Nouveau Reçu)</span>
               </button>
             </div>
           </div>

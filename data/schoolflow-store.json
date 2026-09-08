@@ -595,6 +595,29 @@
         "status": "partial"
       },
       {
+        "id": "inv-boarding-a8540b89-b812-448f-9e53-c12d7dea0b4f",
+        "invoiceNumber": "INT-0b4f",
+        "studentId": "a8540b89-b812-448f-9e53-c12d7dea0b4f",
+        "studentName": "MASSE Cheick Abdul Madjib",
+        "studentAvatar": "",
+        "studentGrade": "Maternelle (G.S.)",
+        "studentGender": "male",
+        "guardianName": "Cisse Makoua",
+        "guardianPhone": "+225 05 04 14 63 78",
+        "feeType": "Internat & Pensionnat",
+        "amount": 65000,
+        "discountAmount": 0,
+        "netAmount": 65000,
+        "paidAmount": 0,
+        "balanceRemaining": 65000,
+        "paymentMethod": "Espèces en caisse",
+        "enrollmentType": "nouveau",
+        "issueDate": "2026-09-07",
+        "dueDate": "2026-09-07",
+        "status": "partial",
+        "installments": {}
+      },
+      {
         "id": "inv-005",
         "invoiceNumber": "ID-005",
         "studentId": "72c96d59-13df-4706-aefa-7bed85ca5138",
@@ -1271,7 +1294,7 @@
       "MAT-2026",
       "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e"
     ],
-    "updatedAt": "2026-09-08T22:11:24.015Z",
+    "updatedAt": "2026-09-08T23:10:18.500Z",
     "slug": "epc-manoi"
   }
 }

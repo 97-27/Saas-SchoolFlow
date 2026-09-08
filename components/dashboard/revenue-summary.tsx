@@ -77,7 +77,7 @@ export function RevenueSummary({
 
           boardingStudentsCount += 1;
 
-          const rate = sub.monthlyRate || 50000;
+          const rate = typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
           const months =
             monthlyPayments[sub.studentId] ||
             (stu?.id ? monthlyPayments[stu.id] : {}) ||
