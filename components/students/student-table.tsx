@@ -72,10 +72,11 @@ export function StudentTable({
       .then((res) => res.json())
       .then((res) => {
         if (res && res.success && res.data?.students?.length) {
-          setStudents(res.data.students);
+          const liveStus = getLiveStudents(res.data.students, activeSlug);
+          setStudents(liveStus);
           try {
-            localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(res.data.students));
-            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(res.data.students));
+            localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
+            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
           } catch (e) {}
         }
       })

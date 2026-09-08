@@ -67,17 +67,19 @@ export function DashboardView({
       .then((res) => {
         if (res && res.success && res.data) {
           if (res.data.students && Array.isArray(res.data.students) && res.data.students.length > 0) {
-            setStudents(res.data.students);
+            const liveStus = getLiveStudents(res.data.students, activeSlug);
+            setStudents(liveStus);
             try {
-              localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(res.data.students));
-              localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(res.data.students));
+              localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
+              localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
             } catch (e) {}
           }
           if (res.data.invoices && Array.isArray(res.data.invoices) && res.data.invoices.length > 0) {
-            setInvoices(res.data.invoices);
+            const liveInvs = getLiveInvoices(res.data.invoices, activeSlug);
+            setInvoices(liveInvs);
             try {
-              localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(res.data.invoices));
-              localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(res.data.invoices));
+              localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
+              localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
             } catch (e) {}
           }
         }
@@ -103,14 +105,16 @@ export function DashboardView({
       const result = await res.json();
       if (result && result.success && result.data) {
         if (result.data.students && Array.isArray(result.data.students)) {
-          localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(result.data.students));
-          localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(result.data.students));
-          setStudents(result.data.students);
+          const liveStus = getLiveStudents(result.data.students, activeSlug);
+          localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
+          localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+          setStudents(liveStus);
         }
         if (result.data.invoices && Array.isArray(result.data.invoices)) {
-          localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(result.data.invoices));
-          localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(result.data.invoices));
-          setInvoices(result.data.invoices);
+          const liveInvs = getLiveInvoices(result.data.invoices, activeSlug);
+          localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
+          localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
+          setInvoices(liveInvs);
         }
         if (result.data.transportSubscriptions) {
           localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(result.data.transportSubscriptions));

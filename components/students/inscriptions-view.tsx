@@ -936,7 +936,7 @@ export function InscriptionsView({
     const savedReceiptNumber = receiptNumber;
 
     const newInvoice: Invoice = {
-      id: `inv-${studentNumberToSave.replace(/\D/g, '').padStart(3, '0')}`,
+      id: `inv-${studentNumberToSave.replace(/\D/g, '').padStart(3, '0')}-${Date.now()}`,
       invoiceNumber: savedReceiptNumber,
       studentId: newStudent.id,
       studentName: newStudent.fullName,

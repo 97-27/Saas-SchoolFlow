@@ -1,7 +1,34 @@
 'use client';
 
 import { Student, Invoice, School } from '@/lib/data/types';
-import { mockSchools } from '@/lib/data/mock-data';
+import { mockSchools, mockStudents, mockInvoices } from '@/lib/data/mock-data';
+
+// Liste des identifiants et numéros d'élèves protégés (effectif officiel 15 élèves d'EPC Manoi)
+export const PROTECTED_STUDENT_NUMBERS = new Set<string>([
+  'ID-001', 'ID-002', 'ID-003', 'ID-004', 'ID-005',
+  'ID-006', 'ID-007', 'ID-008', 'ID-009', 'ID-010',
+  'ID-011', 'ID-012', 'ID-013', 'ID-014', 'ID-015',
+  'stu-001', 'stu-002', 'stu-003', 'stu-004', 'stu-005',
+  'stu-006', 'stu-007', 'stu-008', 'stu-009', 'stu-010',
+  'stu-011', 'stu-012', 'stu-013', 'stu-014', 'stu-015',
+  '2f3af897-b354-47b6-a800-c3419c59ec8f',
+  '1b170bd6-389c-4fe0-944c-4868b0a8599b',
+  '61c785b4-be9d-4a35-8b02-66ceffecccdf',
+  '4675d6cc-e2e1-4b41-b53f-51a15e3caf06',
+  '72c96d59-13df-4706-aefa-7bed85ca5138',
+  '32f145bd-eb60-4b2a-b3cb-ea6880ac8378',
+  '890eca4a-f225-4055-8b70-8dd0919d6de4',
+  'e3df83e2-4732-4225-8efe-b56d868949f2',
+  '16f38872-8b28-41f2-a62d-97971cfbcf15',
+  'a52bd665-0a9e-4a51-9def-b3d57ed39131',
+  '1759e059-c2b7-449f-95aa-d2235c09c88a',
+  '5b3a4413-c77e-4c49-bfaa-55bf71b6af1d',
+  '701e331e-b9eb-4e57-8a5e-b065f38d71d2',
+  'a8540b89-b812-448f-9e53-c12d7dea0b4f',
+  'd5864a3d-8a0f-46a2-97bf-acd14ce72f86',
+  '5403c5e0-f2bb-482d-ac6f-a8443c038da3',
+  '98ae1361-9739-4b1f-9a49-7c40f069c998',
+]);
 import {
   saveSchoolToSupabase,
   saveStudentToSupabase,
@@ -12,6 +39,9 @@ import {
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
+
+export const normalizeWords = (name: string): string =>
+  (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
 
 const STUDENTS_STORAGE_KEY = 'schoolflow_registered_students_v1';
 const INVOICES_STORAGE_KEY = 'schoolflow_registered_invoices_v1';
@@ -403,12 +433,21 @@ export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
 
 /**
  * Récupère les IDs supprimés par l'administrateur
+ * Garantit que les 15 élèves officiels protégés ne peuvent jamais être considérés comme supprimés.
  */
 export function getDeletedStudentIds(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
     const raw = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
-    return new Set(raw ? JSON.parse(raw) : []);
+    const parsed: string[] = raw ? JSON.parse(raw) : [];
+    // Assainissement strict : retirer tout identifiant d'élève officiel protégé
+    const filtered = parsed.filter((id) => !PROTECTED_STUDENT_NUMBERS.has(id));
+    if (raw && parsed.length !== filtered.length) {
+      try {
+        localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(filtered));
+      } catch (e) {}
+    }
+    return new Set(filtered);
   } catch (error) {
     return new Set();
   }
@@ -419,6 +458,10 @@ export function getDeletedStudentIds(): Set<string> {
  */
 export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): void {
   if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return;
+
+  // Interdire formellement la suppression des élèves de l'effectif officiel protégé
+  const safeIdsToDelete = idsToDelete.filter((id) => !PROTECTED_STUDENT_NUMBERS.has(id));
+  if (safeIdsToDelete.length === 0) return;
 
   try {
     const cleanSlug = schoolSlug || 'epc-manoi';
@@ -433,8 +476,8 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       ...(rawGlobal ? JSON.parse(rawGlobal) : []),
     ];
 
-    const inputIdSet = new Set(idsToDelete);
-    const allDeletedIdentifiers = new Set<string>(idsToDelete);
+    const inputIdSet = new Set(safeIdsToDelete);
+    const allDeletedIdentifiers = new Set<string>(safeIdsToDelete);
 
     for (const s of existingList) {
       if (
@@ -716,6 +759,16 @@ export function syncSchoolDataWithServer(slug: string): void {
             }
           });
 
+          // Pour EPC Manoi : s'assurer que les 15 élèves officiels sont TOUJOURS présents
+          if (isPilot) {
+            for (const offStu of mockStudents) {
+              const key = offStu.studentNumber || offStu.id;
+              if (!studentMap.has(key)) {
+                studentMap.set(key, offStu);
+              }
+            }
+          }
+
           const mergedStudents = Array.from(studentMap.values()).sort((a, b) => {
             const numA = parseInt((a.studentNumber || a.id).replace(/\D/g, ''), 10) || 0;
             const numB = parseInt((b.studentNumber || b.id).replace(/\D/g, ''), 10) || 0;
@@ -781,6 +834,16 @@ export function syncSchoolDataWithServer(slug: string): void {
               }
             }
           });
+
+          // Pour EPC Manoi : s'assurer que les 15 factures officielles sont TOUJOURS présentes
+          if (isPilot) {
+            for (const offInv of mockInvoices) {
+              const key = offInv.invoiceNumber || offInv.id;
+              if (!invoiceMap.has(key)) {
+                invoiceMap.set(key, offInv);
+              }
+            }
+          }
 
           const mergedInvoices = Array.from(invoiceMap.values()).sort((a, b) => {
             const numA = parseInt((a.invoiceNumber || a.id).replace(/\D/g, ''), 10) || 0;
@@ -1254,9 +1317,6 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
         }
 
         // Vérification anti-doublon par nom (ordre des mots insensible) ou identifiant déjà existant
-        const normalizeWords = (name: string) =>
-          (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
-
         const alreadyExists = uniqueStudents.some(
           (s) =>
             s.id === inv.studentId ||
@@ -1318,24 +1378,21 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       }
     } catch (e) {}
 
-    // Si le stockage n'a JAMAIS été initialisé (aucun enregistrement, premier lancement à froid)
-    const hasExplicitRecord = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(STUDENTS_STORAGE_KEY) !== null);
-    if (!hasExplicitRecord && uniqueStudents.length === 0 && (slug === 'epc-manoi')) {
-      const status = getSchoolSubscription('epc-manoi');
-      if (!status.isDataReset) {
-        for (const stu of initialStudents) {
-          if (!isValidStudent(stu)) continue;
-          if (
-            deletedIds.has(stu.id) ||
-            (stu.studentNumber && deletedIds.has(stu.studentNumber)) ||
-            (stu.matricule && deletedIds.has(stu.matricule))
-          )
-            continue;
-          if (!seenIds.has(stu.id) && !seenNumbers.has(stu.studentNumber)) {
-            seenIds.add(stu.id);
-            seenNumbers.add(stu.studentNumber);
-            uniqueStudents.push(normalizeStudent(stu));
-          }
+    // GARANTIE ABSOLUE EPC MANOI : s'assurer que les 15 élèves officiels sont TOUJOURS présents dans la liste
+    if (slug === 'epc-manoi') {
+      const candidates = [...initialStudents, ...mockStudents];
+      for (const stu of candidates) {
+        if (!isValidStudent(stu)) continue;
+        const targetNum = stu.studentNumber;
+        const exists = uniqueStudents.some(
+          (u) =>
+            u.id === stu.id ||
+            (targetNum && u.studentNumber === targetNum) ||
+            (stu.matricule && u.matricule === stu.matricule) ||
+            (u.fullName && stu.fullName && normalizeWords(u.fullName) === normalizeWords(stu.fullName))
+        );
+        if (!exists) {
+          uniqueStudents.push(normalizeStudent(stu));
         }
       }
     }
@@ -1385,12 +1442,14 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
       fallbackInvoices = manoiInvoices;
     }
 
-    const allCandidates = [
-      ...schoolInvoices,
-      ...fallbackInvoices,
-      ...globalInvoices,
-      ...(initialInvoices || []),
+    // Marquage de la source : localStorage en priorité haute, mockInvoices en priorité basse
+    const localCandidates = [
+      ...schoolInvoices.map(inv => ({ ...inv, _source: 0 })),
+      ...fallbackInvoices.map(inv => ({ ...inv, _source: 1 })),
+      ...globalInvoices.map(inv => ({ ...inv, _source: 2 })),
     ];
+    const mockCandidates = (initialInvoices || []).map(inv => ({ ...inv, _source: 3 }));
+    const allCandidates = [...localCandidates, ...mockCandidates];
 
     // Récupérer les élèves en direct pour synchroniser les métadonnées
     const rawStudents = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_${slug}`) || localStorage.getItem(STUDENTS_STORAGE_KEY);
@@ -1407,11 +1466,14 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
     const seenStudentNumbers = new Set<string>();
     const uniqueInvoices: Invoice[] = [];
 
-    // Priorité absolue aux factures officielles réelles (REC-2026-xxx)
-    const sortedCandidates = [...allCandidates].sort((a, b) => {
-      const aIsRec = (a.invoiceNumber || '').startsWith('REC-') ? 1 : 0;
-      const bIsRec = (b.invoiceNumber || '').startsWith('REC-') ? 1 : 0;
-      return bIsRec - aIsRec;
+    // Tri : localStorage d'abord (source 0/1/2), REC- en tête dans chaque groupe, mockInvoices en dernier (source 3)
+    const sortedCandidates = [...allCandidates].sort((a: any, b: any) => {
+      // 1. Priorité de source : localStorage (0/1/2) avant mocks (3)
+      if ((a._source ?? 9) !== (b._source ?? 9)) return (a._source ?? 9) - (b._source ?? 9);
+      // 2. Au sein du même groupe : REC- en tête
+      const aIsRec = (a.invoiceNumber || '').startsWith('REC-') ? 0 : 1;
+      const bIsRec = (b.invoiceNumber || '').startsWith('REC-') ? 0 : 1;
+      return aIsRec - bIsRec;
     });
 
     for (const inv of sortedCandidates) {
@@ -1469,8 +1531,10 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
           const sanitizedInstallments = isTuitionUnpaid ? {} : (matchingStu.installments || inv.installments || {});
 
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _source: _s1, ...invClean } = inv as any;
           uniqueInvoices.push({
-            ...inv,
+            ...invClean,
             studentName: matchingStu.fullName || `${matchingStu.firstName} ${matchingStu.lastName}`.trim(),
             studentGrade: matchingStu.grade || inv.studentGrade,
             studentGender: matchingStu.gender || inv.studentGender,
@@ -1486,7 +1550,9 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
             paymentMethod: matchingStu.paymentMethod || inv.paymentMethod,
           });
         } else {
-          uniqueInvoices.push(inv);
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _source: _s2, ...invClean2 } = inv as any;
+          uniqueInvoices.push(invClean2);
         }
       }
     }
@@ -1619,6 +1685,23 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
         }
       }
     } catch (e) {}
+
+    // GARANTIE ABSOLUE EPC MANOI : s'assurer que les 15 factures officielles sont TOUJOURS présentes dans la liste
+    if (slug === 'epc-manoi') {
+      const candidates = [...initialInvoices, ...mockInvoices];
+      for (const inv of candidates) {
+        if (!inv || !inv.invoiceNumber) continue;
+        const exists = uniqueInvoices.some(
+          (u) =>
+            u.id === inv.id ||
+            u.invoiceNumber === inv.invoiceNumber ||
+            (inv.studentId && u.studentId === inv.studentId)
+        );
+        if (!exists) {
+          uniqueInvoices.push(inv);
+        }
+      }
+    }
 
     // Fallback aux factures initiales uniquement si le stockage n'a JAMAIS été initialisé
     const hasInitializedInvoices = rawSchool !== null || (slug === 'epc-manoi' && localStorage.getItem(INVOICES_STORAGE_KEY) !== null);

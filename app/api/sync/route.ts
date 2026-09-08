@@ -13,6 +13,30 @@ import {
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
+import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
+
+const PROTECTED_STUDENT_NUMBERS = new Set([
+  'ID-001', 'ID-002', 'ID-003', 'ID-004', 'ID-005',
+  'ID-006', 'ID-007', 'ID-008', 'ID-009', 'ID-010',
+  'ID-011', 'ID-012', 'ID-013', 'ID-014', 'ID-015',
+  '2f3af897-b354-47b6-a800-c3419c59ec8f',
+  '1b170bd6-389c-4fe0-944c-4868b0a8599b',
+  '61c785b4-be9d-4a35-8b02-66ceffecccdf',
+  '4675d6cc-e2e1-4b41-b53f-51a15e3caf06',
+  '72c96d59-13df-4706-aefa-7bed85ca5138',
+  '32f145bd-eb60-4b2a-b3cb-ea6880ac8378',
+  '890eca4a-f225-4055-8b70-8dd0919d6de4',
+  'e3df83e2-4732-4225-8efe-b56d868949f2',
+  '16f38872-8b28-41f2-a62d-97971cfbcf15',
+  'a52bd665-0a9e-4a51-9def-b3d57ed39131',
+  '1759e059-c2b7-449f-95aa-d2235c09c88a',
+  '5b3a4413-c77e-4c49-bfaa-55bf71b6af1d',
+  '701e331e-b9eb-4e57-8a5e-b065f38d71d2',
+  'a8540b89-b812-448f-9e53-c12d7dea0b4f',
+  'd5864a3d-8a0f-46a2-97bf-acd14ce72f86',
+  '5403c5e0-f2bb-482d-ac6f-a8443c038da3',
+  '98ae1361-9739-4b1f-9a49-7c40f069c998',
+]);
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -97,9 +121,10 @@ export async function GET(request: NextRequest) {
 
     if (!schoolData) schoolData = {};
 
-    // Filtrer les élèves et factures contre les identifiants supprimés
-    const deletedIds: string[] = schoolData.deletedStudentIds || [];
-    const delSet = new Set(deletedIds);
+    // Filtrer les élèves et factures contre les identifiants supprimés (en excluant les protégés)
+    const rawDeletedIds: string[] = schoolData.deletedStudentIds || [];
+    const safeDeleted = rawDeletedIds.filter((id: string) => !PROTECTED_STUDENT_NUMBERS.has(id));
+    const delSet = new Set(safeDeleted);
     if (delSet.size > 0) {
       if (Array.isArray(schoolData.students)) {
         schoolData.students = schoolData.students.filter(
@@ -111,6 +136,43 @@ export async function GET(request: NextRequest) {
           (inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber)
         );
       }
+    }
+
+    // GARANTIE ABSOLUE EPC MANOI : S'assurer que les 15 élèves et 15 factures officiels sont TOUJOURS présents
+    if (slug === 'epc-manoi') {
+      const studentMap = new Map<string, any>();
+      (schoolData.students || []).forEach((s: any) => {
+        const key = s.studentNumber || s.id;
+        studentMap.set(key, s);
+      });
+      for (const offStu of mockStudents) {
+        const key = offStu.studentNumber || offStu.id;
+        if (!studentMap.has(key)) {
+          studentMap.set(key, offStu);
+        }
+      }
+      schoolData.students = Array.from(studentMap.values()).sort((a: any, b: any) => {
+        const numA = parseInt((a.studentNumber || a.id).replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt((b.studentNumber || b.id).replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
+
+      const invoiceMap = new Map<string, any>();
+      (schoolData.invoices || []).forEach((inv: any) => {
+        const key = inv.invoiceNumber || inv.id;
+        invoiceMap.set(key, inv);
+      });
+      for (const offInv of mockInvoices) {
+        const key = offInv.invoiceNumber || offInv.id;
+        if (!invoiceMap.has(key)) {
+          invoiceMap.set(key, offInv);
+        }
+      }
+      schoolData.invoices = Array.from(invoiceMap.values()).sort((a: any, b: any) => {
+        const numA = parseInt((a.invoiceNumber || a.id).replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt((b.invoiceNumber || b.id).replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
     }
 
     return NextResponse.json(
@@ -159,24 +221,59 @@ export async function POST(request: NextRequest) {
     const autoBannedIds = ['MAT-2026', 'ID-2026002', '25bcb95a-62d2-47b1-bfa6-6820cb30dd6e'];
     let existingDeleted: string[] = Array.from(
       new Set([...(currentSchool.deletedStudentIds || []), ...autoBannedIds])
-    );
+    ).filter((id) => !PROTECTED_STUDENT_NUMBERS.has(id));
 
     // Traitement des suppressions dans Supabase Cloud et mémoisation
     if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
-      existingDeleted = Array.from(new Set([...existingDeleted, ...deletedStudentIds]));
-      for (const delId of deletedStudentIds) {
+      const safeNewDeleted = deletedStudentIds.filter((id: string) => !PROTECTED_STUDENT_NUMBERS.has(id));
+      existingDeleted = Array.from(new Set([...existingDeleted, ...safeNewDeleted]));
+      for (const delId of safeNewDeleted) {
         deleteStudentFromSupabase(delId, slug).catch(() => {});
         deleteInvoiceFromSupabase(delId, slug).catch(() => {});
       }
     }
 
     const delSet = new Set(existingDeleted);
-    const cleanStudents = Array.isArray(students)
+    let cleanStudents = Array.isArray(students)
       ? students.filter((s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule))
       : undefined;
-    const cleanInvoices = Array.isArray(invoices)
+    let cleanInvoices = Array.isArray(invoices)
       ? invoices.filter((inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber))
       : undefined;
+
+    if (slug === 'epc-manoi') {
+      if (cleanStudents !== undefined) {
+        const studentMap = new Map<string, any>();
+        cleanStudents.forEach((s: any) => studentMap.set(s.studentNumber || s.id, s));
+        for (const offStu of mockStudents) {
+          const key = offStu.studentNumber || offStu.id;
+          if (!studentMap.has(key)) {
+            studentMap.set(key, offStu);
+          }
+        }
+        cleanStudents = Array.from(studentMap.values()).sort((a: any, b: any) => {
+          const numA = parseInt((a.studentNumber || a.id).replace(/\D/g, ''), 10) || 0;
+          const numB = parseInt((b.studentNumber || b.id).replace(/\D/g, ''), 10) || 0;
+          return numA - numB;
+        });
+      }
+
+      if (cleanInvoices !== undefined) {
+        const invoiceMap = new Map<string, any>();
+        cleanInvoices.forEach((inv: any) => invoiceMap.set(inv.invoiceNumber || inv.id, inv));
+        for (const offInv of mockInvoices) {
+          const key = offInv.invoiceNumber || offInv.id;
+          if (!invoiceMap.has(key)) {
+            invoiceMap.set(key, offInv);
+          }
+        }
+        cleanInvoices = Array.from(invoiceMap.values()).sort((a: any, b: any) => {
+          const numA = parseInt((a.invoiceNumber || a.id).replace(/\D/g, ''), 10) || 0;
+          const numB = parseInt((b.invoiceNumber || b.id).replace(/\D/g, ''), 10) || 0;
+          return numA - numB;
+        });
+      }
+    }
 
     let mergedSettings = schoolSettings;
     if (schoolSettings) {

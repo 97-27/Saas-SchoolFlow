@@ -152,7 +152,7 @@ export function TransportView({
             try { localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(res.data.transportPayments)); } catch (e) {}
           }
           if (res.data.students && Array.isArray(res.data.students) && res.data.students.length > 0) {
-            setStudents(res.data.students);
+            setStudents(getLiveStudents(res.data.students, activeSlug));
           }
         }
       })
