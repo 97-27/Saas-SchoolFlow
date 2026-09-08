@@ -47,26 +47,55 @@ export function RevenueSummary({
 
     if (typeof window !== 'undefined') {
       // Calcul Internat
+      // Calcul Internat
       try {
         const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
         const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
-        if (rawBoardingSubs) {
-          const boardingList: Array<{ studentId: string; matricule?: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
-          const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
+        const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
+        const boardingSubsList: Array<{ studentId: string; matricule?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
+        const boardingSubsMap = new Map<string, number>();
+        boardingSubsList.forEach((sub) => {
+          if (sub.studentId) boardingSubsMap.set(sub.studentId, sub.monthlyRate || 50000);
+          if (sub.matricule) boardingSubsMap.set(sub.matricule, sub.monthlyRate || 50000);
+        });
 
-          boardingList.forEach((sub) => {
-            const stuExists = students.some((s) => s.id === sub.studentId || s.studentNumber === sub.matricule || s.matricule === sub.matricule);
-            if (stuExists || sub.studentId) {
-              const rate = sub.monthlyRate || 0;
-              const months = monthlyPayments[sub.studentId] || {};
-              const paidCount = Object.values(months).filter(Boolean).length;
-              if (paidCount > 0) {
-                boardingAmount += paidCount * rate;
-                boardingStudentsCount += 1;
-              }
+        const seenBoardingIds = new Set<string>();
+
+        // 1. Tous les élèves inscrits avec option Internat
+        students.forEach((stu) => {
+          const hasOptedBoarding = Boolean(
+            stu.isBoarding ||
+            stu.notes?.toLowerCase().includes('internat (oui)') ||
+            stu.address?.toLowerCase().includes('internat (oui)') ||
+            boardingSubsMap.has(stu.id) ||
+            (stu.studentNumber && boardingSubsMap.has(stu.studentNumber)) ||
+            (stu.matricule && boardingSubsMap.has(stu.matricule))
+          );
+          if (hasOptedBoarding) {
+            seenBoardingIds.add(stu.id);
+            boardingStudentsCount += 1;
+            const rate = boardingSubsMap.get(stu.id) || boardingSubsMap.get(stu.studentNumber) || 50000;
+            const months = monthlyPayments[stu.id] || (stu.studentNumber ? monthlyPayments[stu.studentNumber] : {}) || {};
+            const paidCount = Object.values(months).filter(Boolean).length;
+            if (paidCount > 0) {
+              boardingAmount += paidCount * rate;
             }
-          });
-        }
+          }
+        });
+
+        // 2. Souscriptions manuelles additionnelles
+        boardingSubsList.forEach((sub) => {
+          if (sub.studentId && !seenBoardingIds.has(sub.studentId)) {
+            seenBoardingIds.add(sub.studentId);
+            boardingStudentsCount += 1;
+            const rate = sub.monthlyRate || 50000;
+            const months = monthlyPayments[sub.studentId] || {};
+            const paidCount = Object.values(months).filter(Boolean).length;
+            if (paidCount > 0) {
+              boardingAmount += paidCount * rate;
+            }
+          }
+        });
       } catch (e) {}
 
       // Calcul Cantine

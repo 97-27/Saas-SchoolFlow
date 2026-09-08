@@ -135,9 +135,12 @@ export async function POST(request: NextRequest) {
     }
 
     ensureDataFile();
-
     const currentSchool = memoryStore[slug] || {};
-    let existingDeleted: string[] = currentSchool.deletedStudentIds || [];
+
+    const autoBannedIds = ['MAT-2026', 'ID-2026002', '25bcb95a-62d2-47b1-bfa6-6820cb30dd6e'];
+    let existingDeleted: string[] = Array.from(
+      new Set([...(currentSchool.deletedStudentIds || []), ...autoBannedIds])
+    );
 
     // Traitement des suppressions dans Supabase Cloud et mémoisation
     if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
@@ -146,6 +149,10 @@ export async function POST(request: NextRequest) {
         deleteStudentFromSupabase(delId, slug).catch(() => {});
         deleteInvoiceFromSupabase(delId, slug).catch(() => {});
       }
+    }
+    for (const banId of autoBannedIds) {
+      deleteStudentFromSupabase(banId, slug).catch(() => {});
+      deleteInvoiceFromSupabase(banId, slug).catch(() => {});
     }
 
     const delSet = new Set(existingDeleted);

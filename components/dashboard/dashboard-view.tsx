@@ -94,6 +94,8 @@ export function DashboardView({
     const boardingList = students.filter(
       (s) =>
         s.isBoarding ||
+        s.notes?.toLowerCase().includes('internat (oui)') ||
+        s.address?.toLowerCase().includes('internat (oui)') ||
         boardingSubsSet.has(s.id) ||
         (s.studentNumber && boardingSubsSet.has(s.studentNumber)) ||
         (s.matricule && boardingSubsSet.has(s.matricule))

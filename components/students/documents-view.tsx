@@ -179,9 +179,37 @@ export function DocumentsView({
   // Modal pour voir les autres documents d'un élève
   const [viewOtherDocsStudent, setViewOtherDocsStudent] = useState<{ stu: Student; docs: OtherDocItem[] } | null>(null);
 
-  // Filtered & Sorted students
+  // Clean, Deduplicated, Filtered & Sorted students
+  const cleanStudents = useMemo(() => {
+    const seenNames = new Set<string>();
+    const seenIds = new Set<string>();
+    return (students || []).filter((s) => {
+      if (!s) return false;
+      if (
+        (s.studentNumber && /^ID-2026\d+$/i.test(s.studentNumber)) ||
+        (s.id && /^ID-2026\d+$/i.test(s.id)) ||
+        s.matricule === 'MAT-2026' ||
+        s.studentNumber === 'MAT-2026'
+      ) return false;
+
+      const normName = (s.fullName || `${s.lastName || ''} ${s.firstName || ''}`)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .sort()
+        .join(' ');
+      const idKey = s.id || s.studentNumber;
+      if (seenIds.has(idKey) || (normName && seenNames.has(normName))) return false;
+      seenIds.add(idKey);
+      if (normName) seenNames.add(normName);
+      return true;
+    });
+  }, [students]);
+
   const filteredStudents = useMemo(() => {
-    const list = (students || []).filter((s) => {
+    const list = cleanStudents.filter((s) => {
       if (!s) return false;
       const q = (searchQuery || '').toLowerCase().trim();
       const sNum = (s.studentNumber || s.id || '').toLowerCase();
@@ -228,11 +256,11 @@ export function DocumentsView({
       const numB = parseInt((b?.studentNumber || b?.id || '').replace(/\D/g, ''), 10) || 0;
       return numB - numA;
     });
-  }, [students, searchQuery, selectedClass, selectedStatus, docRecords]);
+  }, [cleanStudents, searchQuery, selectedClass, selectedStatus, docRecords]);
 
   // Statistiques exactes
   const stats = useMemo(() => {
-    const totalStudents = students.length;
+    const totalStudents = cleanStudents.length;
     let completeCount = 0;
     let birthCertCount = 0;
     let reportCardCount = 0;
@@ -242,7 +270,7 @@ export function DocumentsView({
     let pendingReportCount = 0;
     let pendingRegistrationCount = 0;
 
-    (students || []).forEach((stu) => {
+    cleanStudents.forEach((stu) => {
       if (!stu || !stu.id) return;
       const doc = docRecords[stu.id] || {
         studentId: stu.id,

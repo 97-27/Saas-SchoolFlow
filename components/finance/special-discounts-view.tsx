@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import html2canvas from 'html2canvas';
 import { School, Student, Invoice } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import {
@@ -663,45 +662,357 @@ export function SpecialDiscountsView({
     }
   };
 
-  // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp (Sans redirection automatique)
-  const handleShareWhatsappWithImageCopy = async () => {
-    const element = receiptCardRef.current || document.getElementById('printable-receipt-card');
-    if (!element) return;
+  // Helper pour charger une image sans risque d'erreur CORS
+  const loadCanvasImageSafe = (src: string): Promise<HTMLImageElement | null> => {
+    return new Promise((resolve) => {
+      if (!src) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  };
 
+  // Moteur de rendu 100% Natif Canvas HD pour le Reçu de Réduction Spéciale
+  const generateDiscountReceiptCanvas = async (): Promise<HTMLCanvasElement> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1750;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    const logoImgPromise = currentSchool.logoUrl ? loadCanvasImageSafe(currentSchool.logoUrl) : Promise.resolve(null);
+    const emblemImgPromise = currentSchool.countryEmblemUrl && currentSchool.countryEmblemUrl.startsWith('data:')
+      ? loadCanvasImageSafe(currentSchool.countryEmblemUrl)
+      : Promise.resolve(null);
+    const stampImgPromise = currentSchool.stampUrl ? loadCanvasImageSafe(currentSchool.stampUrl) : Promise.resolve(null);
+
+    const [logoImg, emblemImg, stampImg] = await Promise.all([logoImgPromise, emblemImgPromise, stampImgPromise]);
+
+    // Fond blanc
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1200, 1750);
+
+    // Bordures
+    drawRoundRect(30, 30, 1140, 1690, 24);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
+
+    drawRoundRect(38, 38, 1124, 1674, 20);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // En-tête école
+    drawRoundRect(45, 45, 1110, 245, 20);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Logo École à gauche
+    drawRoundRect(65, 65, 130, 130, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (logoImg) {
+      try {
+        ctx.save();
+        drawRoundRect(70, 70, 120, 120, 14);
+        ctx.clip();
+        ctx.drawImage(logoImg, 70, 70, 120, 120);
+        ctx.restore();
+      } catch (e) {}
+    } else {
+      ctx.fillStyle = '#047857';
+      ctx.font = 'bold 36px Outfit, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText((currentSchool.shortName || 'EPC').slice(0, 3), 130, 145);
+    }
+
+    // Logo Pays à droite
+    drawRoundRect(1005, 65, 130, 130, 16);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (emblemImg) {
+      try {
+        ctx.save();
+        drawRoundRect(1010, 70, 120, 120, 14);
+        ctx.clip();
+        ctx.drawImage(emblemImg, 1010, 70, 120, 120);
+        ctx.restore();
+      } catch (e) {}
+    } else {
+      ctx.fillStyle = '#64748b';
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('RÉPUBLIQUE', 1070, 125);
+      ctx.fillText('DE CÔTE D’IVOIRE', 1070, 145);
+    }
+
+    // Textes École
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 24px Outfit, sans-serif';
+    ctx.fillText((currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
+
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 18px Outfit, sans-serif';
+    ctx.fillText((currentSchool.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
+
+    if (currentSchool.slogan || currentSchool.motto) {
+      ctx.fillStyle = '#b45309';
+      ctx.font = 'italic bold 13px Outfit, sans-serif';
+      ctx.fillText(currentSchool.slogan || currentSchool.motto || 'Discipline • Rigueur • Réussite', 600, 148);
+    }
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.fillText(`Situation : ${currentSchool.district || 'Abidjan'} • Tél : ${currentSchool.phone || '+225 27 22 44 11 00'}`, 600, 170);
+
+    drawRoundRect(380, 186, 440, 30, 8);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'MENA-04829-CI'}`, 600, 206);
+
+    // Titre Reçu
+    drawRoundRect(45, 305, 1110, 56, 12);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 21px Outfit, sans-serif';
+    const typeLabel = discountType === 'famille_nombreuse' ? 'FAMILLE NOMBREUSE' : discountType === 'social' ? 'CAS SOCIAL' : discountType === 'personnel' ? 'ENFANT PERSONNEL' : discountType === 'partenaire' ? 'PARTENARIAT' : 'RÉDUCTION SPÉCIALE';
+    ctx.fillText(`REÇU OFFICIEL DE SCOLARITÉ & RÉDUCTION SPÉCIALE (${typeLabel})`, 70, 341);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#6ee7b7';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(`Reçu N° : ${receiptNumber}`, 1130, 341);
+
+    // Coordonnées parent / bénéficiaire (hauteur 170px)
+    drawRoundRect(45, 375, 1110, 170, 16);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0f172a';
+
+    // Ligne 1 : Parent / Responsable
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Responsable Légal :', 70, 412);
+    ctx.font = 'bold 18px Outfit, sans-serif';
+    ctx.fillText((parentName || 'Parent d\'élève').toUpperCase(), 235, 412);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Contact WhatsApp :', 720, 412);
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(parentPhone || '—', 880, 412);
+
+    // Ligne 2 : Date & Mode de règlement
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Date d\'émission :', 70, 452);
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText(formatDate(issueDate), 235, 452);
+
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Mode de Règlement :', 720, 452);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Espèces en caisse', 880, 452);
+
+    // Ligne 3 : Motif de réduction
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Motif / Type :', 70, 492);
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillStyle = '#047857';
+    ctx.fillText(`Accord de scolarité : ${typeLabel} (${children.length} enfant(s) rattaché(s))`, 235, 492);
+
+    // Tableau des enfants rattachés
+    let y = 565;
+    drawRoundRect(45, y, 1110, 44, 10);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('N°', 70, y + 27);
+    ctx.fillText('NOM & PRÉNOM(S) DE L\'ÉLÈVE', 140, y + 27);
+    ctx.fillText('CLASSE', 650, y + 27);
+    ctx.textAlign = 'right';
+    ctx.fillText('SCOLARITÉ BRUTE', 1130, y + 27);
+
+    y += 44;
+    children.forEach((c, idx) => {
+      const rowHeight = 44;
+      ctx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      ctx.fillRect(45, y, 1110, rowHeight);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(45, y, 1110, rowHeight);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText(`${idx + 1}`, 70, y + 27);
+
+      ctx.font = 'bold 15px Outfit, sans-serif';
+      ctx.fillText((c.fullName || 'Élève').toUpperCase(), 140, y + 27);
+
+      ctx.font = 'bold 14px Inter, sans-serif';
+      ctx.fillStyle = '#475569';
+      ctx.fillText(c.grade || '—', 650, y + 27);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillText(formatFCFA(c.tuitionAmount || 0), 1130, y + 27);
+
+      y += rowHeight;
+    });
+
+    // Bloc récapitulatif financier
+    y += 25;
+    drawRoundRect(45, y, 1110, 240, 16);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fill();
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 1. Somme Totale Brute
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 15px Inter, sans-serif';
+    ctx.fillText('Somme Totale Brute des Scolarités :', 70, y + 42);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(formatFCFA(totalBrutFCFA), 1130, y + 42);
+
+    // Ligne de séparation
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.moveTo(70, y + 58);
+    ctx.lineTo(1130, y + 58);
+    ctx.stroke();
+
+    // 2. Réduction Spéciale Accordée
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#b45309';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText(`🎁 Réduction Spéciale Accordée (${typeLabel}) :`, 70, y + 90);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#b45309';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(`- ${formatFCFA(discountAmountFCFA)}`, 1130, y + 90);
+
+    // Ligne de séparation
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.moveTo(70, y + 108);
+    ctx.lineTo(1130, y + 108);
+    ctx.stroke();
+
+    // 3. Net À Payer & Versements
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText('NET À PAYER RÉDUIT :', 70, y + 142);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(formatFCFA(netToPayFCFA), 1130, y + 142);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText('Somme Versée / Encaissée ce jour :', 70, y + 182);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(formatFCFA(totalPaidFCFA), 1130, y + 182);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = remainingBalanceFCFA > 0 ? '#b91c1c' : '#047857';
+    ctx.font = 'bold 16px Inter, sans-serif';
+    ctx.fillText('Reste à Recouvrer :', 70, y + 218);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = remainingBalanceFCFA > 0 ? '#b91c1c' : '#047857';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(formatFCFA(remainingBalanceFCFA), 1130, y + 218);
+
+    // Bas de page : Signatures & Cachet
+    y += 280;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'italic 13px Inter, sans-serif';
+    ctx.fillText('Reçu officiel numéroté certifié par la Caisse & Direction des Finances.', 70, y + 30);
+    ctx.fillText('Toute réduction accordée fait l’objet d’un enregistrement comptable strict.', 70, y + 50);
+
+    // Cachet à droite
+    if (stampImg) {
+      try {
+        ctx.drawImage(stampImg, 960, y - 20, 160, 80);
+      } catch (e) {}
+    } else {
+      drawRoundRect(920, y - 10, 230, 50, 10);
+      ctx.fillStyle = '#ecfdf5';
+      ctx.fill();
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#065f46';
+      ctx.font = 'bold 13px Inter, sans-serif';
+      ctx.fillText('✓ Cachet Électronique Certifié', 1035, y + 20);
+    }
+
+    return canvas;
+  };
+
+  // Capture et copie d'image directe dans le Presse-Papier + Ouverture Modale WhatsApp via Canvas HD Natif
+  const handleShareWhatsappWithImageCopy = async () => {
     setIsGeneratingImage(true);
-    setToastMessage('📸 Capture HD du Reçu Officiel en cours...');
+    setToastMessage('📸 Génération HD du Reçu Officiel en cours...');
     setShowToast(true);
 
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        imageTimeout: 8000,
-      });
-
-      let blob: Blob | null = null;
-      try {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      } catch (blobErr) {
-        console.warn('toBlob error:', blobErr);
-      }
-
-      if (!blob) {
-        try {
-          const dataUrl = canvas.toDataURL('image/png');
-          const res = await fetch(dataUrl);
-          blob = await res.blob();
-        } catch (fetchErr) {
-          console.warn('dataUrl fallback failed:', fetchErr);
-        }
-      }
+      const canvas = await generateDiscountReceiptCanvas();
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
 
       if (!blob) {
         setIsGeneratingImage(false);
-        setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+        setToastMessage('⚠️ Erreur lors de la génération du reçu.');
         setShowToast(true);
         return;
       }
@@ -719,7 +1030,7 @@ export function SpecialDiscountsView({
         }
       }
 
-      // 2. Afficher la modale de prévisualisation et partage WhatsApp (sans redirection automatique)
+      // 2. Afficher la modale de prévisualisation et partage WhatsApp
       const imageUrl = URL.createObjectURL(blob);
       const cleanPhone = (parentPhone || '').replace(/\D/g, '');
       const fileName = `Recu_Reduction_${receiptNumber}_${(parentName || 'Parent').replace(/\s+/g, '_')}.png`;
@@ -740,7 +1051,7 @@ export function SpecialDiscountsView({
     } catch (err) {
       console.error('Erreur génération image reçu:', err);
       setIsGeneratingImage(false);
-      setToastMessage('⚠️ Erreur lors de la capture du reçu.');
+      setToastMessage('⚠️ Erreur lors de la génération du reçu.');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
     }

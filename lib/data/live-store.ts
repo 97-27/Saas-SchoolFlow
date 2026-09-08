@@ -765,11 +765,12 @@ const normalizeStudent = (stu: any): Student => {
     guardianPhone: stu?.guardianPhone || stu?.whatsappPhone || '+225 01 02 03 04 05',
     whatsappPhone: stu?.whatsappPhone || stu?.guardianPhone || '+225 01 02 03 04 05',
     address: stu?.address || 'Abidjan',
-    enrollmentDate: stu?.enrollmentDate || stu?.paymentDate || '2026-08-27',
-    paymentDate: stu?.paymentDate || stu?.enrollmentDate || '2026-08-27',
+    enrollmentDate: stu?.enrollmentDate || stu?.paymentDate || '2026-09-07',
+    paymentDate: stu?.paymentDate || stu?.enrollmentDate || '2026-09-07',
     attendanceRate: typeof stu?.attendanceRate === 'number' ? stu.attendanceRate : 95,
     status: stu?.status || 'active',
     enrollmentType: stu?.enrollmentType || 'nouveau',
+    isBoarding: Boolean(stu?.isBoarding || (stu?.notes && stu.notes.toLowerCase().includes('internat (oui)')) || (stu?.address && stu.address.toLowerCase().includes('internat (oui)'))),
   };
 };
 
@@ -783,9 +784,6 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
   try {
     const slug = schoolSlug || 'epc-manoi';
     const deletedIds = getDeletedStudentIds();
-
-    // Déclencher la synchronisation multi-terminaux (PC <-> Smartphone)
-    startCrossDeviceSync(slug);
 
     // 1. Charger depuis la clé spécifique à l'école
     const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
@@ -826,9 +824,24 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       )
         continue;
       
+      if (
+        (stu.studentNumber && /^ID-2026\d+$/i.test(stu.studentNumber)) ||
+        (stu.id && /^ID-2026\d+$/i.test(stu.id)) ||
+        stu.matricule === 'MAT-2026' ||
+        stu.studentNumber === 'MAT-2026'
+      )
+        continue;
+
       const idKey = stu.id || stu.studentNumber;
       const numKey = stu.studentNumber || stu.id;
-      const nameKey = (stu.fullName || `${stu.lastName || ''} ${stu.firstName || ''}`).toLowerCase().trim().replace(/\s+/g, ' ');
+      const nameKey = (stu.fullName || `${stu.lastName || ''} ${stu.firstName || ''}`)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .sort()
+        .join(' ');
       const matKey = (stu.matricule || '').trim().toUpperCase();
 
       if (
@@ -880,20 +893,28 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
           continue;
         }
 
-        // Vérification anti-doublon par nom ou identifiant déjà existant
+        // Vérification anti-doublon par nom (ordre des mots insensible) ou identifiant déjà existant
+        const normalizeWords = (name: string) =>
+          (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+
         const alreadyExists = uniqueStudents.some(
           (s) =>
             s.id === inv.studentId ||
             (inv.studentId && s.studentNumber === inv.studentId) ||
             s.studentNumber === inv.invoiceNumber ||
-            (s.fullName && inv.studentName && s.fullName.toLowerCase().trim() === inv.studentName.toLowerCase().trim())
+            (s.fullName && inv.studentName && normalizeWords(s.fullName) === normalizeWords(inv.studentName))
         );
         if (alreadyExists) continue;
 
         const idKey = inv.studentId || inv.id || inv.invoiceNumber;
         const numKey = inv.invoiceNumber || inv.studentId || inv.id;
         if (!seenIds.has(idKey) && !seenNumbers.has(numKey)) {
-          const numVal = parseInt(inv.invoiceNumber?.replace(/\D/g, '') || '1', 10);
+          // Extraire strictement la séquence terminale pour éviter ID-2026002
+          const matchSeq = inv.invoiceNumber.match(/(\d+)$/);
+          const numVal = matchSeq ? parseInt(matchSeq[1], 10) : 1;
+          const targetStudentNumber = `ID-${numVal.toString().padStart(3, '0')}`;
+          if (seenNumbers.has(targetStudentNumber)) continue;
+
           const parsed = splitFullNameNomFirst(inv.studentName || 'Élève');
           const lastName = parsed.lastName || 'ÉLÈVE';
           const firstName = parsed.firstName || '';
@@ -901,7 +922,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
 
           const reconstructedStudent: Student = {
             id: inv.studentId || `stu-${numVal.toString().padStart(3, '0')}`,
-            studentNumber: inv.invoiceNumber.startsWith('ID-') ? inv.invoiceNumber : `ID-${numVal.toString().padStart(3, '0')}`,
+            studentNumber: targetStudentNumber,
             matricule: (inv as any).matricule || '',
             firstName,
             lastName,

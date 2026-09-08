@@ -265,9 +265,12 @@ export function BoardingView({
     }
   };
 
-  // Construction de la liste des pensionnaires inscrits (STRICTEMENT reliée aux souscriptions confirmées)
+  // Pensionnaires unifiés : Inscriptions avec option Internat + Souscriptions directes
   const boarders = useMemo(() => {
-    // Les pensionnaires issus des customSubscriptions
+    const seenIds = new Set<string>();
+    const seenNumbers = new Set<string>();
+
+    // 1. Les pensionnaires issus des customSubscriptions
     const customList = customSubscriptions
       .map((cs) => {
         let foundStudent = students.find(
@@ -303,18 +306,23 @@ export function BoardingView({
 
         if (!foundStudent) return null;
 
-        const studentMonths = monthlyPayments[cs.studentId] || {};
+        seenIds.add(foundStudent.id);
+        if (foundStudent.studentNumber) seenNumbers.add(foundStudent.studentNumber);
+        if (foundStudent.matricule) seenNumbers.add(foundStudent.matricule);
+
+        const studentMonths = monthlyPayments[cs.studentId] || (foundStudent.id ? monthlyPayments[foundStudent.id] : {}) || {};
         const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const totalPaid = paidMonthsCount * cs.monthlyRate;
-        const totalDue = cs.monthlyRate * 9; // 9 mois stricts
+        const rate = cs.monthlyRate || 50000;
+        const totalPaid = paidMonthsCount * rate;
+        const totalDue = rate * 9; // 9 mois stricts
         const remainingBalance = Math.max(0, totalDue - totalPaid);
 
         return {
           student: foundStudent,
           isBoarder: true,
-          pavilion: cs.pavilion,
-          roomNumber: cs.roomNumber,
-          monthlyRate: cs.monthlyRate,
+          pavilion: cs.pavilion || (foundStudent.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
+          roomNumber: cs.roomNumber || 'Chambre 101',
+          monthlyRate: rate,
           paidMonthsCount,
           totalPaid,
           totalDue,
@@ -324,7 +332,46 @@ export function BoardingView({
       })
       .filter((b): b is NonNullable<typeof b> => b !== null);
 
-    return customList;
+    // 2. Les élèves inscrits ayant souscrit à l'internat (isBoarding ou mention dans les prestations)
+    const registeredBoarders = students
+      .filter((s) => {
+        if (!s) return false;
+        if (seenIds.has(s.id) || (s.studentNumber && seenNumbers.has(s.studentNumber)) || (s.matricule && seenNumbers.has(s.matricule))) {
+          return false;
+        }
+        return Boolean(
+          s.isBoarding ||
+          s.notes?.toLowerCase().includes('internat (oui)') ||
+          s.address?.toLowerCase().includes('internat (oui)')
+        );
+      })
+      .map((s) => {
+        seenIds.add(s.id);
+        if (s.studentNumber) seenNumbers.add(s.studentNumber);
+        if (s.matricule) seenNumbers.add(s.matricule);
+
+        const studentMonths = monthlyPayments[s.id] || (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) || {};
+        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
+        const rate = 50000;
+        const totalPaid = paidMonthsCount * rate;
+        const totalDue = rate * 9;
+        const remainingBalance = Math.max(0, totalDue - totalPaid);
+
+        return {
+          student: s,
+          isBoarder: true,
+          pavilion: s.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
+          roomNumber: 'Chambre 101',
+          monthlyRate: rate,
+          paidMonthsCount,
+          totalPaid,
+          totalDue,
+          remainingBalance,
+          isUpToDate: remainingBalance === 0,
+        };
+      });
+
+    return [...customList, ...registeredBoarders];
   }, [students, customSubscriptions, monthlyPayments]);
 
   // Filtrage pour la recherche et la navigation
@@ -950,12 +997,12 @@ export function BoardingView({
     ctx.textAlign = 'left';
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 22px Outfit, sans-serif';
-    ctx.fillText("QUITTANCE DE PAIEMENT D'INTERNAT", 70, 341);
+    ctx.fillText("REÇU DE PAIEMENT INTERNAT & PENSIONNAT", 70, 341);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#6ee7b7';
     ctx.font = 'bold 20px monospace';
-    const refNum = `QUI-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
+    const refNum = `REC-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
     ctx.fillText(`Réf : ${refNum}`, 1130, 341);
 
     // Coordonnées élève agrandies et aérées (hauteur 240px)
@@ -1113,7 +1160,7 @@ export function BoardingView({
     ctx.textAlign = 'left';
     ctx.fillStyle = '#64748b';
     ctx.font = 'italic 12px Inter, sans-serif';
-    ctx.fillText('Quittance officielle numérotée émise par l’Intendance & Gestion de l’Internat.', 70, y + 30);
+    ctx.fillText('Reçu officiel numéroté émis par l’Intendance & Gestion de l’Internat.', 70, y + 30);
 
     // Cachet à droite
     if (stampImg) {
@@ -1157,10 +1204,10 @@ export function BoardingView({
       const url = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       const cleanName = (formLastName ? `${formLastName.toUpperCase()}_${formFirstName}` : formStudentName || 'Eleve').replace(/\s+/g, '_');
-      link.download = `Quittance_Internat_${cleanName}_${formMatricule || 'REC'}.png`;
+      link.download = `Recu_Internat_${cleanName}_${formMatricule || 'REC'}.png`;
       link.href = url;
       link.click();
-      setToastMessage('📥 Image HD de la quittance téléchargée avec succès !');
+      setToastMessage('📥 Image HD du reçu téléchargée avec succès !');
       setTimeout(() => setToastMessage(null), 4000);
     } catch (e) {
       console.error(e);
@@ -1184,7 +1231,7 @@ export function BoardingView({
             await navigator.clipboard.write([
               new (window as any).ClipboardItem({ 'image/png': blob }),
             ]);
-            setToastMessage('📋 Image de la quittance copiée ! Collez-la directement dans WhatsApp (Ctrl+V).');
+            setToastMessage('📋 Image du reçu copiée ! Collez-la directement dans WhatsApp (Ctrl+V).');
             setTimeout(() => setToastMessage(null), 5000);
           } else {
             handleDownloadReceiptImage();
@@ -1247,7 +1294,7 @@ export function BoardingView({
     const monthsText = paidMonthsList.length > 0 ? ` (${paidMonthsList.join(', ')})` : '';
 
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-      `${schoolGreeting}, voici la quittance officielle d'internat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}. ${activePaidMonthsCount} mois réglés${monthsText}, total encaissé : ${formatFCFA(activeTotalCollected)}.`
+      `${schoolGreeting}, voici le reçu officiel de paiement internat et pensionnat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}. ${activePaidMonthsCount} mois réglés${monthsText}, total encaissé : ${formatFCFA(activeTotalCollected)}.`
     )}`;
 
     // Ouvrir immédiatement l'onglet WhatsApp de discussion avec le parent
@@ -1267,7 +1314,7 @@ export function BoardingView({
         setIsGeneratingImage(false);
         if (!blob) return;
 
-        const cleanFileName = `Quittance-Internat-${activeReceiptNum}-${activeName.replace(/\s+/g, '_')}.png`;
+        const cleanFileName = `Recu-Internat-${activeReceiptNum}-${activeName.replace(/\s+/g, '_')}.png`;
         const file = new File([blob], cleanFileName, { type: 'image/png' });
         const imageUrl = URL.createObjectURL(blob);
 
@@ -1286,11 +1333,11 @@ export function BoardingView({
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({
-              title: `Quittance Internat - ${activeName}`,
-              text: `Quittance officielle d'internat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}`,
+              title: `Reçu Internat & Pensionnat - ${activeName}`,
+              text: `Reçu officiel de paiement internat et pensionnat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}`,
               files: [file],
             });
-            setToastMessage(`✓ Photo de la quittance partagée avec succès sur WhatsApp !`);
+            setToastMessage(`✓ Photo du reçu partagée avec succès sur WhatsApp !`);
             return;
           } catch (shareErr: any) {
             if (shareErr.name === 'AbortError') return;
@@ -1315,7 +1362,7 @@ export function BoardingView({
           name: activeName,
         });
 
-        setToastMessage(`📷 Photo HD de la quittance (${activeReceiptNum}) générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
+        setToastMessage(`📷 Photo HD du reçu officiel (${activeReceiptNum}) générée et copiée ! Faites Ctrl + V dans WhatsApp.`);
         setTimeout(() => setToastMessage(null), 5000);
       }, 'image/png');
     } catch (err) {
@@ -1403,7 +1450,7 @@ export function BoardingView({
                   type="button"
                   onClick={() => {
                     const cleanPhone = (formParentContact || '').replace(/[^0-9]/g, '');
-                    const messageText = `📄 Quittance d'internat officielle — ${formStudentName} (${formMatricule})`;
+                    const messageText = `📄 Reçu officiel de paiement internat et pensionnat — ${formStudentName} (${formMatricule})`;
                     const waUrl = cleanPhone
                       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
                       : `https://api.whatsapp.com/send?text=${encodeURIComponent(messageText)}`;
@@ -1439,7 +1486,7 @@ export function BoardingView({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          MODALE DE CONFIRMATION DE SOUSCRIPTION / QUITTANCE INTERNAT
+          MODALE DE CONFIRMATION DE SOUSCRIPTION / REÇU INTERNAT
           ═══════════════════════════════════════════════════════════════ */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
@@ -1451,7 +1498,7 @@ export function BoardingView({
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading">
-                    Confirmer la Quittance d&apos;Internat
+                    Confirmer le Reçu de Paiement Internat & Pensionnat
                   </h3>
                   <p className="text-xs text-slate-500">
                     Vérification des coordonnées avant validation officielle
@@ -1523,7 +1570,7 @@ export function BoardingView({
               <div className="p-3 rounded-xl bg-slate-100/80 border border-slate-200 text-[11px] text-slate-600 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span>
-                  La confirmation enregistrera la quittance officielle, actualisera immédiatement les 3 compteurs KPI (effectif, dortoirs, recouvrement) et alimentera le journal des encaissements sur le tableau de bord.
+                  La confirmation enregistrera le reçu officiel, actualisera immédiatement les 3 compteurs KPI (effectif, dortoirs, recouvrement) et alimentera le journal des encaissements sur le tableau de bord.
                 </span>
               </div>
             </div>
@@ -1551,7 +1598,7 @@ export function BoardingView({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          MODALE FINALE DE CONFIRMATION AVEC BOUTON OK (QUITTANCE ENREGISTRÉE)
+          MODALE FINALE DE CONFIRMATION AVEC BOUTON OK (REÇU ENREGISTRÉ)
           ═══════════════════════════════════════════════════════════════ */}
       {successReceiptModalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
@@ -1562,7 +1609,7 @@ export function BoardingView({
 
             <div>
               <h3 className="text-lg font-extrabold text-slate-900 font-heading">
-                Quittance Enregistrée avec Succès !
+                Reçu Enregistré avec Succès !
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 Le dossier du pensionnaire et le journal de caisse ont été mis à jour immédiatement.
@@ -1620,7 +1667,7 @@ export function BoardingView({
               >
                 <Smartphone className="w-5 h-5 text-white shrink-0" />
                 <span>
-                  📱 Envoyer la quittance par WhatsApp ({formParentContact || 'Numéro parent'})
+                  📱 Envoyer le reçu par WhatsApp ({formParentContact || 'Numéro parent'})
                 </span>
               </button>
 
@@ -1654,7 +1701,7 @@ export function BoardingView({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Gestion des dortoirs, chambres et génération des quittances officielles d&apos;internat — {currentSchool.name}
+            Gestion des dortoirs, chambres et génération des reçus officiels de paiement internat et pensionnat — {currentSchool.name}
           </p>
         </div>
       </div>
@@ -1874,7 +1921,7 @@ export function BoardingView({
                 type="button"
                 onClick={handlePrevReceipt}
                 className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Quittance Précédente"
+                title="Reçu Précédent"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -1885,7 +1932,7 @@ export function BoardingView({
                 type="button"
                 onClick={handleNextReceipt}
                 className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Quittance Suivante"
+                title="Reçu Suivant"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -2293,7 +2340,7 @@ export function BoardingView({
                   {isCreatingNew
                     ? 'Valider la Nouvelle Souscription'
                     : hasPaymentChange
-                    ? 'Enregistrer le Paiement & Actualiser la Quittance'
+                    ? 'Enregistrer le Paiement & Actualiser le Reçu'
                     : isFormDirty
                     ? 'Enregistrer les Modifications du Dossier'
                     : '🔒 Aucune modification ni nouveau versement'}
@@ -2315,7 +2362,7 @@ export function BoardingView({
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider font-heading">
-                Quittance Officielle
+                Reçu Officiel
               </span>
             </div>
 
@@ -2433,7 +2480,7 @@ export function BoardingView({
                   Document Officiel d&apos;Encaissement
                 </span>
                 <span className="font-extrabold font-heading text-xs sm:text-sm">
-                  QUITTANCE DE PAIEMENT D&apos;INTERNAT & PENSIONNAT
+                  REÇU DE PAIEMENT INTERNAT & PENSIONNAT
                 </span>
               </div>
               <div className="text-right">
@@ -2535,7 +2582,7 @@ export function BoardingView({
 
             {/* 5. Liste des mois réglés */}
             <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs text-emerald-950">
-              <span className="font-extrabold block mb-1.5">Mois d&apos;internat validés par cette quittance :</span>
+              <span className="font-extrabold block mb-1.5">Mois d&apos;internat validés par ce reçu :</span>
               <div className="flex flex-wrap gap-1.5">
                 {MONTHS_LIST.map((m) => (
                   <span
@@ -2601,7 +2648,7 @@ export function BoardingView({
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 font-heading">
-                    Photo HD de la Quittance d&apos;Internat
+                    Photo HD du Reçu d&apos;Internat & Pensionnat
                   </h3>
                   <p className="text-xs text-slate-500">
                     Parent / Élève : <strong className="text-slate-900 font-mono whitespace-nowrap">{whatsAppPreviewData.phone}</strong> ({whatsAppPreviewData.name})
@@ -2635,7 +2682,7 @@ export function BoardingView({
                   Le reçu automatique a été déjà copié dans votre presse-papiers !
                 </p>
                 <p className="text-[11px] text-emerald-800 mt-0.5 leading-tight">
-                  Vous pouvez maintenant aller directement sur WhatsApp et faire <strong>Coller (Ctrl + V)</strong> dans la discussion pour envoyer la quittance officielle.
+                  Vous pouvez maintenant aller directement sur WhatsApp et faire <strong>Coller (Ctrl + V)</strong> dans la discussion pour envoyer le reçu officiel.
                 </p>
               </div>
             </div>
@@ -2646,10 +2693,10 @@ export function BoardingView({
                 href={
                   whatsAppPreviewData.cleanPhone
                     ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
-                        `📄 *QUITTANCE D'INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — ${formRoom}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD de la quittance est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance certifiée par l'Intendance & Gestion de l'Internat._`
+                        `📄 *REÇU DE PAIEMENT INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — ${formRoom}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu certifié par l'Intendance & Gestion de l'Internat._`
                       )}`
                     : `https://wa.me/?text=${encodeURIComponent(
-                        `📄 *QUITTANCE D'INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — ${formRoom}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD de la quittance est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Quittance certifiée par l'Intendance & Gestion de l'Internat._`
+                        `📄 *REÇU DE PAIEMENT INTERNAT & PENSIONNAT — ${(currentSchool.shortName || currentSchool.name || 'ÉTABLISSEMENT SCOLAIRE').toUpperCase()}*\n👤 Élève : *${formStudentName}* (${formMatricule})\n🏫 Classe : *${formClassName}*\n🏠 Pavillon / Chambre : *${formPavilion} — ${formRoom}*\n💰 Tarif Mensuel : *${formatFCFA(formMonthlyRate)} / mois*\n✅ *Total Encaissé : ${formatFCFA(activeTotalCollected)}*\n📅 Date : ${formPaymentDate}\n\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu certifié par l'Intendance & Gestion de l'Internat._`
                       )}`
                 }
                 target="_blank"
@@ -2669,7 +2716,7 @@ export function BoardingView({
                         await navigator.clipboard.write([
                           new (window as any).ClipboardItem({ 'image/png': whatsAppPreviewData.blob }),
                         ]);
-                        setToastMessage('✓ Image de la quittance recopiée dans le presse-papier !');
+                        setToastMessage('✓ Image du reçu recopiée dans le presse-papier !');
                         setTimeout(() => setToastMessage(null), 3000);
                       }
                     } catch (e) {}

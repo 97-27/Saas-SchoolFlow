@@ -226,9 +226,14 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
         return fallback;
       };
 
-      const defaultDate = d.created_at ? parseIsoDate(d.created_at, '2026-09-07') : '2026-09-07';
+      const defaultDate = '2026-09-07';
       const enrollmentDate = parseIsoDate(meta.enrollmentDate, defaultDate);
       const paymentDate = parseIsoDate(meta.paymentDate, enrollmentDate);
+      const isBoarding = Boolean(
+        meta.isBoarding ||
+        (meta.notes && meta.notes.toLowerCase().includes('internat (oui)')) ||
+        (d.address && d.address.toLowerCase().includes('internat (oui)'))
+      );
 
       return {
         id: d.id,
@@ -260,6 +265,7 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
         paymentDate: paymentDate,
         installments: meta.installments || {},
         notes: meta.notes || '',
+        isBoarding: isBoarding,
         updatedAt: meta.updatedAt || d.updated_at || d.created_at || new Date().toISOString(),
       };
     });
@@ -300,6 +306,7 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       updatedAt: student.updatedAt || new Date().toISOString(),
       secondaryPhones: student.secondaryPhones || [],
       notes: student.notes || '',
+      isBoarding: Boolean(student.isBoarding || (student.notes && student.notes.toLowerCase().includes('internat (oui)'))),
     };
     const cleanAddress = (student.address || '').replace(/\[SF_META:.*?\]/g, '').trim();
     const addressWithMeta = `${cleanAddress} [SF_META:${JSON.stringify(metaObj)}]`;
