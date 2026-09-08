@@ -45,7 +45,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialInvoices, schoolSlug]);
 
-  // Helper pour obtenir la date du jour (format YYYY-MM-DD)
+  // Helper pour obtenir la date du jour (format YYYY-MM-DD local)
   const getTodayDateStr = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -54,8 +54,34 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return `${year}-${month}-${day}`;
   };
 
-  // Date active du journal (strictement la date du jour en direct)
-  const [selectedJournalDate, setSelectedJournalDate] = useState<string>(getTodayDateStr());
+  const journalDateStorageKey = `schoolflow_journal_selected_date_${schoolSlug || 'epc-manoi'}`;
+
+  // Date active du journal avec persistance locale (pour ne jamais sauter ni revenir à une fausse date)
+  const [selectedJournalDate, setSelectedJournalDateState] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`schoolflow_journal_selected_date_${schoolSlug || 'epc-manoi'}`);
+        if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
+          return saved;
+        }
+      } catch (e) {}
+    }
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
+  const setSelectedJournalDate = (val: string) => {
+    setSelectedJournalDateState(val);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(journalDateStorageKey, val);
+      } catch (e) {}
+    }
+  };
+
   const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('all_dates');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -367,7 +393,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
             <button
               type="button"
               onClick={() => {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getTodayDateStr();
                 setSelectedJournalDate(today);
                 setDateFilterMode('day_only');
               }}

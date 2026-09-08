@@ -62,12 +62,18 @@ export async function GET(request: NextRequest) {
     // Si la mémoire est vide ou sans élèves ou si un rechargement forcé depuis Supabase est demandé
     if (!schoolData || !schoolData.students || schoolData.students.length === 0 || forceSupabase) {
       try {
-        const [sbSchool, sbStudents, sbInvoices, sbStaff] = await Promise.all([
-          getSchoolFromSupabase(slug),
-          getStudentsFromSupabase(slug),
-          getInvoicesFromSupabase(slug),
-          getStaffUsersFromSupabase(slug),
-        ]);
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => resolve([null, null, null, null]), 1800)
+        );
+        const [sbSchool, sbStudents, sbInvoices, sbStaff] = (await Promise.race([
+          Promise.all([
+            getSchoolFromSupabase(slug),
+            getStudentsFromSupabase(slug),
+            getInvoicesFromSupabase(slug),
+            getStaffUsersFromSupabase(slug),
+          ]),
+          timeoutPromise,
+        ])) as any;
 
         if (!schoolData) schoolData = {};
         if (sbSchool) {

@@ -26,8 +26,15 @@ export const DATA_UPDATED_EVENT = 'schoolflow_data_updated';
 export const REALTIME_SYNC_CHANNEL_NAME = 'schoolflow_realtime_sync_v2';
 
 // ════════════════════════════════════════════════════════════════
-// MOTEUR DE SYNCHRONISATION EN TEMPS RÉEL PARALLÈLE (MULTI-INTERFACES)
+// MOTEUR DE SYNCHRONISATION EN TEMPS RÉEL PARALLÈLE (MULTI-INTERFACES & MULTI-APPAREILS)
 // ════════════════════════════════════════════════════════════════
+
+export const CLIENT_INSTANCE_ID =
+  typeof window !== 'undefined'
+    ? (window as any).__SF_CLIENT_ID ||
+      ((window as any).__SF_CLIENT_ID =
+        'sf_cli_' + Math.random().toString(36).slice(2, 9) + '_' + Date.now())
+    : 'sf_server';
 
 let syncBroadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
@@ -35,11 +42,13 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
     syncBroadcastChannel = new BroadcastChannel(REALTIME_SYNC_CHANNEL_NAME);
     syncBroadcastChannel.onmessage = (event) => {
       // Propagation locale immédiate dans cet onglet sans boucle infinie
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...(event.data || {}), isCrossTabSync: true },
-        })
-      );
+      if (event.data?.senderId !== CLIENT_INSTANCE_ID) {
+        window.dispatchEvent(
+          new CustomEvent(DATA_UPDATED_EVENT, {
+            detail: { ...(event.data || {}), isCrossTabSync: true },
+          })
+        );
+      }
     };
   } catch (e) {
     console.warn('BroadcastChannel sync init warning:', e);
@@ -58,28 +67,170 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
 }
 
 /**
+ * Canal SSE universel pour synchroniser en temps réel les PC, téléphones et tablettes distants
+ */
+let activeEventSource: EventSource | null = null;
+let currentSseSlug = '';
+
+export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+  const cleanSlug = slug || 'epc-manoi';
+  if (activeEventSource && currentSseSlug === cleanSlug) return;
+
+  if (activeEventSource) {
+    try {
+      activeEventSource.close();
+    } catch (e) {}
+    activeEventSource = null;
+  }
+
+  currentSseSlug = cleanSlug;
+  const topic = `schoolflow_sync_${cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
+
+  try {
+    const es = new EventSource(`https://ntfy.sh/${topic}/sse`);
+    activeEventSource = es;
+
+    es.onmessage = (event) => {
+      try {
+        if (!event.data) return;
+        const msg = JSON.parse(event.data);
+        if (!msg || msg.event !== 'message' || !msg.message) return;
+
+        const payload =
+          typeof msg.message === 'string' ? JSON.parse(msg.message) : msg.message;
+        if (!payload || payload.senderId === CLIENT_INSTANCE_ID) {
+          return; // Ignore les messages émis par cette même fenêtre
+        }
+
+        const isPilot = cleanSlug === 'epc-manoi' || cleanSlug === 'college-excellence';
+
+        // 1. Nouvel élève & nouveau reçu enregistré par un collaborateur distant
+        if (payload.action === 'student_registered' && payload.student) {
+          const student: Student = payload.student;
+          const invoice: Invoice = payload.invoice;
+
+          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+          const rawSchool = localStorage.getItem(schoolKey);
+          const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+          const filteredStudents = prevSchool.filter(
+            (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+          );
+          const updatedStudents = [student, ...filteredStudents];
+
+          localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
+          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+          if (isPilot) {
+            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
+            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedStudents));
+          }
+
+          if (invoice) {
+            const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+            const rawInvSchool = localStorage.getItem(invSchoolKey);
+            const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+            const filteredInvoices = prevInvSchool.filter(
+              (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+            );
+            const updatedInvoices = [invoice, ...filteredInvoices];
+
+            localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+            if (isPilot) {
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+              localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvoices));
+            }
+          }
+
+          // Déclencher la notification locale avec tag distant
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'payment_recorded' && payload.invoice) {
+          // 2. Encaissement de prestation ou mise à jour facture
+          const invoice: Invoice = payload.invoice;
+          const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+          const rawInvSchool = localStorage.getItem(invSchoolKey);
+          const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+          const filteredInvoices = prevInvSchool.filter(
+            (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+          );
+          const updatedInvoices = [invoice, ...filteredInvoices];
+
+          localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+          if (isPilot) {
+            localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+            localStorage.setItem(`${INVOICES_STORAGE_KEY}_college-excellence`, JSON.stringify(updatedInvoices));
+          }
+
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: {
+                ...payload,
+                isRemoteSync: true,
+              },
+            })
+          );
+        } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
+          // 3. Suppression propagée
+          deleteLiveStudents(payload.deletedIds, cleanSlug);
+        }
+      } catch (err) {
+        // Ignorer les formats non conformes
+      }
+    };
+
+    es.onerror = () => {
+      // Reconnexion gérée automatiquement par EventSource
+    };
+  } catch (e) {
+    console.warn('Initialisation SSE universel:', e);
+  }
+}
+
+/**
  * Diffuse instantanément un événement de mise à jour à l'interface active et à TOUTES les autres fenêtres ouvertes en direct.
  */
 export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
   if (typeof window === 'undefined') return;
 
+  const enrichedDetail = {
+    ...detail,
+    senderId: CLIENT_INSTANCE_ID,
+    timestamp: Date.now(),
+  };
+
   // 1. Dispatch local immédiat
   window.dispatchEvent(
     new CustomEvent(DATA_UPDATED_EVENT, {
-      detail,
+      detail: enrichedDetail,
     })
   );
 
-  // 2. Diffusion instantanée cross-onglets et cross-fenêtres
+  // 2. Diffusion instantanée cross-onglets et cross-fenêtres du même navigateur
   if (syncBroadcastChannel) {
     try {
-      syncBroadcastChannel.postMessage({
-        ...detail,
-        broadcastTime: Date.now(),
-      });
+      syncBroadcastChannel.postMessage(enrichedDetail);
     } catch (e) {
       console.warn('Erreur broadcast message:', e);
     }
+  }
+
+  // 3. Diffusion instantanée SSE multi-appareils (téléphones, tablettes, autres PC)
+  if (!detail.isRemoteSync && typeof fetch !== 'undefined') {
+    const slug = detail.schoolSlug || 'epc-manoi';
+    const topic = `schoolflow_sync_${slug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
+    fetch(`https://ntfy.sh/${topic}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(enrichedDetail),
+    }).catch(() => {});
   }
 }
 
@@ -255,7 +406,10 @@ let activeSyncInterval: any = null;
 export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
 
-  // Lancer immédiatement la synchronisation
+  // Lancer immédiatement la synchronisation SSE universelle multi-appareils
+  startUniversalRealtimeSync(slug);
+
+  // Lancer la synchronisation API serveur
   syncSchoolDataWithServer(slug);
 
   if (crossDeviceSyncStarted) return;
