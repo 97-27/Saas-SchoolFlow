@@ -59,13 +59,28 @@ export function StudentTable({
   );
 
   useEffect(() => {
+    const activeSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
     const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents, schoolSlug));
+      setStudents(getLiveStudents(initialStudents, activeSlug));
       setCurrentSchool(
-        getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['epc-manoi'])
+        getLiveSchool(activeSlug, school || mockSchools[activeSlug] || mockSchools['epc-manoi'])
       );
     };
     handleUpdate();
+
+    fetch(`/api/sync?slug=${activeSlug}&t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res && res.success && res.data?.students?.length) {
+          setStudents(res.data.students);
+          try {
+            localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(res.data.students));
+            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(res.data.students));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);

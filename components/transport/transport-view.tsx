@@ -120,14 +120,15 @@ export function TransportView({
 
   // Synchronisation des élèves et des factures/quittances
   useEffect(() => {
-    setStudents(getLiveStudents(mockStudents, schoolSlug));
-    setInvoices(getLiveInvoices([], schoolSlug));
-    setCurrentSchool(getLiveSchool(schoolSlug, school));
+    const activeSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
+    setStudents(getLiveStudents(mockStudents, activeSlug));
+    setInvoices(getLiveInvoices([], activeSlug));
+    setCurrentSchool(getLiveSchool(activeSlug, school));
 
     const handleUpdate = () => {
-      setStudents(getLiveStudents(mockStudents, schoolSlug));
-      setInvoices(getLiveInvoices([], schoolSlug));
-      setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setStudents(getLiveStudents(mockStudents, activeSlug));
+      setInvoices(getLiveInvoices([], activeSlug));
+      setCurrentSchool(getLiveSchool(activeSlug, school));
       if (typeof window !== 'undefined') {
         try {
           const savedPayments = localStorage.getItem(TRANSPORT_PAYMENTS_KEY);
@@ -137,6 +138,26 @@ export function TransportView({
         } catch (e) {}
       }
     };
+
+    fetch(`/api/sync?slug=${activeSlug}&t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((res) => {
+        if (res && res.success && res.data) {
+          if (res.data.transportSubscriptions) {
+            setCustomTransportMap(res.data.transportSubscriptions);
+            try { localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(res.data.transportSubscriptions)); } catch (e) {}
+          }
+          if (res.data.transportPayments) {
+            setMonthlyPayments(res.data.transportPayments);
+            try { localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(res.data.transportPayments)); } catch (e) {}
+          }
+          if (res.data.students && Array.isArray(res.data.students) && res.data.students.length > 0) {
+            setStudents(res.data.students);
+          }
+        }
+      })
+      .catch(() => {});
+
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school]);
