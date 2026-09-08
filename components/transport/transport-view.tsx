@@ -5,7 +5,8 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { deleteInvoiceFromSupabase } from '@/lib/supabase/services';
 import {
   Bus,
   MapPin,
@@ -35,6 +36,7 @@ import {
   Copy,
   Loader2,
   Smartphone,
+  Trash2,
 } from 'lucide-react';
 
 interface TransportViewProps {
@@ -57,45 +59,6 @@ const MONTHS_LIST = [
 
 const TRANSPORT_PAYMENTS_KEY = 'schoolflow_transport_monthly_payments_v2';
 const TRANSPORT_SUBSCRIPTIONS_KEY = 'schoolflow_transport_subscriptions_v2';
-
-const ITINERAIRES_DATA = [
-  {
-    line: 'Ligne 1 : Riviera 3 — Angré Djibi',
-    bus: 'Car N°1 (Iveco 32 places)',
-    driver: 'M. Kouamé Jean-Baptiste',
-    monitor: 'Mme Bamba Fatou',
-    stops: ['Riviera Golf (06h45)', 'Riviera Bonoumin (07h00)', 'Angré Djibi (07h15)', '8ème Tranche (07h25)'],
-    morningTime: '06h45 — 07h30',
-    eveningTime: '16h30 — 17h30',
-  },
-  {
-    line: 'Ligne 2 : Deux Plateaux — Vallon',
-    bus: 'Car N°2 (Toyota Coaster 30 places)',
-    driver: 'M. Touré Amadou',
-    monitor: 'Mme Koffi Estelle',
-    stops: ['Deux Plateaux Vallon (06h50)', 'Polyclinique Sainte Anne-Marie (07h05)', 'ENA / Duncan (07h20)'],
-    morningTime: '06h50 — 07h30',
-    eveningTime: '16h30 — 17h25',
-  },
-  {
-    line: 'Ligne 3 : Cocody Danga — Mermoz',
-    bus: 'Car N°3 (Mercedes Sprinter 24 places)',
-    driver: 'M. Yao Marcel',
-    monitor: 'Mme Koné Awa',
-    stops: ['Cité des Cadres (06h45)', 'Cocody Danga (07h00)', 'Mermoz / Lycée Technique (07h20)'],
-    morningTime: '06h45 — 07h30',
-    eveningTime: '16h30 — 17h20',
-  },
-  {
-    line: 'Ligne 4 : Marcory — Zone 4 — VGE',
-    bus: 'Car N°4 (Iveco 30 places)',
-    driver: 'M. Diallo Souleymane',
-    monitor: 'Mme Coulibaly Sylvie',
-    stops: ['Grand Carrefour Marcory (06h40)', 'Zone 4 Biétry (06h55)', 'Prima Center (07h10)', 'Boulevard VGE (07h25)'],
-    morningTime: '06h40 — 07h30',
-    eveningTime: '16h30 — 17h40',
-  },
-];
 
 export function TransportView({
   school,
@@ -120,10 +83,12 @@ export function TransportView({
   const [selectedStudentForReceipt, setSelectedStudentForReceipt] = useState<any | null>(null);
   const [isItinerairesModalOpen, setIsItinerairesModalOpen] = useState(false);
   const [isNewSubModalOpen, setIsNewSubModalOpen] = useState(false);
+  const [showDeleteTransportModal, setShowDeleteTransportModal] = useState(false);
+  const [isDeletingTransport, setIsDeletingTransport] = useState(false);
 
   // Formulaire nouvelle souscription
   const [newSubStudentId, setNewSubStudentId] = useState('');
-  const [newSubStop, setNewSubStop] = useState('Riviera Bonoumin — Carrefour Jacques Prévert');
+  const [newSubStop, setNewSubStop] = useState('');
   const [newSubRate, setNewSubRate] = useState('35000');
   const [newSubDiscount, setNewSubDiscount] = useState('0');
   const [newSubSearchQuery, setNewSubSearchQuery] = useState('');
@@ -225,16 +190,6 @@ export function TransportView({
 
   // Liste des abonnés au transport scolaire (inclus élèves avec transport coché ou facturé)
   const subscribers = useMemo(() => {
-    const defaultStops = [
-      'Riviera Bonoumin — Carrefour Jacques Prévert',
-      'Angré Djibi — Pharmacie des Grâces',
-      'Deux Plateaux — Vallon / Sainte Cécile',
-      'Cocody Danga — Cité des Cadres',
-      'Marcory Biétry — Boulevard de Marseille',
-      'Riviera 3 — Rond-point Lycée Français',
-      '8ème Tranche — Carrefour Soleil Levant',
-    ];
-
     const transportInvoiceStudentIds = new Set(
       invoices
         .filter((inv) => inv.feeType === 'Transport' || inv.invoiceNumber?.startsWith('TRP-') || inv.notes?.toLowerCase().includes('transport'))
@@ -250,9 +205,10 @@ export function TransportView({
           transportInvoiceStudentIds.has(stu.id);
         return Boolean(customTransportMap[stu.id]) || isEnrolled;
       })
-      .map((stu, idx) => {
+      .map((stu) => {
         const custom = customTransportMap[stu.id];
-        const stop = custom?.stop || defaultStops[idx % defaultStops.length];
+        const cleanAddress = stu.address?.replace(/internat\s*\(oui\)/gi, '').replace(/cantine\s*\(oui\)/gi, '').replace(/transport\s*\(oui\)/gi, '').trim();
+        const stop = custom?.stop || (cleanAddress && !cleanAddress.toLowerCase().includes('abidjan,') ? cleanAddress : 'Arrêt selon quartier');
         const monthlyRate = custom?.rate || 35000;
         const discountAmount = custom?.discount || 0;
 
@@ -544,6 +500,136 @@ export function TransportView({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // 1. Retirer uniquement de l'abonnement de transport
+  const handleRemoveFromTransportOnly = async () => {
+    if (!selectedStudentForReceipt) return;
+    setIsDeletingTransport(true);
+    try {
+      const studentId = selectedStudentForReceipt.id;
+      const studentNumber = selectedStudentForReceipt.studentNumber;
+      const matricule = selectedStudentForReceipt.matricule;
+
+      // a. Mettre à jour l'élève (isTransport: false)
+      const foundStudent = students.find((s) => s.id === studentId);
+      if (foundStudent) {
+        const updatedStudent: Student = {
+          ...foundStudent,
+          isTransport: false,
+          notes: (foundStudent.notes || '').replace(/transport\s*\(oui\)/gi, '').trim(),
+        };
+        updateRegisteredStudent(updatedStudent, schoolSlug);
+      }
+
+      // b. Nettoyer customTransportMap
+      const nextMap = { ...customTransportMap };
+      delete nextMap[studentId];
+      if (studentNumber) delete nextMap[studentNumber];
+      if (matricule) delete nextMap[matricule];
+      setCustomTransportMap(nextMap);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+        } catch (e) {}
+      }
+
+      // c. Nettoyer monthlyPayments
+      const nextPayments = { ...monthlyPayments };
+      delete nextPayments[studentId];
+      if (studentNumber) delete nextPayments[studentNumber];
+      if (matricule) delete nextPayments[matricule];
+      setMonthlyPayments(nextPayments);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(nextPayments));
+        } catch (e) {}
+      }
+
+      // d. Supprimer les factures/quittances de transport
+      const invoiceId = `inv-transport-${studentId}`;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawInvoices = localStorage.getItem('schoolflow_registered_invoices_v1');
+          if (rawInvoices) {
+            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
+            const filteredInvoices = prevInvoices.filter(
+              (inv) =>
+                inv.id !== invoiceId &&
+                inv.studentId !== studentId &&
+                !inv.invoiceNumber?.startsWith(`TRP-${studentNumber}`) &&
+                !inv.invoiceNumber?.startsWith(`QUI-TRP-${studentNumber}`)
+            );
+            localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(filteredInvoices));
+          }
+        } catch (e) {}
+      }
+      deleteInvoiceFromSupabase(invoiceId, schoolSlug).catch(() => {});
+
+      // e. Diffuser l'événement
+      broadcastLiveUpdate({
+        action: 'transport_removed',
+        studentId,
+        schoolSlug,
+      });
+      window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'transport_removed' } }));
+
+      setShowDeleteTransportModal(false);
+      setSelectedStudentForReceipt(null);
+      setToastMessage(`✓ L'élève ${selectedStudentForReceipt.fullName} a été retiré du transport scolaire.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error('Erreur lors du retrait du transport:', err);
+    } finally {
+      setIsDeletingTransport(false);
+    }
+  };
+
+  // 2. Supprimer définitivement l'élève et tous ses reçus (si doublon accidentel)
+  const handleDeleteEntireTransportStudent = async () => {
+    if (!selectedStudentForReceipt) return;
+    setIsDeletingTransport(true);
+    try {
+      const studentId = selectedStudentForReceipt.id;
+      const studentNumber = selectedStudentForReceipt.studentNumber;
+      const matricule = selectedStudentForReceipt.matricule;
+
+      // Nettoyer transport map et payments
+      const nextMap = { ...customTransportMap };
+      delete nextMap[studentId];
+      if (studentNumber) delete nextMap[studentNumber];
+      if (matricule) delete nextMap[matricule];
+      setCustomTransportMap(nextMap);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+        } catch (e) {}
+      }
+
+      const nextPayments = { ...monthlyPayments };
+      delete nextPayments[studentId];
+      if (studentNumber) delete nextPayments[studentNumber];
+      if (matricule) delete nextPayments[matricule];
+      setMonthlyPayments(nextPayments);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(nextPayments));
+        } catch (e) {}
+      }
+
+      // Supprimer définitivement l'élève et tous ses reçus
+      const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
+      deleteLiveStudents(idsToDelete, schoolSlug);
+
+      setShowDeleteTransportModal(false);
+      setSelectedStudentForReceipt(null);
+      setToastMessage(`✓ Reçu et dossier de ${selectedStudentForReceipt.fullName} définitivement supprimés.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error('Erreur suppression totale transport:', err);
+    } finally {
+      setIsDeletingTransport(false);
+    }
+  };
+
   // Partage WhatsApp du reçu avec copie d'image dans le presse-papier
   const handleSendReceiptWhatsApp = async (sub: any) => {
     if (!sub) return;
@@ -635,7 +721,7 @@ export function TransportView({
             type="button"
             onClick={() => {
               setNewSubStudentId('');
-              setNewSubStop('Riviera Bonoumin — Carrefour Jacques Prévert');
+              setNewSubStop('');
               setNewSubRate('35000');
               setNewSubDiscount('0');
               setIsNewSubModalOpen(true);
@@ -831,8 +917,8 @@ export function TransportView({
         <div
           ref={topScrollRef}
           onScroll={handleTopScroll}
-          className="overflow-x-auto bg-slate-100/90 border-b border-slate-200 scrollbar-thin scrollbar-thumb-emerald-500 scrollbar-track-slate-100"
-          style={{ height: '14px' }}
+          className="custom-top-scrollbar overflow-x-auto bg-slate-100/90 border-b border-slate-200"
+          style={{ height: '16px' }}
         >
           <div style={{ width: `${tableScrollWidth}px`, height: '1px' }} />
         </div>
@@ -841,7 +927,8 @@ export function TransportView({
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
-          className="overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
@@ -956,7 +1043,7 @@ export function TransportView({
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-900 bg-white border border-slate-300 hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs"
                       >
                         <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Mois ({sub.paidMonthsCount}/10)</span>
+                        <span>Mois ({sub.paidMonthsCount}/9)</span>
                       </button>
                     </td>
 
@@ -1084,7 +1171,7 @@ export function TransportView({
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Mois Validés</span>
-                <strong className="text-slate-900 font-heading text-sm">{selectedStudentForMonths.paidMonthsCount} sur 10 mois</strong>
+                <strong className="text-slate-900 font-heading text-sm">{selectedStudentForMonths.paidMonthsCount} sur 9 mois</strong>
               </div>
               <div className="text-right">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Net Encaissé</span>
@@ -1097,7 +1184,7 @@ export function TransportView({
             {/* Grille des mois */}
             <div className="space-y-2">
               <label className="font-bold text-slate-900 text-xs flex items-center justify-between">
-                <span>Pointage des 10 mois scolaires :</span>
+                <span>Pointage des 9 mois scolaires :</span>
                 <span className="text-[11px] text-slate-400">Cliquez pour valider/invalider</span>
               </label>
 
@@ -1381,6 +1468,120 @@ export function TransportView({
                 {isGeneratingImage ? <Loader2 className="w-4 h-4 animate-spin text-emerald-600" /> : <Smartphone className="w-4 h-4 text-emerald-600" />}
                 <span>Partager sur WhatsApp</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDeleteTransportModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:border-rose-300 transition-all shadow-2xs cursor-pointer"
+                title="Supprimer ce reçu ou cet abonnement de transport"
+              >
+                <Trash2 className="w-4 h-4 text-rose-600" />
+                <span>Supprimer ce Reçu</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de Confirmation de Suppression de Reçu / Abonnement Transport */}
+      {showDeleteTransportModal && selectedStudentForReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading">
+                  Supprimer ce Reçu / Abonnement de Transport ?
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choisissez le mode de suppression pour ce reçu de transport scolaire.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteTransportModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Récapitulatif de l'élève */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs space-y-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Élève :</span>
+                <span className="font-extrabold text-slate-950 truncate max-w-[220px]">
+                  {selectedStudentForReceipt.fullName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Matricule / ID :</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {selectedStudentForReceipt.studentNumber} {selectedStudentForReceipt.matricule ? `(${selectedStudentForReceipt.matricule})` : ''} • {selectedStudentForReceipt.grade}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Arrêt de ramassage :</span>
+                <span className="font-bold text-emerald-800">
+                  {selectedStudentForReceipt.pickupStop}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Total Réglé :</span>
+                <span className="font-mono font-black text-emerald-700">
+                  {formatFCFA(selectedStudentForReceipt.totalPaidAmount || 0)} ({selectedStudentForReceipt.paidMonthsCount}/9 mois)
+                </span>
+              </div>
+            </div>
+
+            {/* Options de suppression */}
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                disabled={isDeletingTransport}
+                onClick={handleRemoveFromTransportOnly}
+                className="w-full p-3.5 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-left transition-all cursor-pointer flex items-start gap-3 group"
+              >
+                <RotateCcw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5 group-hover:rotate-[-45deg] transition-transform" />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-amber-950 block">
+                    1. Retirer uniquement du transport (Recommandé)
+                  </span>
+                  <span className="text-[11px] text-amber-800 mt-0.5 block">
+                    L&apos;élève reste scolarisé dans l&apos;école. Seuls son abonnement de car, son reçu et ses mensualités de transport sont supprimés.
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeletingTransport}
+                onClick={handleDeleteEntireTransportStudent}
+                className="w-full p-3.5 rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-left transition-all cursor-pointer flex items-start gap-3 group"
+              >
+                <Trash2 className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-rose-950 block">
+                    2. Supprimer définitivement le reçu et le dossier complet
+                  </span>
+                  <span className="text-[11px] text-rose-800 mt-0.5 block">
+                    Idéal si ce reçu est un doublon accidentel. L&apos;élève et tous ses reçus disparaîtront immédiatement de toute la base de données.
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                disabled={isDeletingTransport}
+                onClick={() => setShowDeleteTransportModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Annuler
+              </button>
             </div>
           </div>
         </div>
@@ -1414,38 +1615,44 @@ export function TransportView({
             </div>
 
             <div className="space-y-4 text-xs">
-              {ITINERAIRES_DATA.map((line) => (
-                <div key={line.line} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-slate-950 uppercase tracking-wider text-xs">
-                      {line.line}
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                      {line.bus}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-slate-600 pt-1">
-                    <div>
-                      <span>Chauffeur : <strong className="text-slate-900">{line.driver}</strong></span>
-                    </div>
-                    <div>
-                      <span>Accompagnatrice : <strong className="text-slate-900">{line.monitor}</strong></span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200/70 text-slate-700 space-y-1">
-                    <span className="font-bold text-[11px] block">Arrêts desservis :</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {line.stops.map((stop) => (
-                        <span key={stop} className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-medium">
-                          📍 {stop}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                  <Navigation className="w-6 h-6" />
                 </div>
-              ))}
+                <div className="space-y-1 max-w-md mx-auto">
+                  <h4 className="font-extrabold text-slate-900 text-sm">
+                    Circuits de Ramassage Définis sur Mesure
+                  </h4>
+                  <p className="text-slate-500 text-xs">
+                    Aucune ligne fictive pré-assignée. Les itinéraires et arrêts de montée sont configurés directement lors de chaque souscription d&apos;élève selon son quartier de résidence (ex: Abobo Biabou 2, etc.).
+                  </p>
+                </div>
+              </div>
+
+              {/* Arrêts actuels des élèves inscrits */}
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-950 uppercase tracking-wider text-xs">
+                    Arrêts Déclarés par les Élèves Inscrits ({subscribers.length})
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                    Points réels
+                  </span>
+                </div>
+                {subscribers.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">
+                    Aucun élève n&apos;est encore abonné au transport pour le moment.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Array.from(new Set(subscribers.map((s) => s.pickupStop).filter(Boolean))).map((st) => (
+                      <span key={st} className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-semibold text-slate-800">
+                        📍 {st}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end">

@@ -5,8 +5,8 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent } from '@/lib/data/live-store';
-import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/services';
+import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents } from '@/lib/data/live-store';
+import { saveStudentToSupabase, saveInvoiceToSupabase, deleteInvoiceFromSupabase } from '@/lib/supabase/services';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   BedDouble,
@@ -117,6 +117,10 @@ export function BoardingView({
 
   // Modale de Confirmation de Souscription d'Internat
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+
+  // Modale de suppression de reçu / pensionnaire
+  const [showDeleteBoardingModal, setShowDeleteBoardingModal] = useState(false);
+  const [isDeletingBoarding, setIsDeletingBoarding] = useState(false);
 
   // Modale d'Aperçu & Partage Image HD (WhatsApp)
   const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
@@ -803,6 +807,108 @@ export function BoardingView({
     setIsCreatingNew(false);
     if (filteredBoarders.length === 0) return;
     setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
+  };
+
+  // Suppression du Reçu / Retrait de l'Internat
+  const handleRemoveFromBoardingOnly = async () => {
+    if (!activeBoarder) return;
+    setIsDeletingBoarding(true);
+    try {
+      const studentId = activeBoarder.student.id;
+      const studentNumber = activeBoarder.student.studentNumber;
+      const matricule = activeBoarder.student.matricule;
+
+      // 1. Mettre à jour l'élève pour retirer l'option internat
+      const updatedStudent: Student = {
+        ...activeBoarder.student,
+        isBoarding: false,
+        notes: (activeBoarder.student.notes || '').replace(/internat\s*\(oui\)/gi, '').trim(),
+      };
+      updateRegisteredStudent(updatedStudent, schoolSlug);
+
+      // 2. Nettoyer les customSubscriptions
+      const updatedSubs = customSubscriptions.filter(
+        (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
+      );
+      saveSubscriptionsToStorage(updatedSubs);
+
+      // 3. Nettoyer les monthlyPayments
+      const updatedPayments = { ...monthlyPayments };
+      delete updatedPayments[studentId];
+      if (studentNumber) delete updatedPayments[studentNumber];
+      if (matricule) delete updatedPayments[matricule];
+      savePaymentsToStorage(updatedPayments);
+
+      // 4. Supprimer la quittance d'internat du journal
+      const invoiceId = `inv-boarding-${studentId}`;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+          if (rawInvoices) {
+            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
+            const filteredInvoices = prevInvoices.filter(
+              (inv) => inv.id !== invoiceId && inv.studentId !== studentId && !inv.invoiceNumber?.startsWith(`QUI-INT-${studentNumber}`)
+            );
+            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filteredInvoices));
+          }
+        } catch (e) {}
+      }
+
+      deleteInvoiceFromSupabase(invoiceId, schoolSlug).catch(() => {});
+
+      // 5. Diffuser l'événement en temps réel
+      broadcastLiveUpdate({
+        action: 'boarding_removed',
+        studentId,
+        schoolSlug,
+      });
+      window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'boarding_removed' } }));
+
+      setShowDeleteBoardingModal(false);
+      setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
+      setToastMessage(`✓ L'élève ${activeBoarder.student.fullName} a été retiré de l'internat.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error('Erreur lors du retrait de l\'internat:', err);
+    } finally {
+      setIsDeletingBoarding(false);
+    }
+  };
+
+  // Suppression totale et définitive du doublon ou élève de toute la base
+  const handleDeleteEntireBoarderStudent = async () => {
+    if (!activeBoarder) return;
+    setIsDeletingBoarding(true);
+    try {
+      const studentId = activeBoarder.student.id;
+      const studentNumber = activeBoarder.student.studentNumber;
+      const matricule = activeBoarder.student.matricule;
+
+      // Nettoyer les subscriptions et monthly payments
+      const updatedSubs = customSubscriptions.filter(
+        (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
+      );
+      saveSubscriptionsToStorage(updatedSubs);
+
+      const updatedPayments = { ...monthlyPayments };
+      delete updatedPayments[studentId];
+      if (studentNumber) delete updatedPayments[studentNumber];
+      if (matricule) delete updatedPayments[matricule];
+      savePaymentsToStorage(updatedPayments);
+
+      // Supprimer définitivement l'élève et tous ses reçus
+      const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
+      deleteLiveStudents(idsToDelete, schoolSlug);
+
+      setShowDeleteBoardingModal(false);
+      setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
+      setToastMessage(`✓ Reçu et dossier de ${activeBoarder.student.fullName} définitivement supprimés.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err) {
+      console.error('Erreur suppression totale pensionnaire:', err);
+    } finally {
+      setIsDeletingBoarding(false);
+    }
   };
 
   // 1. Impression A4 Isolé (Uniquement le reçu cadré)
@@ -1687,6 +1793,110 @@ export function BoardingView({
         </div>
       )}
 
+      {/* Modale de Confirmation de Suppression de Reçu / Pensionnaire */}
+      {showDeleteBoardingModal && activeBoarder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 sm:p-7 space-y-5 animate-in zoom-in-95">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-black text-slate-950 font-heading">
+                  Supprimer ce Reçu / Pensionnaire ?
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Choisissez le mode de suppression pour ce dossier.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteBoardingModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Récapitulatif de l'élève */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs space-y-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Pensionnaire :</span>
+                <span className="font-extrabold text-slate-950 truncate max-w-[220px]">
+                  {activeBoarder.student.fullName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Matricule / ID :</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {activeBoarder.student.studentNumber} {activeBoarder.student.matricule ? `(${activeBoarder.student.matricule})` : ''} • {activeBoarder.student.grade}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
+                <span className="text-slate-500 font-medium">Dortoir & Chambre :</span>
+                <span className="font-bold text-purple-900">
+                  {activeBoarder.pavilion} — {activeBoarder.roomNumber}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Total Réglé :</span>
+                <span className="font-mono font-black text-emerald-700">
+                  {formatFCFA(activeBoarder.totalPaid)} ({activeBoarder.paidMonthsCount}/9 mois)
+                </span>
+              </div>
+            </div>
+
+            {/* Options de suppression */}
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                disabled={isDeletingBoarding}
+                onClick={handleRemoveFromBoardingOnly}
+                className="w-full p-3.5 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-left transition-all cursor-pointer flex items-start gap-3 group"
+              >
+                <RotateCcw className="w-5 h-5 text-amber-700 shrink-0 mt-0.5 group-hover:rotate-[-45deg] transition-transform" />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-amber-950 block">
+                    1. Retirer uniquement de l'internat (Recommandé)
+                  </span>
+                  <span className="text-[11px] text-amber-800 mt-0.5 block">
+                    L'élève reste scolarisé dans l'école. Seuls son inscription à l'internat, son reçu et ses mensualités de pensionnat sont annulés.
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeletingBoarding}
+                onClick={handleDeleteEntireBoarderStudent}
+                className="w-full p-3.5 rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-left transition-all cursor-pointer flex items-start gap-3 group"
+              >
+                <Trash2 className="w-5 h-5 text-rose-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-rose-950 block">
+                    2. Supprimer définitivement le reçu et le dossier complet
+                  </span>
+                  <span className="text-[11px] text-rose-800 mt-0.5 block">
+                    Idéal si ce reçu est un doublon accidentel. L'élève et tous ses reçus disparaîtront immédiatement de toute la base de données.
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                disabled={isDeletingBoarding}
+                onClick={() => setShowDeleteBoardingModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════
           EN-TÊTE DE PAGE AVEC ANNÉE SCOLAIRE SUR LA MÊME LIGNE
           ═══════════════════════════════════════════════════════════════ */}
@@ -2351,6 +2561,17 @@ export function BoardingView({
                   Modifiez une coordonnée ou cochez un mois pour enregistrer.
                 </p>
               )}
+              {!isCreatingNew && activeBoarder && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteBoardingModal(true)}
+                  className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:border-rose-300 transition-all cursor-pointer shadow-2xs mt-1"
+                  title="Supprimer ce reçu ou ce pensionnaire en doublon"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Supprimer ce Reçu / Pensionnaire</span>
+                </button>
+              )}
             </div>
           </form>
         </div>
@@ -2393,6 +2614,19 @@ export function BoardingView({
                 )}
                 <span>Partager sur WhatsApp</span>
               </button>
+
+              {/* Bouton Supprimer ce Reçu / Pensionnaire */}
+              {activeBoarder && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteBoardingModal(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 hover:border-rose-300 transition-all shadow-2xs cursor-pointer"
+                  title="Supprimer ce reçu ou ce pensionnaire en doublon"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Supprimer ce Reçu</span>
+                </button>
+              )}
             </div>
           </div>
 
