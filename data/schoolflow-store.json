@@ -1296,6 +1296,55 @@
       "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e"
     ],
     "updatedAt": "2026-09-08T23:31:24.353Z",
-    "slug": "epc-manoi"
+    "slug": "epc-manoi",
+    "boardingSubscriptions": [
+      {
+        "studentId": "ID-001",
+        "studentNumber": "ID-001",
+        "matricule": "26001482A",
+        "studentName": "COULIBALY Zouleikha Tiegbana",
+        "className": "Maternelle (P.S.)",
+        "monthlyRate": 25000,
+        "gender": "M"
+      }
+    ],
+    "boardingPayments": {
+      "ID-001": {
+        "0": true,
+        "1": true,
+        "2": true
+      }
+    },
+    "canteenSubscriptions": {
+      "ID-002": {
+        "rate": 10000,
+        "diet": "Standard",
+        "studentName": "COULIBALY Fatmah Gnele Elif"
+      }
+    },
+    "canteenPayments": {
+      "ID-002": {
+        "0": true
+      }
+    },
+    "transportSubscriptions": {
+      "ID-003": {
+        "rate": 20000,
+        "stop": "Circuit 1",
+        "studentName": "COULIBALY Doh Tariq Imram"
+      }
+    },
+    "transportPayments": {
+      "ID-003": {
+        "0": true
+      }
+    },
+    "installments": {
+      "versement1": 65000,
+      "versement2": 20000,
+      "versement3": 20000,
+      "versement4": 15000,
+      "versement5": 0
+    }
   }
 }

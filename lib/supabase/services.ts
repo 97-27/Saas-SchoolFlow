@@ -904,20 +904,44 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
 
     const { data: existing } = await supabase
       .from('staff_users')
-      .select('id')
+      .select('id, department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_services_data')
       .maybeSingle();
 
+    let mergedData = servicesData;
+    if (existing?.department) {
+      try {
+        const prev = JSON.parse(existing.department);
+        mergedData = {
+          boardingSubscriptions: (servicesData.boardingSubscriptions && servicesData.boardingSubscriptions.length > 0) ? servicesData.boardingSubscriptions : (prev.boardingSubscriptions || []),
+          boardingPayments: (servicesData.boardingPayments && Object.keys(servicesData.boardingPayments).length > 0) ? servicesData.boardingPayments : (prev.boardingPayments || {}),
+          canteenSubscriptions: (servicesData.canteenSubscriptions && Object.keys(servicesData.canteenSubscriptions).length > 0) ? servicesData.canteenSubscriptions : (prev.canteenSubscriptions || {}),
+          canteenPayments: (servicesData.canteenPayments && Object.keys(servicesData.canteenPayments).length > 0) ? servicesData.canteenPayments : (prev.canteenPayments || {}),
+          transportSubscriptions: (servicesData.transportSubscriptions && Object.keys(servicesData.transportSubscriptions).length > 0) ? servicesData.transportSubscriptions : (prev.transportSubscriptions || {}),
+          transportPayments: (servicesData.transportPayments && Object.keys(servicesData.transportPayments).length > 0) ? servicesData.transportPayments : (prev.transportPayments || {}),
+          installments: (servicesData.installments && Object.keys(servicesData.installments).length > 0) ? servicesData.installments : (prev.installments || {}),
+        };
+      } catch (e) {}
+    }
+
     if (existing?.id) {
       await supabase
         .from('staff_users')
-        .update({ department: JSON.stringify(servicesData) })
+        .update({ department: JSON.stringify(mergedData) })
         .eq('id', existing.id);
     } else {
       await supabase
         .from('staff_users')
-        .insert(payload);
+        .insert({
+          school_id: schoolId,
+          role_id: 'system_services_data',
+          role_title: 'Services Data Sync',
+          full_name: 'SYSTEM SERVICES SYNC',
+          auth_code: 'SYS-SRV-DATA',
+          department: JSON.stringify(mergedData),
+          is_active: true,
+        });
     }
     return true;
   } catch (err) {
