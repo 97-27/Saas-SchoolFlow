@@ -123,7 +123,7 @@ export function RevenueSummary({
             if (matKey) seenBoardingIdentifiers.add(matKey);
 
             boardingStudentsCount += 1;
-            const rate = 50000;
+            const rate = 25000;
             boardingAmount += paidCount * rate;
           }
         });

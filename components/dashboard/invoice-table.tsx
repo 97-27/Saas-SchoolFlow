@@ -225,7 +225,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         let prestation = '🎓 Scolarité';
         let motif = '1er Versement';
         if (feeLower.includes('internat')) {
-          prestation = '🏠 Internat';
+          prestation = '🏠 Internat & Pensionnat';
           motif = inv.notes || (inv.feeType && inv.feeType.includes('(') ? inv.feeType.slice(inv.feeType.indexOf('(') + 1, inv.feeType.lastIndexOf(')')) : 'Pensionnat & Hébergement');
         } else if (feeLower.includes('cantine')) {
           prestation = '🍽️ Cantine';
@@ -236,6 +236,13 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         } else if (feeLower.includes('inscription') && !feeLower.includes('scolarité')) {
           prestation = "📝 Frais d'Inscription";
           motif = "Droits d'Inscription";
+        }
+
+        // Correction orthographique rigoureuse singulier / pluriel ("1 mois réglé" sans 's')
+        if (motif.includes('1 mois réglés')) {
+          motif = motif.replace('1 mois réglés', '1 mois réglé');
+        } else if (motif.startsWith('Mois réglés :') && !motif.includes(',')) {
+          motif = motif.replace('Mois réglés :', 'Mois réglé :');
         }
 
         const amt = inv.paidAmount !== undefined ? inv.paidAmount : inv.amount;

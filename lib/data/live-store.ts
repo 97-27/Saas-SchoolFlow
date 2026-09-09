@@ -1615,29 +1615,53 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
           if (!b || !b.studentId) continue;
           if (deletedIds.has(b.studentId) || (b.matricule && deletedIds.has(b.matricule))) continue;
 
-          // Si une facture pour cet élève en 'Internat & Pensionnat' existe déjà dans uniqueInvoices, ne pas dupliquer
-          const alreadyExists = uniqueInvoices.some(
+          const months = monthlyPayments[b.studentId] || (b.matricule ? monthlyPayments[b.matricule] : {}) || {};
+          const paidMonths = Object.keys(months).filter((m) => months[m]);
+          const paidCount = paidMonths.length;
+          const rate = typeof b.monthlyRate === 'number' && b.monthlyRate > 0 ? b.monthlyRate : 25000;
+          const totalPaid = paidCount * rate;
+          const totalDue = rate * 9;
+          const matchingStu = studentMap.get(b.studentId) || (b.matricule ? studentMap.get(b.matricule) : undefined);
+
+          const d = new Date();
+          const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const finalDate = b.paymentDate || todayStr;
+          const notesText = paidCount > 0
+            ? `${paidCount} mois ${paidCount > 1 ? 'réglés' : 'réglé'} (${paidMonths.join(', ')})`
+            : 'Internat & Pensionnat';
+
+          // Vérifier si une facture existe déjà dans uniqueInvoices
+          const existingInvIdx = uniqueInvoices.findIndex(
             (inv) =>
               (inv.studentId === b.studentId || (b.matricule && inv.invoiceNumber?.includes(b.matricule))) &&
-              inv.feeType === 'Internat & Pensionnat'
+              ((inv.feeType || '').toLowerCase().includes('internat') || (inv.id || '').includes('boarding'))
           );
-          if (alreadyExists) continue;
+
+          if (existingInvIdx >= 0) {
+            // Mettre à jour la facture avec les données réelles consolidées
+            if (totalPaid > 0) {
+              uniqueInvoices[existingInvIdx] = {
+                ...uniqueInvoices[existingInvIdx],
+                studentName: b.studentName || matchingStu?.fullName || uniqueInvoices[existingInvIdx].studentName,
+                amount: totalDue > 0 ? totalDue : totalPaid,
+                netAmount: totalDue > 0 ? totalDue : totalPaid,
+                paidAmount: totalPaid,
+                balanceRemaining: Math.max(0, totalDue - totalPaid),
+                issueDate: finalDate,
+                dueDate: finalDate,
+                status: totalDue > 0 && totalPaid >= totalDue ? 'paid' : 'partial',
+                notes: notesText,
+              };
+            }
+            continue;
+          }
 
           const boardInvId = `inv-boarding-${b.studentId}`;
-          const boardInvNum = b.matricule ? `INT-${b.matricule.replace(/\D/g, '').slice(-4) || '2026'}` : `INT-${b.studentId.slice(-4)}`;
+          const cleanNum = b.matricule ? b.matricule.replace(/\D/g, '').slice(-4) : (matchingStu?.studentNumber ? matchingStu.studentNumber.replace(/\D/g, '').slice(-4) : b.studentId.replace(/\D/g, '').slice(-4));
+          const boardInvNum = `QUI-INT-${cleanNum || '001'}`;
 
           if (!seenIds.has(boardInvId) && !seenNumbers.has(boardInvNum)) {
-            const months = monthlyPayments[b.studentId] || {};
-            const paidCount = Object.values(months).filter(Boolean).length;
-            const rate = b.monthlyRate || 0;
-            const totalPaid = paidCount * rate;
             if (totalPaid <= 0) continue; // Pas de versement -> ne pas encombrer le journal de caisse
-
-            const totalDue = rate * 9;
-            const matchingStu = studentMap.get(b.studentId) || (b.matricule ? studentMap.get(b.matricule) : undefined);
-
-            const d = new Date();
-            const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
             seenIds.add(boardInvId);
             seenNumbers.add(boardInvNum);
@@ -1657,11 +1681,14 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
               netAmount: totalDue > 0 ? totalDue : totalPaid,
               paidAmount: totalPaid,
               balanceRemaining: Math.max(0, totalDue - totalPaid),
-              paymentMethod: 'Espèces en caisse',
+              paymentMethod: 'Espèces',
               enrollmentType: matchingStu?.enrollmentType || 'nouveau',
-              issueDate: b.paymentDate || matchingStu?.paymentDate || todayStr,
-              dueDate: b.paymentDate || matchingStu?.paymentDate || todayStr,
+              issueDate: finalDate,
+              dueDate: finalDate,
               status: totalDue > 0 && totalPaid >= totalDue ? 'paid' : totalPaid > 0 ? 'partial' : 'sent',
+              notes: notesText,
+              schoolSlug: slug,
+              schoolId: slug,
             });
           }
         }
@@ -2031,16 +2058,18 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
         const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
         if (student.isBoarding) {
           const existingIdx = prevBoarding.findIndex((b) => b.studentId === student.id || b.matricule === student.studentNumber);
+          const existingRecord = existingIdx >= 0 ? prevBoarding[existingIdx] : null;
           const boardingRecord = {
+            ...existingRecord,
             studentId: student.id,
             studentName: student.fullName,
-            matricule: student.matricule || student.studentNumber,
-            className: student.grade,
+            matricule: student.matricule || student.studentNumber || existingRecord?.matricule || '',
+            className: student.grade || existingRecord?.className || '6ème',
             gender: student.gender === 'female' ? 'F' : 'M',
-            parentContact: student.whatsappPhone || student.guardianPhone,
-            pavilion: student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
-            roomNumber: 'Chambre 101',
-            monthlyRate: 50000,
+            parentContact: student.whatsappPhone || student.guardianPhone || existingRecord?.parentContact || '',
+            pavilion: existingRecord?.pavilion || (student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
+            roomNumber: existingRecord?.roomNumber || 'Chambre 101',
+            monthlyRate: existingRecord?.monthlyRate !== undefined && Number(existingRecord.monthlyRate) > 0 ? Number(existingRecord.monthlyRate) : 25000,
           };
           if (existingIdx >= 0) {
             prevBoarding[existingIdx] = boardingRecord;

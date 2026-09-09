@@ -778,7 +778,7 @@ export function BoardingView({
         issueDate: parsedPaymentDate,
         dueDate: parsedPaymentDate,
         status: activeRemainingBalance === 0 ? 'paid' : 'partial',
-        notes: `${activePaidMonthsCount} mois (${paidMonthsList.join(', ')})`,
+        notes: `${activePaidMonthsCount} mois ${activePaidMonthsCount > 1 ? 'réglés' : 'réglé'} (${paidMonthsList.join(', ')})`,
         schoolSlug,
         schoolId: schoolSlug,
       };
@@ -1425,8 +1425,9 @@ export function BoardingView({
     const paidMonthsList = MONTHS_LIST.filter((m) => activeMonthsChecked[m]);
     const monthsText = paidMonthsList.length > 0 ? ` (${paidMonthsList.join(', ')})` : '';
 
+    const monthsSuffix = activePaidMonthsCount > 1 ? `${activePaidMonthsCount} mois réglés` : `${activePaidMonthsCount} mois réglé`;
     const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-      `${schoolGreeting}, voici le reçu officiel de paiement internat et pensionnat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}. ${activePaidMonthsCount} mois réglés${monthsText}, total encaissé : ${formatFCFA(activeTotalCollected)}.`
+      `${schoolGreeting}, voici le reçu officiel de paiement internat et pensionnat (${activeReceiptNum}) pour ${activeName} — ${currentSchool.name}. ${monthsSuffix}${monthsText}, total encaissé : ${formatFCFA(activeTotalCollected)}.`
     )}`;
 
     // Ouvrir immédiatement l'onglet WhatsApp de discussion avec le parent
@@ -1790,7 +1791,7 @@ export function BoardingView({
               <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">
                 <span className="text-slate-500">Mensualités prises en compte :</span>
                 <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {successReceiptModalData.paidMonthsCount} / 9 mois réglés
+                  {successReceiptModalData.paidMonthsCount} / 9 mois {successReceiptModalData.paidMonthsCount > 1 ? 'réglés' : 'réglé'}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/70">

@@ -217,7 +217,7 @@ export function DashboardView({
           const monthlyPayments: Record<string, Record<string, boolean>> = JSON.parse(rawBoardingPay);
           const subs: Array<{ studentId: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
           const rateMap = new Map<string, number>();
-          subs.forEach((sub) => rateMap.set(sub.studentId, sub.monthlyRate || 50000));
+          subs.forEach((sub) => rateMap.set(sub.studentId, sub.monthlyRate || 25000));
 
           const invoiceStudentIdsWithBoarding = new Set(
             invoices.filter((i) => i.feeType?.toLowerCase().includes('internat') || i.id?.includes('boarding')).map((i) => i.studentId)
@@ -226,7 +226,7 @@ export function DashboardView({
           Object.entries(monthlyPayments).forEach(([stuId, months]) => {
             if (!invoiceStudentIdsWithBoarding.has(stuId)) {
               const paidCount = Object.values(months).filter(Boolean).length;
-              const rate = rateMap.get(stuId) || 50000;
+              const rate = rateMap.get(stuId) || 25000;
               totalCollected += paidCount * rate;
             }
           });

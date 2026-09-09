@@ -605,17 +605,18 @@
         "guardianName": "Cisse Makoua",
         "guardianPhone": "+225 05 04 14 63 78",
         "feeType": "Internat & Pensionnat",
-        "amount": 65000,
+        "amount": 225000,
         "discountAmount": 0,
-        "netAmount": 65000,
-        "paidAmount": 0,
-        "balanceRemaining": 65000,
+        "netAmount": 225000,
+        "paidAmount": 75000,
+        "balanceRemaining": 150000,
         "paymentMethod": "Espèces en caisse",
         "enrollmentType": "nouveau",
         "issueDate": "2026-09-07",
         "dueDate": "2026-09-07",
         "status": "partial",
-        "installments": {}
+        "installments": {},
+        "notes": "3 mois réglés (Septembre, Octobre, Novembre)"
       },
       {
         "id": "inv-005",
@@ -1294,7 +1295,7 @@
       "MAT-2026",
       "25bcb95a-62d2-47b1-bfa6-6820cb30dd6e"
     ],
-    "updatedAt": "2026-09-08T23:10:18.500Z",
+    "updatedAt": "2026-09-08T23:31:24.353Z",
     "slug": "epc-manoi"
   }
 }

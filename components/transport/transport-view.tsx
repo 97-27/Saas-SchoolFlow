@@ -477,7 +477,7 @@ export function TransportView({
         dueDate: todayStr,
         status: remaining === 0 ? ('paid' as const) : ('partial' as const),
         notes: paidMonths.length > 0
-          ? `Mois réglés : ${paidMonths.map(m => ['Septembre', 'Octobre', 'Novembre', 'Décembre'].includes(m) ? `${m} 2026` : `${m} 2027`).join(', ')}`
+          ? `${paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé'} : ${paidMonths.map(m => ['Septembre', 'Octobre', 'Novembre', 'Décembre'].includes(m) ? `${m} 2026` : `${m} 2027`).join(', ')}`
           : 'Transport Scolaire (Navettes)',
       };
       saveLivePaymentInvoice(transportInvoice, schoolSlug);
@@ -754,9 +754,8 @@ export function TransportView({
       setTimeout(() => setToastMessage(null), 7000);
 
       // Ouverture directe du dialogue WhatsApp avec message récapitulatif
-      const rawPhone = (sub.whatsappPhone || sub.guardianPhone || '').replace(/\D/g, '');
-      const cleanPhone = rawPhone.length === 10 ? `225${rawPhone}` : rawPhone;
-      const message = `Bonjour,\nVoici le reçu officiel de cotisation au Transport Scolaire pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Arrêt : ${sub.pickupStop}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• Mois réglés : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
+      const monthsLabel = sub.paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé';
+      const message = `Bonjour,\nVoici le reçu officiel de cotisation au Transport Scolaire pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Arrêt : ${sub.pickupStop}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
       const waUrl = cleanPhone
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
         : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
