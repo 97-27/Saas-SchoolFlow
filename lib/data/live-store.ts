@@ -1668,7 +1668,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
           const d = new Date();
           const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          const finalDate = b.paymentDate || todayStr;
+          const finalDate = b.paymentDate || matchingStu?.paymentDate || matchingStu?.enrollmentDate || '2026-09-07';
           const notesText = paidCount > 0
             ? `${paidCount} mois ${paidCount > 1 ? 'réglés' : 'réglé'} (${paidMonths.join(', ')})`
             : 'Internat & Pensionnat';

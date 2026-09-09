@@ -36,6 +36,7 @@ export function DashboardShell({
           <div className="print:hidden">
             <Topbar
               schoolSlug={schoolSlug}
+              onMenuClick={() => setIsMobileMenuOpen(true)}
               onMenuToggle={() => setIsMobileMenuOpen(true)}
               breadcrumbs={breadcrumbs}
             />

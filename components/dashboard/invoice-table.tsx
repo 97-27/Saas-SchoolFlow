@@ -280,6 +280,22 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return allTransactions.filter((tx) => isMatchingTxDate(tx.paymentDate, selectedJournalDate));
   }, [allTransactions, selectedJournalDate]);
 
+  // Auto-calibrage intelligent : Si la date active ne comporte aucun versement mais que des encaissements existent,
+  // pré-sélectionner immédiatement la date réelle des encaissements (ex: 2026-09-07)
+  useEffect(() => {
+    if (allTransactions.length > 0 && dayTransactions.length === 0) {
+      const dates = allTransactions.map((t) => t.paymentDate).filter(Boolean);
+      if (dates.length > 0) {
+        const primaryDate = dates.find((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) || dates[0];
+        if (primaryDate && /^\d{4}-\d{2}-\d{2}$/.test(primaryDate)) {
+          setSelectedJournalDateState(primaryDate);
+        } else {
+          setDateFilterMode('all_dates');
+        }
+      }
+    }
+  }, [allTransactions.length, dayTransactions.length]);
+
   // Métriques du Bilan Journalier (calculées sur les encaissements effectifs du jour)
   const dayMetrics = useMemo(() => {
     const totalCount = dayTransactions.length;
