@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     if (!schoolData || !schoolData.students || schoolData.students.length === 0 || forceSupabase) {
       try {
         const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => resolve([null, null, null, null]), 1800)
+          setTimeout(() => resolve([null, null, null, null]), 9000)
         );
         const [sbSchool, sbStudents, sbInvoices, sbStaff] = (await Promise.race([
           Promise.all([
@@ -83,10 +83,10 @@ export async function GET(request: NextRequest) {
             stampUrl: sbSchool.stampUrl || schoolData.schoolSettings?.stampUrl || '',
           };
         }
-        if (sbStudents !== null && Array.isArray(sbStudents)) {
+        if (sbStudents !== null && Array.isArray(sbStudents) && sbStudents.length > 0) {
           schoolData.students = sbStudents;
         }
-        if (sbInvoices !== null && Array.isArray(sbInvoices)) {
+        if (sbInvoices !== null && Array.isArray(sbInvoices) && sbInvoices.length > 0) {
           schoolData.invoices = sbInvoices;
         }
         if (sbStaff !== null && Array.isArray(sbStaff) && sbStaff.length > 0) {
@@ -123,8 +123,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Initialisation EPC MANOI : n'ajouter les élèves officiels initiaux que s'ils n'ont JAMAIS été supprimés
-    if (slug === 'epc-manoi') {
+    // Initialisation EPC MANOI : si AUCUN élève n'existe en base de données, n'ajouter les élèves de démo que comme secours
+    if (slug === 'epc-manoi' && (!schoolData.students || schoolData.students.length === 0)) {
       const studentMap = new Map<string, any>();
       (schoolData.students || []).forEach((s: any) => {
         const key = s.studentNumber || s.id;

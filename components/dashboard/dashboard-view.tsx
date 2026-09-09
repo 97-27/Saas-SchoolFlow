@@ -15,6 +15,8 @@ import {
   FileSpreadsheet,
   ArrowRight,
   RefreshCw,
+  Share2,
+  Check,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -25,6 +27,11 @@ import {
   DATA_UPDATED_EVENT,
   startCrossDeviceSync,
 } from '@/lib/data/live-store';
+import {
+  getSchoolFromSupabase,
+  getStudentsFromSupabase,
+  getInvoicesFromSupabase,
+} from '@/lib/supabase/services';
 
 interface DashboardViewProps {
   school: School;
@@ -46,6 +53,27 @@ export function DashboardView({
   const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, cleanSlug));
   const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(cleanSlug, school));
   const [isSyncing, setIsSyncing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = async () => {
+    if (typeof window === 'undefined') return;
+    const shareUrl = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `SchoolFlow - ${schoolState.name}`,
+          text: `Accès direct au tableau de bord de ${schoolState.name}`,
+          url: shareUrl,
+        });
+        return;
+      } catch (e) {}
+    }
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 3000);
+    }
+  };
 
   // Synchronisation en direct avec le stockage local, l'API et événements SSE
   useEffect(() => {
@@ -62,7 +90,39 @@ export function DashboardView({
 
     handleUpdate();
 
-    // Auto-récupération immédiate depuis l'API pour éliminer tout cache résiduel sur les nouveaux terminaux
+    // 1. Récupération directe et prioritaire depuis Supabase Cloud
+    Promise.all([
+      getStudentsFromSupabase(activeSlug),
+      getInvoicesFromSupabase(activeSlug),
+      getSchoolFromSupabase(activeSlug),
+    ])
+      .then(([sbStudents, sbInvoices, sbSchool]) => {
+        if (sbStudents && sbStudents.length > 0) {
+          const liveStus = getLiveStudents(sbStudents, activeSlug);
+          setStudents(liveStus);
+          try {
+            localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
+            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+          } catch (e) {}
+        }
+        if (sbInvoices && sbInvoices.length > 0) {
+          const liveInvs = getLiveInvoices(sbInvoices, activeSlug);
+          setInvoices(liveInvs);
+          try {
+            localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
+            localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
+          } catch (e) {}
+        }
+        if (sbSchool) {
+          setSchoolState(sbSchool);
+          try {
+            localStorage.setItem(`schoolflow_school_settings_v1_${activeSlug}`, JSON.stringify(sbSchool));
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    // 2. Auto-récupération d'appoint depuis l'API pour éliminer tout cache résiduel sur les nouveaux terminaux
     fetch(`/api/sync?slug=${activeSlug}&t=${Date.now()}`)
       .then((res) => res.json())
       .then((res) => {
@@ -295,6 +355,33 @@ export function DashboardView({
 
         {/* Boutons d'actions rapides */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleShare}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all shadow-2xs cursor-pointer"
+          >
+            {shareCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Lien copié !</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Partager l&apos;accès</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleForceSync}
+            disabled={isSyncing}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Synchronisation...' : 'Actualiser Cloud'}</span>
+          </button>
 
           <Link
             href={`/${schoolSlug}/admin/rapports`}
