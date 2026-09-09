@@ -31,6 +31,7 @@ import {
   Check,
   X,
   HelpCircle,
+  MapPin,
 } from 'lucide-react';
 import { School, Student } from '@/lib/data/types';
 import { defaultSchool, mockStudents, mockSchools } from '@/lib/data/mock-data';
@@ -297,9 +298,12 @@ export function LoginView({
   const [signupResponsableName, setSignupResponsableName] = useState('');
   const [signupFounderName, setSignupFounderName] = useState('');
   const [signupSchoolName, setSignupSchoolName] = useState('');
+  const [signupSchoolShortName, setSignupSchoolShortName] = useState('');
+  const [signupSchoolAddress, setSignupSchoolAddress] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<'mensuel' | 'annuel' | 'triennal'>('annuel');
+  const [isSelectingPlan, setIsSelectingPlan] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'wave' | 'orange' | 'card'>('wave');
   const [paymentPhone, setPaymentPhone] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -647,9 +651,11 @@ export function LoginView({
       !signupResponsableName.trim() ||
       !signupFounderName.trim() ||
       !signupSchoolName.trim() ||
+      !signupSchoolShortName.trim() ||
+      !signupSchoolAddress.trim() ||
       !signupEmail.trim()
     ) {
-      setErrorMessage('Veuillez renseigner tous les champs obligatoires (*).');
+      setErrorMessage('Veuillez renseigner tous les champs obligatoires (*) incluant le sigle et l’adresse de l’établissement.');
       return;
     }
 
@@ -679,9 +685,11 @@ export function LoginView({
     setIsLoading(true);
 
     setTimeout(() => {
-      // Générer le slug de l'école
+      const cleanSigle = signupSchoolShortName.trim().toUpperCase();
+
+      // Générer le slug de l'école (priorité au sigle court si pertinent, sinon au nom)
       const slug =
-        signupSchoolName
+        (cleanSigle.length >= 2 ? cleanSigle : signupSchoolName)
           .toLowerCase()
           .trim()
           .normalize('NFD')
@@ -690,11 +698,11 @@ export function LoginView({
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
 
-      // Générer automatiquement un sigle intelligent
+      // Sigle officiel de l'école (renseigné ou déduit)
       const words = signupSchoolName.trim().split(/\s+/);
-      const generatedShortName = words.length > 1
+      const generatedShortName = cleanSigle || (words.length > 1
         ? words.map((w) => w[0]).join('').toUpperCase().slice(0, 8)
-        : signupSchoolName.slice(0, 8).toUpperCase();
+        : signupSchoolName.slice(0, 8).toUpperCase());
 
       // Créer et enregistrer la nouvelle école dans le live-store
       const newSchool: School = {
@@ -711,11 +719,12 @@ export function LoginView({
         email: signupEmail.trim(),
         motto: 'Discipline • Rigueur • Réussite',
         slogan: 'L’Excellence au service de l’Éducation',
-        city: 'Abidjan',
+        city: signupSchoolAddress.trim() || 'Abidjan',
+        address: signupSchoolAddress.trim() || 'Abidjan, Côte d’Ivoire',
         country: 'Côte d’Ivoire',
         district: 'Abidjan',
         ministryCode: '',
-        founderName: signupFounderName.trim() || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur'),
+        founderName: signupFounderName.trim() || 'Fondateur / Promoteur',
         directorName: signupResponsableName.trim() || 'Directeur Général',
         studiesDirectorName: signupResponsableName.trim() || 'Direction des Études',
         logoUrl: '',
@@ -1270,7 +1279,7 @@ export function LoginView({
                         autoComplete="off"
                         value={signupResponsableName}
                         onChange={(e) => setSignupResponsableName(e.target.value)}
-                        placeholder="Ex : Dr. Konate Oumar"
+                        placeholder="Ex : M. KOFFI KOUAME ERIC"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
@@ -1292,21 +1301,21 @@ export function LoginView({
                         autoComplete="off"
                         value={signupFounderName}
                         onChange={(e) => setSignupFounderName(e.target.value)}
-                        placeholder="Ex : M. LAWANI MOUSSA"
+                        placeholder="Ex : M. KOUASSI YAO JEAN"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
-                    <p className="text-[10px] text-amber-700 font-medium">
-                      🏛️ Renseignez le nom du Fondateur / Propriétaire légal de l’école (ex : LAWANI MOUSSA).
+                    <p className="text-[10.5px] text-amber-800 font-semibold flex items-center gap-1 mt-0.5">
+                      🏛️ Renseigner le nom du fondateur, propriétaire légal de l'école.
                     </p>
                   </div>
                 </div>
 
-                {/* 2. Nom de l'École & Email Professionnel */}
+                {/* 2. Nom de l'École & Sigle Officiel */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
-                      Nom de l'Établissement *
+                      Nom officiel de l'Établissement *
                     </label>
                     <div className="relative">
                       <Building2 className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1315,13 +1324,46 @@ export function LoginView({
                         required
                         autoComplete="off"
                         value={signupSchoolName}
-                        onChange={(e) => setSignupSchoolName(e.target.value)}
+                        onChange={(e) => {
+                          setSignupSchoolName(e.target.value);
+                          if (!signupSchoolShortName) {
+                            const words = e.target.value.trim().split(/\s+/);
+                            if (words.length > 1) {
+                              setSignupSchoolShortName(words.map((w) => w[0]).join('').toUpperCase().slice(0, 8));
+                            }
+                          }
+                        }}
                         placeholder="Ex : Groupe Scolaire Excellence"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                      <span>Sigle de l'Établissement *</span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Clé de Connexion</span>
+                    </label>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        autoComplete="off"
+                        value={signupSchoolShortName}
+                        onChange={(e) => setSignupSchoolShortName(e.target.value.toUpperCase())}
+                        placeholder="Ex : GSE ou EPC MANOI"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal uppercase shadow-2xs"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      🔑 Permet d'identifier votre école et de retrouver tous les membres à la connexion.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Email & Téléphone / WhatsApp */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
                       Adresse Email Professionnelle *
@@ -1339,48 +1381,122 @@ export function LoginView({
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-800 block text-xs">
+                      Téléphone / Contact WhatsApp *
+                    </label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="tel"
+                        required
+                        autoComplete="off"
+                        value={signupPhone}
+                        onChange={(e) => setSignupPhone(e.target.value)}
+                        placeholder="Ex : +225 07 48 92 11 00"
+                        className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 shadow-2xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* 3. Téléphone / WhatsApp Simplifié */}
+                {/* 4. Commune, Ville & Adresse Géographique */}
                 <div className="space-y-1">
                   <label className="font-bold text-slate-800 block text-xs">
-                    Téléphone / Contact WhatsApp *
+                    Commune, Ville & Adresse Géographique de l'École *
                   </label>
                   <div className="relative">
-                    <Phone className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <MapPin className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
-                      type="tel"
+                      type="text"
                       required
                       autoComplete="off"
-                      value={signupPhone}
-                      onChange={(e) => setSignupPhone(e.target.value)}
-                      placeholder="Ex : +225 07 48 92 11 00"
-                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-bold text-slate-900 transition-all placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 shadow-2xs"
+                      value={signupSchoolAddress}
+                      onChange={(e) => setSignupSchoolAddress(e.target.value)}
+                      placeholder="Ex : Cocody Angré 8ème Tranche, Abidjan"
+                      className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                     />
                   </div>
                 </div>
 
-                {/* 4. Forfait d'Abonnement Sélectionné */}
-                <div className="p-3 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Sparkles className="w-4 h-4 text-amber-300" />
+                {/* 5. Forfait d'Abonnement Sélectionné & Choix Direct des 3 Formules */}
+                <div className="space-y-2 pt-0.5">
+                  {!isSelectingPlan ? (
+                    <div className="p-3 bg-emerald-50/90 border border-emerald-300 rounded-2xl flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <Sparkles className="w-4 h-4 text-amber-300" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+                            Forfait d'Abonnement Sélectionné
+                          </span>
+                          <span className="text-xs font-black text-slate-900 font-heading">
+                            {getPlanDetails(selectedPlan).name} — {formatFCFA(getPlanDetails(selectedPlan).price)}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsSelectingPlan(true)}
+                        className="text-[11px] font-bold text-emerald-800 bg-white hover:bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-300 transition-all shadow-2xs shrink-0 cursor-pointer"
+                      >
+                        Changer
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-                        Forfait d'Abonnement Sélectionné
-                      </span>
-                      <span className="text-xs font-black text-slate-900 font-heading">
-                        {getPlanDetails(selectedPlan).name} ({formatFCFA(getPlanDetails(selectedPlan).price)})
-                      </span>
+                  ) : (
+                    <div className="p-3 bg-slate-900 text-white border border-emerald-500/50 rounded-2xl space-y-2.5 shadow-xl animate-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <span className="text-xs font-bold text-white">Sélectionnez votre formule d'abonnement :</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsSelectingPlan(false)}
+                          className="text-slate-400 hover:text-white text-xs font-bold px-2 py-0.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                        >
+                          ✕ Fermer
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { id: 'mensuel' as const, name: 'Formule Mensuelle', price: '30 000 FCFA', period: '/ mois scolaire', note: 'Sans engagement', badge: 'Flexible' },
+                          { id: 'annuel' as const, name: 'Formule Annuelle (1 An)', price: '250 000 FCFA', period: '/ an complet', note: 'Économisez 20 000 FCFA', badge: '⭐ Populaire' },
+                          { id: 'triennal' as const, name: 'Formule 3 Ans Scolaires', price: '750 000 FCFA', period: '/ 3 années', note: 'Économisez 60 000 FCFA', badge: '👑 VIP Élite' },
+                        ].map((plan) => (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPlan(plan.id);
+                              setIsSelectingPlan(false);
+                            }}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                              selectedPlan === plan.id
+                                ? 'bg-emerald-600/30 border-emerald-400 text-white ring-2 ring-emerald-400 shadow-md'
+                                : 'bg-slate-800/80 border-slate-700 hover:bg-slate-800 text-slate-200'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                                selectedPlan === plan.id ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'
+                              }`}>
+                                {plan.badge}
+                              </span>
+                              {selectedPlan === plan.id && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                            </div>
+                            <div className="text-xs font-bold leading-snug">{plan.name}</div>
+                            <div className="text-xs font-black text-amber-300 font-heading mt-0.5">
+                              {plan.price} <span className="text-[9px] font-normal text-slate-400">{plan.period}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-300 mt-1">{plan.note}</div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <Link
-                    href="/landing#tarifs"
-                    className="text-[10px] font-bold text-emerald-700 bg-white hover:bg-emerald-100/70 px-2.5 py-1.5 rounded-xl border border-emerald-200 transition-colors shadow-2xs shrink-0"
-                  >
-                    Changer
-                  </Link>
+                  )}
                 </div>
 
                 {/* 5. Choix Moyen de Paiement */}

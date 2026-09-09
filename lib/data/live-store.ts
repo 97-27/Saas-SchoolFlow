@@ -3126,6 +3126,7 @@ export function verifySchoolSubscriptionForLogin(
     const sEmail = (s.email || '').toLowerCase();
     const sName = (s.name || '').toLowerCase();
     const sSlug = (s.slug || '').toLowerCase();
+    const sShortName = (s.shortName || '').toLowerCase();
     const sFounder = (s.founderName || '').toLowerCase();
     const sDirector = (s.directorName || '').toLowerCase();
 
@@ -3133,9 +3134,11 @@ export function verifySchoolSubscriptionForLogin(
       (clean && (sEmail.includes(clean) || clean.includes(sEmail))) ||
       (clean && (sName.includes(clean) || clean.includes(sName))) ||
       (clean && sSlug === clean) ||
+      (clean && sShortName && (sShortName === clean || clean.includes(sShortName) || sShortName.includes(clean))) ||
       (clean && (sFounder.includes(clean) || clean.includes(sFounder))) ||
       (clean && (sDirector.includes(clean) || clean.includes(sDirector))) ||
-      (schoolSlug && sSlug === schoolSlug.toLowerCase())
+      (schoolSlug && sSlug === schoolSlug.toLowerCase()) ||
+      (schoolSlug && sShortName && sShortName === schoolSlug.toLowerCase())
     );
   });
 
