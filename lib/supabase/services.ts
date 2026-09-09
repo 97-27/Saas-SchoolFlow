@@ -883,4 +883,71 @@ export async function uploadAvatarToSupabase(
   }
 }
 
+/**
+ * Sauvegarde la configuration et les souscriptions des services (Internat, Cantine, Transport) dans Supabase
+ */
+export async function saveServicesDataToSupabase(schoolSlug: string, servicesData: any): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
 
+    const payload = {
+      school_id: schoolId,
+      role_id: 'system_services_data',
+      role_title: 'Services Data Sync',
+      full_name: 'SYSTEM SERVICES SYNC',
+      auth_code: 'SYS-SRV-DATA',
+      department: JSON.stringify(servicesData),
+      is_active: true,
+    };
+
+    const { data: existing } = await supabase
+      .from('staff_users')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_services_data')
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase
+        .from('staff_users')
+        .update({ department: JSON.stringify(servicesData) })
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('staff_users')
+        .insert(payload);
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveServicesDataToSupabase catch:', err);
+    return false;
+  }
+}
+
+/**
+ * Récupère la configuration et les souscriptions des services (Internat, Cantine, Transport) depuis Supabase
+ */
+export async function getServicesDataFromSupabase(schoolSlug: string): Promise<any | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return null;
+
+    const { data } = await supabase
+      .from('staff_users')
+      .select('department')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_services_data')
+      .maybeSingle();
+
+    if (data?.department) {
+      return JSON.parse(data.department);
+    }
+    return null;
+  } catch (err) {
+    console.warn('getServicesDataFromSupabase catch:', err);
+    return null;
+  }
+}

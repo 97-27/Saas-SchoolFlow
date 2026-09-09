@@ -145,6 +145,7 @@ export interface School {
 
   // Localisation & Contacts
   city: string;
+  address?: string;
   country: string;
   district?: string;
   postalBox?: string;

@@ -10,12 +10,14 @@ interface RevenueSummaryProps {
   academicYear?: string;
   invoices?: Invoice[];
   students?: Student[];
+  servicesData?: any;
 }
 
 export function RevenueSummary({
   academicYear = '2026-2027',
   invoices = [],
   students = [],
+  servicesData,
 }: RevenueSummaryProps) {
   const [serviceVersion, setServiceVersion] = useState(0);
 
@@ -45,154 +47,171 @@ export function RevenueSummary({
     let transportAmount = 0;
     let transportStudentsCount = 0;
 
-    if (typeof window !== 'undefined') {
-      // Calcul Internat
-      // Calcul Internat (Strictement synchronisé avec la page Internat)
-      try {
-        const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
-        const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
-        const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
-        const boardingSubsList: Array<{ studentId: string; studentName?: string; matricule?: string; className?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
+    // Calcul Internat (Strictement synchronisé avec la page Internat & Supabase Cloud)
+    try {
+      const rawBoardingSubs =
+        (typeof window !== 'undefined'
+          ? localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem('schoolflow_boarding_subscriptions_v3_epc-manoi')
+          : null) || (servicesData?.boardingSubscriptions ? JSON.stringify(servicesData.boardingSubscriptions) : null);
+      const rawBoardingPay =
+        (typeof window !== 'undefined' ? localStorage.getItem('schoolflow_boarding_monthly_payments_v3') : null) ||
+        (servicesData?.boardingPayments ? JSON.stringify(servicesData.boardingPayments) : null);
 
-        const seenBoardingIdentifiers = new Set<string>();
+      const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
+      const boardingSubsList: Array<{ studentId: string; studentName?: string; matricule?: string; className?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
 
-        // 1. Calculer à partir de chaque souscription d'internat réelle
-        boardingSubsList.forEach((sub) => {
-          if (!sub || !sub.studentId) return;
-          const stu = students.find(
-            (s) => s.id === sub.studentId || s.studentNumber === sub.studentId || (sub.matricule && s.matricule === sub.matricule)
-          );
+      const seenBoardingIdentifiers = new Set<string>();
 
-          const idKey = sub.studentId;
-          const numKey = stu?.studentNumber;
-          const matKey = sub.matricule || stu?.matricule;
+      // 1. Calculer à partir de chaque souscription d'internat réelle
+      boardingSubsList.forEach((sub) => {
+        if (!sub || !sub.studentId) return;
+        const stu = students.find(
+          (s) => s.id === sub.studentId || s.studentNumber === sub.studentId || (sub.matricule && s.matricule === sub.matricule)
+        );
 
-          if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
-            return;
-          }
+        const idKey = sub.studentId;
+        const numKey = stu?.studentNumber;
+        const matKey = sub.matricule || stu?.matricule;
 
+        if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
+          return;
+        }
+
+        seenBoardingIdentifiers.add(idKey);
+        if (numKey) seenBoardingIdentifiers.add(numKey);
+        if (matKey) seenBoardingIdentifiers.add(matKey);
+
+        boardingStudentsCount += 1;
+
+        const rate = typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
+        const months =
+          monthlyPayments[sub.studentId] ||
+          (stu?.id ? monthlyPayments[stu.id] : {}) ||
+          (numKey ? monthlyPayments[numKey] : {}) ||
+          (matKey ? monthlyPayments[matKey] : {}) ||
+          {};
+        const paidCount = Object.values(months).filter(Boolean).length;
+        let studentBoardingPaid = paidCount * rate;
+
+        // Vérifier si une quittance d'internat avec versement direct existe
+        const directInvoice = invoices.find((inv) =>
+          (inv.studentId === sub.studentId || inv.studentId === numKey || (matKey && inv.studentId === matKey)) &&
+          ((inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-'))
+        );
+        if (directInvoice && directInvoice.paidAmount && directInvoice.paidAmount > studentBoardingPaid) {
+          studentBoardingPaid = directInvoice.paidAmount;
+        }
+
+        boardingAmount += studentBoardingPaid;
+      });
+
+      // 2. Vérifier les élèves inscrits avec option internat active hors customSubscriptions
+      students.forEach((stu) => {
+        if (!stu) return;
+        const idKey = stu.id;
+        const numKey = stu.studentNumber;
+        const matKey = stu.matricule;
+
+        if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
+          return;
+        }
+
+        const months =
+          monthlyPayments[stu.id] ||
+          (numKey ? monthlyPayments[numKey] : {}) ||
+          (matKey ? monthlyPayments[matKey] : {}) ||
+          {};
+        const paidCount = Object.values(months).filter(Boolean).length;
+
+        if (stu.isBoarding || paidCount > 0) {
           seenBoardingIdentifiers.add(idKey);
           if (numKey) seenBoardingIdentifiers.add(numKey);
           if (matKey) seenBoardingIdentifiers.add(matKey);
 
           boardingStudentsCount += 1;
+          const rate = 25000;
+          boardingAmount += paidCount * rate;
+        }
+      });
+    } catch (e) {}
 
-          const rate = typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
-          const months =
-            monthlyPayments[sub.studentId] ||
-            (stu?.id ? monthlyPayments[stu.id] : {}) ||
-            (numKey ? monthlyPayments[numKey] : {}) ||
-            (matKey ? monthlyPayments[matKey] : {}) ||
-            {};
-          const paidCount = Object.values(months).filter(Boolean).length;
-          let studentBoardingPaid = paidCount * rate;
+    // Calcul Cantine
+    try {
+      const rawCanteenSubs =
+        (typeof window !== 'undefined'
+          ? localStorage.getItem('schoolflow_canteen_subscriptions_v3') || localStorage.getItem('schoolflow_canteen_subscriptions_v2')
+          : null) || (servicesData?.canteenSubscriptions ? JSON.stringify(servicesData.canteenSubscriptions) : null);
+      const rawCanteenPay =
+        (typeof window !== 'undefined'
+          ? localStorage.getItem('schoolflow_canteen_monthly_payments_v3') || localStorage.getItem('schoolflow_canteen_monthly_payments_v2')
+          : null) || (servicesData?.canteenPayments ? JSON.stringify(servicesData.canteenPayments) : null);
 
-          // Vérifier si une quittance d'internat avec versement direct existe
-          const directInvoice = invoices.find((inv) =>
-            (inv.studentId === sub.studentId || inv.studentId === numKey || (matKey && inv.studentId === matKey)) &&
-            ((inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-'))
-          );
-          if (directInvoice && directInvoice.paidAmount && directInvoice.paidAmount > studentBoardingPaid) {
-            studentBoardingPaid = directInvoice.paidAmount;
-          }
+      const customDietMap: Record<string, { diet?: string; rate: number; discount?: number }> = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : {};
+      const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
+      const seenCanteenIds = new Set<string>();
 
-          boardingAmount += studentBoardingPaid;
-        });
+      Object.keys(customDietMap).forEach((stuId) => {
+        const custom = customDietMap[stuId];
+        const rate = custom?.rate || 10000;
+        const discount = custom?.discount || 0;
+        const months = monthlyPayments[stuId] || {};
+        const paidCount = Object.values(months).filter(Boolean).length;
+        if (paidCount > 0) {
+          seenCanteenIds.add(stuId);
+          canteenStudentsCount += 1;
+          canteenAmount += Math.max(0, paidCount * rate - discount);
+        }
+      });
 
-        // 2. Vérifier les élèves inscrits avec option internat active hors customSubscriptions
-        students.forEach((stu) => {
-          if (!stu) return;
-          const idKey = stu.id;
-          const numKey = stu.studentNumber;
-          const matKey = stu.matricule;
+      // Factures de cantine directes
+      invoices.forEach((inv) => {
+        const isCan = (inv.feeType || '').toLowerCase().includes('cantine') || (inv.invoiceNumber || '').startsWith('CAN-');
+        if (isCan && inv.paidAmount && inv.paidAmount > 0 && !seenCanteenIds.has(inv.studentId)) {
+          seenCanteenIds.add(inv.studentId);
+          canteenStudentsCount += 1;
+          canteenAmount += inv.paidAmount;
+        }
+      });
+    } catch (e) {}
 
-          if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
-            return;
-          }
+    // Calcul Transport
+    try {
+      const rawTransportSubs =
+        (typeof window !== 'undefined'
+          ? localStorage.getItem('schoolflow_transport_subscriptions_v2') || localStorage.getItem('schoolflow_transport_subscriptions_v3')
+          : null) || (servicesData?.transportSubscriptions ? JSON.stringify(servicesData.transportSubscriptions) : null);
+      const rawTransportPay =
+        (typeof window !== 'undefined'
+          ? localStorage.getItem('schoolflow_transport_monthly_payments_v2') || localStorage.getItem('schoolflow_transport_monthly_payments_v3')
+          : null) || (servicesData?.transportPayments ? JSON.stringify(servicesData.transportPayments) : null);
 
-          const months =
-            monthlyPayments[stu.id] ||
-            (numKey ? monthlyPayments[numKey] : {}) ||
-            (matKey ? monthlyPayments[matKey] : {}) ||
-            {};
-          const paidCount = Object.values(months).filter(Boolean).length;
+      const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = rawTransportSubs ? JSON.parse(rawTransportSubs) : {};
+      const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
+      const seenTransportIds = new Set<string>();
 
-          if (stu.isBoarding || paidCount > 0) {
-            seenBoardingIdentifiers.add(idKey);
-            if (numKey) seenBoardingIdentifiers.add(numKey);
-            if (matKey) seenBoardingIdentifiers.add(matKey);
+      Object.keys(customTransportMap).forEach((stuId) => {
+        const custom = customTransportMap[stuId];
+        const rate = custom?.rate || 20000;
+        const discount = custom?.discount || 0;
+        const months = monthlyPayments[stuId] || {};
+        const paidCount = Object.values(months).filter(Boolean).length;
+        if (paidCount > 0) {
+          seenTransportIds.add(stuId);
+          transportStudentsCount += 1;
+          transportAmount += Math.max(0, paidCount * rate - discount);
+        }
+      });
 
-            boardingStudentsCount += 1;
-            const rate = 25000;
-            boardingAmount += paidCount * rate;
-          }
-        });
-      } catch (e) {}
-
-      // Calcul Cantine
-      try {
-        const rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
-        const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
-        const customDietMap: Record<string, { diet: string; rate: number; discount?: number }> = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : {};
-        const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
-        const seenCanteenIds = new Set<string>();
-
-        Object.keys(customDietMap).forEach((stuId) => {
-          const custom = customDietMap[stuId];
-          const rate = custom?.rate || 25000;
-          const discount = custom?.discount || 0;
-          const months = monthlyPayments[stuId] || {};
-          const paidCount = Object.values(months).filter(Boolean).length;
-          if (paidCount > 0) {
-            seenCanteenIds.add(stuId);
-            canteenStudentsCount += 1;
-            canteenAmount += Math.max(0, paidCount * rate - discount);
-          }
-        });
-
-        // Factures de cantine directes
-        invoices.forEach((inv) => {
-          const isCan = (inv.feeType || '').toLowerCase().includes('cantine') || (inv.invoiceNumber || '').startsWith('CAN-');
-          if (isCan && inv.paidAmount && inv.paidAmount > 0 && !seenCanteenIds.has(inv.studentId)) {
-            seenCanteenIds.add(inv.studentId);
-            canteenStudentsCount += 1;
-            canteenAmount += inv.paidAmount;
-          }
-        });
-      } catch (e) {}
-
-      // Calcul Transport
-      try {
-        const rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2');
-        const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
-        const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = rawTransportSubs ? JSON.parse(rawTransportSubs) : {};
-        const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
-        const seenTransportIds = new Set<string>();
-
-        Object.keys(customTransportMap).forEach((stuId) => {
-          const custom = customTransportMap[stuId];
-          const rate = custom?.rate || 35000;
-          const discount = custom?.discount || 0;
-          const months = monthlyPayments[stuId] || {};
-          const paidCount = Object.values(months).filter(Boolean).length;
-          if (paidCount > 0) {
-            seenTransportIds.add(stuId);
-            transportStudentsCount += 1;
-            transportAmount += Math.max(0, paidCount * rate - discount);
-          }
-        });
-
-        // Factures de transport directes
-        invoices.forEach((inv) => {
-          const isTrp = (inv.feeType || '').toLowerCase().includes('transport') || (inv.invoiceNumber || '').startsWith('TRP-');
-          if (isTrp && inv.paidAmount && inv.paidAmount > 0 && !seenTransportIds.has(inv.studentId)) {
-            seenTransportIds.add(inv.studentId);
-            transportStudentsCount += 1;
-            transportAmount += inv.paidAmount;
-          }
-        });
-      } catch (e) {}
-    }
+      // Factures de transport directes
+      invoices.forEach((inv) => {
+        const isTrp = (inv.feeType || '').toLowerCase().includes('transport') || (inv.invoiceNumber || '').startsWith('TRP-');
+        if (isTrp && inv.paidAmount && inv.paidAmount > 0 && !seenTransportIds.has(inv.studentId)) {
+          seenTransportIds.add(inv.studentId);
+          transportStudentsCount += 1;
+          transportAmount += inv.paidAmount;
+        }
+      });
+    } catch (e) {}
 
     const totalCollected = inscriptionAmount + boardingAmount + canteenAmount + transportAmount;
 
@@ -352,6 +371,15 @@ export function RevenueSummary({
         v5 += inst.versement5?.amount || 0;
       }
     });
+
+    // Intégration prioritaire de l'échéancier cloud consolidé si disponible
+    if (servicesData?.installments) {
+      if (typeof servicesData.installments.versement1 === 'number') v1 = Math.max(v1, servicesData.installments.versement1);
+      if (typeof servicesData.installments.versement2 === 'number') v2 = Math.max(v2, servicesData.installments.versement2);
+      if (typeof servicesData.installments.versement3 === 'number') v3 = Math.max(v3, servicesData.installments.versement3);
+      if (typeof servicesData.installments.versement4 === 'number') v4 = Math.max(v4, servicesData.installments.versement4);
+      if (typeof servicesData.installments.versement5 === 'number') v5 = Math.max(v5, servicesData.installments.versement5);
+    }
 
     const getBadgeStyle = (amount: number) => {
       return amount > 0

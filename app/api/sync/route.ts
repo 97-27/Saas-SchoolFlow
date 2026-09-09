@@ -12,6 +12,8 @@ import {
   saveStaffUserToSupabase,
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
+  saveServicesDataToSupabase,
+  getServicesDataFromSupabase,
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
 
@@ -64,17 +66,27 @@ export async function GET(request: NextRequest) {
         const timeoutPromise = new Promise((resolve) =>
           setTimeout(() => resolve([null, null, null, null]), 9000)
         );
-        const [sbSchool, sbStudents, sbInvoices, sbStaff] = (await Promise.race([
+        const [sbSchool, sbStudents, sbInvoices, sbStaff, sbServices] = (await Promise.race([
           Promise.all([
             getSchoolFromSupabase(slug),
             getStudentsFromSupabase(slug),
             getInvoicesFromSupabase(slug),
             getStaffUsersFromSupabase(slug),
+            getServicesDataFromSupabase(slug),
           ]),
           timeoutPromise,
         ])) as any;
 
         if (!schoolData) schoolData = {};
+        if (sbServices) {
+          if (sbServices.boardingSubscriptions) schoolData.boardingSubscriptions = sbServices.boardingSubscriptions;
+          if (sbServices.boardingPayments) schoolData.boardingPayments = sbServices.boardingPayments;
+          if (sbServices.canteenSubscriptions) schoolData.canteenSubscriptions = sbServices.canteenSubscriptions;
+          if (sbServices.canteenPayments) schoolData.canteenPayments = sbServices.canteenPayments;
+          if (sbServices.transportSubscriptions) schoolData.transportSubscriptions = sbServices.transportSubscriptions;
+          if (sbServices.transportPayments) schoolData.transportPayments = sbServices.transportPayments;
+          if (sbServices.installments) schoolData.installments = sbServices.installments;
+        }
         if (sbSchool) {
           schoolData.schoolSettings = {
             ...sbSchool,
@@ -309,16 +321,31 @@ export async function POST(request: NextRequest) {
         saveSchoolToSupabase(mergedSettings).catch(() => {});
       }
       if (cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0) {
-        const sorted = [...cleanStudents].sort((a: any, b: any) => {
-          const da = new Date(a.updatedAt || a.enrollmentDate || 0).getTime();
-          const db = new Date(b.updatedAt || b.enrollmentDate || 0).getTime();
-          return db - da;
-        });
-        const recentStudents = sorted.slice(0, 3);
-        for (const st of recentStudents) {
+        for (const st of cleanStudents) {
           saveStudentToSupabase(st, slug).catch(() => {});
         }
       }
+      if (cleanInvoices && Array.isArray(cleanInvoices) && cleanInvoices.length > 0) {
+        for (const inv of cleanInvoices) {
+          saveInvoiceToSupabase(inv, slug).catch(() => {});
+        }
+      }
+      const servicesPayload = {
+        boardingSubscriptions: boardingSubscriptions || currentSchool.boardingSubscriptions || [],
+        boardingPayments: boardingPayments || currentSchool.boardingPayments || {},
+        canteenSubscriptions: canteenSubscriptions || currentSchool.canteenSubscriptions || {},
+        canteenPayments: canteenPayments || currentSchool.canteenPayments || {},
+        transportSubscriptions: transportSubscriptions || currentSchool.transportSubscriptions || {},
+        transportPayments: transportPayments || currentSchool.transportPayments || {},
+        installments: body.installments || currentSchool.installments || {
+          versement1: 65000,
+          versement2: 20000,
+          versement3: 20000,
+          versement4: 15000,
+          versement5: 0,
+        },
+      };
+      saveServicesDataToSupabase(slug, servicesPayload).catch(() => {});
     } catch (sbSaveErr) {
       console.warn('Erreur sauvegarde Supabase dans /api/sync POST:', sbSaveErr);
     }

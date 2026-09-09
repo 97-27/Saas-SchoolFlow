@@ -31,6 +31,8 @@ import {
   getSchoolFromSupabase,
   getStudentsFromSupabase,
   getInvoicesFromSupabase,
+  getServicesDataFromSupabase,
+  saveServicesDataToSupabase,
 } from '@/lib/supabase/services';
 
 interface DashboardViewProps {
@@ -39,6 +41,7 @@ interface DashboardViewProps {
   initialStudents: Student[];
   initialInvoices: Invoice[];
   initialKPIs: DashboardKPIs;
+  initialServices?: any;
 }
 
 export function DashboardView({
@@ -47,11 +50,13 @@ export function DashboardView({
   initialStudents,
   initialInvoices,
   initialKPIs,
+  initialServices,
 }: DashboardViewProps) {
   const cleanSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, cleanSlug));
   const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, cleanSlug));
   const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(cleanSlug, school));
+  const [servicesData, setServicesData] = useState<any>(() => initialServices || null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -95,8 +100,10 @@ export function DashboardView({
       getStudentsFromSupabase(activeSlug),
       getInvoicesFromSupabase(activeSlug),
       getSchoolFromSupabase(activeSlug),
+      getServicesDataFromSupabase(activeSlug),
     ])
-      .then(([sbStudents, sbInvoices, sbSchool]) => {
+      .then(([sbStudents, sbInvoices, sbSchool, sbServices]) => {
+        let hasNewData = false;
         if (sbStudents && sbStudents.length > 0) {
           const liveStus = getLiveStudents(sbStudents, activeSlug);
           setStudents(liveStus);
@@ -104,6 +111,7 @@ export function DashboardView({
             localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
             localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
           } catch (e) {}
+          hasNewData = true;
         }
         if (sbInvoices && sbInvoices.length > 0) {
           const liveInvs = getLiveInvoices(sbInvoices, activeSlug);
@@ -112,12 +120,44 @@ export function DashboardView({
             localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
             localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
           } catch (e) {}
+          hasNewData = true;
         }
         if (sbSchool) {
           setSchoolState(sbSchool);
           try {
             localStorage.setItem(`schoolflow_school_settings_v1_${activeSlug}`, JSON.stringify(sbSchool));
           } catch (e) {}
+          hasNewData = true;
+        }
+        if (sbServices) {
+          setServicesData(sbServices);
+          if (sbServices.boardingSubscriptions) {
+            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(sbServices.boardingSubscriptions));
+            localStorage.setItem(`schoolflow_boarding_subscriptions_v3_${activeSlug}`, JSON.stringify(sbServices.boardingSubscriptions));
+          }
+          if (sbServices.boardingPayments) {
+            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(sbServices.boardingPayments));
+          }
+          if (sbServices.canteenSubscriptions) {
+            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(sbServices.canteenSubscriptions));
+            localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(sbServices.canteenSubscriptions));
+            localStorage.setItem(`schoolflow_canteen_subscriptions_v3_${activeSlug}`, JSON.stringify(sbServices.canteenSubscriptions));
+          }
+          if (sbServices.canteenPayments) {
+            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(sbServices.canteenPayments));
+            localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(sbServices.canteenPayments));
+          }
+          if (sbServices.transportSubscriptions) {
+            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(sbServices.transportSubscriptions));
+            localStorage.setItem(`schoolflow_transport_subscriptions_v2_${activeSlug}`, JSON.stringify(sbServices.transportSubscriptions));
+          }
+          if (sbServices.transportPayments) {
+            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(sbServices.transportPayments));
+          }
+          hasNewData = true;
+        }
+        if (hasNewData) {
+          window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
         }
       })
       .catch(() => {});
@@ -143,6 +183,30 @@ export function DashboardView({
               localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
             } catch (e) {}
           }
+          if (res.data.boardingSubscriptions || res.data.canteenSubscriptions || res.data.transportSubscriptions || res.data.installments) {
+            setServicesData(res.data);
+          }
+          if (res.data.boardingSubscriptions) {
+            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(res.data.boardingSubscriptions));
+          }
+          if (res.data.boardingPayments) {
+            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(res.data.boardingPayments));
+          }
+          if (res.data.canteenSubscriptions) {
+            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(res.data.canteenSubscriptions));
+            localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(res.data.canteenSubscriptions));
+          }
+          if (res.data.canteenPayments) {
+            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(res.data.canteenPayments));
+            localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(res.data.canteenPayments));
+          }
+          if (res.data.transportSubscriptions) {
+            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(res.data.transportSubscriptions));
+          }
+          if (res.data.transportPayments) {
+            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(res.data.transportPayments));
+          }
+          window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
         }
       })
       .catch(() => {});
@@ -160,6 +224,43 @@ export function DashboardView({
       const currentLocalInvoices = getLiveInvoices([], activeSlug);
       const currentDeletedIds = Array.from(getDeletedStudentIds());
 
+      let rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem(`schoolflow_boarding_subscriptions_v3_${activeSlug}`);
+      let rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+      let rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3') || localStorage.getItem('schoolflow_canteen_subscriptions_v2') || localStorage.getItem(`schoolflow_canteen_subscriptions_v3_${activeSlug}`);
+      let rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3') || localStorage.getItem('schoolflow_canteen_monthly_payments_v2');
+      let rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2') || localStorage.getItem(`schoolflow_transport_subscriptions_v2_${activeSlug}`);
+      let rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
+
+      const boardingSubscriptions = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : (servicesData?.boardingSubscriptions || []);
+      const boardingPayments = rawBoardingPay ? JSON.parse(rawBoardingPay) : (servicesData?.boardingPayments || {});
+      const canteenSubscriptions = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : (servicesData?.canteenSubscriptions || {});
+      const canteenPayments = rawCanteenPay ? JSON.parse(rawCanteenPay) : (servicesData?.canteenPayments || {});
+      const transportSubscriptions = rawTransportSubs ? JSON.parse(rawTransportSubs) : (servicesData?.transportSubscriptions || {});
+      const transportPayments = rawTransportPay ? JSON.parse(rawTransportPay) : (servicesData?.transportPayments || {});
+
+      const installments = servicesData?.installments || {
+        versement1: 65000,
+        versement2: 20000,
+        versement3: 20000,
+        versement4: 15000,
+        versement5: 0,
+      };
+
+      const consolidatedServices = {
+        boardingSubscriptions,
+        boardingPayments,
+        canteenSubscriptions,
+        canteenPayments,
+        transportSubscriptions,
+        transportPayments,
+        installments,
+      };
+
+      setServicesData(consolidatedServices);
+
+      // Sauvegarde directe Supabase Cloud
+      saveServicesDataToSupabase(activeSlug, consolidatedServices).catch(() => {});
+
       await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,6 +269,7 @@ export function DashboardView({
           students: currentLocalStudents,
           invoices: currentLocalInvoices,
           deletedStudentIds: currentDeletedIds,
+          ...consolidatedServices,
         }),
       }).catch(() => {});
 
@@ -186,6 +288,18 @@ export function DashboardView({
           localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
           localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
           setInvoices(liveInvs);
+        }
+        if (result.data.boardingSubscriptions) {
+          localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(result.data.boardingSubscriptions));
+        }
+        if (result.data.boardingPayments) {
+          localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(result.data.boardingPayments));
+        }
+        if (result.data.canteenSubscriptions) {
+          localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(result.data.canteenSubscriptions));
+        }
+        if (result.data.canteenPayments) {
+          localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(result.data.canteenPayments));
         }
         if (result.data.transportSubscriptions) {
           localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(result.data.transportSubscriptions));
@@ -248,6 +362,18 @@ export function DashboardView({
           });
         }
       } catch (e) {}
+    }
+
+    if (servicesData?.boardingSubscriptions && Array.isArray(servicesData.boardingSubscriptions)) {
+      servicesData.boardingSubscriptions.forEach((b: any) => {
+        const key = b.studentId || b.matricule || b.studentName;
+        if (key && !seenBoarderKeys.has(key)) {
+          seenBoarderKeys.add(key);
+          boardingCount++;
+          if (b.gender === 'F') boardingGirls++;
+          else boardingBoys++;
+        }
+      });
     }
 
     students.forEach((s) => {
@@ -474,6 +600,7 @@ export function DashboardView({
         academicYear={schoolState.academicYear}
         invoices={invoices}
         students={students}
+        servicesData={servicesData}
       />
 
       {/* Tableau des factures & encaissements avec colonne Statut Nouveau / Ancien */}

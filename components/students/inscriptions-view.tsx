@@ -889,6 +889,7 @@ export function InscriptionsView({
     };
 
     // Permettre la modification totale de l'élève (Nom, Prénom, Genre, Classe, Statut, Matricule, Adresse)
+    const finalFirstName = firstName.trim();
     const finalLastName = lastName.trim().toUpperCase();
     const finalGender: 'male' | 'female' = (gender as 'male' | 'female') || 'male';
     const finalGrade = grade;
