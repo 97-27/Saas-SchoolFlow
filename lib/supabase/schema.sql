@@ -167,3 +167,64 @@ CREATE INDEX IF NOT EXISTS idx_students_grade ON public.students(grade);
 CREATE INDEX IF NOT EXISTS idx_invoices_student ON public.invoices(student_id);
 CREATE INDEX IF NOT EXISTS idx_grades_student_period ON public.grades(student_id, period);
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON public.attendance_records(date);
+
+-- ==============================================================================
+-- POLITIQUES DE SÉCURITÉ (ROW LEVEL SECURITY - RLS)
+-- Permet l'accès complet en lecture et écriture via la clé publique anon / authenticated
+-- ==============================================================================
+ALTER TABLE public.schools ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on schools" ON public.schools;
+CREATE POLICY "Allow public read/write on schools" ON public.schools FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.staff_users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on staff_users" ON public.staff_users;
+CREATE POLICY "Allow public read/write on staff_users" ON public.staff_users FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on students" ON public.students;
+CREATE POLICY "Allow public read/write on students" ON public.students FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on invoices" ON public.invoices;
+CREATE POLICY "Allow public read/write on invoices" ON public.invoices FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.installments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on installments" ON public.installments;
+CREATE POLICY "Allow public read/write on installments" ON public.installments FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.grades ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on grades" ON public.grades;
+CREATE POLICY "Allow public read/write on grades" ON public.grades FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on attendance_records" ON public.attendance_records;
+CREATE POLICY "Allow public read/write on attendance_records" ON public.attendance_records FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.staff_salaries ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read/write on staff_salaries" ON public.staff_salaries;
+CREATE POLICY "Allow public read/write on staff_salaries" ON public.staff_salaries FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- SYNCHRONISATION EN TEMPS RÉEL (SUPABASE REALTIME)
+-- ==============================================================================
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.schools, public.staff_users, public.students, public.invoices;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
+-- ==============================================================================
+-- BUCKET DE STOCKAGE PUBLIC (DOCUMENTS, PHOTOS & CACHETS)
+-- ==============================================================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('schoolflow-documents', 'schoolflow-documents', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Public access to schoolflow documents" ON storage.objects;
+CREATE POLICY "Public access to schoolflow documents"
+ON storage.objects FOR ALL
+USING (bucket_id = 'schoolflow-documents')
+WITH CHECK (bucket_id = 'schoolflow-documents');

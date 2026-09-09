@@ -88,6 +88,51 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
   }
 }
 
+export async function getAllSchoolsFromSupabase(): Promise<School[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const { data, error } = await supabase
+      .from('schools')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((d) => ({
+      id: d.id,
+      slug: d.slug,
+      name: d.name,
+      shortName: d.short_name || d.name.slice(0, 8).toUpperCase(),
+      logoColor: d.logo_color || '#059669',
+      academicYear: d.academic_year || '2026-2027',
+      currentTerm: d.current_term || 'Trimestre 1',
+      termType: 'trimestriel',
+      phone: d.phone || '',
+      whatsappPhone: d.whatsapp_phone || d.phone || '',
+      email: d.email || '',
+      motto: d.motto || 'Discipline • Rigueur • Réussite',
+      slogan: d.slogan || 'La Lumière du Savoir',
+      city: d.city || 'Abidjan',
+      country: d.country || 'Côte d’Ivoire',
+      district: d.district || 'Abidjan',
+      ministryCode: '',
+      founderName: d.founder_name || 'Fondateur / Promoteur',
+      directorName: d.director_name || 'Directeur Général',
+      studiesDirectorName: d.director_name || 'Direction des Études',
+      logoUrl: d.logo_url || '',
+      stampUrl: '',
+      countryEmblemUrl: d.country_emblem_url || '',
+      status: (d.status as any) || 'active',
+      subscriptionPlan: (d.subscription_plan as any) || 'annuel',
+      subscriptionPrice: Number(d.subscription_price) || 250000,
+      subscriptionActive: d.status === 'active',
+      createdAt: d.created_at,
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
 export async function saveSchoolToSupabase(school: School): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   if (!school.slug || school.slug === 'college-excellence') return true; // Refuser de sauvegarder l'école exemple college-excellence

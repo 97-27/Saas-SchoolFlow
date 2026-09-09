@@ -53,6 +53,7 @@ import {
   broadcastLiveUpdate,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
+import { getAllSchoolsFromSupabase } from '@/lib/supabase/services';
 
 export type UserRole =
   | 'directeur'
@@ -84,7 +85,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👑 Fondateur (Admin)',
     department: 'Présidence & Conseil d’Administration',
     defaultAuthCode: 'FND-2026',
-    defaultUserName: 'NOM DU FONDATEUR',
+    defaultUserName: '',
     description: 'Propriétaire et Fondateur de l’école. Accès total et illimité à l’ensemble des modules.',
     allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
     isAdmin: true,
@@ -95,7 +96,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👑 Direction (Admin)',
     department: 'Direction des Études',
     defaultAuthCode: 'DIR-2026',
-    defaultUserName: 'NOM DU DIRECTEUR',
+    defaultUserName: '',
     description: 'Directeur des Études : Gestion pédagogique, administrative et financière globale de l’établissement.',
     allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
     isAdmin: true,
@@ -106,7 +107,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '📋 Assistant(e) Direction',
     department: 'Direction Adjointe',
     defaultAuthCode: 'AST-2026',
-    defaultUserName: 'M. Soro Ibrahim',
+    defaultUserName: '',
     description: 'Assistance à la direction, gestion des classes, suivi du personnel et communication.',
     allowedModules: 'Vue d’ensemble, Classes & Niveaux, Enseignants & Personnel, Communication Parents, Notes Diverses',
   },
@@ -116,7 +117,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '🛡️ Éducateur (Vie Scolaire)',
     department: 'Vie Scolaire & Discipline',
     defaultAuthCode: 'EDU-2026',
-    defaultUserName: 'M. Kouamé Yao',
+    defaultUserName: '',
     description: 'Suivi de la discipline, retards, assiduité, autorisations et encadrement des élèves.',
     allowedModules: 'Présences, Classes, Notes Diverses, Communication Parents, Bulletins',
   },
@@ -126,7 +127,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '💻 Informaticien (IT)',
     department: 'Systèmes d’Information & Informatique',
     defaultAuthCode: 'INF-2026',
-    defaultUserName: 'Ing. Franck N’Guessan',
+    defaultUserName: '',
     description: 'Administration technique, maintenance du parc informatique, réseau et sécurité des données.',
     allowedModules: 'Tableau de bord, Administration, Paramètres, Sécurité, Sauvegardes',
   },
@@ -136,7 +137,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '💼 Comptable',
     department: 'Comptabilité & Caisse',
     defaultAuthCode: 'CPT-2026',
-    defaultUserName: 'M. Amadou Diallo',
+    defaultUserName: '',
     description: 'Gestion des paiements de scolarité, effectifs, prestations, réductions, salaires et finances.',
     allowedModules: 'Tableau de bord, Élèves, Comptabilité & Finances, Scolarité, Salaires, Personnel',
   },
@@ -146,7 +147,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '📝 Secrétaire',
     department: 'Secrétariat & Accueil',
     defaultAuthCode: 'SEC-2026',
-    defaultUserName: 'Mme Fatou Traoré',
+    defaultUserName: '',
     description: 'Accueil, documents scolaires officiels, suivi du personnel, communication et inscriptions.',
     allowedModules: 'Vue d’ensemble, Documents Scolaires, Enseignants & Personnel, Inscriptions',
   },
@@ -156,7 +157,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👨‍🏫 Enseignant',
     department: 'Corps Enseignant',
     defaultAuthCode: 'ENS-2026',
-    defaultUserName: 'M. Cissé Ousmane',
+    defaultUserName: '',
     description: 'Saisie des notes, appel des présences par classe, bulletins scolaires et communication.',
     allowedModules: 'Présences & Absences, Pédagogie & Notes, Bulletins Scolaires',
   },
@@ -166,7 +167,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     badge: '👨‍👩‍👧 Parent',
     department: 'Espace Famille',
     defaultAuthCode: 'PAR-2026',
-    defaultUserName: 'M. & Mme Konate',
+    defaultUserName: '',
     description: 'Consultation des notes et bulletins de vos enfants, assiduité et communication avec l’école.',
     allowedModules: 'Notes & Bulletins des Enfants, Communication Parents',
   },
@@ -274,8 +275,11 @@ export function LoginView({
           if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
           if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
           if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
-        } else if (ROLE_CONFIGS[selectedRole]?.defaultUserName) {
-          setUserName(ROLE_CONFIGS[selectedRole].defaultUserName);
+        } else {
+          setUserName('');
+          setLoginEmail('');
+          setParentPhone('');
+          setAuthCodeInput('');
         }
       }
     } catch (e) {
@@ -364,6 +368,20 @@ export function LoginView({
       const isDeleted = params.get('deleted') === 'true' || isSchoolDeleted(schoolSlug);
       setIsDeletedSchool(isDeleted);
     }
+
+    // Synchronisation automatique des établissements abonnés depuis Supabase Cloud
+    getAllSchoolsFromSupabase().then((remoteSchools) => {
+      if (remoteSchools && remoteSchools.length > 0) {
+        try {
+          const current = getRegisteredSchools();
+          const map = new Map<string, School>();
+          for (const s of current) map.set(s.slug, s);
+          for (const s of remoteSchools) map.set(s.slug, s);
+          localStorage.setItem('schoolflow_registered_schools_v1', JSON.stringify(Array.from(map.values())));
+          window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+        } catch (e) {}
+      }
+    });
   }, [schoolSlug]);
 
   useEffect(() => {
@@ -466,6 +484,20 @@ export function LoginView({
     let verifiedStaffUser: any = null;
 
     if (selectedRole !== 'parent') {
+      const allStaffForSchool = getLiveStaffUsers(activeSlug);
+      const roleExists = allStaffForSchool.some((s) => {
+        if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
+        if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
+        return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
+      });
+
+      if (!roleExists) {
+        setErrorMessage(
+          `❌ Aucun compte n'a encore été créé pour le poste de « ${ROLE_CONFIGS[selectedRole].title} » dans cet établissement. La Direction doit d'abord créer ce compte dans l'espace Personnel.`
+        );
+        return;
+      }
+
       // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
       if (!authCodeInput.trim()) {
         setErrorMessage(
@@ -1022,8 +1054,11 @@ export function LoginView({
                           if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
                           if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
                           if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
-                        } else if (ROLE_CONFIGS[newRole]?.defaultUserName) {
-                          setUserName(ROLE_CONFIGS[newRole].defaultUserName);
+                        } else {
+                          setUserName('');
+                          setLoginEmail('');
+                          setParentPhone('');
+                          setAuthCodeInput('');
                         }
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
@@ -1119,17 +1154,16 @@ export function LoginView({
                           if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
                           return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
                         });
-                        const listToRender = matchedRoleStaff.length > 0 ? matchedRoleStaff : [
-                          {
-                            id: `def-${selectedRole}`,
-                            fullName: ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel',
-                            email: '',
-                            phone: '',
-                            avatarUrl: '',
-                            authCode: '',
-                          }
-                        ];
-                        return listToRender.map((staff) => (
+
+                        if (matchedRoleStaff.length === 0) {
+                          return (
+                            <span className="text-[11px] text-amber-800 bg-amber-50/90 px-2.5 py-1 rounded-lg border border-amber-300 font-semibold inline-flex items-center gap-1.5 shadow-2xs">
+                              ⚠️ Aucun compte créé pour ce poste (Non reconnu)
+                            </span>
+                          );
+                        }
+
+                        return matchedRoleStaff.map((staff) => (
                           <button
                             key={staff.id}
                             type="button"
