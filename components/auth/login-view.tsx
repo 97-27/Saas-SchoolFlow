@@ -33,12 +33,13 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { School, Student } from '@/lib/data/types';
-import { defaultSchool, mockStudents } from '@/lib/data/mock-data';
+import { defaultSchool, mockStudents, mockSchools } from '@/lib/data/mock-data';
 import { formatFCFA } from '@/lib/utils/formatters';
 import {
   getLiveSchool,
   getLiveStaffUsers,
   getLiveStudents,
+  getRegisteredSchools,
   recordStaffLogin,
   isSchoolDeleted,
   restoreSchoolAccount,
@@ -206,6 +207,7 @@ export function LoginView({
   // État de l'établissement
   const [currentSchool, setCurrentSchool] = useState<School>(initialSchool);
   const [isDeletedSchool, setIsDeletedSchool] = useState(false);
+  const activeSlug = currentSchool?.slug || schoolSlug;
 
   // Formulaire de Connexion (Comptes Existants)
   const [selectedRole, setSelectedRole] = useState<UserRole>('directeur');
@@ -217,6 +219,68 @@ export function LoginView({
   const [parentPhone, setParentPhone] = useState('');
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [loginAvatar, setLoginAvatar] = useState('');
+
+  // Liste globale de tous les établissements enregistrés (abonnés et par défaut)
+  const allSchoolsList = React.useMemo(() => {
+    if (!mounted) return [];
+    try {
+      const registered = getRegisteredSchools();
+      const mockList = Object.values(mockSchools);
+      const combined = [...registered, ...mockList];
+      const seen = new Set<string>();
+      return combined.filter((s) => {
+        const key = (s.shortName || s.slug || s.name || '').toUpperCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    } catch (e) {
+      return [];
+    }
+  }, [mounted]);
+
+  // Détection et basculement automatique de l'établissement dès la saisie du sigle
+  const handleSigleChange = (val: string) => {
+    const rawVal = val.toUpperCase();
+    setSchoolSigle(rawVal);
+    const clean = rawVal.trim();
+    if (!clean) return;
+
+    try {
+      const registered = getRegisteredSchools();
+      const mockList = Object.values(mockSchools);
+      const allCandidates = [...registered, ...mockList];
+
+      const match = allCandidates.find(
+        (s) =>
+          (s.shortName && s.shortName.toUpperCase() === clean) ||
+          (s.slug && s.slug.toUpperCase() === clean) ||
+          (s.slug && s.slug.toUpperCase() === clean.toLowerCase()) ||
+          (s.name && s.name.toUpperCase() === clean) ||
+          (s.name && s.name.toUpperCase().includes(clean))
+      );
+
+      if (match) {
+        setCurrentSchool(match);
+        setIsDeletedSchool(isSchoolDeleted(match.slug));
+        const staffForNewRole = getLiveStaffUsers(match.slug).filter((s) => {
+          if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
+          if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
+          return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
+        });
+        if (staffForNewRole.length > 0) {
+          setUserName(staffForNewRole[0].fullName);
+          if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
+          if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
+          if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
+        } else if (ROLE_CONFIGS[selectedRole]?.defaultUserName) {
+          setUserName(ROLE_CONFIGS[selectedRole].defaultUserName);
+        }
+      }
+    } catch (e) {
+      console.error('Erreur recherche établissement par sigle:', e);
+    }
+  };
 
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -346,7 +410,7 @@ export function LoginView({
 
     // Vérification stricte : l'école / le compte doit avoir un abonnement actif souscrit
     const identifier = cleanEmail || trimmedName;
-    const subCheck = verifySchoolSubscriptionForLogin(identifier, schoolSlug);
+    const subCheck = verifySchoolSubscriptionForLogin(identifier, activeSlug);
     if (!subCheck.isValid) {
       setErrorMessage(
         subCheck.reason ||
@@ -379,7 +443,7 @@ export function LoginView({
         'parent',
         '',
         trimmedName,
-        schoolSlug,
+        activeSlug,
         parentPhone
       );
 
@@ -415,7 +479,7 @@ export function LoginView({
         selectedRole,
         authCodeInput,
         trimmedName,
-        schoolSlug,
+        activeSlug,
         parentPhone
       );
 
@@ -441,7 +505,7 @@ export function LoginView({
       const firstChild = matchedParentStudents[0];
 
       // Synchronisation du profil personnel (Fondateur, Directeur, Collaborateurs)
-      const allStaff = getLiveStaffUsers(schoolSlug);
+      const allStaff = getLiveStaffUsers(activeSlug);
       const matchedStaff = verifiedStaffUser || (cleanAuthCode ? allStaff.find((s) => s.authCode.toUpperCase() === cleanAuthCode) : undefined);
 
       // Pour les parents : profil alimenté par le numéro officiel renseigné à l'inscription et son email de connexion
@@ -470,7 +534,7 @@ export function LoginView({
           email: finalEmail,
           phone: finalPhone,
           avatarUrl: loginAvatar || undefined,
-        }, schoolSlug);
+        }, activeSlug);
       }
       const roleBadge =
         selectedRole === 'fondateur'
@@ -542,11 +606,11 @@ export function LoginView({
 
       try {
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
-        recordStaffLogin(selectedRole, finalFullName, cleanAuthCode, schoolSlug);
+        recordStaffLogin(selectedRole, finalFullName, cleanAuthCode, activeSlug);
         broadcastLiveUpdate({
           action: 'user_login',
           user: sessionData,
-          schoolSlug,
+          schoolSlug: activeSlug,
         });
       } catch (err) {
         console.error('Erreur stockage session:', err);
@@ -558,11 +622,11 @@ export function LoginView({
       });
       setIsLoading(false);
 
-      let destinationUrl = `/${schoolSlug}/admin/dashboard`;
+      let destinationUrl = `/${activeSlug}/admin/dashboard`;
       if (selectedRole === 'enseignant') {
-        destinationUrl = `/${schoolSlug}/admin/notes`;
+        destinationUrl = `/${activeSlug}/admin/notes`;
       } else if (selectedRole === 'parent') {
-        destinationUrl = `/${schoolSlug}/admin/bulletins-parents`;
+        destinationUrl = `/${activeSlug}/admin/bulletins-parents`;
       }
 
       setTimeout(() => {
@@ -909,11 +973,19 @@ export function LoginView({
                     <input
                       type="text"
                       required
+                      list="registered-schools-sigles"
                       value={schoolSigle}
-                      onChange={(e) => setSchoolSigle(e.target.value.toUpperCase())}
+                      onChange={(e) => handleSigleChange(e.target.value)}
                       placeholder="Ex : EPC MANOI"
                       className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                     />
+                    <datalist id="registered-schools-sigles">
+                      {allSchoolsList.map((s) => (
+                        <option key={s.id || s.slug} value={s.shortName || s.name}>
+                          {s.name} ({s.shortName || s.slug})
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
@@ -931,7 +1003,7 @@ export function LoginView({
                         const newRole = e.target.value as UserRole;
                         setSelectedRole(newRole);
                         setErrorMessage('');
-                        const staffForNewRole = getLiveStaffUsers(schoolSlug).filter((s) => {
+                        const staffForNewRole = getLiveStaffUsers(activeSlug).filter((s) => {
                           if (newRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
                           if (newRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
                           return s.roleId === newRole || s.role === ROLE_CONFIGS[newRole]?.title;
@@ -940,6 +1012,7 @@ export function LoginView({
                           setUserName(staffForNewRole[0].fullName);
                           if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
                           if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
+                          if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
                         } else if (ROLE_CONFIGS[newRole]?.defaultUserName) {
                           setUserName(ROLE_CONFIGS[newRole].defaultUserName);
                         }
@@ -1031,7 +1104,7 @@ export function LoginView({
                     <div className="pt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10.5px] font-semibold text-slate-500">Personnel identifié :</span>
                       {(() => {
-                        const allStaff = getLiveStaffUsers(schoolSlug);
+                        const allStaff = getLiveStaffUsers(activeSlug);
                         const matchedRoleStaff = allStaff.filter((s) => {
                           if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
                           if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
@@ -1044,6 +1117,7 @@ export function LoginView({
                             email: '',
                             phone: '',
                             avatarUrl: '',
+                            authCode: '',
                           }
                         ];
                         return listToRender.map((staff) => (
@@ -1055,13 +1129,14 @@ export function LoginView({
                               if (staff.email) setLoginEmail(staff.email);
                               if (staff.phone) setParentPhone(staff.phone);
                               if (staff.avatarUrl) setLoginAvatar(staff.avatarUrl);
+                              if (staff.authCode) setAuthCodeInput(staff.authCode);
                             }}
                             className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs ${
                               userName.trim().toUpperCase() === staff.fullName.trim().toUpperCase()
                                 ? 'bg-emerald-600 text-white border-emerald-700'
                                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
                             }`}
-                            title="Cliquer pour renseigner automatiquement ce nom"
+                            title="Cliquer pour renseigner automatiquement ce nom et ses accès"
                           >
                             <span>👤 {staff.fullName}</span>
                           </button>

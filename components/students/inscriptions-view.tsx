@@ -136,7 +136,7 @@ export function InscriptionsView({
         const nextNumber = Math.max(currentMax + 1, (parseInt(stuNum.replace(/\D/g, ''), 10) || 0) + 1);
 
         setCollaboratorAlert({
-          message: `Un Reçu vient d'être enregistré pour ${stuName} (${stuNum}) ! Votre formulaire d'inscription bascule automatiquement sur l'identifiant ID-${String(nextNumber).padStart(3, '0')} sans réinitialiser vos saisies en cours.`,
+          message: `Un reçu vient d'être enregistré au nom de ${stuName}. Passage à l'ID suivant.`,
           studentNumber: stuNum,
           fullName: stuName,
           newSeq: nextNumber,
@@ -150,7 +150,7 @@ export function InscriptionsView({
           return prev;
         });
 
-        setTimeout(() => setCollaboratorAlert(null), 6000);
+        setTimeout(() => setCollaboratorAlert(null), 3000);
       }
 
       prevMaxSeqRef.current = currentMax;
@@ -977,8 +977,8 @@ export function InscriptionsView({
 
     setSuccessModalData(newStudent);
     setShowConfirmModal(false);
-    setSuccessToast(`Élève ${newStudent.fullName} (${newStudent.studentNumber}) enregistré(e) avec succès !`);
-    setTimeout(() => setSuccessToast(null), 3000);
+    setSuccessToast(`✓ Reçu enregistré pour ${newStudent.fullName} (${newStudent.studentNumber})`);
+    setTimeout(() => setSuccessToast(null), 2500);
   };
 
   // Suppression définitive du reçu et de l'élève sélectionné
@@ -2177,12 +2177,12 @@ export function InscriptionsView({
         </div>
       </div>
 
-      {/* Toast Notification Centrée au Milieu de l'Écran */}
+      {/* Toast Notification Centrée au Milieu de l'Écran (2.5 secondes) */}
       {successToast && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
-          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-sm text-center">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
             <span className="leading-snug text-left flex-1">{successToast}</span>
             <button
@@ -2190,41 +2190,34 @@ export function InscriptionsView({
               onClick={() => setSuccessToast(null)}
               className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Alerte Détection Collaborateur en direct */}
+      {/* Alerte Détection Collaborateur en direct (Flottant discret en haut au centre, 3 secondes) */}
       {collaboratorAlert && (
-        <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-emerald-500/10 border-2 border-amber-500 rounded-2xl p-4 flex items-start justify-between gap-3 text-amber-950 animate-in slide-in-from-top-2 duration-200 shadow-md">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-amber-500 text-white rounded-xl font-bold shrink-0 mt-0.5 animate-pulse shadow-xs">
-              <Users className="w-5 h-5" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-black font-heading text-sm sm:text-base text-amber-950">
-                  ⚡ Nouveau reçu validé par un collaborateur en direct !
-                </span>
-                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded-md font-mono text-[10px] font-black border border-amber-300">
-                  SYNCHRO TEMPS RÉEL
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-800 leading-relaxed font-medium">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92%] sm:w-auto pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-amber-500/60 px-4 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 text-xs font-semibold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="flex h-2.5 w-2.5 relative shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+              </span>
+              <p className="truncate text-slate-100 text-xs">
                 {collaboratorAlert.message}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setCollaboratorAlert(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition-colors cursor-pointer shrink-0 font-bold text-xs"
+              title="Fermer"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setCollaboratorAlert(null)}
-            className="text-amber-800 hover:text-amber-950 p-1.5 rounded-xl hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0 font-bold"
-            title="Fermer l'alerte"
-          >
-            ✕
-          </button>
         </div>
       )}
 

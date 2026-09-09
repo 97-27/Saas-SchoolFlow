@@ -208,8 +208,8 @@ export function StudentTable({
     // Save to local storage and sync invoice across dashboard and caisse
     updateRegisteredStudent(updated, schoolSlug);
 
-    setSuccessMessage(`Coordonnées et date d'inscription (${formatDate(formattedDate)}) de l'élève ${updated.fullName} enregistrées avec succès !`);
-    setTimeout(() => setSuccessMessage(null), 5000);
+    setSuccessMessage(`✓ Coordonnées de l'élève ${updated.fullName} mises à jour avec succès !`);
+    setTimeout(() => setSuccessMessage(null), 2500);
     setEditingStudent(null);
   };
 
@@ -278,11 +278,11 @@ export function StudentTable({
   const handleStudentCreated = (newStudent: Student) => {
     setStudents((prev) => [newStudent, ...prev]);
     setSuccessMessage(
-      `Élève ${newStudent.lastName} ${newStudent.firstName} inscrit avec succès sous l'identifiant ${newStudent.studentNumber} !`
+      `✓ Élève ${newStudent.fullName} (${newStudent.studentNumber}) inscrit avec succès !`
     );
     setTimeout(() => {
       setSuccessMessage(null);
-    }, 6000);
+    }, 2500);
   };
 
   // Selection toggle
@@ -359,20 +359,22 @@ export function StudentTable({
         </div>
       </div>
 
-      {/* Message de succès */}
+      {/* Message de confirmation centré et éphémère (3s max) */}
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center justify-between text-xs font-medium shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{successMessage}</span>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-sm text-center">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <span className="leading-snug text-left flex-1">{successMessage}</span>
+            <button
+              type="button"
+              onClick={() => setSuccessMessage(null)}
+              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setSuccessMessage(null)}
-            className="text-emerald-700 hover:text-emerald-900 font-bold ml-4"
-          >
-            ✕
-          </button>
         </div>
       )}
 
@@ -1378,10 +1380,10 @@ export function StudentTable({
                   setStudentToDelete(null);
                   setSuccessMessage(
                     studentToDelete.length === 1
-                      ? "L'élève a été supprimé avec succès de l'ensemble des modules de l'école."
-                      : `${studentToDelete.length} élèves ont été supprimés avec succès de l'ensemble des modules de l'école.`
+                      ? "✓ Élève retiré de la liste avec succès."
+                      : `✓ ${studentToDelete.length} élèves retirés de la liste.`
                   );
-                  setTimeout(() => setSuccessMessage(null), 5000);
+                  setTimeout(() => setSuccessMessage(null), 2500);
                 }}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/30 transition-all cursor-pointer"
               >
