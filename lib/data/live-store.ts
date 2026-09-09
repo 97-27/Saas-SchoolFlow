@@ -14,6 +14,7 @@ import {
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
 } from '@/lib/supabase/services';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 
 export const normalizeWords = (name: string): string =>
@@ -82,288 +83,319 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
 }
 
 /**
- * Canal SSE universel pour synchroniser en temps réel les PC, téléphones et tablettes distants
+ * Gestionnaire unifié des flux entrants distants (WebSockets Supabase + SSE)
+ */
+function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
+  if (!payload || typeof window === 'undefined') return;
+  const isPilot = cleanSlug === 'epc-manoi';
+
+  try {
+    // 1. Nouvel élève & nouveau reçu enregistré par un collaborateur distant
+    if (payload.action === 'student_registered' && payload.student) {
+      const student: Student = payload.student;
+      const invoice: Invoice = payload.invoice;
+
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+      const filteredStudents = prevSchool.filter(
+        (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+      );
+      const updatedStudents = [student, ...filteredStudents];
+
+      localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+      if (isPilot) {
+        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
+      }
+
+      if (invoice) {
+        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+        const rawInvSchool = localStorage.getItem(invSchoolKey);
+        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+        const filteredInvoices = prevInvSchool.filter(
+          (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+        );
+        const updatedInvoices = [invoice, ...filteredInvoices];
+
+        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+        if (isPilot) {
+          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+        }
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'payment_recorded' && payload.invoice) {
+      // 2. Encaissement de prestation ou mise à jour facture
+      const invoice: Invoice = payload.invoice;
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+      const rawInvSchool = localStorage.getItem(invSchoolKey);
+      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+      const filteredInvoices = prevInvSchool.filter(
+        (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+      );
+      const updatedInvoices = [invoice, ...filteredInvoices];
+
+      localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+      if (isPilot) {
+        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'student_updated' && payload.student) {
+      // 3. Mise à jour d'un élève par un collaborateur distant
+      const student: Student = payload.student;
+      const invoice: Invoice = payload.invoice;
+
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+      const rawSchool = localStorage.getItem(schoolKey);
+      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
+      const updatedStudents = prevSchool.map((s) =>
+        s.id === student.id || (s.studentNumber && s.studentNumber === student.studentNumber)
+          ? { ...s, ...student }
+          : s
+      );
+
+      localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+      if (isPilot) {
+        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
+      }
+
+      if (invoice) {
+        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+        const rawInvSchool = localStorage.getItem(invSchoolKey);
+        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
+        const updatedInvoices = prevInvSchool.map((inv) =>
+          inv.id === invoice.id || (inv.invoiceNumber && inv.invoiceNumber === invoice.invoiceNumber)
+            ? { ...inv, ...invoice }
+            : inv
+        );
+
+        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
+        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+        if (isPilot) {
+          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
+        }
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'school_settings_updated' && payload.school) {
+      // 4. Mise à jour des paramètres de l'école
+      const schoolJson = JSON.stringify(payload.school);
+      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${cleanSlug}`, schoolJson);
+      if (isPilot) {
+        localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, schoolJson);
+        localStorage.setItem('schoolflow_active_school_settings_v1', schoolJson);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'staff_users_updated' && Array.isArray(payload.staffUsers)) {
+      // 5. Mise à jour du personnel et des accès
+      const staffJson = JSON.stringify(payload.staffUsers);
+      localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_${cleanSlug}`, staffJson);
+      if (isPilot) {
+        localStorage.setItem(STAFF_USERS_STORAGE_KEY, staffJson);
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'session_updated' && payload.session) {
+      if (payload.avatarUrl) {
+        try {
+          if (payload.session.authCode) {
+            localStorage.setItem(`schoolflow_user_avatar_${payload.session.authCode.toUpperCase()}`, payload.avatarUrl);
+          }
+        } catch (e) {}
+      }
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'grades_portal_updated' && payload.portalStatus) {
+      // 6. Ouverture / Fermeture portail des notes
+      const portalJson = JSON.stringify(payload.portalStatus);
+      localStorage.setItem(`${GRADES_PORTAL_KEY}_${cleanSlug}`, portalJson);
+      localStorage.setItem(GRADES_PORTAL_KEY, portalJson);
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'transport_updated') {
+      if (payload.customTransportMap) {
+        localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(payload.customTransportMap));
+      }
+      if (payload.monthlyPayments) {
+        localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(payload.monthlyPayments));
+      }
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'canteen_updated') {
+      if (payload.customCanteenMap) {
+        localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(payload.customCanteenMap));
+      }
+      if (payload.monthlyPayments) {
+        localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+      }
+      if (payload.weeklyMenu) {
+        localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(payload.weeklyMenu));
+      }
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'boarding_updated') {
+      if (payload.customSubscriptions) {
+        localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(payload.customSubscriptions));
+      }
+      if (payload.monthlyPayments) {
+        localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+      }
+      if (payload.boardingCapacity !== undefined) {
+        localStorage.setItem(`schoolflow_boarding_capacity_${cleanSlug}`, payload.boardingCapacity.toString());
+      }
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: { ...payload, isRemoteSync: true },
+        })
+      );
+    } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
+      deleteLiveStudents(payload.deletedIds, cleanSlug);
+    } else if (payload.action === 'force_store_refresh' && Array.isArray(payload.students)) {
+      const students: Student[] = payload.students;
+      const invoices: Invoice[] = payload.invoices || [];
+
+      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
+      localStorage.setItem(schoolKey, JSON.stringify(students));
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
+      if (isPilot) {
+        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(students));
+      }
+
+      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
+      localStorage.setItem(invSchoolKey, JSON.stringify(invoices));
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(invoices));
+      if (isPilot) {
+        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(invoices));
+      }
+
+      window.dispatchEvent(
+        new CustomEvent(DATA_UPDATED_EVENT, {
+          detail: {
+            action: 'force_store_refresh',
+            isRemoteSync: true,
+          },
+        })
+      );
+    }
+  } catch (err) {
+    // Ignorer les formats non conformes
+  }
+}
+
+/**
+ * Canal universel hybride (Supabase Realtime WebSockets + SSE) pour synchroniser
+ * en temps réel tous les PC, téléphones et tablettes distants.
  */
 let activeEventSource: EventSource | null = null;
 let currentSseSlug = '';
+let activeSupabaseChannel: any = null;
 
 export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
-  if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+  if (typeof window === 'undefined') return;
   const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
-  if (activeEventSource && currentSseSlug === cleanSlug) return;
 
-  if (activeEventSource) {
+  // 1. Canal Supabase Realtime (WebSockets)
+  if (isSupabaseConfigured && !activeSupabaseChannel) {
     try {
-      activeEventSource.close();
-    } catch (e) {}
-    activeEventSource = null;
+      const channelSlug = cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_');
+      activeSupabaseChannel = supabase
+        .channel(`sf_realtime_${channelSlug}`)
+        .on('broadcast', { event: 'live_update' }, ({ payload }) => {
+          if (!payload || payload.senderId === CLIENT_INSTANCE_ID) return;
+          handleRemoteIncomingPayload(payload, cleanSlug);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public' }, (changePayload) => {
+          window.dispatchEvent(
+            new CustomEvent(DATA_UPDATED_EVENT, {
+              detail: { action: 'postgres_cdc_update', payload: changePayload, isRemoteSync: true },
+            })
+          );
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('Supabase realtime channel notice:', err);
+    }
   }
 
-  currentSseSlug = cleanSlug;
-  const topic = `schoolflow_sync_${cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
+  // 2. Canal SSE redondant haute disponibilité
+  if (typeof EventSource !== 'undefined') {
+    if (activeEventSource && currentSseSlug === cleanSlug) return;
 
-  try {
-    const es = new EventSource(`https://ntfy.sh/${topic}/sse`);
-    activeEventSource = es;
-
-    es.onmessage = (event) => {
+    if (activeEventSource) {
       try {
-        if (!event.data) return;
-        const msg = JSON.parse(event.data);
-        if (!msg || msg.event !== 'message' || !msg.message) return;
+        activeEventSource.close();
+      } catch (e) {}
+      activeEventSource = null;
+    }
 
-        const payload =
-          typeof msg.message === 'string' ? JSON.parse(msg.message) : msg.message;
-        if (!payload || payload.senderId === CLIENT_INSTANCE_ID) {
-          return; // Ignore les messages émis par cette même fenêtre
-        }
+    currentSseSlug = cleanSlug;
+    const topic = `schoolflow_sync_${cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
 
-        const isPilot = cleanSlug === 'epc-manoi';
+    try {
+      const es = new EventSource(`https://ntfy.sh/${topic}/sse`);
+      activeEventSource = es;
 
-        // 1. Nouvel élève & nouveau reçu enregistré par un collaborateur distant
-        if (payload.action === 'student_registered' && payload.student) {
-          const student: Student = payload.student;
-          const invoice: Invoice = payload.invoice;
+      es.onmessage = (event) => {
+        try {
+          if (!event.data) return;
+          const msg = JSON.parse(event.data);
+          if (!msg || msg.event !== 'message' || !msg.message) return;
 
-          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-          const rawSchool = localStorage.getItem(schoolKey);
-          const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-          const filteredStudents = prevSchool.filter(
-            (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
-          );
-          const updatedStudents = [student, ...filteredStudents];
-
-          localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
-          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
-          if (isPilot) {
-            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
+          const payload =
+            typeof msg.message === 'string' ? JSON.parse(msg.message) : msg.message;
+          if (!payload || payload.senderId === CLIENT_INSTANCE_ID) {
+            return;
           }
 
-          if (invoice) {
-            const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-            const rawInvSchool = localStorage.getItem(invSchoolKey);
-            const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-            const filteredInvoices = prevInvSchool.filter(
-              (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-            );
-            const updatedInvoices = [invoice, ...filteredInvoices];
+          handleRemoteIncomingPayload(payload, cleanSlug);
+        } catch (err) {}
+      };
 
-            localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-            if (isPilot) {
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-            }
-          }
-
-          // Déclencher la notification locale avec tag distant
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'payment_recorded' && payload.invoice) {
-          // 2. Encaissement de prestation ou mise à jour facture
-          const invoice: Invoice = payload.invoice;
-          const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-          const rawInvSchool = localStorage.getItem(invSchoolKey);
-          const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-          const filteredInvoices = prevInvSchool.filter(
-            (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-          );
-          const updatedInvoices = [invoice, ...filteredInvoices];
-
-          localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-          if (isPilot) {
-            localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-          }
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'student_updated' && payload.student) {
-          // 3. Mise à jour d'un élève (frais, statut, classe, infos personnelles) par un collaborateur
-          const student: Student = payload.student;
-          const invoice: Invoice = payload.invoice;
-
-          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-          const rawSchool = localStorage.getItem(schoolKey);
-          const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-          const updatedStudents = prevSchool.map((s) =>
-            s.id === student.id || (s.studentNumber && s.studentNumber === student.studentNumber)
-              ? { ...s, ...student }
-              : s
-          );
-
-          localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
-          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
-          if (isPilot) {
-            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
-          }
-
-          if (invoice) {
-            const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-            const rawInvSchool = localStorage.getItem(invSchoolKey);
-            const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-            const updatedInvoices = prevInvSchool.map((inv) =>
-              inv.id === invoice.id || (inv.invoiceNumber && inv.invoiceNumber === invoice.invoiceNumber)
-                ? { ...inv, ...invoice }
-                : inv
-            );
-
-            localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-            if (isPilot) {
-              localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-            }
-          }
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'school_settings_updated' && payload.school) {
-          // 4. Mise à jour des paramètres de l'école (nom, contact, devise, etc.)
-          const schoolJson = JSON.stringify(payload.school);
-          localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${cleanSlug}`, schoolJson);
-          if (isPilot) {
-            localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, schoolJson);
-            localStorage.setItem('schoolflow_active_school_settings_v1', schoolJson);
-          }
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'staff_users_updated' && Array.isArray(payload.staffUsers)) {
-          // 5. Mise à jour du personnel et des accès
-          const staffJson = JSON.stringify(payload.staffUsers);
-          localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_${cleanSlug}`, staffJson);
-          if (isPilot) {
-            localStorage.setItem(STAFF_USERS_STORAGE_KEY, staffJson);
-          }
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'grades_portal_updated' && payload.portalStatus) {
-          // 6. Ouverture / Fermeture portail des notes
-          const portalJson = JSON.stringify(payload.portalStatus);
-          localStorage.setItem(`${GRADES_PORTAL_KEY}_${cleanSlug}`, portalJson);
-          localStorage.setItem(GRADES_PORTAL_KEY, portalJson);
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                ...payload,
-                isRemoteSync: true,
-              },
-            })
-          );
-        } else if (payload.action === 'transport_updated') {
-          if (payload.customTransportMap) {
-            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(payload.customTransportMap));
-          }
-          if (payload.monthlyPayments) {
-            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(payload.monthlyPayments));
-          }
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: { ...payload, isRemoteSync: true },
-            })
-          );
-        } else if (payload.action === 'canteen_updated') {
-          if (payload.customCanteenMap) {
-            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(payload.customCanteenMap));
-          }
-          if (payload.monthlyPayments) {
-            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
-          }
-          if (payload.weeklyMenu) {
-            localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(payload.weeklyMenu));
-          }
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: { ...payload, isRemoteSync: true },
-            })
-          );
-        } else if (payload.action === 'boarding_updated') {
-          if (payload.customSubscriptions) {
-            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(payload.customSubscriptions));
-          }
-          if (payload.monthlyPayments) {
-            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
-          }
-          if (payload.boardingCapacity !== undefined) {
-            localStorage.setItem(`schoolflow_boarding_capacity_${cleanSlug}`, payload.boardingCapacity.toString());
-          }
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: { ...payload, isRemoteSync: true },
-            })
-          );
-        } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
-          // 7. Suppression propagée
-          deleteLiveStudents(payload.deletedIds, cleanSlug);
-        } else if (payload.action === 'force_store_refresh' && Array.isArray(payload.students)) {
-          // 8. Réinitialisation et alignement officiel forcé de tous les postes
-          const students: Student[] = payload.students;
-          const invoices: Invoice[] = payload.invoices || [];
-
-          const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-          localStorage.setItem(schoolKey, JSON.stringify(students));
-          localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
-          if (isPilot) {
-            localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(students));
-          }
-
-          const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-          localStorage.setItem(invSchoolKey, JSON.stringify(invoices));
-          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(invoices));
-          if (isPilot) {
-            localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(invoices));
-          }
-
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: {
-                action: 'force_store_refresh',
-                isRemoteSync: true,
-              },
-            })
-          );
-        }
-      } catch (err) {
-        // Ignorer les formats non conformes
-      }
-    };
-
-    es.onerror = () => {
-      // Reconnexion gérée automatiquement par EventSource
-    };
-  } catch (e) {
-    console.warn('Initialisation SSE universel:', e);
+      es.onerror = () => {
+        // Reconnexion gérée automatiquement par EventSource
+      };
+    } catch (e) {
+      console.warn('Initialisation SSE universel notice:', e);
+    }
   }
 }
 
@@ -395,7 +427,18 @@ export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
     }
   }
 
-  // 3. Diffusion instantanée SSE multi-appareils (téléphones, tablettes, autres PC)
+  // 3. Diffusion instantanée via Supabase Realtime WebSockets
+  if (!detail.isRemoteSync && activeSupabaseChannel) {
+    try {
+      activeSupabaseChannel.send({
+        type: 'broadcast',
+        event: 'live_update',
+        payload: enrichedDetail,
+      });
+    } catch (e) {}
+  }
+
+  // 4. Diffusion instantanée SSE multi-appareils (téléphones, tablettes, autres PC)
   if (!detail.isRemoteSync && typeof fetch !== 'undefined') {
     const slug = detail.schoolSlug || 'epc-manoi';
     const topic = `schoolflow_sync_${slug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
@@ -2298,10 +2341,10 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           }
           const persistentAvatar =
             (u.authCode ? localStorage.getItem(`schoolflow_user_avatar_${u.authCode.toUpperCase()}`) : null) ||
-            (def.authCode ? localStorage.getItem(`schoolflow_user_avatar_${def.authCode.toUpperCase()}`) : null) ||
-            (finalName ? localStorage.getItem(`schoolflow_user_avatar_${finalName}`) : null) ||
-            (def.roleId ? localStorage.getItem(`schoolflow_user_avatar_${def.roleId}`) : null) ||
             u.avatarUrl ||
+            (finalName ? localStorage.getItem(`schoolflow_user_avatar_${finalName}`) : null) ||
+            (def.authCode ? localStorage.getItem(`schoolflow_user_avatar_${def.authCode.toUpperCase()}`) : null) ||
+            (def.roleId ? localStorage.getItem(`schoolflow_user_avatar_${def.roleId}`) : null) ||
             def.avatarUrl;
 
           codeMap.set(u.authCode, {

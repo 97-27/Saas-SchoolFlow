@@ -295,16 +295,6 @@ export function DashboardView({
 
         {/* Boutons d'actions rapides */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={handleForceSync}
-            disabled={isSyncing}
-            title="Actualiser et forcer la synchronisation avec la base Cloud"
-            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Actualisation...' : 'Actualiser Cloud'}</span>
-          </button>
 
           <Link
             href={`/${schoolSlug}/admin/rapports`}

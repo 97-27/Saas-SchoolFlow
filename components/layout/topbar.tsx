@@ -13,6 +13,7 @@ import {
   DATA_UPDATED_EVENT,
   broadcastLiveUpdate,
 } from '@/lib/data/live-store';
+import { uploadAvatarToSupabase } from '@/lib/supabase/services';
 import {
   Menu,
   Bell,
@@ -280,52 +281,100 @@ export function Topbar({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const updated = { ...activeSession, avatarUrl: dataUrl };
-      setActiveSession(updated);
-
-      try {
-        const stored = localStorage.getItem('schoolflow_active_session_v2');
-        const parsed = stored ? JSON.parse(stored) : {};
-        const newSession = { ...parsed, avatarUrl: dataUrl };
-        localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
-
-        // Clés indélébiles de sauvegarde permanente par code d'accès, rôle et nom
-        if (parsed.authCode) {
-          localStorage.setItem(`schoolflow_user_avatar_${parsed.authCode.toUpperCase()}`, dataUrl);
+    // Optimisation & compression haute fidélité (max 400x400) pour fluidité et persistance instantanée
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement('canvas');
+      const maxDim = 400;
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
         }
-        if (activeSession.roleId) {
-          localStorage.setItem(`schoolflow_user_avatar_${activeSession.roleId}`, dataUrl);
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
-        if (activeSession.fullName) {
-          localStorage.setItem(`schoolflow_user_avatar_${activeSession.fullName}`, dataUrl);
-        }
-        localStorage.setItem('schoolflow_user_avatar_custom', dataUrl);
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
 
-        // Sauvegarder également dans le registre du personnel (staffUsers)
-        const allStaff = getLiveStaffUsers(schoolSlug);
-        const nextStaff = allStaff.map((s) => {
-          if (
-            (parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase()) ||
-            s.roleId === activeSession.roleId ||
-            s.fullName === activeSession.fullName
-          ) {
-            return { ...s, avatarUrl: dataUrl };
+      // Envoi asynchrone vers Supabase Cloud Storage
+      canvas.toBlob(async (blob) => {
+        let finalAvatarUrl = compressedDataUrl;
+        if (blob) {
+          const userIdentifier = (
+            (activeSession as any)?.authCode ||
+            activeSession.roleId ||
+            'user'
+          ).toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const fileName = `avatar_${schoolSlug}_${userIdentifier}_${Date.now()}.jpg`;
+          try {
+            const cloudUrl = await uploadAvatarToSupabase(blob, fileName);
+            if (cloudUrl) {
+              finalAvatarUrl = cloudUrl;
+            }
+          } catch (e) {}
+        }
+
+        const updated = { ...activeSession, avatarUrl: finalAvatarUrl };
+        setActiveSession(updated);
+
+        try {
+          const stored = localStorage.getItem('schoolflow_active_session_v2');
+          const parsed = stored ? JSON.parse(stored) : {};
+          const newSession = { ...parsed, avatarUrl: finalAvatarUrl };
+          localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
+
+          // Clés indélébiles de sauvegarde permanente par code d'accès, rôle et nom
+          if (parsed.authCode) {
+            localStorage.setItem(`schoolflow_user_avatar_${parsed.authCode.toUpperCase()}`, finalAvatarUrl);
           }
-          return s;
-        });
-        saveLiveStaffUsers(nextStaff, schoolSlug);
+          if (activeSession.roleId) {
+            localStorage.setItem(`schoolflow_user_avatar_${activeSession.roleId}`, finalAvatarUrl);
+          }
+          if (activeSession.fullName) {
+            localStorage.setItem(`schoolflow_user_avatar_${activeSession.fullName}`, finalAvatarUrl);
+          }
+          localStorage.setItem('schoolflow_user_avatar_custom', finalAvatarUrl);
 
-        broadcastLiveUpdate({
-          action: 'session_updated',
-          session: newSession,
-          avatarUrl: dataUrl,
-        });
-      } catch (err) {}
+          // Sauvegarder également dans le registre du personnel Cloud (staffUsers)
+          const allStaff = getLiveStaffUsers(schoolSlug);
+          const nextStaff = allStaff.map((s) => {
+            if (
+              (parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase()) ||
+              s.roleId === activeSession.roleId ||
+              s.fullName === activeSession.fullName
+            ) {
+              return { ...s, avatarUrl: finalAvatarUrl };
+            }
+            return s;
+          });
+          saveLiveStaffUsers(nextStaff, schoolSlug);
+
+          broadcastLiveUpdate({
+            action: 'session_updated',
+            session: newSession,
+            avatarUrl: finalAvatarUrl,
+            schoolSlug,
+          });
+
+          setProfileSuccessMsg('Photo de profil mise à jour et synchronisée avec le Cloud !');
+          setTimeout(() => setProfileSuccessMsg(null), 4000);
+        } catch (err) {}
+      }, 'image/jpeg', 0.85);
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   };
 
   // Fermer la fenêtre de notifications ou profil au clic extérieur

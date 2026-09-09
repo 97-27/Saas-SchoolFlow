@@ -890,10 +890,9 @@ export function InscriptionsView({
 
     // Permettre la modification totale de l'élève (Nom, Prénom, Genre, Classe, Statut, Matricule, Adresse)
     const finalLastName = lastName.trim().toUpperCase();
-    const finalFirstName = firstName.trim();
-    const finalGender = gender;
+    const finalGender: 'male' | 'female' = (gender as 'male' | 'female') || 'male';
     const finalGrade = grade;
-    const finalEnrollmentType = enrollmentType;
+    const finalEnrollmentType: 'ancien' | 'nouveau' = (enrollmentType as 'ancien' | 'nouveau') || 'nouveau';
     const finalMatricule = customMatricule.trim().toUpperCase() || (currentSelectedStudent ? currentSelectedStudent.matricule : '');
 
     const newStudent: Student = {
@@ -945,8 +944,8 @@ export function InscriptionsView({
         gender === 'female'
           ? 'https://images.unsplash.com/photo-1534751516642-a1714f5a596a?w=150&auto=format&fit=crop&q=80'
           : 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-      studentGrade: grade,
-      studentGender: gender,
+      studentGrade: finalGrade,
+      studentGender: finalGender,
       guardianName: newStudent.guardianName,
       guardianPhone: newStudent.guardianPhone,
       secondaryPhones: newStudent.secondaryPhones,
@@ -957,7 +956,7 @@ export function InscriptionsView({
       netAmount: netAmount,
       paidAmount: paidAmount,
       balanceRemaining: remainingAmount,
-      enrollmentType: enrollmentType,
+      enrollmentType: finalEnrollmentType,
       paymentMethod: getPaymentMethodLabel(),
       installments: installments,
       issueDate: finalPaymentDate,
@@ -1070,9 +1069,9 @@ export function InscriptionsView({
 
     // Résolution précise des données cibles (Élève réel pour lequel le reçu est généré)
     const finalStuName = targetStudent ? targetStudent.fullName : (name || 'NOM ET PRÉNOM');
-    const finalStuGender = targetStudent ? targetStudent.gender : gender;
+    const finalStuGender: 'male' | 'female' = targetStudent ? targetStudent.gender : ((gender as 'male' | 'female') || 'male');
     const finalStuGrade = targetStudent ? targetStudent.grade : grade;
-    const finalStuStatus = targetStudent ? (targetStudent.enrollmentType || 'nouveau') : enrollmentType;
+    const finalStuStatus: 'ancien' | 'nouveau' = targetStudent ? (targetStudent.enrollmentType || 'nouveau') : ((enrollmentType as 'ancien' | 'nouveau') || 'nouveau');
     const finalStuParent = targetStudent ? (targetStudent.guardianName || 'Non renseigné') : (guardianName || 'Non renseigné');
     const finalStuPhone = targetStudent ? (targetStudent.whatsappPhone || targetStudent.guardianPhone || phone || 'Non renseigné') : (phone || 'Non renseigné');
     const finalStuDate = targetStudent ? (targetStudent.paymentDate || targetStudent.enrollmentDate || paymentDate) : paymentDate;

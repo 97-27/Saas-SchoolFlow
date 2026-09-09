@@ -754,6 +754,7 @@ export function TransportView({
       setTimeout(() => setToastMessage(null), 7000);
 
       // Ouverture directe du dialogue WhatsApp avec message récapitulatif
+      const cleanPhone = (sub.guardianPhone || sub.phone || '').replace(/[^0-9]/g, '');
       const monthsLabel = sub.paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé';
       const message = `Bonjour,\nVoici le reçu officiel de cotisation au Transport Scolaire pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Arrêt : ${sub.pickupStop}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
       const waUrl = cleanPhone

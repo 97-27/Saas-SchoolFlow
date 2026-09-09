@@ -512,11 +512,11 @@ export function LoginView({
           let persistentAvatar = '';
           try {
             persistentAvatar =
+              verifiedStaffUser?.avatarUrl ||
               (cleanAuthCode ? localStorage.getItem(`schoolflow_user_avatar_${cleanAuthCode.toUpperCase()}`) : null) ||
+              matchedStaff?.avatarUrl ||
               (finalFullName ? localStorage.getItem(`schoolflow_user_avatar_${finalFullName}`) : null) ||
               (selectedRole ? localStorage.getItem(`schoolflow_user_avatar_${selectedRole}`) : null) ||
-              verifiedStaffUser?.avatarUrl ||
-              matchedStaff?.avatarUrl ||
               localStorage.getItem('schoolflow_user_avatar_custom') ||
               '';
           } catch (e) {}

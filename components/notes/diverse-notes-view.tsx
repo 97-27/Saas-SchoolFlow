@@ -48,6 +48,8 @@ export interface DiverseNote {
   targetStudentName?: string;
   author: string;
   authorRole?: string;
+  authorId?: string; // Identifiant ou code unique de l'auteur pour étanchéité absolue
+  authorCode?: string; // Code d'accès unique du collaborateur
   date: string;
   note1: string; // Note 1 demandée par l'utilisateur
   note2: string; // Note 2 demandée par l'utilisateur
@@ -106,6 +108,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     fullName?: string;
     pureName?: string;
     role?: string;
+    authCode?: string;
+    email?: string;
   }>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -117,17 +121,45 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   });
 
   const activeRoleId = activeSession?.roleId || 'directeur';
-  const getRoleStorageKey = (role: string) => `${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_${role}`;
 
-  // Liste des notes persistée isolée strictement par rôle / utilisateur
+  // Clé de stockage hermétique par utilisateur unique (code d'accès / email / nom)
+  const getUserStorageKey = (session: { authCode?: string; fullName?: string; pureName?: string; roleId?: string; email?: string } | null) => {
+    const rawId = (
+      session?.authCode ||
+      session?.email ||
+      session?.pureName ||
+      session?.fullName ||
+      session?.roleId ||
+      'directeur'
+    ).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return `${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_user_${rawId}`;
+  };
+
+  // Liste des notes persistée isolée strictement par collaborateur
   const [notes, setNotes] = useState<DiverseNote[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const role = (JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}') as any).roleId || 'directeur';
-        const saved = localStorage.getItem(`${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_${role}`);
+        const session = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}');
+        const userKey = getUserStorageKey(session);
+        const saved = localStorage.getItem(userKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeNotes(parsed);
+        }
+        // Migration rétrocompatible depuis l'ancien stockage de rôle si disponible
+        const roleKey = `${DIVERSE_NOTES_STORAGE_KEY}_${schoolSlug}_${session.roleId || 'directeur'}`;
+        const legacySaved = localStorage.getItem(roleKey);
+        if (legacySaved) {
+          const legacyParsed = JSON.parse(legacySaved);
+          const userNotes = sanitizeNotes(legacyParsed).filter((n) => {
+            if (session.authCode && n.authorCode) return n.authorCode === session.authCode;
+            const name = (session.pureName || session.fullName || '').toLowerCase();
+            return !n.author || n.author.toLowerCase().includes(name);
+          });
+          if (userNotes.length > 0) {
+            localStorage.setItem(userKey, JSON.stringify(userNotes));
+            return userNotes;
+          }
         }
       } catch (e) {}
     }
@@ -166,20 +198,19 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  // Synchronisation avec le store et partitionnement étanche par rôle
+  // Synchronisation avec le store et partitionnement étanche par utilisateur
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
     setStudents(getLiveStudents(mockStudents, schoolSlug));
 
     const loadSessionAndNotes = () => {
-      let currentRole = 'directeur';
+      let currentSession: any = { roleId: 'directeur' };
       if (typeof window !== 'undefined') {
         try {
           const stored = localStorage.getItem('schoolflow_active_session_v2');
           if (stored) {
-            const parsed = JSON.parse(stored);
-            setActiveSession(parsed);
-            currentRole = parsed.roleId || 'directeur';
+            currentSession = JSON.parse(stored);
+            setActiveSession(currentSession);
           }
         } catch (e) {}
       }
@@ -189,7 +220,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
 
       if (typeof window !== 'undefined') {
         try {
-          const targetKey = getRoleStorageKey(currentRole);
+          const targetKey = getUserStorageKey(currentSession);
           const saved = localStorage.getItem(targetKey);
           if (saved) {
             const parsed = JSON.parse(saved);
@@ -210,20 +241,33 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     return () => window.removeEventListener(DATA_UPDATED_EVENT, loadSessionAndNotes);
   }, [schoolSlug, school]);
 
-  // Sauvegarder dans le stockage dédié au rôle actif
+  // Sauvegarder dans le stockage dédié à l'utilisateur actif
   const saveNotesToStorage = (list: DiverseNote[]) => {
     setNotes(list);
     if (typeof window !== 'undefined') {
       try {
-        const targetKey = getRoleStorageKey(activeRoleId);
+        const targetKey = getUserStorageKey(activeSession);
         localStorage.setItem(targetKey, JSON.stringify(list));
       } catch (e) {}
     }
   };
 
-  // Filtrage intelligent
+  // Filtrage intelligent avec étanchéité absolue
   const filteredNotes = useMemo(() => {
     return notes.filter((n) => {
+      // Étanchéité absolue : Seul l'auteur peut voir ses propres notes diverses
+      const sessionCode = (activeSession?.authCode || '').trim().toUpperCase();
+      const sessionName = (activeSession?.pureName || activeSession?.fullName || '').trim().toLowerCase();
+      const noteAuthorCode = (n.authorCode || '').trim().toUpperCase();
+      const noteAuthor = (n.author || '').trim().toLowerCase();
+
+      if (sessionCode && noteAuthorCode) {
+        if (sessionCode !== noteAuthorCode) return false;
+      } else if (sessionName && noteAuthor) {
+        const isMatch = noteAuthor.includes(sessionName) || sessionName.includes(noteAuthor);
+        if (!isMatch) return false;
+      }
+
       const matchSearch =
         !searchQuery ||
         n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -248,9 +292,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         n.targetGrade === gradeFilter ||
         n.targetType === 'Général (Établissement)';
 
-      return matchSearch && matchCategory && matchPriority && matchStatus && matchGrade;
     });
-  }, [notes, searchQuery, categoryFilter, priorityFilter, statusFilter, gradeFilter]);
+  }, [notes, searchQuery, categoryFilter, priorityFilter, statusFilter, gradeFilter, activeSession]);
 
   // Statistiques clés
   const stats = useMemo(() => {
@@ -336,6 +379,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         targetStudentName: formTargetType === 'Élève Particulier' ? formTargetStudentName : undefined,
         author: formAuthor,
         authorRole: editingNote.authorRole || activeRoleId,
+        authorId: editingNote.authorId || activeSession?.authCode || activeSession?.fullName,
+        authorCode: editingNote.authorCode || activeSession?.authCode,
         date: formDate,
         note1: formNote1,
         note2: formNote2,
@@ -363,6 +408,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         targetStudentName: formTargetType === 'Élève Particulier' ? formTargetStudentName : undefined,
         author: formAuthor || activeSession?.fullName || 'Personnel',
         authorRole: activeRoleId,
+        authorId: activeSession?.authCode || activeSession?.fullName || 'user',
+        authorCode: activeSession?.authCode,
         date: formDate,
         note1: formNote1,
         note2: formNote2,

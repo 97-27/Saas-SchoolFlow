@@ -804,3 +804,38 @@ export async function deleteStaffUserFromSupabase(authCode: string, schoolSlug: 
   }
 }
 
+/**
+ * Téléverse une photo de profil vers Supabase Storage (Bucket 'avatars')
+ * et renvoie l'URL publique permanente HTTPS.
+ */
+export async function uploadAvatarToSupabase(
+  fileOrBlob: Blob | File,
+  fileName: string
+): Promise<string | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(cleanFileName, fileOrBlob, {
+        upsert: true,
+        contentType: (fileOrBlob as any).type || 'image/jpeg',
+      });
+
+    if (error) {
+      console.warn('uploadAvatarToSupabase notice:', error.message);
+      return null;
+    }
+
+    const { data: publicData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(cleanFileName);
+
+    return publicData?.publicUrl || null;
+  } catch (err) {
+    console.warn('uploadAvatarToSupabase catch:', err);
+    return null;
+  }
+}
+
+
