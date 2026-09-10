@@ -1645,7 +1645,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       2. Réinitialisation de Toutes les Données Scolaires à Zéro
                     </h4>
                     <p className="text-xs text-slate-500">
-                      Purger les élèves inscrits, les factures de scolarité, les notes et les salaires pour démarrer une nouvelle année scolaire ou un nouveau cycle d&apos;abonnement. L&apos;établissement et son compte restent conservés.
+                      Purger les élèves inscrits, les reçus de scolarité, les notes et les salaires pour démarrer une nouvelle année scolaire ou un nouveau cycle d&apos;abonnement. L&apos;établissement et son compte restent conservés.
                     </p>
                   </div>
                 </div>
@@ -1873,7 +1873,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     {
                       key: 'invoices',
                       label: '💰 Scolarité, Caisse & Règlements FCFA',
-                      desc: 'Factures, encaissements, journal de caisse et dépenses de l’école',
+                      desc: 'Reçus, encaissements, journal de caisse et dépenses de l’école',
                     },
                     {
                       key: 'salaries',
@@ -2023,7 +2023,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     {
                       key: 'comptableInterface',
                       label: '💼 Interface Comptable (Espace Caisse & Comptabilité)',
-                      desc: 'Supprime le journal de caisse, les encaissements de scolarité enregistrés, factures et dépenses du comptable.',
+                      desc: 'Supprime le journal de caisse, les encaissements de scolarité enregistrés, reçus et dépenses du comptable.',
                     },
                     {
                       key: 'enseignantInterface',

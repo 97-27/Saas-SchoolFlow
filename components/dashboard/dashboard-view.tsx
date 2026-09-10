@@ -475,7 +475,7 @@ export function DashboardView({
             </span>
           </div>
           <p suppressHydrationWarning className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Suivi des effectifs réels ({metrics.totalCount} élèves inscrits), scolarités en FCFA et factures — {schoolState.name}
+            Suivi des effectifs réels ({metrics.totalCount} élèves inscrits), scolarités en FCFA et reçus — {schoolState.name}
           </p>
         </div>
 

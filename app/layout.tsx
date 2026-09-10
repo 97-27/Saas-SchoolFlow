@@ -18,7 +18,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "SchoolFlow — Plateforme de Gestion Scolaire Moderne",
-  description: "Plateforme de gestion d'école tout-en-un : élèves, scolarités, factures FCFA, notes et présence.",
+  description: "Plateforme de gestion d'école tout-en-un : élèves, scolarités, reçus FCFA, notes et présence.",
 };
 
 export default function RootLayout({
