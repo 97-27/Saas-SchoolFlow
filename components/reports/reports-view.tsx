@@ -130,29 +130,18 @@ export function ReportsView({
 
     filteredStudents.forEach((stu) => {
       const inst = stu.installments;
-      const paid = stu.paidAmount || 0;
 
-      let p1: number, p2: number, p3: number, p4: number, p5: number;
+      // Uniquement le détail réellement enregistré — aucune estimation/répartition inventée
+      // quand ce détail manque (même logique que le tableau de bord, revenue-summary.tsx) :
+      // un dossier sans versement détaillé ne contribue à aucune des 5 tranches tant que la
+      // saisie réelle n'a pas eu lieu, plutôt que d'afficher un chiffre qui n'existe pas.
+      let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
       if (inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5)) {
         p1 = inst.versement1?.amount || 0;
         p2 = inst.versement2?.amount || 0;
         p3 = inst.versement3?.amount || 0;
         p4 = inst.versement4?.amount || 0;
         p5 = inst.versement5?.amount || 0;
-      } else {
-        // Repli identique à celui du tableau de bord (revenue-summary.tsx) pour un dossier
-        // sans détail de versement enregistré : répartition selon la clé standard des 5
-        // tranches (40/20/20/10/10 de la scolarité nette), et non des seuils fixes en FCFA
-        // sans rapport avec le montant de scolarité réel de l'élève — c'est ce décalage de
-        // méthode qui faisait que ce rapport et le tableau de bord ne concordaient jamais.
-        const netTuition = stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0);
-        const shares = [0.4, 0.2, 0.2, 0.1, 0.1].map((pct) => netTuition * pct);
-        let remainingPaid = paid;
-        [p1, p2, p3, p4, p5] = shares.map((share) => {
-          const take = Math.min(remainingPaid, share);
-          remainingPaid -= take;
-          return take;
-        });
       }
 
       v1Total += p1;

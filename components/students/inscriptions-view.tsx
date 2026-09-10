@@ -41,6 +41,7 @@ import {
   getLiveSchool,
   saveRegisteredStudent,
   deleteLiveStudents,
+  getDeletedStudentIds,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { playRegistrationSuccessSound, playCopySound } from '@/lib/utils/audio';
@@ -400,15 +401,27 @@ export function InscriptionsView({
 
   // Compute next available Student ID sequence number
   const nextSeq = useMemo(() => {
-    if (!students || students.length === 0) return 1;
-    const nums = students
+    const nums = (students || [])
       .map((s) => {
         const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
         return match ? parseInt(match[0], 10) : 0;
       })
       .filter((n) => !isNaN(n) && n > 0);
     const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
-    return maxNum + 1;
+
+    // Un numéro d'élève supprimé un jour (ID-XXX / stu-XXX) reste bloqué pour toujours dans la
+    // liste des suppressions (deletedStudentIds) - jamais réutilisable en toute sécurité, même
+    // longtemps après. Le "prochain numéro" ne doit donc jamais retomber sur un numéro qui s'y
+    // trouve déjà, sous peine de voir le nouvel élève entrer en collision avec ce tombstone et
+    // se faire supprimer à son tour à la prochaine synchronisation.
+    let candidate = maxNum + 1;
+    try {
+      const delSet = getDeletedStudentIds();
+      while (delSet.has(`ID-${candidate.toString().padStart(3, '0')}`) || delSet.has(`stu-${candidate.toString().padStart(3, '0')}`)) {
+        candidate += 1;
+      }
+    } catch (e) {}
+    return candidate;
   }, [students]);
 
   // Trouver l'élève actuellement sélectionné s'il existe
@@ -899,7 +912,13 @@ export function InscriptionsView({
       // Le serveur n'a pas répondu à temps : on continue avec la meilleure estimation locale
       // plutôt que de bloquer indéfiniment l'enregistrement du reçu.
     }
-    const computedNextSeq = Math.max(nextSeq, freshMax + 1);
+    let computedNextSeq = Math.max(nextSeq, freshMax + 1);
+    try {
+      const delSet = getDeletedStudentIds();
+      while (delSet.has(`ID-${computedNextSeq.toString().padStart(3, '0')}`) || delSet.has(`stu-${computedNextSeq.toString().padStart(3, '0')}`)) {
+        computedNextSeq += 1;
+      }
+    } catch (e) {}
 
     const studentIdToSave = currentSelectedStudent
       ? currentSelectedStudent.id

@@ -342,25 +342,13 @@ export function RevenueSummary({
         }
       });
 
-      // Repli si aucun échéancier détaillé n'a été trouvé mais que l'élève a payé de la scolarité :
-      // répartir le total réglé selon la clé de répartition standard des 5 tranches
-      // (40/20/20/10/10, cf. parent-scolarite-tab.tsx) au lieu de tout attribuer au 1er
-      // versement. Cette estimation évite qu'une année entière de règlements s'affiche comme
-      // "encaissée en Octobre" pour un élève dont le détail par tranche n'a pas (encore) été
-      // ressaisi — en attendant une saisie réelle du détail via la page Inscriptions.
-      if (p1 === 0 && p2 === 0 && p3 === 0 && p4 === 0 && p5 === 0) {
-        const paid = stu.paidAmount || 0;
-        const regFee = stu.registrationFee || 0;
-        let remainingPaid = Math.max(0, paid - regFee);
-        const netTuition = stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0);
-        const shares = [0.4, 0.2, 0.2, 0.1, 0.1].map((pct) => netTuition * pct);
-        const allocated = shares.map((share) => {
-          const take = Math.min(remainingPaid, share);
-          remainingPaid -= take;
-          return take;
-        });
-        [p1, p2, p3, p4, p5] = allocated;
-      }
+      // Si aucun échéancier détaillé n'a été trouvé, ne RIEN estimer/répartir : un élève dont
+      // le détail par tranche n'a pas encore été ressaisi ne contribue à aucune des 5 tranches
+      // tant que cette saisie réelle (via la page Inscriptions) n'a pas eu lieu. Une estimation
+      // proportionnelle a été essayée ici, mais elle affichait des montants inventés (y compris
+      // sur la 5ème échéance, jamais réellement réglée) au lieu de la vérité du terrain — le
+      // Directeur a explicitement demandé qu'une tranche reste à 0 tant qu'aucun versement réel
+      // n'y est enregistré, plutôt que de risquer d'afficher un chiffre qui n'existe pas.
 
       v1 += p1;
       v2 += p2;
