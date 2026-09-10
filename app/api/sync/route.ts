@@ -16,6 +16,10 @@ import {
   getServicesDataFromSupabase,
   batchUpsertStudents,
   batchUpsertInvoices,
+  saveDiverseNotesToSupabase,
+  getDiverseNotesFromSupabase,
+  saveParentMessagesToSupabase,
+  getParentMessagesFromSupabase,
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
 
@@ -69,15 +73,17 @@ export async function GET(request: NextRequest) {
     {
       try {
         const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => resolve([null, null, null, null, null]), 9000)
+          setTimeout(() => resolve([null, null, null, null, null, null, null]), 9000)
         );
-        const [sbSchool, sbStudents, sbInvoices, sbStaff, sbServices] = (await Promise.race([
+        const [sbSchool, sbStudents, sbInvoices, sbStaff, sbServices, sbDiverseNotes, sbParentMessages] = (await Promise.race([
           Promise.all([
             getSchoolFromSupabase(slug),
             getStudentsFromSupabase(slug),
             getInvoicesFromSupabase(slug),
             getStaffUsersFromSupabase(slug),
             getServicesDataFromSupabase(slug),
+            getDiverseNotesFromSupabase(slug),
+            getParentMessagesFromSupabase(slug),
           ]),
           timeoutPromise,
         ])) as any;
@@ -105,6 +111,12 @@ export async function GET(request: NextRequest) {
         }
         if (sbInvoices !== null && Array.isArray(sbInvoices) && sbInvoices.length > 0) {
           schoolData.invoices = sbInvoices;
+        }
+        if (sbDiverseNotes !== null && Array.isArray(sbDiverseNotes)) {
+          schoolData.diverseNotes = sbDiverseNotes;
+        }
+        if (sbParentMessages !== null && Array.isArray(sbParentMessages)) {
+          schoolData.parentMessages = sbParentMessages;
         }
         if (sbStaff !== null && Array.isArray(sbStaff) && sbStaff.length > 0) {
           const staffMap = new Map<string, any>();
@@ -214,6 +226,8 @@ export async function POST(request: NextRequest) {
       boardingSubscriptions,
       boardingPayments,
       boardingCapacity,
+      diverseNotes,
+      parentMessages,
     } = body;
     const slug = (rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug) || 'epc-manoi';
 
@@ -327,6 +341,8 @@ export async function POST(request: NextRequest) {
       ...(boardingSubscriptions !== undefined ? { boardingSubscriptions } : {}),
       ...(boardingPayments !== undefined ? { boardingPayments } : {}),
       ...(boardingCapacity !== undefined ? { boardingCapacity } : {}),
+      ...(diverseNotes !== undefined ? { diverseNotes } : {}),
+      ...(parentMessages !== undefined ? { parentMessages } : {}),
     };
     memoryStore[slug] = updatedEntry;
 
@@ -361,6 +377,13 @@ export async function POST(request: NextRequest) {
         },
       };
       savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
+
+      if (diverseNotes !== undefined && Array.isArray(diverseNotes)) {
+        savePromises.push(saveDiverseNotesToSupabase(slug, diverseNotes));
+      }
+      if (parentMessages !== undefined && Array.isArray(parentMessages)) {
+        savePromises.push(saveParentMessagesToSupabase(slug, parentMessages));
+      }
 
       const results = await Promise.allSettled(savePromises);
       results.forEach((r) => {

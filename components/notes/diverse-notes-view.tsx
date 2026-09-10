@@ -241,15 +241,61 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
     return () => window.removeEventListener(DATA_UPDATED_EVENT, loadSessionAndNotes);
   }, [schoolSlug, school]);
 
-  // Sauvegarder dans le stockage dédié à l'utilisateur actif
+  // Tirer les notes du cloud au chargement (multi-appareils) : le blob cloud contient les
+  // notes de TOUS les collaborateurs, on ne garde ici que celles de l'auteur actif, fusionnées
+  // avec la copie locale déjà affichée (union par id, la plus récente par mise à jour gagne).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sessionCode = (activeSession?.authCode || '').trim().toUpperCase();
+    if (!sessionCode) return;
+
+    fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((result) => {
+        const cloudAll: DiverseNote[] = result?.data?.diverseNotes;
+        if (!Array.isArray(cloudAll)) return;
+        const cloudOwn = sanitizeNotes(cloudAll.filter((n) => (n.authorCode || '').trim().toUpperCase() === sessionCode));
+
+        setNotes((prevLocal) => {
+          const merged = new Map<string, DiverseNote>();
+          cloudOwn.forEach((n) => merged.set(n.id, n));
+          prevLocal.forEach((n) => merged.set(n.id, n)); // le local prévaut en cas de conflit (dernière modif sur cet appareil)
+          const list = Array.from(merged.values());
+          try {
+            localStorage.setItem(getUserStorageKey(activeSession), JSON.stringify(list));
+          } catch (e) {}
+          return list;
+        });
+      })
+      .catch(() => {});
+  }, [schoolSlug, activeSession?.authCode]);
+
+  // Sauvegarder dans le stockage dédié à l'utilisateur actif, puis pousser vers le cloud
+  // (fusionné avec les notes des autres collaborateurs) pour la synchro multi-appareils.
   const saveNotesToStorage = (list: DiverseNote[]) => {
     setNotes(list);
-    if (typeof window !== 'undefined') {
-      try {
-        const targetKey = getUserStorageKey(activeSession);
-        localStorage.setItem(targetKey, JSON.stringify(list));
-      } catch (e) {}
-    }
+    if (typeof window === 'undefined') return;
+    try {
+      const targetKey = getUserStorageKey(activeSession);
+      localStorage.setItem(targetKey, JSON.stringify(list));
+    } catch (e) {}
+
+    const sessionCode = (activeSession?.authCode || '').trim().toUpperCase();
+    fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+      .then((res) => res.json())
+      .then((result) => {
+        const cloudAll: DiverseNote[] = Array.isArray(result?.data?.diverseNotes) ? result.data.diverseNotes : [];
+        // Conserver les notes de tous les AUTRES auteurs telles quelles, remplacer entièrement
+        // celles de l'auteur actif par sa liste locale à jour (ajouts, modifications, suppressions).
+        const others = cloudAll.filter((n) => (n.authorCode || '').trim().toUpperCase() !== sessionCode);
+        const mergedAll = [...others, ...list];
+        return fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: schoolSlug, diverseNotes: mergedAll }),
+        });
+      })
+      .catch(() => {});
   };
 
   // Filtrage intelligent avec étanchéité absolue
@@ -292,6 +338,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         n.targetGrade === gradeFilter ||
         n.targetType === 'Général (Établissement)';
 
+      return matchSearch && matchCategory && matchPriority && matchStatus && matchGrade;
     });
   }, [notes, searchQuery, categoryFilter, priorityFilter, statusFilter, gradeFilter, activeSession]);
 

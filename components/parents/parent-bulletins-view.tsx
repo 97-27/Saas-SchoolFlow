@@ -239,6 +239,21 @@ export function ParentBulletinsView({
         schoolSlug,
       });
 
+      // Pousser vers le cloud pour que le message atteigne réellement les appareils de la
+      // Direction (la seule diffusion locale/onglet ci-dessus ne sort jamais du navigateur du parent).
+      fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          const cloudAll = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
+          const mergedAll = [newMsg, ...cloudAll.filter((m: any) => m.id !== newMsg.id)];
+          return fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: schoolSlug, parentMessages: mergedAll }),
+          });
+        })
+        .catch(() => {});
+
       setMsgToast('✓ Votre message a été transmis en direct à la Direction de l’école !');
       setIsMessageModalOpen(false);
       setMsgSubject('');

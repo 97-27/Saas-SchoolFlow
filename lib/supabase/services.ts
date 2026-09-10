@@ -920,6 +920,8 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       .in('school_id', schoolIds_)
       .neq('role_id', 'school_stamp')
       .neq('role_id', 'system_services_data')
+      .neq('role_id', 'system_diverse_notes')
+      .neq('role_id', 'system_parent_messages')
       .order('created_at', { ascending: true });
 
     if (error || !data) return [];
@@ -1155,6 +1157,129 @@ export async function getServicesDataFromSupabase(schoolSlug: string): Promise<a
     return null;
   } catch (err) {
     console.warn('getServicesDataFromSupabase catch:', err);
+    return null;
+  }
+}
+
+/**
+ * Sauvegarde/récupère les Notes Diverses de tous les collaborateurs d'une école dans Supabase
+ * (même mécanisme que saveServicesDataToSupabase). Chaque note porte son authorCode ; le
+ * cloisonnement par collaborateur reste appliqué côté client au moment de l'affichage — ce
+ * blob partagé sert uniquement de support de synchronisation multi-appareils.
+ */
+export async function saveDiverseNotesToSupabase(schoolSlug: string, notes: any[]): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
+
+    const payload = {
+      school_id: schoolId,
+      role_id: 'system_diverse_notes',
+      role_title: 'Diverse Notes Sync',
+      full_name: 'SYSTEM DIVERSE NOTES SYNC',
+      auth_code: 'SYS-NOTES-DATA',
+      department: JSON.stringify(notes || []),
+      is_active: true,
+    };
+
+    const { data: existing } = await supabase
+      .from('staff_users')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_diverse_notes')
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase.from('staff_users').update({ department: payload.department }).eq('id', existing.id);
+    } else {
+      await supabase.from('staff_users').insert(payload);
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveDiverseNotesToSupabase catch:', err);
+    return false;
+  }
+}
+
+export async function getDiverseNotesFromSupabase(schoolSlug: string): Promise<any[] | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return null;
+
+    const { data } = await supabase
+      .from('staff_users')
+      .select('department')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_diverse_notes')
+      .maybeSingle();
+
+    if (data?.department) return JSON.parse(data.department);
+    return null;
+  } catch (err) {
+    console.warn('getDiverseNotesFromSupabase catch:', err);
+    return null;
+  }
+}
+
+/**
+ * Sauvegarde/récupère les messages envoyés par les parents à la Direction dans Supabase.
+ * Visibilité restreinte côté route (proxy.ts) et navigation (sidebar) au fondateur, directeur,
+ * secrétaire et assistant de direction — jamais aux enseignants.
+ */
+export async function saveParentMessagesToSupabase(schoolSlug: string, messages: any[]): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
+
+    const payload = {
+      school_id: schoolId,
+      role_id: 'system_parent_messages',
+      role_title: 'Parent Messages Sync',
+      full_name: 'SYSTEM PARENT MESSAGES SYNC',
+      auth_code: 'SYS-MSG-DATA',
+      department: JSON.stringify(messages || []),
+      is_active: true,
+    };
+
+    const { data: existing } = await supabase
+      .from('staff_users')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_parent_messages')
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase.from('staff_users').update({ department: payload.department }).eq('id', existing.id);
+    } else {
+      await supabase.from('staff_users').insert(payload);
+    }
+    return true;
+  } catch (err) {
+    console.warn('saveParentMessagesToSupabase catch:', err);
+    return false;
+  }
+}
+
+export async function getParentMessagesFromSupabase(schoolSlug: string): Promise<any[] | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return null;
+
+    const { data } = await supabase
+      .from('staff_users')
+      .select('department')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_parent_messages')
+      .maybeSingle();
+
+    if (data?.department) return JSON.parse(data.department);
+    return null;
+  } catch (err) {
+    console.warn('getParentMessagesFromSupabase catch:', err);
     return null;
   }
 }

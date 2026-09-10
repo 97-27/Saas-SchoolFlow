@@ -180,6 +180,37 @@ export function CommunicationView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug, school, initialStudents]);
 
+  // Tirer les messages envoyés par les parents depuis le cloud : sans ça, un message envoyé
+  // depuis le téléphone d'un parent n'atteignait jamais l'écran de la Direction sur un autre
+  // appareil (le stockage précédent était strictement local au navigateur de l'expéditeur).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pull = () => {
+      fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          const cloudAll: ParentMessage[] = result?.data?.parentMessages;
+          if (!Array.isArray(cloudAll)) return;
+          const cleaned = sanitizeMessages(cloudAll);
+          setMessages((prevLocal) => {
+            const merged = new Map<string, ParentMessage>();
+            cleaned.forEach((m) => merged.set(m.id, m));
+            prevLocal.forEach((m) => merged.set(m.id, m));
+            const list = Array.from(merged.values());
+            try {
+              localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(list));
+              localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(list));
+            } catch (e) {}
+            return list;
+          });
+        })
+        .catch(() => {});
+    };
+    pull();
+    const interval = setInterval(pull, 60000);
+    return () => clearInterval(interval);
+  }, [schoolSlug]);
+
   const [activeTab, setActiveTab] = useState<'inbox' | 'compose' | 'history' | 'parents_directory'>('inbox');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'absence' | 'finance' | 'document' | 'info'>('all');
