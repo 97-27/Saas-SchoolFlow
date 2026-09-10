@@ -246,8 +246,13 @@ export function DashboardView({
   const handleForceSync = async () => {
     const activeSlug = cleanSlug;
     setIsSyncing(true);
+
+    // 1. Envoyer d'abord les données et suppressions locales actuelles pour ne jamais les
+    // écraser. Isolé dans son propre try/catch : si UNE des lectures/écritures locales ci-
+    // dessous échoue (ex: une entrée localStorage corrompue), l'étape 2 (la vraie raison
+    // d'être du bouton "Actualiser Cloud" : aller chercher la vérité depuis Supabase) doit
+    // s'exécuter quand même plutôt que d'être bloquée silencieusement par la même exception.
     try {
-      // 1. Envoyer d'abord les données et suppressions locales actuelles pour ne jamais les écraser
       const currentLocalStudents = getLiveStudents([], activeSlug);
       const currentLocalInvoices = getLiveInvoices([], activeSlug);
       const currentDeletedIds = Array.from(getDeletedStudentIds());
@@ -300,19 +305,33 @@ export function DashboardView({
           ...consolidatedServices,
         }),
       }).catch(() => {});
+    } catch (pushErr) {
+      console.error('Erreur envoi local -> cloud (Actualiser Cloud, étape 1/2) :', pushErr);
+    }
 
-      // 2. Récupérer les données fraîches synchronisées
+    try {
+      // 2. Récupérer les données fraîches synchronisées. Ce bouton sert précisément à trancher
+      // en faveur du cloud : on prend désormais la liste Supabase telle quelle (moins les
+      // suppressions locales pas encore synchronisées) au lieu de la refaire passer par la
+      // fusion "priorité au local" de getLiveStudents(), qui pouvait laisser une entrée locale
+      // périmée (ex: un doublon résiduel de même nom, jamais nettoyé sur cet appareil précis)
+      // bloquer silencieusement l'ajout d'un élève pourtant bien présent côté serveur.
       const res = await fetch(`/api/sync?slug=${activeSlug}&forceSupabase=true&t=${Date.now()}`);
       const result = await res.json();
       if (result && result.success && result.data) {
+        const delSet = getDeletedStudentIds();
         if (result.data.students && Array.isArray(result.data.students)) {
-          const liveStus = getLiveStudents(result.data.students, activeSlug);
+          const liveStus = result.data.students.filter(
+            (s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule)
+          );
           localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
           localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
           setStudents(liveStus);
         }
         if (result.data.invoices && Array.isArray(result.data.invoices)) {
-          const liveInvs = getLiveInvoices(result.data.invoices, activeSlug);
+          const liveInvs = result.data.invoices.filter(
+            (inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber)
+          );
           localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
           localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
           setInvoices(liveInvs);
@@ -527,12 +546,14 @@ export function DashboardView({
           </div>
         )}
 
-      {/* En-tête de page Pandhowan — colonne d'abord et bascule en ligne seulement à partir de
-          "lg" : à des largeurs intermédiaires, le sous-titre (qui inclut le nom complet de
-          l'établissement) se retrouvait à partager sa ligne avec les 4 boutons d'action et se
-          coupait sur deux lignes en plein milieu du nom de l'école. */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
-        <div className="min-w-0">
+      {/* En-tête de page Pandhowan. Le sous-titre (qui inclut le nom complet de l'établissement)
+          ne doit JAMAIS se couper sur deux lignes : whitespace-nowrap le garantit dès "sm", et
+          flex-wrap sur la ligne fait redescendre le groupe de 4 boutons sur sa propre ligne (au
+          lieu de forcer le texte à se compresser) si la largeur totale ne suffit pas. Le titre
+          garde sa largeur naturelle (pas de min-w-0 qui l'autoriserait à se réduire et donc à
+          faire retourner le texte à la ligne). */}
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+        <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
               Tableau de bord de gestion
@@ -541,7 +562,7 @@ export function DashboardView({
               {schoolState.academicYear}
             </span>
           </div>
-          <p suppressHydrationWarning className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
+          <p suppressHydrationWarning className="text-xs sm:text-sm text-slate-500 mt-1 font-sans sm:whitespace-nowrap">
             Suivi des effectifs réels ({metrics.totalCount} élèves inscrits), scolarités en FCFA et reçus — {schoolState.name}
           </p>
         </div>
