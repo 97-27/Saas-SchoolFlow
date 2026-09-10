@@ -118,15 +118,22 @@ export async function GET(request: NextRequest) {
         if (sbParentMessages !== null && Array.isArray(sbParentMessages)) {
           schoolData.parentMessages = sbParentMessages;
         }
-        if (sbStaff !== null && Array.isArray(sbStaff) && sbStaff.length > 0) {
-          const staffMap = new Map<string, any>();
+        if (sbStaff !== null && Array.isArray(sbStaff)) {
+          // Remplacement strict par la liste Supabase (source de vérité), et non fusion : un
+          // membre supprimé (deleteStaffUserFromSupabase) était bien retiré de Supabase mais
+          // la précédente fusion par union ne faisait qu'AJOUTER/METTRE À JOUR à partir du
+          // cache mémoire serveur (memoryStore, propre à chaque instance serverless) sans
+          // jamais retirer les entrées absentes de la réponse Supabase fraîche. Un appareil
+          // dont l'instance avait encore l'ancien membre en cache continuait donc à le voir
+          // indéfiniment, même après sa suppression confirmée sur un autre appareil.
+          const oldByCode = new Map<string, any>();
           (schoolData.staffUsers || []).forEach((u: any) => {
-            if (u && u.authCode) staffMap.set(u.authCode.toUpperCase(), u);
+            if (u && u.authCode) oldByCode.set(u.authCode.toUpperCase(), u);
           });
-          sbStaff.forEach((u: any) => {
-            if (u && u.authCode) staffMap.set(u.authCode.toUpperCase(), { ...staffMap.get(u.authCode.toUpperCase()), ...u });
+          schoolData.staffUsers = sbStaff.map((u: any) => {
+            const prev = u.authCode ? oldByCode.get(u.authCode.toUpperCase()) : undefined;
+            return prev?.lastLogin ? { ...u, lastLogin: prev.lastLogin } : u;
           });
-          schoolData.staffUsers = Array.from(staffMap.values());
         }
         memoryStore[slug] = schoolData;
       } catch (sbErr) {

@@ -482,12 +482,15 @@ export function StudentTable({
           </div>
         </div>
 
-        {/* Tableau des élèves (Strictement sans colonnes financières selon consigne - Scrollbar du bas supprimée) */}
+        {/* Tableau des élèves. La barre de défilement horizontal du bas reste masquée (barre
+            proxy en haut pour la souris), mais le défilement tactile direct au doigt sur le
+            tableau doit rester possible — sur mobile, personne ne fait glisser une souris sur
+            la fine barre du haut, on balaie directement le tableau. */}
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
-          className="max-h-[680px] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          style={{ overflowX: 'hidden' }}
+          className="max-h-[680px] overflow-y-auto overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ overflowX: 'auto' }}
         >
           <table className="w-full text-left border-collapse min-w-[880px]">
             <thead className="sticky top-0 z-10 shadow-2xs">

@@ -61,6 +61,7 @@ export function InscriptionsView({
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [successModalData, setSuccessModalData] = useState<Student | null>(null);
+  const [isConfirmingSave, setIsConfirmingSave] = useState(false);
 
   // État de sélection d'un élève existant (null = mode nouvelle inscription)
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -858,16 +859,46 @@ export function InscriptionsView({
   };
 
   // Confirm and save student + invoice in persistent live store
-  const handleConfirmAndSave = () => {
-    // Récupération en temps réel des élèves les plus récents pour éviter toute collision d'ID entre collaborateurs
-    const freshStudents = getLiveStudents(initialStudents, schoolSlug);
-    const existingNums = freshStudents
-      .map((s) => {
-        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-        return match ? parseInt(match[0], 10) : 0;
-      })
-      .filter((n) => !isNaN(n) && n > 0);
-    const freshMax = existingNums.length > 0 ? Math.max(...existingNums) : 0;
+  const handleConfirmAndSave = async () => {
+    setIsConfirmingSave(true);
+    // Récupération en temps réel des élèves les plus récents pour éviter toute collision d'ID
+    // entre collaborateurs. getLiveStudents() ne lit que le cache local (jusqu'à 15s de retard
+    // possible sur ce que d'autres appareils viennent d'enregistrer) : on interroge en plus le
+    // serveur en direct (lui-même toujours relu depuis Supabase, cf. /api/sync) juste avant de
+    // valider, pour réduire au minimum la fenêtre où deux personnes pourraient se voir attribuer
+    // le même prochain numéro et écraser accidentellement le reçu l'une de l'autre.
+    let freshMax = 0;
+    try {
+      const localStudents = getLiveStudents(initialStudents, schoolSlug);
+      const localNums = localStudents
+        .map((s) => {
+          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        })
+        .filter((n) => !isNaN(n) && n > 0);
+      freshMax = localNums.length > 0 ? Math.max(...localNums) : 0;
+
+      // Inutile pour la modification d'un élève déjà existant (son numéro ne change pas) —
+      // ne faire l'appel réseau supplémentaire que pour une véritable nouvelle inscription.
+      if (!currentSelectedStudent) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`, { signal: controller.signal });
+        clearTimeout(timeout);
+        const result = await res.json();
+        const serverStudents = Array.isArray(result?.data?.students) ? result.data.students : [];
+        const serverNums = serverStudents
+          .map((s: any) => {
+            const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+            return match ? parseInt(match[0], 10) : 0;
+          })
+          .filter((n: number) => !isNaN(n) && n > 0);
+        if (serverNums.length > 0) freshMax = Math.max(freshMax, ...serverNums);
+      }
+    } catch (e) {
+      // Le serveur n'a pas répondu à temps : on continue avec la meilleure estimation locale
+      // plutôt que de bloquer indéfiniment l'enregistrement du reçu.
+    }
     const computedNextSeq = Math.max(nextSeq, freshMax + 1);
 
     const studentIdToSave = currentSelectedStudent
@@ -980,6 +1011,7 @@ export function InscriptionsView({
     setShowConfirmModal(false);
     setSuccessToast(`✓ Reçu enregistré pour ${newStudent.fullName} (${newStudent.studentNumber})`);
     setTimeout(() => setSuccessToast(null), 2500);
+    setIsConfirmingSave(false);
   };
 
   // Suppression définitive du reçu et de l'élève sélectionné
@@ -3369,9 +3401,14 @@ export function InscriptionsView({
               <button
                 type="button"
                 onClick={handleConfirmAndSave}
-                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all text-center cursor-pointer"
+                disabled={isConfirmingSave}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all text-center cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {selectedStudentId ? 'Enregistrer Modifications' : 'Confirmer & Enregistrer'}
+                {isConfirmingSave
+                  ? 'Vérification du prochain N°...'
+                  : selectedStudentId
+                  ? 'Enregistrer Modifications'
+                  : 'Confirmer & Enregistrer'}
               </button>
             </div>
           </div>

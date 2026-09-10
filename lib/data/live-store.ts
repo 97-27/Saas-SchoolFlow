@@ -880,8 +880,14 @@ export function syncSchoolDataWithServer(slug: string): void {
           }
         }
 
-        // 5. Synchroniser le personnel
-        if (data.staffUsers && Array.isArray(data.staffUsers) && data.staffUsers.length > 0) {
+        // 5. Synchroniser le personnel — remplacement strict depuis le serveur (source de
+        // vérité Supabase), et non fusion par union. Un membre supprimé sur un autre appareil
+        // (deleteLiveStaffUser -> deleteStaffUserFromSupabase) disparaissait bien de Supabase,
+        // mais l'ancienne fusion se contentait d'AJOUTER/METTRE À JOUR sans jamais retirer les
+        // entrées absentes de la réponse serveur : un appareil ayant encore cette personne en
+        // cache local (ex: un téléphone resté sur une ancienne session) continuait à l'afficher
+        // indéfiniment, même bien après sa suppression confirmée ailleurs.
+        if (data.staffUsers && Array.isArray(data.staffUsers)) {
           const staffSchoolKey = `${STAFF_USERS_STORAGE_KEY}_${slug}`;
           const currentLocalRaw = localStorage.getItem(staffSchoolKey) || localStorage.getItem(STAFF_USERS_STORAGE_KEY);
           let currentLocalList: any[] = [];
@@ -889,16 +895,16 @@ export function syncSchoolDataWithServer(slug: string): void {
             if (currentLocalRaw) currentLocalList = JSON.parse(currentLocalRaw);
           } catch (e) {}
 
-          const staffMap = new Map<string, any>();
+          const oldByCode = new Map<string, any>();
           currentLocalList.forEach((s: any) => {
-            if (s && s.authCode) staffMap.set(s.authCode.toUpperCase(), s);
+            if (s && s.authCode) oldByCode.set(s.authCode.toUpperCase(), s);
           });
-          data.staffUsers.forEach((u: any) => {
-            if (u && u.authCode && !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode)) {
-              staffMap.set(u.authCode.toUpperCase(), { ...staffMap.get(u.authCode.toUpperCase()), ...u });
-            }
-          });
-          const mergedStaff = Array.from(staffMap.values());
+          const mergedStaff = data.staffUsers
+            .filter((u: any) => u && u.authCode && !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode))
+            .map((u: any) => {
+              const prev = oldByCode.get(u.authCode.toUpperCase());
+              return prev?.lastLogin ? { ...u, lastLogin: prev.lastLogin } : u;
+            });
           const newStr = JSON.stringify(mergedStaff);
           if (currentLocalRaw !== newStr) {
             localStorage.setItem(staffSchoolKey, newStr);
@@ -2343,12 +2349,12 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
               finalName = 'LAWANI MOUHAMED';
             }
           }
+          // Photo strictement personnelle, clée uniquement sur le code d'authentification
+          // unique. Les anciennes clés par nom affiché ou par rôle pouvaient faire fuiter la
+          // photo d'une personne vers une autre partageant le même nom ou le même rôle.
           const persistentAvatar =
             (u.authCode ? localStorage.getItem(`schoolflow_user_avatar_${u.authCode.toUpperCase()}`) : null) ||
             u.avatarUrl ||
-            (finalName ? localStorage.getItem(`schoolflow_user_avatar_${finalName}`) : null) ||
-            (def.authCode ? localStorage.getItem(`schoolflow_user_avatar_${def.authCode.toUpperCase()}`) : null) ||
-            (def.roleId ? localStorage.getItem(`schoolflow_user_avatar_${def.roleId}`) : null) ||
             def.avatarUrl;
 
           codeMap.set(u.authCode, {
@@ -2372,7 +2378,6 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           const userCode = (u.authCode || u.id || '').toUpperCase();
           const persistentUserAvatar =
             (userCode ? localStorage.getItem(`schoolflow_user_avatar_${userCode}`) : null) ||
-            (sanitizedName ? localStorage.getItem(`schoolflow_user_avatar_${sanitizedName}`) : null) ||
             u.avatarUrl;
 
           codeMap.set(u.authCode || u.id, {

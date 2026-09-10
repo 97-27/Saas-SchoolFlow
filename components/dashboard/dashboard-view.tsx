@@ -527,9 +527,12 @@ export function DashboardView({
           </div>
         )}
 
-      {/* En-tête de page Pandhowan */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+      {/* En-tête de page Pandhowan — colonne d'abord et bascule en ligne seulement à partir de
+          "lg" : à des largeurs intermédiaires, le sous-titre (qui inclut le nom complet de
+          l'établissement) se retrouvait à partager sa ligne avec les 4 boutons d'action et se
+          coupait sur deux lignes en plein milieu du nom de l'école. */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
               Tableau de bord de gestion
