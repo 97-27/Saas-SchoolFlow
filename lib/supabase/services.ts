@@ -872,6 +872,7 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       .select('*')
       .in('school_id', schoolIds_)
       .neq('role_id', 'school_stamp')
+      .neq('role_id', 'system_services_data')
       .order('created_at', { ascending: true });
 
     if (error || !data) return [];

@@ -63,6 +63,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale de Fiche Détaillée & Plus d'Informations (Empêche le défilement horizontal et permet une vue exhaustive)
   const [selectedStaffDetail, setSelectedStaffDetail] = useState<StaffUser | null>(null);
 
+  // Modale de confirmation de révocation d'un compte (remplace window.confirm)
+  const [staffToDelete, setStaffToDelete] = useState<StaffUser | null>(null);
+
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
@@ -193,13 +196,17 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Supprimer / Révoquer un profil et son code
   const handleDeleteStaff = (staff: StaffUser) => {
     if (staff.roleId === 'directeur' || staff.roleId === 'fondateur' || staff.id === 'staff-founder' || staff.id === 'staff-001') {
-      alert("Impossible de supprimer un compte de Direction Principale.");
+      showToast("Impossible de supprimer un compte de Direction Principale.");
       return;
     }
-    if (confirm(`Confirmez-vous la révocation définitive du compte de « ${staff.fullName} » ? Son code d'accès sera immédiatement désactivé.`)) {
-      deleteLiveStaffUser(staff.id, schoolSlug);
-      showToast(`Compte et code de ${staff.fullName} révoqués avec succès.`);
-    }
+    setStaffToDelete(staff);
+  };
+
+  const confirmDeleteStaff = () => {
+    if (!staffToDelete) return;
+    deleteLiveStaffUser(staffToDelete.id, schoolSlug);
+    showToast(`Compte et code de ${staffToDelete.fullName} révoqués avec succès.`);
+    setStaffToDelete(null);
   };
 
   // Sauvegarder l'édition complète d'un membre (Fondateur, Directeur, Personnel)
@@ -1389,6 +1396,45 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALE : CONFIRMATION DE RÉVOCATION D'UN COMPTE ================= */}
+      {staffToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-200">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-base font-extrabold text-slate-900 font-heading">
+                Révoquer ce compte ?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Confirmez-vous la révocation définitive du compte de{' '}
+                <strong className="text-slate-800">{staffToDelete.fullName}</strong> ? Son code d&apos;accès (
+                <span className="font-mono font-bold">{staffToDelete.authCode}</span>) sera immédiatement désactivé.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setStaffToDelete(null)}
+                className="px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteStaff}
+                className="px-4 py-2.5 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Révoquer définitivement
+              </button>
+            </div>
           </div>
         </div>
       )}

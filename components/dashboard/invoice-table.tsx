@@ -54,32 +54,15 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return `${year}-${month}-${day}`;
   };
 
-  const journalDateStorageKey = `schoolflow_journal_selected_date_${schoolSlug || 'epc-manoi'}`;
-
-  // Date active du journal avec persistance locale (pour ne jamais sauter ni revenir à une fausse date)
-  const [selectedJournalDate, setSelectedJournalDateState] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(`schoolflow_journal_selected_date_${schoolSlug || 'epc-manoi'}`);
-        if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
-          return saved;
-        }
-      } catch (e) {}
-    }
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  });
+  // Date active du journal : toujours la date du jour par défaut à l'entrée sur le tableau
+  // de bord ("Réinitialisation automatique toutes les 24h"). Une navigation manuelle vers une
+  // autre date reste possible et n'est plus jamais annulée automatiquement, mais elle n'est
+  // plus mémorisée d'une visite à l'autre — sinon le journal rouvrirait sur une ancienne date
+  // au lieu de celle du jour.
+  const [selectedJournalDate, setSelectedJournalDateState] = useState<string>(getTodayDateStr);
 
   const setSelectedJournalDate = (val: string) => {
     setSelectedJournalDateState(val);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(journalDateStorageKey, val);
-      } catch (e) {}
-    }
   };
 
   const [dateFilterMode, setDateFilterMode] = useState<'day_only' | 'all_dates'>('day_only');
@@ -279,29 +262,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
   const dayTransactions = useMemo(() => {
     return allTransactions.filter((tx) => isMatchingTxDate(tx.paymentDate, selectedJournalDate));
   }, [allTransactions, selectedJournalDate]);
-
-  // Auto-calibrage intelligent : au tout premier chargement seulement, si la date active
-  // (celle du jour, ou restaurée depuis le stockage local) ne comporte aucun versement mais
-  // que des encaissements existent ailleurs, pré-sélectionner la date réelle des encaissements.
-  // Ne doit JAMAIS se redéclencher ensuite : sinon il annule silencieusement tout changement de
-  // date fait manuellement par l'utilisateur dès que la date choisie est vide (bug : impossible
-  // de consulter une ancienne date sans transaction, le journal rebasculait aussitôt ailleurs).
-  const hasAutoCalibratedRef = React.useRef(false);
-  useEffect(() => {
-    if (hasAutoCalibratedRef.current || allTransactions.length === 0) return;
-    hasAutoCalibratedRef.current = true;
-    if (dayTransactions.length === 0) {
-      const dates = allTransactions.map((t) => t.paymentDate).filter(Boolean);
-      if (dates.length > 0) {
-        const primaryDate = dates.find((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) || dates[0];
-        if (primaryDate && /^\d{4}-\d{2}-\d{2}$/.test(primaryDate)) {
-          setSelectedJournalDateState(primaryDate);
-        } else {
-          setDateFilterMode('all_dates');
-        }
-      }
-    }
-  }, [allTransactions.length, dayTransactions.length]);
 
   // Métriques du Bilan Journalier (calculées sur les encaissements effectifs du jour)
   const dayMetrics = useMemo(() => {

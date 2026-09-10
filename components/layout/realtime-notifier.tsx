@@ -17,6 +17,10 @@ interface RealtimeToast {
 }
 
 export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierProps) {
+  // File d'attente façon carrousel : si plusieurs collaborateurs (comptable, secrétaire,
+  // directeur...) enregistrent des reçus au même moment, chaque notification passe l'une
+  // après l'autre au lieu d'écraser silencieusement la précédente.
+  const [queue, setQueue] = useState<RealtimeToast[]>([]);
   const [toast, setToast] = useState<RealtimeToast | null>(null);
 
   useEffect(() => {
@@ -34,25 +38,31 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
         const name = student.fullName || `${student.lastName || ''} ${student.firstName || ''}`.trim() || 'Nouvel élève';
         const num = student.studentNumber || student.id || 'Nouveau';
 
-        setToast({
-          id: Date.now(),
-          type: 'student',
-          title: '🔔 Un Reçu vient d\'être enregistré !',
-          message: `${name.toUpperCase()} (${num}) a été enregistré.`,
-          subInfo: 'Données synchronisées automatiquement sur tous les écrans.',
-        });
+        setQueue((q) => [
+          ...q,
+          {
+            id: Date.now() + Math.random(),
+            type: 'student',
+            title: '🔔 Un Reçu vient d\'être enregistré !',
+            message: `${name.toUpperCase()} (${num}) a été enregistré.`,
+            subInfo: 'Passage automatique à l’ID suivant sur tous les écrans.',
+          },
+        ]);
       } else if (detail.action === 'payment_recorded' && detail.invoice) {
         const inv = detail.invoice;
         const num = inv.invoiceNumber || 'Quittance';
         const studentName = inv.studentName || 'Élève';
 
-        setToast({
-          id: Date.now(),
-          type: 'payment',
-          title: '💳 Nouveau Paiement Enregistré !',
-          message: `Règlement validé pour ${studentName} (${num}).`,
-          subInfo: 'Journal des encaissements actualisé en direct.',
-        });
+        setQueue((q) => [
+          ...q,
+          {
+            id: Date.now() + Math.random(),
+            type: 'payment',
+            title: '💳 Nouveau Paiement Enregistré !',
+            message: `Règlement validé pour ${studentName} (${num}).`,
+            subInfo: 'Journal des encaissements actualisé en direct.',
+          },
+        ]);
       }
     };
 
@@ -60,11 +70,19 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug]);
 
+  // Fait avancer le carrousel : dès qu'aucun toast n'est affiché, prendre le suivant dans la file.
+  useEffect(() => {
+    if (toast || queue.length === 0) return;
+    const [next, ...rest] = queue;
+    setToast(next);
+    setQueue(rest);
+  }, [toast, queue]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => {
       setToast(null);
-    }, 6000);
+    }, 4000);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -83,6 +101,11 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
             <span className="font-extrabold text-xs sm:text-sm text-emerald-300">
               {toast.title}
             </span>
+            {queue.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold shrink-0">
+                +{queue.length}
+              </span>
+            )}
           </div>
           <p className="text-xs sm:text-sm font-semibold text-slate-100 mt-0.5 leading-snug">
             {toast.message}

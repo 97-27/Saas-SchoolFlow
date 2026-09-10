@@ -270,16 +270,16 @@ export function LoginView({
           if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
           return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
         });
+        // Seuls le nom et la photo sont pré-remplis pour la reconnaissance visuelle du compte
+        // déjà créé par la direction. Email, téléphone et code restent à saisir manuellement :
+        // les pré-remplir permettrait de se connecter au compte d'un collègue sans connaître
+        // son code secret, simplement en tapant le sigle de l'école.
         if (staffForNewRole.length > 0) {
           setUserName(staffForNewRole[0].fullName);
-          if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
-          if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
-          if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
+          if (staffForNewRole[0].avatarUrl) setLoginAvatar(staffForNewRole[0].avatarUrl);
         } else {
           setUserName('');
-          setLoginEmail('');
-          setParentPhone('');
-          setAuthCodeInput('');
+          setLoginAvatar('');
         }
       }
     } catch (e) {
@@ -1059,16 +1059,14 @@ export function LoginView({
                           if (newRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
                           return s.roleId === newRole || s.role === ROLE_CONFIGS[newRole]?.title;
                         });
+                        // Seuls le nom et la photo sont pré-remplis (reconnaissance visuelle du
+                        // compte) — email, téléphone et code restent à saisir manuellement.
                         if (staffForNewRole.length > 0) {
                           setUserName(staffForNewRole[0].fullName);
-                          if (staffForNewRole[0].email) setLoginEmail(staffForNewRole[0].email);
-                          if (staffForNewRole[0].phone) setParentPhone(staffForNewRole[0].phone);
-                          if (staffForNewRole[0].authCode) setAuthCodeInput(staffForNewRole[0].authCode);
+                          if (staffForNewRole[0].avatarUrl) setLoginAvatar(staffForNewRole[0].avatarUrl);
                         } else {
                           setUserName('');
-                          setLoginEmail('');
-                          setParentPhone('');
-                          setAuthCodeInput('');
+                          setLoginAvatar('');
                         }
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
@@ -1178,11 +1176,10 @@ export function LoginView({
                             key={staff.id}
                             type="button"
                             onClick={() => {
+                              // Nom et photo seulement : email, téléphone et code doivent être
+                              // saisis manuellement par la personne, jamais pré-remplis.
                               setUserName(staff.fullName);
-                              if (staff.email) setLoginEmail(staff.email);
-                              if (staff.phone) setParentPhone(staff.phone);
                               if (staff.avatarUrl) setLoginAvatar(staff.avatarUrl);
-                              if (staff.authCode) setAuthCodeInput(staff.authCode);
                             }}
                             className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-2xs ${
                               userName.trim().toUpperCase() === staff.fullName.trim().toUpperCase()
