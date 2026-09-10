@@ -347,22 +347,19 @@ export function StudentTable({
         </div>
       </div>
 
-      {/* Message de confirmation centré et éphémère (3s max) */}
+      {/* Bannière discrète de confirmation — le grand message centré à 3 secondes est réservé
+          à la page Inscriptions, qui n'a pas déjà de modale de confirmation. */}
       {successMessage && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
-          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-sm text-center">
-            <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <span className="leading-snug text-left flex-1">{successMessage}</span>
-            <button
-              type="button"
-              onClick={() => setSuccessMessage(null)}
-              className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer shrink-0"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="flex-1">{successMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            className="p-0.5 rounded-full text-emerald-500 hover:text-emerald-800 hover:bg-emerald-100 transition-all cursor-pointer shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

@@ -17,6 +17,8 @@ import {
   RefreshCw,
   Share2,
   Check,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -59,6 +61,32 @@ export function DashboardView({
   const [servicesData, setServicesData] = useState<any>(() => initialServices || null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [activeRoleId, setActiveRoleId] = useState<string>('directeur');
+  const [setupBannerDismissed, setSetupBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('schoolflow_active_session_v2');
+      if (stored) setActiveRoleId(JSON.parse(stored).roleId || 'directeur');
+    } catch (e) {}
+  }, []);
+
+  // Éléments d'identité de l'établissement à renseigner avant qu'ils n'apparaissent sur les
+  // reçus et documents officiels (logo, emblème, cachet, devise, slogan, code/agrément). Une
+  // nouvelle école qui vient de souscrire démarre avec tous ces champs vides — les reçus les
+  // omettent déjà proprement (aucune image cassée), mais rien ne signale qu'ils restent à
+  // compléter tant que ce n'est pas fait.
+  const missingSetupItems = useMemo(() => {
+    const items: string[] = [];
+    if (!schoolState.logoUrl) items.push('Logo de l’établissement');
+    if (!schoolState.countryEmblemUrl) items.push('Emblème / Armoiries officielles');
+    if (!schoolState.stampUrl) items.push('Cachet officiel');
+    if (!schoolState.motto) items.push('Devise de l’établissement');
+    if (!schoolState.slogan) items.push('Slogan');
+    if (!schoolState.ministryCode) items.push('Code du Ministère');
+    if (!schoolState.approvalNumber) items.push('Numéro d’agrément');
+    return items;
+  }, [schoolState]);
 
   const handleShare = async () => {
     if (typeof window === 'undefined') return;
@@ -463,6 +491,42 @@ export function DashboardView({
 
   return (
     <div className="space-y-7 pb-12">
+      {/* Bannière de configuration à compléter — uniquement visible par le Directeur/Fondateur,
+          seuls rôles ayant accès à la page Paramètres pour agir sur ces éléments. */}
+      {(activeRoleId === 'directeur' || activeRoleId === 'fondateur') &&
+        missingSetupItems.length > 0 &&
+        !setupBannerDismissed && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4.5 h-4.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm font-bold text-amber-900">
+                Configuration de l’établissement à compléter avant l’impression des reçus officiels
+              </p>
+              <p className="text-[11px] sm:text-xs text-amber-700 mt-0.5">
+                À renseigner dans les Paramètres : {missingSetupItems.join(' • ')}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href={`/${schoolSlug}/admin/parametres`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-2xs whitespace-nowrap"
+              >
+                <span>Aller aux Paramètres</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setSetupBannerDismissed(true)}
+                className="p-2 rounded-xl text-amber-500 hover:text-amber-800 hover:bg-amber-100 transition-all cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
       {/* En-tête de page Pandhowan */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
