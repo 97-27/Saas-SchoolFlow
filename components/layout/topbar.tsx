@@ -64,6 +64,7 @@ export function Topbar({
     roleBadge: string;
     department: string;
     avatarUrl: string;
+    authCode?: string;
   }>({
     fullName: currentSchool.founderName || 'Direction',
     email: '',
@@ -73,6 +74,7 @@ export function Topbar({
     roleBadge: '👑 Admin',
     department: 'Direction Générale',
     avatarUrl: '',
+    authCode: '',
   });
 
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -137,6 +139,7 @@ export function Topbar({
                 : (parsed.roleBadge || 'Personnel'),
               department: parsed.department || (isFounder ? 'Présidence & Conseil' : isDirector ? 'Direction Générale' : 'Direction'),
               avatarUrl: persistentAvatar,
+              authCode: cleanCode,
             });
 
             // Affichage automatique du message « Bonjour [Nom] » pendant 8 secondes à la connexion
@@ -385,12 +388,70 @@ export function Topbar({
 
 
 
+  // Clé locale des réponses de la Direction que CE parent a déjà ouvertes dans la cloche de
+  // notifications — les messages parents n'ont pas de champ "vu par le parent" séparé du
+  // statut interne utilisé par la Direction (qui ne doit pas être modifié par le parent).
+  const PARENT_SEEN_REPLIES_KEY = 'schoolflow_parent_seen_replies_v1';
+
+  const loadParentNotifications = () => {
+    try {
+      const session: any = activeSession;
+      const cleanAuthCode = (session.authCode || '').toUpperCase();
+      const myPhoneDigits = (session.phone || '').replace(/\D/g, '');
+      const myName = (session.fullName || '').toLowerCase().trim();
+
+      const raw =
+        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
+        localStorage.getItem('schoolflow_parent_messages_v1');
+      const allMsgs: any[] = raw ? JSON.parse(raw) : [];
+
+      const seenRaw = cleanAuthCode ? localStorage.getItem(`${PARENT_SEEN_REPLIES_KEY}_${cleanAuthCode}`) : null;
+      const seenIds: string[] = seenRaw ? JSON.parse(seenRaw) : [];
+
+      const myRepliedMessages = allMsgs.filter((m) => {
+        if (!m || !m.directorReply) return false;
+        const mPhone = (m.parentPhone || '').replace(/\D/g, '');
+        const mName = (m.parentName || '').toLowerCase().trim();
+        return (myPhoneDigits && mPhone === myPhoneDigits) || (myName && mName === myName);
+      });
+
+      const mapped = myRepliedMessages
+        .sort((a, b) => (a.directorReplyAt || a.timestamp || '') < (b.directorReplyAt || b.timestamp || '') ? 1 : -1)
+        .map((m) => ({
+          id: m.id,
+          sender: 'La Direction de l’École',
+          role: `Réponse à : ${m.subject || 'votre message'}`,
+          type: m.category || 'info',
+          message: m.directorReply,
+          time: (m.directorReplyAt || m.timestamp || '').includes('T')
+            ? (m.directorReplyAt || m.timestamp).split('T')[0]
+            : (m.directorReplyAt || m.timestamp || 'Récemment'),
+          unread: !seenIds.includes(m.id),
+          icon: CheckCheck,
+          iconColor: 'text-emerald-600 bg-emerald-50',
+        }));
+
+      setNotifications(mapped);
+      setUnreadCount(mapped.filter((n) => n.unread).length);
+    } catch (e) {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
   const loadNotifications = () => {
     if (typeof window === 'undefined') return;
     try {
-      // Les enseignants et les parents ne doivent PAS recevoir les notifications des messages parents destinés à la Direction
       const currentRole = activeSession.roleId || 'directeur';
-      if (currentRole === 'enseignant' || currentRole === 'parent') {
+
+      // Les parents ont leurs propres notifications : uniquement les réponses écrites par la
+      // Direction à LEURS messages (jamais les messages des autres parents destinés à la
+      // Direction). Les enseignants n'ont accès à aucune notification de messagerie parent.
+      if (currentRole === 'parent') {
+        loadParentNotifications();
+        return;
+      }
+      if (currentRole === 'enseignant') {
         setNotifications([]);
         setUnreadCount(0);
         return;
@@ -452,9 +513,55 @@ export function Topbar({
     loadNotifications();
   }, [schoolSlug]);
 
+  // Pour un parent, la réponse de la Direction peut arriver alors qu'il navigue sur une page
+  // qui ne tire pas elle-même le cloud (ex: Notes & Bulletins) — on tire ici périodiquement
+  // pour que la cloche de notification reste à jour en temps quasi réel, où que le parent soit.
+  useEffect(() => {
+    if (activeSession.roleId !== 'parent') return;
+    const pull = () => {
+      fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          const cloudAll: any[] = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
+          if (cloudAll.length === 0) return;
+          try {
+            const rawLocal = localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`);
+            const localAll: any[] = rawLocal ? JSON.parse(rawLocal) : [];
+            const byId = new Map<string, any>();
+            localAll.forEach((m) => byId.set(m.id, m));
+            cloudAll.forEach((m) => byId.set(m.id, m));
+            const merged = Array.from(byId.values());
+            localStorage.setItem(`schoolflow_parent_messages_v1_${schoolSlug}`, JSON.stringify(merged));
+            localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify(merged));
+          } catch (e) {}
+          loadParentNotifications();
+        })
+        .catch(() => {});
+    };
+    pull();
+    const interval = setInterval(pull, 45000);
+    return () => clearInterval(interval);
+  }, [activeSession.roleId, schoolSlug]);
+
   const handleMarkAllAsRead = () => {
     setUnreadCount(0);
     setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+
+    if (activeSession.roleId === 'parent') {
+      // Le parent ne peut jamais changer le statut interne (traité/en cours) réservé à la
+      // Direction : on marque seulement, localement, les réponses comme vues par ce parent.
+      try {
+        const cleanAuthCode = ((activeSession as any).authCode || '').toUpperCase();
+        if (!cleanAuthCode) return;
+        const ids = notifications.map((n) => n.id);
+        const seenRaw = localStorage.getItem(`${PARENT_SEEN_REPLIES_KEY}_${cleanAuthCode}`);
+        const prevSeen: string[] = seenRaw ? JSON.parse(seenRaw) : [];
+        const nextSeen = Array.from(new Set([...prevSeen, ...ids]));
+        localStorage.setItem(`${PARENT_SEEN_REPLIES_KEY}_${cleanAuthCode}`, JSON.stringify(nextSeen));
+      } catch (e) {}
+      return;
+    }
+
     try {
       const raw =
         localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
@@ -664,14 +771,23 @@ export function Topbar({
                   )}
                 </div>
 
-                {/* Footer Link to Full Communication Module */}
+                {/* Footer Link to Full Communication Module — chaque rôle reste dans son propre
+                    espace : un parent qui clique ici ne doit jamais basculer sur la boîte de
+                    réception interne de la Direction (/communication), réservée au personnel. */}
                 <div className="p-3 bg-slate-50 border-t border-slate-100">
                   <Link
-                    href={`/${schoolSlug}/admin/communication`}
-                    onClick={() => setIsNotificationsOpen(false)}
+                    href={
+                      activeSession.roleId === 'parent'
+                        ? `/${schoolSlug}/admin/messagerie-parent`
+                        : `/${schoolSlug}/admin/communication`
+                    }
+                    onClick={() => {
+                      setIsNotificationsOpen(false);
+                      if (activeSession.roleId === 'parent') handleMarkAllAsRead();
+                    }}
                     className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
                   >
-                    <span>Ouvrir la Messagerie</span>
+                    <span>{activeSession.roleId === 'parent' ? 'Voir mes messages' : 'Ouvrir la Messagerie'}</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>

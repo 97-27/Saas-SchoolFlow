@@ -152,7 +152,10 @@ export function ParentScolariteTab({
         isPaid,
         method: inst.rec?.paymentMethod || inst.rec?.method || 'Espèces',
         date: inst.rec?.date || activeChild.paymentDate || '—',
-        receiptNumber: inst.rec?.receiptNumber || `REC-${activeChild.studentNumber || activeChild.id.slice(-4)}`,
+        // Même référence que la quittance officielle de l'élève (visible côté Direction dans
+        // Inscriptions/Caisse) — une fausse référence "REC-xxxx" inventée ici ne correspondrait
+        // à rien de reconnaissable par la Direction.
+        receiptNumber: inst.rec?.receiptNumber || activeChild.studentNumber || activeChild.id,
       };
     });
 

@@ -700,22 +700,12 @@ export function LoginView({
       return;
     }
 
-    // 2. Validation du moyen de paiement
-    if (selectedPaymentMethod === 'wave' || selectedPaymentMethod === 'orange') {
-      const cleanPayPhone = paymentPhone.replace(/\D/g, '');
-      if (!cleanPayPhone || cleanPayPhone.length < 8) {
-        setErrorMessage(
-          `Veuillez saisir le numéro de compte ${selectedPaymentMethod === 'wave' ? 'Wave' : 'Orange Money'} pour le règlement.`
-        );
-        return;
-      }
-    } else if (selectedPaymentMethod === 'card') {
-      const cleanCard = cardNumber.replace(/\D/g, '');
-      if (cleanCard.length < 16 || !cardExpiry.trim() || !cardCvc.trim()) {
-        setErrorMessage('Veuillez renseigner un numéro de carte à 16 chiffres valide, la date d’expiration (MM/AA) et le CVC.');
-        return;
-      }
-    }
+    // Le moyen de paiement n'est pas encore relié à un prestataire réel (aucun appel Wave /
+    // Orange Money / carte bancaire n'est effectué ici) : bloquer la création de l'espace tant
+    // que ces champs ne sont pas remplis n'apportait aucune sécurité réelle, seulement de la
+    // friction pour une école qui veut découvrir l'interface avant de finaliser son règlement.
+    // L'abonnement est donc activé immédiatement ; les coordonnées de paiement, si renseignées,
+    // restent enregistrées sur la fiche école pour la facturation à venir.
 
     setIsLoading(true);
 
