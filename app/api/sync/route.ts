@@ -235,6 +235,7 @@ export async function POST(request: NextRequest) {
       boardingCapacity,
       diverseNotes,
       parentMessages,
+      restoreStudentIds,
     } = body;
     const slug = (rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug) || 'epc-manoi';
 
@@ -245,6 +246,19 @@ export async function POST(request: NextRequest) {
     let existingDeleted: string[] = Array.from(
       new Set([...(currentSchool.deletedStudentIds || []), ...autoBannedIds])
     );
+
+    // Soupape de secours explicite : un identifiant tombé une fois dans deletedStudentIds y
+    // reste pour toujours (la liste ne fait qu'accumuler), y compris un simple numéro d'élève
+    // séquentiel ("ID-016") qui n'est pourtant PAS un identifiant unique permanent — il est
+    // réattribué au prochain élève inscrit une fois le précédent supprimé. Un ancien tombstone
+    // de test ("stu-016"/"ID-016") est ainsi entré en collision avec un élève réel et légitime
+    // inscrit plus tard sous ce même numéro, le faisant disparaître silencieusement de la
+    // liste ET provoquant sa suppression réelle dans Supabase à chaque nouvelle synchronisation
+    // (le bouton "Actualiser Cloud" renvoie la liste de suppressions locale au serveur).
+    if (Array.isArray(restoreStudentIds) && restoreStudentIds.length > 0) {
+      const restoreSet = new Set(restoreStudentIds.filter(Boolean));
+      existingDeleted = existingDeleted.filter((id) => !restoreSet.has(id));
+    }
 
     // Traitement des suppressions dans Supabase Cloud et mémoisation
     if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
