@@ -505,21 +505,11 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'parent') {
-    // 👨‍👩‍👧 PARENT : Strictement Communication Parents (Messagerie & Diffusions, Notes & Bulletins Scolaires) + Notes Diverses
+    // 👨‍👩‍👧 PARENT : Strictement Notes & Bulletins (qui inclut l'envoi de message à la
+    // Direction) + Notes Diverses. La boîte de réception interne "Communication Parents" est
+    // réservée au personnel de direction (communication-view.tsx n'a pas de vue parent).
     navItems = [
-      {
-        key: 'communication',
-        title: 'Communication Parents',
-        icon: MessageSquare,
-        isGroup: true,
-        isOpen: communicationOpen,
-        onToggle: () => setCommunicationOpen(!communicationOpen),
-        active: pathname.includes('/communication') || pathname.includes('/bulletins-parents'),
-        subItems: [
-          { title: 'Messagerie & Diffusions', href: `${baseUrl}/communication`, active: pathname.endsWith('/communication') },
-          { title: 'Notes & Bulletins Scolaires', href: `${baseUrl}/bulletins-parents`, active: pathname.includes('/bulletins-parents') },
-        ],
-      },
+      { key: 'bulletins-parents', title: 'Notes & Bulletins Scolaires', href: `${baseUrl}/bulletins-parents`, icon: MessageSquare, active: pathname.includes('/bulletins-parents') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else {

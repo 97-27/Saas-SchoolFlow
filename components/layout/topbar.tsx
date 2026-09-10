@@ -109,13 +109,13 @@ export function Topbar({
 
             const pureFullName = (parsed.fullName || staffMember?.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
 
+            // Photo strictement personnelle, clée uniquement sur le code d'accès unique de la
+            // personne. Les anciennes clés par nom/rôle et la clé globale "custom" faisaient
+            // qu'une photo importée par une personne s'affichait chez n'importe qui d'autre
+            // sur le même navigateur (ex: un parent voyait la photo du Directeur).
             const cleanCode = (parsed.authCode || staffMember?.authCode || '').toUpperCase();
             const persistentAvatar =
               (cleanCode ? localStorage.getItem(`schoolflow_user_avatar_${cleanCode}`) : null) ||
-              (pureFullName ? localStorage.getItem(`schoolflow_user_avatar_${pureFullName}`) : null) ||
-              (parsed.fullName ? localStorage.getItem(`schoolflow_user_avatar_${parsed.fullName}`) : null) ||
-              (parsed.roleId ? localStorage.getItem(`schoolflow_user_avatar_${parsed.roleId}`) : null) ||
-              localStorage.getItem('schoolflow_user_avatar_custom') ||
               staffMember?.avatarUrl ||
               parsed.avatarUrl ||
               '';
@@ -161,9 +161,6 @@ export function Topbar({
       const defaultName = (defaultDir?.fullName || live.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
       const persistentDirAvatar =
         localStorage.getItem('schoolflow_user_avatar_DIR-2026') ||
-        localStorage.getItem('schoolflow_user_avatar_directeur') ||
-        localStorage.getItem(`schoolflow_user_avatar_${defaultName}`) ||
-        localStorage.getItem('schoolflow_user_avatar_custom') ||
         defaultDir?.avatarUrl ||
         '';
 
@@ -336,26 +333,19 @@ export function Topbar({
           const newSession = { ...parsed, avatarUrl: finalAvatarUrl };
           localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
 
-          // Clés indélébiles de sauvegarde permanente par code d'accès, rôle et nom
+          // Clé indélébile de sauvegarde permanente strictement par code d'accès personnel.
+          // Les anciennes clés par rôle et par nom (et la clé globale "custom") faisaient
+          // qu'une photo importée par une personne s'affichait ensuite chez toute autre
+          // personne du même rôle ou homonyme sur le même navigateur.
           if (parsed.authCode) {
             localStorage.setItem(`schoolflow_user_avatar_${parsed.authCode.toUpperCase()}`, finalAvatarUrl);
           }
-          if (activeSession.roleId) {
-            localStorage.setItem(`schoolflow_user_avatar_${activeSession.roleId}`, finalAvatarUrl);
-          }
-          if (activeSession.fullName) {
-            localStorage.setItem(`schoolflow_user_avatar_${activeSession.fullName}`, finalAvatarUrl);
-          }
-          localStorage.setItem('schoolflow_user_avatar_custom', finalAvatarUrl);
 
-          // Sauvegarder également dans le registre du personnel Cloud (staffUsers)
+          // Sauvegarder également dans le registre du personnel Cloud (staffUsers) — uniquement
+          // la personne exacte identifiée par son code d'accès, jamais par rôle ou nom partagé.
           const allStaff = getLiveStaffUsers(schoolSlug);
           const nextStaff = allStaff.map((s) => {
-            if (
-              (parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase()) ||
-              s.roleId === activeSession.roleId ||
-              s.fullName === activeSession.fullName
-            ) {
+            if (parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase()) {
               return { ...s, avatarUrl: finalAvatarUrl };
             }
             return s;
@@ -972,16 +962,18 @@ export function Topbar({
                   )}
                 </div>
 
-                {/* Boutons d'Action : Landing Page & Déconnexion */}
+                {/* Boutons d'Action : Landing Page (Fondateur/Directeur uniquement) & Déconnexion */}
                 <div className="p-3 bg-white space-y-2">
-                  <Link
-                    href="/landing"
-                    onClick={() => setIsProfileOpen(false)}
-                    className="w-full px-4 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 flex items-center justify-center gap-2 border border-emerald-200 transition-colors"
-                  >
-                    <span>🌐</span>
-                    <span>Landing Page & Tarifs</span>
-                  </Link>
+                  {(activeSession.roleId === 'fondateur' || activeSession.roleId === 'directeur') && (
+                    <Link
+                      href="/landing"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="w-full px-4 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 flex items-center justify-center gap-2 border border-emerald-200 transition-colors"
+                    >
+                      <span>🌐</span>
+                      <span>Landing Page & Tarifs</span>
+                    </Link>
+                  )}
 
                   <button
                     type="button"
