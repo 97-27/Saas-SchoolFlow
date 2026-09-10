@@ -529,9 +529,19 @@ export function LoginView({
       verifiedStaffUser = authCheck.staffUser;
     }
 
+    // Les parents n'ont pas de code d'authentification à saisir : leur code d'identité
+    // stable et UNIQUE est dérivé de leur numéro de téléphone/WhatsApp officiel vérifié à
+    // l'instant (verifyUserAuthCodeForLogin plus haut). Avant ce correctif, TOUS les
+    // parents (potentiellement 1000 à 3000 familles) recevaient le même code générique
+    // "STAFF-AUTH" — sur un même appareil, la photo de profil du premier parent connecté
+    // s'affichait alors chez tous les parents suivants (ex: photo du Directeur vue par un
+    // parent). Le numéro de téléphone étant vérifié contre la fiche de l'élève, il est
+    // stable d'une connexion à l'autre pour une même famille et jamais partagé entre familles.
     const cleanAuthCode =
-      authCodeInput.trim().toUpperCase() ||
-      (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
+      selectedRole === 'parent'
+        ? `PARENT-${cleanPhone.replace(/\D/g, '') || Date.now()}`
+        : authCodeInput.trim().toUpperCase() ||
+          (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
 
     setIsLoading(true);
 

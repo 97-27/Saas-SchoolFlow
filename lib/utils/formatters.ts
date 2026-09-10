@@ -174,10 +174,18 @@ export function formatFullNameNomFirst(fullName?: string): string {
 export function cleanDisplayAddress(address?: string | null): string {
   if (!address) return '';
   let cleaned = String(address);
-  // Remove [SF_META:...]
-  cleaned = cleaned.replace(/\[SF_META:[\s\S]*?\]/g, '');
+  // Remove [SF_META:...]. The blob is always appended once at the very end of the address
+  // (see batchUpsertStudents in lib/supabase/services.ts), so it must be matched greedily
+  // to the end of the string. A non-greedy match stopping at the FIRST "]" used to cut the
+  // JSON short whenever it contained its own array (e.g. an empty "secondaryPhones":[]),
+  // leaving the rest of the JSON as stray "key:value" text baked permanently into the
+  // "clean" address on every subsequent save (visible as ",isBoarding:false" etc.).
+  cleaned = cleaned.replace(/\s*\[SF_META:[\s\S]*\]\s*$/, '');
   // Remove legacy notes fragments like ,"notes":"..."}] or ,"notes":""}]
   cleaned = cleaned.replace(/,?\s*["']?notes["']?\s*:\s*["'][^"']*["']\s*\}?\]?/gi, '');
+  // Self-heal stray metadata fragments already baked into stored addresses by the bug above
+  // on records saved before this fix (no DB migration needed — cleaned again on every read).
+  cleaned = cleaned.replace(/,?\s*(enrollmentDate|paymentDate|installments|updatedAt|secondaryPhones|isBoarding)\s*:\s*[^,]*/gi, '');
   // Strip trailing JSON symbols
   cleaned = cleaned.replace(/[\[\]\{\}"]/g, '');
   // Strip trailing commas, spaces

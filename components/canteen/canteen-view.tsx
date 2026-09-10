@@ -524,10 +524,11 @@ export function CanteenView({
     if (targetStu) {
       const updatedStu = {
         ...targetStu,
+        // Le statut cantine est porté uniquement par le champ isCanteen (voir lib/data/types.ts),
+        // déjà lu partout (parent-scolarite-tab.tsx, live-store.ts). Le marqueur texte
+        // "| Cantine (Oui)" était en plus injecté directement dans l'adresse de résidence de
+        // l'élève, où il restait affiché en permanence dans les formulaires de modification.
         isCanteen: true,
-        address: targetStu.address?.includes('Cantine (Oui)')
-          ? targetStu.address
-          : `${targetStu.address || ''} | Cantine (Oui)`.trim(),
         updatedAt: new Date().toISOString(),
       };
       updateRegisteredStudent(updatedStu, schoolSlug);

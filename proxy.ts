@@ -14,9 +14,9 @@ const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
   enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
   assistant_direction: ['dashboard', 'classes', 'documents', 'personnel', 'notes-diverses'],
   // "communication" est volontairement absent : c'est la boîte de réception interne de la
-  // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Le formulaire
-  // "Envoyer à la Direction" pour les parents vit déjà sur la page bulletins-parents.
-  parent: ['bulletins-parents', 'notes-diverses'],
+  // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Les parents ont
+  // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.
+  parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
   educateur: ['dashboard', 'classes', 'notes-diverses'],
   informaticien: ['dashboard', 'classes', 'notes-diverses'],
 };

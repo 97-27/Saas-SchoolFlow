@@ -31,6 +31,7 @@ import {
   KeyRound,
   NotebookPen,
   Receipt,
+  Mail,
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
@@ -505,11 +506,13 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'parent') {
-    // 👨‍👩‍👧 PARENT : Strictement Notes & Bulletins (qui inclut l'envoi de message à la
-    // Direction) + Notes Diverses. La boîte de réception interne "Communication Parents" est
-    // réservée au personnel de direction (communication-view.tsx n'a pas de vue parent).
+    // 👨‍👩‍👧 PARENT : trois espaces dédiés et distincts — Notes & Bulletins, Écrire à la
+    // Direction (page propre, plus une modale noyée dans la page Bulletins), et Notes
+    // Diverses. La boîte de réception interne "Communication Parents" reste réservée au
+    // personnel de direction (communication-view.tsx n'a pas de vue parent).
     navItems = [
       { key: 'bulletins-parents', title: 'Notes & Bulletins Scolaires', href: `${baseUrl}/bulletins-parents`, icon: MessageSquare, active: pathname.includes('/bulletins-parents') },
+      { key: 'messagerie-parent', title: 'Écrire à la Direction', href: `${baseUrl}/messagerie-parent`, icon: Mail, active: pathname.includes('/messagerie-parent') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else {

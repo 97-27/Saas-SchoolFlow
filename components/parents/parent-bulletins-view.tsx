@@ -748,16 +748,19 @@ export function ParentBulletinsView({
           </p>
         </div>
 
-        {/* Boutons d'Action : Écrire à la Direction + Impression */}
+        {/* Bouton d'Impression (le bouton "Écrire à la Direction" a sa propre page dédiée
+            pour les parents : /messagerie-parent, cf. sidebar.tsx et proxy.ts) */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsMessageModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>✍️ Écrire à la Direction</span>
-          </button>
+          {!isParentRole && (
+            <button
+              type="button"
+              onClick={() => setIsMessageModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>✍️ Écrire à la Direction</span>
+            </button>
+          )}
 
           {activeViewTab === 'scolarite' ? (
             <button
@@ -1218,8 +1221,8 @@ export function ParentBulletinsView({
         </div>
       )}
 
-      {/* MODALE D'ENVOI DE MESSAGE PARENT -> DIRECTION */}
-      {isMessageModalOpen && (
+      {/* MODALE D'ENVOI DE MESSAGE PARENT -> DIRECTION (staff/admin uniquement, cf. bouton ci-dessus) */}
+      {!isParentRole && isMessageModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
             {/* Header Modale */}
