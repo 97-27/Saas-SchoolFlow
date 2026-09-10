@@ -477,6 +477,23 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
       const existingId = (student.studentNumber && existingMap.get(student.studentNumber)) ||
         (student.id && isUUID(student.id) ? student.id : undefined);
 
+      // La table students n'a pas de colonne dédiée pour la date d'inscription, les versements,
+      // les notes, etc. : ces champs sont encodés dans un bloc [SF_META:...] caché en fin
+      // d'adresse (voir saveStudentToSupabase). Sans ce même encodage ici, chaque synchronisation
+      // en arrière-plan écrasait l'adresse SANS ce bloc, effaçant silencieusement la vraie date
+      // d'inscription — qui retombait alors sur la date par défaut au prochain chargement.
+      const metaObj = {
+        enrollmentDate: student.enrollmentDate || student.paymentDate || '2026-09-07',
+        paymentDate: student.paymentDate || student.enrollmentDate || '2026-09-07',
+        installments: student.installments || {},
+        updatedAt: student.updatedAt || new Date().toISOString(),
+        secondaryPhones: student.secondaryPhones || [],
+        notes: student.notes || '',
+        isBoarding: Boolean(student.isBoarding || (student.notes && student.notes.toLowerCase().includes('internat (oui)'))),
+      };
+      const cleanAddress = cleanDisplayAddress(student.address || '');
+      const addressWithMeta = `${cleanAddress} [SF_META:${JSON.stringify(metaObj)}]`;
+
       return {
         ...(existingId ? { id: existingId } : {}),
         school_id: schoolId,
@@ -488,7 +505,7 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
         grade: student.grade || 'Maternelle (P.S.)',
         gender: student.gender === 'female' ? 'female' : 'male',
         date_of_birth: student.dateOfBirth || null,
-        address: student.address || null,
+        address: addressWithMeta,
         guardian_name: student.guardianName || 'Parent',
         guardian_phone: student.guardianPhone || '+225 00 00 00 00',
         whatsapp_phone: student.whatsappPhone || null,
@@ -847,8 +864,6 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
           status: inv.status || 'draft',
           issue_date: inv.issueDate || '2026-09-07',
           due_date: inv.dueDate || '2026-09-07',
-          notes: inv.notes || null,
-          updated_at: new Date().toISOString(),
         });
       }
     }
