@@ -43,17 +43,30 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
 
     if (!data) return null;
 
-    // Récupérer le cachet officiel sauvegardé
+    // Récupérer le cachet officiel ET les informations complémentaires (code du Ministère,
+    // numéro d'agrément) : la table "schools" n'a pas de colonne dédiée pour ces champs, donc
+    // ils étaient jusqu'ici purement locaux au navigateur — jamais synchronisés vers les autres
+    // appareils ni relus après un rafraîchissement Supabase, ce qui les faisait réapparaître
+    // comme "non configurés" alors qu'ils l'étaient bel et bien sur l'appareil d'origine.
     let stampUrl = '';
+    let ministryCode = '';
+    let approvalNumber = '';
     try {
       const { data: stampRow } = await supabase
         .from('staff_users')
-        .select('avatar_url')
+        .select('avatar_url, department')
         .eq('school_id', data.id)
         .eq('role_id', 'school_stamp')
         .maybeSingle();
       if (stampRow?.avatar_url) {
         stampUrl = stampRow.avatar_url;
+      }
+      if (stampRow?.department) {
+        try {
+          const extra = JSON.parse(stampRow.department);
+          ministryCode = extra.ministryCode || '';
+          approvalNumber = extra.approvalNumber || '';
+        } catch (e) {}
       }
     } catch (e) {}
 
@@ -67,6 +80,8 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
       logoUrl: data.logo_url || '',
       countryEmblemUrl: data.country_emblem_url || '',
       stampUrl: stampUrl,
+      ministryCode: ministryCode,
+      approvalNumber: approvalNumber,
       logoColor: data.logo_color || '#059669',
       city: data.city || 'Abidjan',
       country: data.country || 'Côte d’Ivoire',
@@ -181,10 +196,21 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
       return false;
     }
 
-    // Sauvegarder le cachet officiel dans Supabase Cloud si fourni
+    // Sauvegarder le cachet officiel ET le code du Ministère / numéro d'agrément dans Supabase
+    // Cloud (aucune colonne dédiée sur "schools" pour ces trois champs : réutilise la ligne
+    // synthétique "school_stamp" déjà utilisée pour le cachet, comme le fait le reste du code
+    // pour les données système sans colonne propre — ex: notes diverses, messages parents).
     const schoolId = upsertedSchool?.id;
-    if (schoolId && school.stampUrl && school.stampUrl.trim() !== '') {
+    const hasStamp = school.stampUrl && school.stampUrl.trim() !== '';
+    const hasMinistryCode = school.ministryCode && school.ministryCode.trim() !== '';
+    const hasApprovalNumber = school.approvalNumber && school.approvalNumber.trim() !== '';
+    if (schoolId && (hasStamp || hasMinistryCode || hasApprovalNumber)) {
       try {
+        const extraInfo = JSON.stringify({
+          ministryCode: school.ministryCode || '',
+          approvalNumber: school.approvalNumber || '',
+        });
+
         const { data: existingStamp } = await supabase
           .from('staff_users')
           .select('id')
@@ -192,21 +218,28 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
           .eq('role_id', 'school_stamp')
           .maybeSingle();
 
+        const updatePayload: Record<string, any> = { department: extraInfo };
+        if (hasStamp) updatePayload.avatar_url = school.stampUrl;
+
         if (existingStamp?.id) {
           await supabase
             .from('staff_users')
-            .update({ avatar_url: school.stampUrl })
+            .update(updatePayload)
             .eq('id', existingStamp.id);
         } else {
           await supabase.from('staff_users').insert({
             school_id: schoolId,
             role_id: 'school_stamp',
             role_title: 'Cachet Officiel',
+            full_name: 'Cachet & Tampon Établissement',
+            auth_code: 'STAMP-2026',
             is_active: true,
+            department: extraInfo,
+            ...(hasStamp ? { avatar_url: school.stampUrl } : {}),
           });
         }
       } catch (stampErr) {
-        console.warn('Erreur sauvegarde stamp dans Supabase:', stampErr);
+        console.warn('Erreur sauvegarde stamp/infos école dans Supabase:', stampErr);
       }
     }
 
