@@ -31,6 +31,16 @@ export function proxy(request: NextRequest) {
     if (!session.slug || (session.slug !== ecole && session.slug !== normalizedEcole)) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
     }
+
+    // Communication Parents (messagerie reçue des familles) est réservée à la Direction
+    // (fondateur, directeur, secrétaire, assistant de direction). La barre latérale la
+    // masque déjà pour les enseignants, mais rien n'empêchait d'y accéder via l'URL directe.
+    if (subPath === 'communication') {
+      const allowedRoles = ['fondateur', 'directeur', 'secretaire', 'assistant_direction'];
+      if (!allowedRoles.includes(session.roleId)) {
+        return NextResponse.redirect(new URL(`/${ecole}/admin/dashboard`, request.url));
+      }
+    }
   } catch (e) {
     return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
   }
