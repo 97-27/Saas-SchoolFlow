@@ -132,11 +132,28 @@ export function ReportsView({
       const inst = stu.installments;
       const paid = stu.paidAmount || 0;
 
-      const p1 = inst?.versement1?.amount !== undefined ? inst.versement1.amount : (paid > 0 ? Math.min(paid, 100000) : 0);
-      const p2 = inst?.versement2?.amount !== undefined ? inst.versement2.amount : (paid > 100000 ? Math.min(paid - 100000, 50000) : 0);
-      const p3 = inst?.versement3?.amount !== undefined ? inst.versement3.amount : (paid > 150000 ? Math.min(paid - 150000, 40000) : 0);
-      const p4 = inst?.versement4?.amount !== undefined ? inst.versement4.amount : (paid > 190000 ? Math.min(paid - 190000, 35000) : 0);
-      const p5 = inst?.versement5?.amount !== undefined ? inst.versement5.amount : (paid > 225000 ? Math.min(paid - 225000, 25000) : 0);
+      let p1: number, p2: number, p3: number, p4: number, p5: number;
+      if (inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5)) {
+        p1 = inst.versement1?.amount || 0;
+        p2 = inst.versement2?.amount || 0;
+        p3 = inst.versement3?.amount || 0;
+        p4 = inst.versement4?.amount || 0;
+        p5 = inst.versement5?.amount || 0;
+      } else {
+        // Repli identique à celui du tableau de bord (revenue-summary.tsx) pour un dossier
+        // sans détail de versement enregistré : répartition selon la clé standard des 5
+        // tranches (40/20/20/10/10 de la scolarité nette), et non des seuils fixes en FCFA
+        // sans rapport avec le montant de scolarité réel de l'élève — c'est ce décalage de
+        // méthode qui faisait que ce rapport et le tableau de bord ne concordaient jamais.
+        const netTuition = stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0);
+        const shares = [0.4, 0.2, 0.2, 0.1, 0.1].map((pct) => netTuition * pct);
+        let remainingPaid = paid;
+        [p1, p2, p3, p4, p5] = shares.map((share) => {
+          const take = Math.min(remainingPaid, share);
+          remainingPaid -= take;
+          return take;
+        });
+      }
 
       v1Total += p1;
       v2Total += p2;
