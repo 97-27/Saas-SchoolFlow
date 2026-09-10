@@ -452,13 +452,33 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
     const schoolId = await getSchoolId(cleanSlug);
     if (!schoolId) return false;
 
+    // Résoudre l'id réel (clé primaire) de chaque élève existant avant l'upsert. La table
+    // n'a pas de contrainte unique sur (school_id, student_number), donc upsert({onConflict:
+    // 'school_id, student_number'}) ne détecte jamais de conflit et INSÈRE une nouvelle ligne
+    // à chaque appel au lieu de mettre à jour — c'est ce qui a fait exploser la table students
+    // à plus de 1600 lignes en doublon. On upsert désormais sur l'id (la vraie clé primaire).
+    const studentNumbers = students.map((s) => s.studentNumber).filter(Boolean) as string[];
+    const existingMap = new Map<string, string>(); // student_number -> id
+    if (studentNumbers.length > 0) {
+      const { data: existingRows } = await supabase
+        .from('students')
+        .select('id, student_number')
+        .eq('school_id', schoolId)
+        .in('student_number', studentNumbers);
+      (existingRows || []).forEach((r: any) => {
+        if (r.student_number) existingMap.set(r.student_number, r.id);
+      });
+    }
+
     const payloads = students.map((student) => {
       const names = (student.fullName || `${student.firstName || ''} ${student.lastName || ''}`).trim().split(' ');
       const firstName = student.firstName || names.slice(1).join(' ') || student.fullName || 'Élève';
       const lastName = student.lastName || names[0] || 'Nom';
+      const existingId = (student.studentNumber && existingMap.get(student.studentNumber)) ||
+        (student.id && isUUID(student.id) ? student.id : undefined);
 
       return {
-        ...(student.id && isUUID(student.id) ? { id: student.id } : {}),
+        ...(existingId ? { id: existingId } : {}),
         school_id: schoolId,
         student_number: student.studentNumber,
         matricule: student.matricule || null,
@@ -487,9 +507,7 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
       };
     });
 
-    const { error } = await supabase
-      .from('students')
-      .upsert(payloads, { onConflict: 'school_id, student_number' });
+    const { error } = await supabase.from('students').upsert(payloads);
 
     if (error) {
       console.error('Erreur batchUpsertStudents:', error.message);
@@ -782,6 +800,20 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
       }
     });
 
+    // Résoudre l'id réel (clé primaire) de chaque facture existante avant l'upsert — même
+    // raison que pour batchUpsertStudents : (school_id, invoice_number) n'est pas une
+    // contrainte unique réelle sur cette table, donc onConflict sur ces colonnes ne détecte
+    // jamais rien et chaque appel INSÉRAIT une nouvelle ligne (jusqu'à plus de 100 doublons
+    // pour une seule quittance d'internat).
+    const { data: existingInvoices } = await supabase
+      .from('invoices')
+      .select('id, invoice_number')
+      .eq('school_id', schoolId);
+    const invMap = new Map<string, string>(); // invoice_number -> id
+    (existingInvoices || []).forEach((r: any) => {
+      if (r.invoice_number) invMap.set(r.invoice_number, r.id);
+    });
+
     const payloads: any[] = [];
     for (const inv of invoices) {
       let stuUUID: string | null = null;
@@ -798,8 +830,10 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
       }
 
       if (stuUUID) {
+        const existingId = (inv.invoiceNumber && invMap.get(inv.invoiceNumber)) ||
+          (inv.id && isUUID(inv.id) ? inv.id : undefined);
         payloads.push({
-          ...(inv.id && isUUID(inv.id) ? { id: inv.id } : {}),
+          ...(existingId ? { id: existingId } : {}),
           school_id: schoolId,
           student_id: stuUUID,
           invoice_number: inv.invoiceNumber,
@@ -821,9 +855,7 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
 
     if (payloads.length === 0) return true;
 
-    const { error } = await supabase
-      .from('invoices')
-      .upsert(payloads, { onConflict: 'school_id, invoice_number' });
+    const { error } = await supabase.from('invoices').upsert(payloads);
 
     if (error) {
       console.warn('Erreur batchUpsertInvoices:', error.message);
