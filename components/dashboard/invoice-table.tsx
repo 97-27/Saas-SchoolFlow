@@ -280,10 +280,17 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     return allTransactions.filter((tx) => isMatchingTxDate(tx.paymentDate, selectedJournalDate));
   }, [allTransactions, selectedJournalDate]);
 
-  // Auto-calibrage intelligent : Si la date active ne comporte aucun versement mais que des encaissements existent,
-  // pré-sélectionner immédiatement la date réelle des encaissements (ex: 2026-09-07)
+  // Auto-calibrage intelligent : au tout premier chargement seulement, si la date active
+  // (celle du jour, ou restaurée depuis le stockage local) ne comporte aucun versement mais
+  // que des encaissements existent ailleurs, pré-sélectionner la date réelle des encaissements.
+  // Ne doit JAMAIS se redéclencher ensuite : sinon il annule silencieusement tout changement de
+  // date fait manuellement par l'utilisateur dès que la date choisie est vide (bug : impossible
+  // de consulter une ancienne date sans transaction, le journal rebasculait aussitôt ailleurs).
+  const hasAutoCalibratedRef = React.useRef(false);
   useEffect(() => {
-    if (allTransactions.length > 0 && dayTransactions.length === 0) {
+    if (hasAutoCalibratedRef.current || allTransactions.length === 0) return;
+    hasAutoCalibratedRef.current = true;
+    if (dayTransactions.length === 0) {
       const dates = allTransactions.map((t) => t.paymentDate).filter(Boolean);
       if (dates.length > 0) {
         const primaryDate = dates.find((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)) || dates[0];
