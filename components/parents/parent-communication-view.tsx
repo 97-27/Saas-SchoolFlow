@@ -30,6 +30,8 @@ interface ParentMessage {
   timestamp: string;
   status: 'new' | 'in_progress' | 'resolved';
   unread: boolean;
+  directorReply?: string;
+  directorReplyAt?: string;
 }
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: string }> = {
@@ -367,6 +369,12 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
                       <Clock className="w-3 h-3" />
                       <span>{new Date(m.timestamp).toLocaleString('fr-FR')}</span>
                     </div>
+                    {m.directorReply && (
+                      <div className="mt-1.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-0.5">
+                        <p className="text-[10px] font-black text-emerald-800 uppercase">Réponse de la Direction</p>
+                        <p className="text-[11px] text-emerald-900 leading-snug">{m.directorReply}</p>
+                      </div>
+                    )}
                   </div>
                 );
               })}

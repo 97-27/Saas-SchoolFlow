@@ -52,6 +52,8 @@ interface ParentMessage {
   category: 'absence' | 'finance' | 'document' | 'info';
   timestamp: string;
   status: 'new' | 'in_progress' | 'resolved';
+  directorReply?: string;
+  directorReplyAt?: string;
 }
 
 interface BroadcastRecord {
@@ -193,9 +195,13 @@ export function CommunicationView({
           if (!Array.isArray(cloudAll)) return;
           const cleaned = sanitizeMessages(cloudAll);
           setMessages((prevLocal) => {
+            // Le cloud est la source de vérité pour tout message déjà synchronisé (statut ou
+            // réponse mis à jour par la Direction sur un autre appareil) : il doit l'emporter.
+            // Seuls les messages purement locaux (envoyés par ce navigateur mais pas encore
+            // remontés au cloud) doivent être conservés depuis prevLocal.
             const merged = new Map<string, ParentMessage>();
-            cleaned.forEach((m) => merged.set(m.id, m));
             prevLocal.forEach((m) => merged.set(m.id, m));
+            cleaned.forEach((m) => merged.set(m.id, m));
             const list = Array.from(merged.values());
             try {
               localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(list));
@@ -406,14 +412,58 @@ export function CommunicationView({
     });
   }, [messages, searchQuery, categoryFilter, statusFilter]);
 
-  // Changer le statut d'un message
-  const updateMessageStatus = (id: string, newStatus: 'new' | 'in_progress' | 'resolved') => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
-    );
-    setToastMessage('✓ Statut de la demande parent mis à jour !');
+  // Changer le statut d'un message, et éventuellement écrire une réponse visible par le parent.
+  // Avant ce correctif, le statut n'était jamais persisté (ni localStorage, ni cloud) : il
+  // disparaissait au premier rechargement de page et n'atteignait jamais l'appareil du parent,
+  // qui ne voyait donc jamais que la Direction avait traité sa demande.
+  const updateMessageStatus = (id: string, newStatus: 'new' | 'in_progress' | 'resolved', reply?: string) => {
+    setMessages((prev) => {
+      const updated = prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              status: newStatus,
+              ...(reply && reply.trim() ? { directorReply: reply.trim(), directorReplyAt: new Date().toISOString() } : {}),
+            }
+          : m
+      );
+
+      try {
+        localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(updated));
+        localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(updated));
+      } catch (e) {}
+
+      const touched = updated.find((m) => m.id === id);
+      fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          const cloudAll: ParentMessage[] = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
+          const byId = new Map<string, ParentMessage>();
+          cloudAll.forEach((m) => byId.set(m.id, m));
+          if (touched) byId.set(id, touched);
+          const merged = Array.from(byId.values());
+          return fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: schoolSlug, parentMessages: merged }),
+          });
+        })
+        .catch(() => {});
+
+      return updated;
+    });
+
+    setReplyDrafts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setToastMessage(reply && reply.trim() ? '✓ Réponse envoyée au parent !' : '✓ Statut de la demande parent mis à jour !');
     setTimeout(() => setToastMessage(null), 4000);
   };
+
+  // Brouillons de réponse en cours de saisie, par message
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   // Répondre directement par WhatsApp
   const handleReplyWhatsApp = (msg: ParentMessage) => {
@@ -825,6 +875,36 @@ export function CommunicationView({
                       {msg.message}
                     </p>
                   </div>
+
+                  {/* Réponse écrite de la Direction, visible par le parent dans son espace */}
+                  {msg.directorReply ? (
+                    <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200 space-y-1">
+                      <p className="text-[11px] font-black text-emerald-800 uppercase flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Réponse envoyée au parent
+                      </p>
+                      <p className="text-xs text-emerald-900 leading-relaxed">{msg.directorReply}</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <textarea
+                        value={replyDrafts[msg.id] || ''}
+                        onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [msg.id]: e.target.value }))}
+                        rows={2}
+                        placeholder="Écrire une réponse visible par le parent dans son espace..."
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-800 resize-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={!(replyDrafts[msg.id] || '').trim()}
+                        onClick={() => updateMessageStatus(msg.id, 'resolved', replyDrafts[msg.id])}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Envoyer</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Actions Rapides */}
                   <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">

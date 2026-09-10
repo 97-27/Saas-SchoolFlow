@@ -265,7 +265,16 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
       let meta: any = {};
       let cleanAddress = cleanDisplayAddress(d.address || '');
       try {
-        const match = (d.address || '').match(/\[SF_META:(.*?)\]/);
+        // Le bloc [SF_META:{...}] est toujours ajouté une seule fois en fin de chaîne
+        // d'adresse (voir saveStudentToSupabase / batchUpsertStudents plus bas). Un match
+        // non-glouton "(.*?)\]" s'arrêtait au premier "]" rencontré — quasi systématiquement
+        // celui de "secondaryPhones":[] (vide pour la quasi-totalité des élèves), qui apparaît
+        // AVANT la fin réelle du JSON. Le JSON.parse échouait alors silencieusement (catch
+        // vide plus bas), et TOUTES les métadonnées (date d'inscription, versements/échéances,
+        // notes, internat) retombaient sur leurs valeurs par défaut à chaque lecture — même
+        // juste après une sauvegarde réussie. Ancré en fin de chaîne (glouton) pour capturer le
+        // JSON complet, quel que soit son contenu interne.
+        const match = (d.address || '').match(/\[SF_META:([\s\S]*)\]\s*$/);
         if (match && match[1]) {
           meta = JSON.parse(match[1]);
         }
