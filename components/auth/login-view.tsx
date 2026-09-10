@@ -648,6 +648,12 @@ export function LoginView({
           user: sessionData,
           schoolSlug: activeSlug,
         });
+        // Cookie de session lu par proxy.ts pour protéger les pages /admin côté serveur
+        // (le localStorage seul n'est pas lisible avant le rendu, et ne bloque donc rien).
+        const cookiePayload = encodeURIComponent(
+          JSON.stringify({ slug: activeSlug, roleId: selectedRole, authCode: cleanAuthCode })
+        );
+        document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
       } catch (err) {
         console.error('Erreur stockage session:', err);
       }
@@ -786,6 +792,10 @@ export function LoginView({
         };
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
         window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+        const cookiePayload = encodeURIComponent(
+          JSON.stringify({ slug, roleId: 'directeur', authCode: 'DIR-2026' })
+        );
+        document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
       } catch (err) {
         console.error('Erreur création école:', err);
       }

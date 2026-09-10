@@ -987,6 +987,12 @@ export function Topbar({
                     type="button"
                     onClick={() => {
                       setIsProfileOpen(false);
+                      try {
+                        localStorage.removeItem('schoolflow_active_session_v2');
+                      } catch (e) {}
+                      // Efface le cookie lu par proxy.ts : sans ça, le lien admin resterait
+                      // accessible sans reconnexion malgré le bouton "Verrouiller".
+                      document.cookie = 'sf_admin_session=; path=/; max-age=0; SameSite=Lax';
                       router.push(`/${schoolSlug}/login`);
                     }}
                     className="w-full px-4 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 flex items-center justify-center gap-2 border border-rose-200 transition-colors cursor-pointer"
