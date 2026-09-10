@@ -148,8 +148,13 @@ export function ReportsView({
     const periodLabel = 'Bilan Financier Annuel (2026-2027)';
     const periodSub = 'Recouvrement cumulé de toutes les échéances sur toute l’année scolaire (Septembre à Juin)';
 
-    const totalExigible = filteredStudents.reduce((acc, s) => acc + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
-    const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+    // Montant exigible/encaissé = droits d'inscription + scolarité UNIQUEMENT (jamais les
+    // frais annexes ou la tenue, qui ne sont pas des montants chiffrés sur la fiche élève).
+    // Le montant exigible omettait jusqu'ici les droits d'inscription (toujours réglés dès
+    // l'inscription, cf. registrationFee), ne comptant que la scolarité — ce qui sous-évaluait
+    // le budget exigible réel par cycle.
+    const totalExigible = filteredStudents.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
+    const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.paidAmount || 0), 0);
     const totalOverdue = filteredStudents.reduce((acc, s) => {
       const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
       const paid = s.paidAmount || 0;
@@ -170,8 +175,8 @@ export function ReportsView({
     ].map((c) => {
       const cycStus = students.filter((s) => c.check(s.grade));
       
-      const cycExigible = cycStus.reduce((acc, s) => acc + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
-      const cycCollected = cycStus.reduce((acc, s) => acc + (s.paidAmount || 0), 0);
+      const cycExigible = cycStus.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
+      const cycCollected = cycStus.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.paidAmount || 0), 0);
       const cycRemaining = cycStus.reduce((acc, s) => {
         const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
         const paid = s.paidAmount || 0;

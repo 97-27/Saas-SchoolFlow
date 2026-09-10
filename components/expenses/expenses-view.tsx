@@ -233,8 +233,25 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
       .reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
     const operatingExpenses = totalExpenses - salaryExpenses;
 
-    // Recettes réelles de scolarité en caisse
-    const totalRevenues = invoices.reduce((acc, inv) => acc + (Number(inv.paidAmount) || 0), 0);
+    // Recettes réelles de scolarité en caisse — strictement inscription & scolarité. L'internat,
+    // la cantine et le transport ont déjà leur propre bloc de suivi dédié (pages Internat/
+    // Cantine/Transport et Structure des encaissements du tableau de bord) : les mélanger ici
+    // aurait compté ces sommes en double dans le solde de caisse de cette page.
+    const isServiceFee = (inv: Invoice) => {
+      const fee = (inv.feeType || '').toLowerCase();
+      const num = inv.invoiceNumber || '';
+      return (
+        fee.includes('internat') ||
+        fee.includes('cantine') ||
+        fee.includes('transport') ||
+        num.startsWith('QUI-') ||
+        num.startsWith('CAN-') ||
+        num.startsWith('TRP-')
+      );
+    };
+    const totalRevenues = invoices
+      .filter((inv) => !isServiceFee(inv))
+      .reduce((acc, inv) => acc + (Number(inv.paidAmount) || 0), 0);
     const netBalance = totalRevenues - totalExpenses;
 
     return {
