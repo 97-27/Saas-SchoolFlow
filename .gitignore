@@ -28,6 +28,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# cache runtime local (source de vérité = Supabase ; ne doit jamais être committé,
+# contient des données d'élèves réelles et peut figer un déploiement sur un instantané obsolète)
+/data/schoolflow-store.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

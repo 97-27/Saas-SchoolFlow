@@ -14,6 +14,8 @@ import {
   deleteInvoiceFromSupabase,
   saveServicesDataToSupabase,
   getServicesDataFromSupabase,
+  batchUpsertStudents,
+  batchUpsertInvoices,
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
 
@@ -55,16 +57,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const rawSlug = searchParams.get('slug') || 'epc-manoi';
     const slug = rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug;
-    const forceSupabase = searchParams.get('forceSupabase') === 'true';
 
     ensureDataFile();
     let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
 
-    // Si la mémoire est vide ou sans élèves ou si un rechargement forcé depuis Supabase est demandé
-    if (!schoolData || !schoolData.students || schoolData.students.length === 0 || forceSupabase) {
+    // Supabase est la source de vérité : on la relit à chaque requête, quel que soit
+    // l'état du cache local. Ce cache est propre à chaque instance serverless (Vercel en
+    // crée plusieurs en parallèle) — s'y fier seul pouvait figer une instance sur des
+    // données partielles ou obsolètes indéfiniment. Le cache local ne sert plus que de
+    // filet de secours si l'appel Supabase échoue ou dépasse le délai ci-dessous.
+    {
       try {
         const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => resolve([null, null, null, null]), 9000)
+          setTimeout(() => resolve([null, null, null, null, null]), 9000)
         );
         const [sbSchool, sbStudents, sbInvoices, sbStaff, sbServices] = (await Promise.race([
           Promise.all([
@@ -224,10 +229,17 @@ export async function POST(request: NextRequest) {
     if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
       const safeNewDeleted = deletedStudentIds.filter(Boolean);
       existingDeleted = Array.from(new Set([...existingDeleted, ...safeNewDeleted]));
+      const deletePromises: Promise<any>[] = [];
       for (const delId of safeNewDeleted) {
-        deleteStudentFromSupabase(delId, slug).catch(() => {});
-        deleteInvoiceFromSupabase(delId, slug).catch(() => {});
+        deletePromises.push(deleteStudentFromSupabase(delId, slug));
+        deletePromises.push(deleteInvoiceFromSupabase(delId, slug));
       }
+      const delResults = await Promise.allSettled(deletePromises);
+      delResults.forEach((r) => {
+        if (r.status === 'rejected') {
+          console.warn('Erreur suppression Supabase dans /api/sync POST:', r.reason);
+        }
+      });
     }
 
     // Si des élèves sont envoyés pour enregistrement, s'assurer qu'aucun d'eux n'est bloqué par existingDeleted
@@ -289,6 +301,9 @@ export async function POST(request: NextRequest) {
       mergedSettings = {
         ...existingSettings,
         ...schoolSettings,
+        // Le slug doit toujours être présent : sans lui, saveSchoolToSupabase()
+        // ignore silencieusement l'écriture (no-op) alors que l'API répond "succès".
+        slug: schoolSettings.slug || existingSettings.slug || slug,
         logoUrl: schoolSettings.logoUrl || existingSettings.logoUrl || '',
         countryEmblemUrl: schoolSettings.countryEmblemUrl || existingSettings.countryEmblemUrl || '',
         stampUrl: schoolSettings.stampUrl || existingSettings.stampUrl || '',
@@ -315,20 +330,20 @@ export async function POST(request: NextRequest) {
     };
     memoryStore[slug] = updatedEntry;
 
-    // Sauvegarde Supabase Cloud
+    // Sauvegarde Supabase Cloud — attendue avant de répondre pour garantir la persistance
+    // réelle sur toutes les instances serverless (Vercel peut geler la fonction juste après
+    // l'envoi de la réponse, ce qui tuait silencieusement les écritures en tâche de fond).
     try {
+      const savePromises: Promise<any>[] = [];
+
       if (mergedSettings) {
-        saveSchoolToSupabase(mergedSettings).catch(() => {});
+        savePromises.push(saveSchoolToSupabase(mergedSettings));
       }
       if (cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0) {
-        for (const st of cleanStudents) {
-          saveStudentToSupabase(st, slug).catch(() => {});
-        }
+        savePromises.push(batchUpsertStudents(cleanStudents, slug));
       }
       if (cleanInvoices && Array.isArray(cleanInvoices) && cleanInvoices.length > 0) {
-        for (const inv of cleanInvoices) {
-          saveInvoiceToSupabase(inv, slug).catch(() => {});
-        }
+        savePromises.push(batchUpsertInvoices(cleanInvoices, slug));
       }
       const servicesPayload = {
         boardingSubscriptions: boardingSubscriptions || currentSchool.boardingSubscriptions || [],
@@ -345,7 +360,14 @@ export async function POST(request: NextRequest) {
           versement5: 0,
         },
       };
-      saveServicesDataToSupabase(slug, servicesPayload).catch(() => {});
+      savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
+
+      const results = await Promise.allSettled(savePromises);
+      results.forEach((r) => {
+        if (r.status === 'rejected') {
+          console.warn('Erreur sauvegarde Supabase dans /api/sync POST:', r.reason);
+        }
+      });
     } catch (sbSaveErr) {
       console.warn('Erreur sauvegarde Supabase dans /api/sync POST:', sbSaveErr);
     }

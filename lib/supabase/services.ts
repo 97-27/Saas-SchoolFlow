@@ -8,8 +8,10 @@ import { cleanDisplayAddress } from '@/lib/utils/formatters';
  * ══════════════════════════════════════════════════════════════════
  */
 
-// ── Cache mémoire pour éviter les lookups répétés sur la table schools ──
-const schoolIdCache = new Map<string, string>(); // slug → UUID
+const schoolIdCache = new Map<string, string>([
+  ['epc-manoi', 'f72b9cc2-90c5-43a6-a584-d16c1c485a77'],
+  ['college-excellence', 'f72b9cc2-90c5-43a6-a584-d16c1c485a77']
+]); // slug → UUID
 
 async function getSchoolId(slug: string): Promise<string | null> {
   const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
@@ -443,6 +445,63 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
   }
 }
 
+export async function batchUpsertStudents(students: Student[], schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !students || students.length === 0) return false;
+  try {
+    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const schoolId = await getSchoolId(cleanSlug);
+    if (!schoolId) return false;
+
+    const payloads = students.map((student) => {
+      const names = (student.fullName || `${student.firstName || ''} ${student.lastName || ''}`).trim().split(' ');
+      const firstName = student.firstName || names.slice(1).join(' ') || student.fullName || 'Élève';
+      const lastName = student.lastName || names[0] || 'Nom';
+
+      return {
+        ...(student.id && isUUID(student.id) ? { id: student.id } : {}),
+        school_id: schoolId,
+        student_number: student.studentNumber,
+        matricule: student.matricule || null,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: student.fullName || `${firstName} ${lastName}`.trim(),
+        grade: student.grade || 'Maternelle (P.S.)',
+        gender: student.gender === 'female' ? 'female' : 'male',
+        date_of_birth: student.dateOfBirth || null,
+        address: student.address || null,
+        guardian_name: student.guardianName || 'Parent',
+        guardian_phone: student.guardianPhone || '+225 00 00 00 00',
+        whatsapp_phone: student.whatsappPhone || null,
+        avatar_url: student.avatar || null,
+        enrollment_type: student.enrollmentType || 'nouveau',
+        registration_fee: student.registrationFee || 0,
+        tuition_amount: student.tuitionAmount || 0,
+        discount_amount: student.discountAmount || 0,
+        net_amount: student.netAmount || student.tuitionAmount || 0,
+        paid_amount: student.paidAmount || 0,
+        balance_remaining: student.balanceRemaining || 0,
+        tuition_status: student.tuitionStatus || 'unpaid',
+        attendance_rate: student.attendanceRate || 100,
+        status: student.status || 'active',
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    const { error } = await supabase
+      .from('students')
+      .upsert(payloads, { onConflict: 'school_id, student_number' });
+
+    if (error) {
+      console.error('Erreur batchUpsertStudents:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Erreur batchUpsertStudents catch:', err);
+    return false;
+  }
+}
+
 const isUUID = (str: string): boolean => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 };
@@ -697,6 +756,82 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
     return true;
   } catch (err) {
     console.warn('saveInvoiceToSupabase catch:', err);
+    return false;
+  }
+}
+
+export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !invoices || invoices.length === 0) return false;
+  try {
+    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const schoolId = await getSchoolId(cleanSlug);
+    if (!schoolId) return false;
+
+    // Charger les élèves de l'établissement une seule fois pour résoudre les UUIDs sans requêtes en boucle
+    const { data: schoolStudents } = await supabase
+      .from('students')
+      .select('id, student_number, full_name')
+      .eq('school_id', schoolId);
+
+    const stuMap = new Map<string, string>();
+    (schoolStudents || []).forEach((s: any) => {
+      if (s.id) {
+        stuMap.set(s.id, s.id);
+        if (s.student_number) stuMap.set(s.student_number.toUpperCase(), s.id);
+        if (s.full_name) stuMap.set(s.full_name.trim().toLowerCase(), s.id);
+      }
+    });
+
+    const payloads: any[] = [];
+    for (const inv of invoices) {
+      let stuUUID: string | null = null;
+      if (inv.studentId && isUUID(inv.studentId)) {
+        stuUUID = inv.studentId;
+      } else if (inv.studentId && stuMap.has(inv.studentId.toUpperCase())) {
+        stuUUID = stuMap.get(inv.studentId.toUpperCase())!;
+      } else if (inv.invoiceNumber) {
+        const studentNum = inv.invoiceNumber.replace('REC-2026-', 'ID-').toUpperCase();
+        if (stuMap.has(studentNum)) stuUUID = stuMap.get(studentNum)!;
+      }
+      if (!stuUUID && inv.studentName && stuMap.has(inv.studentName.trim().toLowerCase())) {
+        stuUUID = stuMap.get(inv.studentName.trim().toLowerCase())!;
+      }
+
+      if (stuUUID) {
+        payloads.push({
+          ...(inv.id && isUUID(inv.id) ? { id: inv.id } : {}),
+          school_id: schoolId,
+          student_id: stuUUID,
+          invoice_number: inv.invoiceNumber,
+          fee_type: inv.feeType || "Frais d'inscription & Scolarité",
+          amount: inv.amount || 0,
+          paid_amount: inv.paidAmount || 0,
+          discount_amount: inv.discountAmount || 0,
+          net_amount: inv.netAmount || inv.amount || 0,
+          balance_remaining: inv.balanceRemaining || 0,
+          payment_method: inv.paymentMethod || 'Espèces en caisse',
+          status: inv.status || 'draft',
+          issue_date: inv.issueDate || '2026-09-07',
+          due_date: inv.dueDate || '2026-09-07',
+          notes: inv.notes || null,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    if (payloads.length === 0) return true;
+
+    const { error } = await supabase
+      .from('invoices')
+      .upsert(payloads, { onConflict: 'school_id, invoice_number' });
+
+    if (error) {
+      console.warn('Erreur batchUpsertInvoices:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Erreur batchUpsertInvoices catch:', err);
     return false;
   }
 }

@@ -68,19 +68,7 @@ export function StudentTable({
     };
     handleUpdate();
 
-    fetch(`/api/sync?slug=${activeSlug}&t=${Date.now()}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res && res.success && res.data?.students?.length) {
-          const liveStus = getLiveStudents(res.data.students, activeSlug);
-          setStudents(liveStus);
-          try {
-            localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
-            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
-          } catch (e) {}
-        }
-      })
-      .catch(() => {});
+    // Synchronisation centralisée assurée par le LiveStore et l'écouteur DATA_UPDATED_EVENT
 
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

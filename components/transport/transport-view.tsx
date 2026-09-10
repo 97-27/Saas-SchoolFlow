@@ -189,24 +189,7 @@ export function TransportView({
       }
     };
 
-    fetch(`/api/sync?slug=${activeSlug}&t=${Date.now()}`)
-      .then((res) => res.json())
-      .then((res) => {
-        if (res && res.success && res.data) {
-          if (res.data.transportSubscriptions) {
-            setCustomTransportMap(res.data.transportSubscriptions);
-            try { localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(res.data.transportSubscriptions)); } catch (e) {}
-          }
-          if (res.data.transportPayments) {
-            setMonthlyPayments(res.data.transportPayments);
-            try { localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(res.data.transportPayments)); } catch (e) {}
-          }
-          if (res.data.students && Array.isArray(res.data.students) && res.data.students.length > 0) {
-            setStudents(getLiveStudents(res.data.students, activeSlug));
-          }
-        }
-      })
-      .catch(() => {});
+    // Synchronisation centralisée assurée par le LiveStore et l'événement DATA_UPDATED_EVENT
 
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

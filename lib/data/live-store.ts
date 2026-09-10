@@ -615,6 +615,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
 }
 
 let isSyncingServer = false;
+let lastSyncTimestamp = 0;
 let crossDeviceSyncStarted = false;
 let activeSyncInterval: any = null;
 
@@ -659,7 +660,10 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
  */
 export function syncSchoolDataWithServer(slug: string): void {
   if (typeof window === 'undefined' || typeof fetch === 'undefined' || isSyncingServer) return;
+  const now = Date.now();
+  if (now - lastSyncTimestamp < 15000) return; // Anti-rafale : 15s minimum entre deux appels
   isSyncingServer = true;
+  lastSyncTimestamp = now;
 
   fetch(`/api/sync?slug=${encodeURIComponent(slug)}&t=${Date.now()}`)
     .then((res) => res.json())
