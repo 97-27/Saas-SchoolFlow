@@ -6,6 +6,7 @@ import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import {
   getLiveStudents,
   getLiveSchool,
+  updateRegisteredStudent,
   DATA_UPDATED_EVENT,
   DOCS_STATUS_KEY,
   OtherDocItem,
@@ -83,12 +84,22 @@ export function ClassesView({
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
-  // 4 Blocs : 'all' | 'maternelle' | 'primaire' | 'college'
-  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college'>('all');
+  // 3 Blocs : 'all' | 'maternelle' (fusionné avec le Primaire) | 'college' (fusionné avec le Lycée)
+  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'college'>('all');
   const [selectedClass, setSelectedClass] = useState<string>('Toutes les classes');
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState<'all' | 'female' | 'male'>('all');
   const [selectedStudentDoc, setSelectedStudentDoc] = useState<Student | null>(null);
+  const [editingDobId, setEditingDobId] = useState<string | null>(null);
+  const [editingDobValue, setEditingDobValue] = useState('');
+
+  const saveBirthDate = (stu: Student, newDate: string) => {
+    setEditingDobId(null);
+    if (!newDate || newDate === (stu.dateOfBirth || getStudentBirthDate(stu))) return;
+    const updated: Student = { ...stu, dateOfBirth: newDate, updatedAt: new Date().toISOString() };
+    setStudents((prev) => prev.map((s) => (s.id === stu.id ? updated : s)));
+    updateRegisteredStudent(updated, schoolSlug);
+  };
 
   // Documents synchronisés depuis Documents Scolaires (DOCS_STATUS_KEY)
   const [docRecords, setDocRecords] = useState<Record<string, StudentDocumentRecord>>({});
@@ -121,7 +132,7 @@ export function ClassesView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
 
-  // Définition des 4 Blocs de Cycles (Toutes les Classes, Maternelle, Primaire, Collège)
+  // Définition des 3 Blocs de Cycles (Toutes les Classes, Maternelle & Primaire, Collège & Lycée)
   const cyclesConfig = useMemo(() => {
     return {
       all: {
@@ -143,30 +154,29 @@ export function ClassesView({
           '5ème',
           '4ème',
           '3ème',
+          '2nde',
+          '1ère',
+          'Terminale',
         ],
       },
+      // Fusion Maternelle + Primaire en un seul bloc
       maternelle: {
-        label: 'Cycle Maternelle',
-        sub: 'P.S., M.S. et G.S.',
+        label: 'Maternelle & Primaire',
+        sub: 'P.S., M.S., G.S. et du CP1 jusqu’au CM2',
         icon: Sparkles,
-        classes: ['Maternelle (P.S.)', 'Maternelle (M.S.)', 'Maternelle (G.S.)'],
+        classes: ['Maternelle (P.S.)', 'Maternelle (M.S.)', 'Maternelle (G.S.)', 'CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'],
       },
-      primaire: {
-        label: 'Cycle Primaire',
-        sub: 'Du CP1 jusqu’au CM2',
-        icon: GraduationCap,
-        classes: ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'],
-      },
+      // Fusion Collège + Lycée en un seul bloc
       college: {
-        label: 'Cycle Collège',
-        sub: 'De la 6ème à la 3ème',
+        label: 'Collège & Lycée',
+        sub: 'De la 6ème à la Terminale',
         icon: Building2,
-        classes: ['6ème', '5ème', '4ème', '3ème'],
+        classes: ['6ème', '5ème', '4ème', '3ème', '2nde', '1ère', 'Terminale'],
       },
     };
   }, []);
 
-  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college') => {
+  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'college') => {
     setSelectedCycle(cycle);
     setSelectedClass(cyclesConfig[cycle].classes[0]);
   };
@@ -380,8 +390,8 @@ export function ClassesView({
         }
       `}</style>
 
-      {/* 2. LES 4 BLOCS DU HAUT (Toutes les Classes, Maternelle, Primaire, Collège) */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
+      {/* 2. LES 3 BLOCS DU HAUT (Toutes les Classes, Maternelle & Primaire, Collège & Lycée) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 print:hidden">
         {(Object.keys(cyclesConfig) as Array<keyof typeof cyclesConfig>).map((cycKey) => {
           const cyc = cyclesConfig[cycKey];
           const Icon = cyc.icon;
@@ -586,9 +596,35 @@ export function ClassesView({
                         </span>
                       </td>
 
-                      {/* Date de Naissance */}
+                      {/* Date de Naissance — modifiable directement (clic pour éditer) */}
                       <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-700 whitespace-nowrap">
-                        {formatDate(birthDate)}
+                        {editingDobId === stu.id ? (
+                          <input
+                            type="date"
+                            autoFocus
+                            value={editingDobValue}
+                            onChange={(e) => setEditingDobValue(e.target.value)}
+                            onBlur={() => saveBirthDate(stu, editingDobValue)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveBirthDate(stu, editingDobValue);
+                              if (e.key === 'Escape') setEditingDobId(null);
+                            }}
+                            className="px-2 py-1 rounded-lg border border-emerald-400 bg-white text-slate-800 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDobId(stu.id);
+                              setEditingDobValue(birthDate);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-lg hover:bg-emerald-50 hover:text-emerald-800 transition-colors cursor-pointer group"
+                            title="Modifier la date de naissance"
+                          >
+                            <span>{formatDate(birthDate)}</span>
+                            <Edit className="w-3 h-3 text-slate-300 group-hover:text-emerald-600 shrink-0" />
+                          </button>
+                        )}
                       </td>
 
                       {/* Genre */}

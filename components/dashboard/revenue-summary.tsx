@@ -342,12 +342,24 @@ export function RevenueSummary({
         }
       });
 
-      // Repli si aucun échéancier détaillé n'a été trouvé mais que l'élève a payé de la scolarité
+      // Repli si aucun échéancier détaillé n'a été trouvé mais que l'élève a payé de la scolarité :
+      // répartir le total réglé selon la clé de répartition standard des 5 tranches
+      // (40/20/20/10/10, cf. parent-scolarite-tab.tsx) au lieu de tout attribuer au 1er
+      // versement. Cette estimation évite qu'une année entière de règlements s'affiche comme
+      // "encaissée en Octobre" pour un élève dont le détail par tranche n'a pas (encore) été
+      // ressaisi — en attendant une saisie réelle du détail via la page Inscriptions.
       if (p1 === 0 && p2 === 0 && p3 === 0 && p4 === 0 && p5 === 0) {
         const paid = stu.paidAmount || 0;
         const regFee = stu.registrationFee || 0;
-        const tuitionPaid = Math.max(0, paid - regFee);
-        p1 = tuitionPaid;
+        let remainingPaid = Math.max(0, paid - regFee);
+        const netTuition = stu.netAmount !== undefined ? stu.netAmount : (stu.tuitionAmount || 0);
+        const shares = [0.4, 0.2, 0.2, 0.1, 0.1].map((pct) => netTuition * pct);
+        const allocated = shares.map((share) => {
+          const take = Math.min(remainingPaid, share);
+          remainingPaid -= take;
+          return take;
+        });
+        [p1, p2, p3, p4, p5] = allocated;
       }
 
       v1 += p1;

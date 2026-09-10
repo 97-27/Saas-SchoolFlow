@@ -188,6 +188,9 @@ export const availableClasses = [
   '5ème',
   '4ème',
   '3ème',
+  '2nde',
+  '1ère',
+  'Terminale',
 ];
 
 export const mockStudents: Student[] = [
