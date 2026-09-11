@@ -137,6 +137,14 @@ export function ParentScolariteTab({
 
     // Décomposer les versements 1 à 5
     const installments = activeChild.installments || {};
+    const hasAnyDetail = Boolean(
+      installments.versement1 || installments.versement2 || installments.versement3 ||
+      installments.versement4 || installments.versement5
+    );
+    // Dossier ancien sans ventilation par tranche mais avec un montant réellement encaissé :
+    // classé par défaut en 1ère échéance (montant réel, jamais inventé), même règle que le
+    // Dashboard et les Rapports côté Direction, plutôt que de le faire disparaître du portail.
+    const fallbackToV1 = !hasAnyDetail && (activeChild.paidAmount || 0) > 0;
     const instList = [
       { key: 'versement1', label: '1er Versement', rec: installments.versement1 },
       { key: 'versement2', label: '2ème Versement', rec: installments.versement2 },
@@ -144,14 +152,11 @@ export function ParentScolariteTab({
       { key: 'versement4', label: '4ème Versement', rec: installments.versement4 },
       { key: 'versement5', label: '5ème Versement (Solde)', rec: installments.versement5 },
     ].map((inst) => {
-      const isPaid = Boolean(inst.rec && inst.rec.amount && inst.rec.amount > 0);
+      const isPaid = Boolean(inst.rec && inst.rec.amount && inst.rec.amount > 0) || (inst.key === 'versement1' && fallbackToV1);
       return {
         key: inst.key,
         label: inst.label,
-        // Jamais de montant estimé/proportionnel pour une tranche non réglée : 0 tant qu'aucun
-        // versement réel n'est enregistré, à l'identique de la règle déjà appliquée au Dashboard
-        // et aux Rapports côté Direction.
-        amount: isPaid ? inst.rec!.amount : 0,
+        amount: isPaid ? (inst.rec?.amount || (inst.key === 'versement1' ? activeChild.paidAmount || 0 : 0)) : 0,
         isPaid,
         method: inst.rec?.paymentMethod || inst.rec?.method || 'Espèces',
         date: inst.rec?.date || activeChild.paymentDate || '—',

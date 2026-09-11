@@ -326,15 +326,14 @@ export function RevenueSummary({
         p3 = inst.versement3?.amount || 0;
         p4 = inst.versement4?.amount || 0;
         p5 = inst.versement5?.amount || 0;
+      } else if (stu.paidAmount && stu.paidAmount > 0) {
+        // Aucun détail par tranche saisi, mais un montant a bel et bien été réellement encaissé
+        // (dossier ancien saisi avant la ventilation par versement) : ce montant réel — jamais
+        // inventé — est classé par défaut en 1ère échéance tant que le détail exact n'a pas été
+        // ressaisi via Inscriptions, plutôt que de le faire disparaître de tout tableau de
+        // tranches alors qu'il a vraiment été payé.
+        p1 = stu.paidAmount;
       }
-
-      // Si aucun échéancier détaillé n'a été trouvé, ne RIEN estimer/répartir : un élève dont
-      // le détail par tranche n'a pas encore été ressaisi ne contribue à aucune des 5 tranches
-      // tant que cette saisie réelle (via la page Inscriptions) n'a pas eu lieu. Une estimation
-      // proportionnelle a été essayée ici, mais elle affichait des montants inventés (y compris
-      // sur la 5ème échéance, jamais réellement réglée) au lieu de la vérité du terrain — le
-      // Directeur a explicitement demandé qu'une tranche reste à 0 tant qu'aucun versement réel
-      // n'y est enregistré, plutôt que de risquer d'afficher un chiffre qui n'existe pas.
 
       v1 += p1;
       v2 += p2;

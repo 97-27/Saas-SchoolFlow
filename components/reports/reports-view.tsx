@@ -142,6 +142,11 @@ export function ReportsView({
         p3 = inst.versement3?.amount || 0;
         p4 = inst.versement4?.amount || 0;
         p5 = inst.versement5?.amount || 0;
+      } else if (stu.paidAmount && stu.paidAmount > 0) {
+        // Montant réellement encaissé sur un dossier ancien jamais ventilé par tranche : classé
+        // par défaut en 1ère échéance (jamais inventé, c'est le vrai total payé) plutôt que
+        // d'en faire disparaître la trace de tout tableau de tranches.
+        p1 = stu.paidAmount;
       }
 
       v1Total += p1;
