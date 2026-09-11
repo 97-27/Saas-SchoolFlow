@@ -742,9 +742,15 @@ export function syncSchoolDataWithServer(slug: string): void {
           // Map intelligente par identifiant
           const studentMap = new Map<string, Student>();
 
-          // A. Charger les élèves serveur
+          // A. Charger les élèves serveur — clé de correspondance = l'identifiant réel stable
+          // (UUID Supabase) en priorité, et non le numéro affiché ID-XXX. Une correction
+          // administrative directe du numéro d'un élève (ex: comblement d'un trou de
+          // numérotation) change studentNumber mais jamais l'id réel : indexer par
+          // studentNumber faisait passer cette correction pour "un élève local pas encore
+          // synchronisé" sur tout navigateur ayant encore l'ancien numéro en cache, qui la
+          // renvoyait alors vers le serveur et l'écrasait aussitôt.
           incomingStudents.forEach((st: Student) => {
-            const key = st.studentNumber || st.id;
+            const key = st.id || st.studentNumber;
             studentMap.set(key, st);
           });
 
@@ -758,27 +764,36 @@ export function syncSchoolDataWithServer(slug: string): void {
             ) {
               return;
             }
-            const key = localStu.studentNumber || localStu.id;
+            const key = localStu.id || localStu.studentNumber;
             if (!studentMap.has(key)) {
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
               hasLocalNewStudents = true;
             } else {
-              // Élève déjà présent : si la version locale a un updatedAt plus récent, conserver la version locale
+              // Élève déjà connu du serveur (même id réel) : ne conserver la version locale que
+              // si elle est STRICTEMENT plus récente — à égalité ou en cas de doute, le serveur
+              // gagne, pour que toute correction faite côté serveur reste acquise.
               const incomingStu = studentMap.get(key)!;
               const localTime = localStu.updatedAt ? new Date(localStu.updatedAt).getTime() : 0;
               const incomingTime = incomingStu.updatedAt ? new Date(incomingStu.updatedAt).getTime() : 0;
-              if (localTime >= incomingTime) {
+              if (localTime > incomingTime) {
                 studentMap.set(key, { ...incomingStu, ...localStu });
               }
             }
           });
 
-          // Pour EPC Manoi : s'assurer que les 15 élèves officiels sont TOUJOURS présents
+          // Pour EPC Manoi : s'assurer que les 15 élèves officiels sont TOUJOURS présents — mais
+          // seulement si aucun élève réel (identifié par id ou par son numéro déjà attribué,
+          // même après un changement de numéro administratif) n'occupe déjà ce numéro, sinon le
+          // placeholder mock recréerait un doublon fantôme du numéro qu'un vrai élève a repris.
           if (isPilot) {
+            const usedNumbers = new Set<string>();
+            studentMap.forEach((s) => {
+              if (s.studentNumber) usedNumbers.add(s.studentNumber);
+            });
             for (const offStu of mockStudents) {
-              const key = offStu.studentNumber || offStu.id;
-              if (!studentMap.has(key)) {
+              const key = offStu.id || offStu.studentNumber;
+              if (!studentMap.has(key) && !(offStu.studentNumber && usedNumbers.has(offStu.studentNumber))) {
                 studentMap.set(key, offStu);
               }
             }
@@ -825,9 +840,11 @@ export function syncSchoolDataWithServer(slug: string): void {
             if (currentLocal) prevInvoices = JSON.parse(currentLocal);
           } catch (e) {}
 
+          // Clé de correspondance = id réel en priorité (même raison que pour les élèves : un
+          // invoiceNumber peut être corrigé administrativement sans que l'id réel ne change).
           const invoiceMap = new Map<string, Invoice>();
           incomingInvoices.forEach((inv: Invoice) => {
-            const key = inv.invoiceNumber || inv.id;
+            const key = inv.id || inv.invoiceNumber;
             invoiceMap.set(key, inv);
           });
 
@@ -840,22 +857,29 @@ export function syncSchoolDataWithServer(slug: string): void {
             ) {
               return;
             }
-            const key = localInv.invoiceNumber || localInv.id;
+            const key = localInv.id || localInv.invoiceNumber;
             if (!invoiceMap.has(key)) {
               // Conserver impérativement la facture créée localement
               invoiceMap.set(key, localInv);
               hasLocalNewInvoices = true;
             } else {
+              // Facture déjà connue du serveur (même id réel) : le serveur reste la référence —
+              // une correction administrative (ex: renumérotation) ne doit pas être écrasée par
+              // une ancienne version encore en cache sur un autre appareil.
               const incomingInv = invoiceMap.get(key)!;
-              invoiceMap.set(key, { ...incomingInv, ...localInv });
+              invoiceMap.set(key, incomingInv);
             }
           });
 
           // Pour EPC Manoi : s'assurer que les 15 factures officielles sont TOUJOURS présentes
           if (isPilot) {
+            const usedInvoiceNumbers = new Set<string>();
+            invoiceMap.forEach((inv) => {
+              if (inv.invoiceNumber) usedInvoiceNumbers.add(inv.invoiceNumber);
+            });
             for (const offInv of mockInvoices) {
-              const key = offInv.invoiceNumber || offInv.id;
-              if (!invoiceMap.has(key)) {
+              const key = offInv.id || offInv.invoiceNumber;
+              if (!invoiceMap.has(key) && !(offInv.invoiceNumber && usedInvoiceNumbers.has(offInv.invoiceNumber))) {
                 invoiceMap.set(key, offInv);
               }
             }
