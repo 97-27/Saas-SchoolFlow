@@ -674,13 +674,19 @@ export function syncSchoolDataWithServer(slug: string): void {
         let hasChanges = false;
         const isPilot = slug === 'epc-manoi';
 
-        // 1. Fusionner les identifiants supprimés depuis le serveur
-        if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds) && data.deletedStudentIds.length > 0) {
+        // 1. Remplacer la liste locale des identifiants supprimés par celle du serveur (source de
+        // vérité unique). Une simple fusion additive ne pouvait jamais faire disparaître un
+        // identifiant débloqué côté serveur (ex: via restoreStudentIds) : ce navigateur continuait
+        // de bloquer ID-016/ID-017 indéfiniment même après leur déblocage confirmé sur le serveur.
+        if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds)) {
           const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
           const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-          const merged = Array.from(new Set([...prevDeleted, ...data.deletedStudentIds]));
-          if (merged.length !== prevDeleted.length) {
-            localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(merged));
+          const serverList = Array.from(new Set(data.deletedStudentIds.filter(Boolean)));
+          if (
+            serverList.length !== prevDeleted.length ||
+            serverList.some((id) => !prevDeleted.includes(id))
+          ) {
+            localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(serverList));
             hasChanges = true;
           }
         }
