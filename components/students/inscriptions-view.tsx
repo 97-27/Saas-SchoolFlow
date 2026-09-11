@@ -78,6 +78,11 @@ export function InscriptionsView({
   } | null>(null);
 
   const prevMaxSeqRef = useRef<number>(0);
+  // Identifiant du dernier élève enregistré PAR CE NAVIGATEUR lui-même — l'événement diffusé par
+  // saveRegisteredStudent() est reçu par ce même composant (même onglet), donc sans cette
+  // distinction, l'alerte "Un collaborateur vient d'enregistrer..." s'affichait aussi pour sa
+  // propre inscription, en double avec le message de succès normal.
+  const lastLocalSaveIdRef = useRef<string | null>(null);
 
   // Synchronisation dynamique avec le live-store (Élèves & Paramètres École) + Détection Collaborateur en temps réel
   useEffect(() => {
@@ -124,9 +129,11 @@ export function InscriptionsView({
         .filter((n) => !isNaN(n) && n > 0);
       const currentMax = nums.length > 0 ? Math.max(...nums) : 0;
 
-      // Détecter si un collaborateur vient de valider une inscription ou si un événement distant arrive
-      const isRemoteRegister = Boolean(e?.detail?.action === 'student_registered' && e?.detail?.student);
-      if (isRemoteRegister || (prevMaxSeqRef.current > 0 && currentMax > prevMaxSeqRef.current)) {
+      // Détecter si un collaborateur vient de valider une inscription ou si un événement distant
+      // arrive — jamais pour SA PROPRE inscription tout juste enregistrée par ce navigateur.
+      const isOwnSave = Boolean(e?.detail?.student?.id && e.detail.student.id === lastLocalSaveIdRef.current);
+      const isRemoteRegister = Boolean(e?.detail?.action === 'student_registered' && e?.detail?.student && !isOwnSave);
+      if (isRemoteRegister || (!isOwnSave && prevMaxSeqRef.current > 0 && currentMax > prevMaxSeqRef.current)) {
         const latestStu = isRemoteRegister
           ? e.detail.student
           : combinedLive.find((s) => {
@@ -399,28 +406,36 @@ export function InscriptionsView({
     });
   }, [students]);
 
-  // Compute next available Student ID sequence number
+  // Compute next available Student ID sequence number — comble le premier numéro réellement
+  // libre (ni occupé par un élève existant, ni bloqué dans la liste des suppressions), au lieu
+  // de toujours avancer au plus haut+1. Un numéro bloqué par le passé (ex: supprimé une fois
+  // puis débloqué) est ainsi naturellement récupéré par la prochaine inscription, sans laisser
+  // de trou définitif dans la numérotation.
   const nextSeq = useMemo(() => {
-    const nums = (students || [])
-      .map((s) => {
-        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-        return match ? parseInt(match[0], 10) : 0;
-      })
-      .filter((n) => !isNaN(n) && n > 0);
-    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+    const existingNums = new Set<number>(
+      (students || [])
+        .map((s) => {
+          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        })
+        .filter((n) => !isNaN(n) && n > 0)
+    );
 
-    // Un numéro d'élève supprimé un jour (ID-XXX / stu-XXX) reste bloqué pour toujours dans la
-    // liste des suppressions (deletedStudentIds) - jamais réutilisable en toute sécurité, même
-    // longtemps après. Le "prochain numéro" ne doit donc jamais retomber sur un numéro qui s'y
-    // trouve déjà, sous peine de voir le nouvel élève entrer en collision avec ce tombstone et
-    // se faire supprimer à son tour à la prochaine synchronisation.
-    let candidate = maxNum + 1;
+    let delSet: Set<string>;
     try {
-      const delSet = getDeletedStudentIds();
-      while (delSet.has(`ID-${candidate.toString().padStart(3, '0')}`) || delSet.has(`stu-${candidate.toString().padStart(3, '0')}`)) {
-        candidate += 1;
-      }
-    } catch (e) {}
+      delSet = getDeletedStudentIds();
+    } catch (e) {
+      delSet = new Set();
+    }
+
+    let candidate = 1;
+    while (
+      existingNums.has(candidate) ||
+      delSet.has(`ID-${candidate.toString().padStart(3, '0')}`) ||
+      delSet.has(`stu-${candidate.toString().padStart(3, '0')}`)
+    ) {
+      candidate += 1;
+    }
     return candidate;
   }, [students]);
 
@@ -880,16 +895,14 @@ export function InscriptionsView({
     // serveur en direct (lui-même toujours relu depuis Supabase, cf. /api/sync) juste avant de
     // valider, pour réduire au minimum la fenêtre où deux personnes pourraient se voir attribuer
     // le même prochain numéro et écraser accidentellement le reçu l'une de l'autre.
-    let freshMax = 0;
+    const combinedExistingNums = new Set<number>();
     try {
       const localStudents = getLiveStudents(initialStudents, schoolSlug);
-      const localNums = localStudents
-        .map((s) => {
-          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-          return match ? parseInt(match[0], 10) : 0;
-        })
-        .filter((n) => !isNaN(n) && n > 0);
-      freshMax = localNums.length > 0 ? Math.max(...localNums) : 0;
+      localStudents.forEach((s) => {
+        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+        const n = match ? parseInt(match[0], 10) : 0;
+        if (!isNaN(n) && n > 0) combinedExistingNums.add(n);
+      });
 
       // Inutile pour la modification d'un élève déjà existant (son numéro ne change pas) —
       // ne faire l'appel réseau supplémentaire que pour une véritable nouvelle inscription.
@@ -900,22 +913,28 @@ export function InscriptionsView({
         clearTimeout(timeout);
         const result = await res.json();
         const serverStudents = Array.isArray(result?.data?.students) ? result.data.students : [];
-        const serverNums = serverStudents
-          .map((s: any) => {
-            const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-            return match ? parseInt(match[0], 10) : 0;
-          })
-          .filter((n: number) => !isNaN(n) && n > 0);
-        if (serverNums.length > 0) freshMax = Math.max(freshMax, ...serverNums);
+        serverStudents.forEach((s: any) => {
+          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
+          const n = match ? parseInt(match[0], 10) : 0;
+          if (!isNaN(n) && n > 0) combinedExistingNums.add(n);
+        });
       }
     } catch (e) {
       // Le serveur n'a pas répondu à temps : on continue avec la meilleure estimation locale
       // plutôt que de bloquer indéfiniment l'enregistrement du reçu.
     }
-    let computedNextSeq = Math.max(nextSeq, freshMax + 1);
+    // Même logique de comblement du premier numéro libre que nextSeq, mais sur les données les
+    // plus fraîches possibles (locales + serveur), pour éviter qu'un numéro tout juste pris par
+    // un autre appareil ne soit réattribué en double.
+    let computedNextSeq = nextSeq;
     try {
       const delSet = getDeletedStudentIds();
-      while (delSet.has(`ID-${computedNextSeq.toString().padStart(3, '0')}`) || delSet.has(`stu-${computedNextSeq.toString().padStart(3, '0')}`)) {
+      computedNextSeq = 1;
+      while (
+        combinedExistingNums.has(computedNextSeq) ||
+        delSet.has(`ID-${computedNextSeq.toString().padStart(3, '0')}`) ||
+        delSet.has(`stu-${computedNextSeq.toString().padStart(3, '0')}`)
+      ) {
         computedNextSeq += 1;
       }
     } catch (e) {}
@@ -1016,6 +1035,7 @@ export function InscriptionsView({
     };
 
     // Save to persistent storage and broadcast event
+    lastLocalSaveIdRef.current = newStudent.id;
     saveRegisteredStudent(newStudent, newInvoice, schoolSlug);
     clearDraft();
 
