@@ -82,20 +82,11 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
         };
       }
     }
-    if (activeSession?.fullName) {
-      const normName = activeSession.fullName.toLowerCase().trim();
-      const directMatch = allStudents.filter((s) => {
-        const g = (s.guardianName || '').toLowerCase().trim();
-        return g && (g.includes(normName) || normName.includes(g));
-      });
-      if (directMatch.length > 0) {
-        return {
-          guardianName: directMatch[0].guardianName,
-          phone: directMatch[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
-          children: directMatch,
-        };
-      }
-    }
+    // Aucun repli par correspondance approximative de nom : un match par sous-chaîne de nom
+    // ("JEAN" correspondant à "KOUASSI JEAN MARC") pouvait faire apparaître les données d'une
+    // AUTRE famille. matchedChildrenIds (fixé une seule fois à la connexion, par téléphone) est
+    // la seule source fiable — si elle est vide, la connexion elle-même a un problème à corriger,
+    // pas une raison d'élargir la recherche par nom.
     return null;
   }, [activeSession, allStudents]);
 

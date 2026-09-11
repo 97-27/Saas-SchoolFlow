@@ -152,7 +152,9 @@ export function RevenueSummary({
 
       Object.keys(customDietMap).forEach((stuId) => {
         const custom = customDietMap[stuId];
-        const rate = custom?.rate || 10000;
+        // Même tarif par défaut que la page Cantine elle-même (canteen-view.tsx), sinon un même
+        // élève sans tarif personnalisé affichait un total différent selon la page consultée.
+        const rate = custom?.rate || 25000;
         const discount = custom?.discount || 0;
         const months = monthlyPayments[stuId] || {};
         const paidCount = Object.values(months).filter(Boolean).length;
@@ -191,7 +193,8 @@ export function RevenueSummary({
 
       Object.keys(customTransportMap).forEach((stuId) => {
         const custom = customTransportMap[stuId];
-        const rate = custom?.rate || 20000;
+        // Même tarif par défaut que la page Transport elle-même (transport-view.tsx).
+        const rate = custom?.rate || 35000;
         const discount = custom?.discount || 0;
         const months = monthlyPayments[stuId] || {};
         const paidCount = Object.values(months).filter(Boolean).length;
@@ -325,23 +328,6 @@ export function RevenueSummary({
         p5 = inst.versement5?.amount || 0;
       }
 
-      // Vérifier aussi si des factures distinctes existent pour des versements additionnels
-      studentInvs.forEach((inv) => {
-        const motifLower = `${inv.feeType || ''} ${inv.notes || ''}`.toLowerCase();
-        const amt = inv.paidAmount || 0;
-        if (amt > 0) {
-          if ((motifLower.includes('2') || motifLower.includes('deuxième') || motifLower.includes('deuxieme')) && motifLower.includes('versement')) {
-            if (p2 === 0) p2 = amt;
-          } else if ((motifLower.includes('3') || motifLower.includes('troisième') || motifLower.includes('troisieme')) && motifLower.includes('versement')) {
-            if (p3 === 0) p3 = amt;
-          } else if ((motifLower.includes('4') || motifLower.includes('quatrième') || motifLower.includes('quatrieme')) && motifLower.includes('versement')) {
-            if (p4 === 0) p4 = amt;
-          } else if ((motifLower.includes('5') || motifLower.includes('cinquième') || motifLower.includes('cinquieme')) && motifLower.includes('versement')) {
-            if (p5 === 0) p5 = amt;
-          }
-        }
-      });
-
       // Si aucun échéancier détaillé n'a été trouvé, ne RIEN estimer/répartir : un élève dont
       // le détail par tranche n'a pas encore été ressaisi ne contribue à aucune des 5 tranches
       // tant que cette saisie réelle (via la page Inscriptions) n'a pas eu lieu. Une estimation
@@ -372,14 +358,10 @@ export function RevenueSummary({
       }
     });
 
-    // Intégration prioritaire de l'échéancier cloud consolidé si disponible
-    if (servicesData?.installments) {
-      if (typeof servicesData.installments.versement1 === 'number') v1 = Math.max(v1, servicesData.installments.versement1);
-      if (typeof servicesData.installments.versement2 === 'number') v2 = Math.max(v2, servicesData.installments.versement2);
-      if (typeof servicesData.installments.versement3 === 'number') v3 = Math.max(v3, servicesData.installments.versement3);
-      if (typeof servicesData.installments.versement4 === 'number') v4 = Math.max(v4, servicesData.installments.versement4);
-      if (typeof servicesData.installments.versement5 === 'number') v5 = Math.max(v5, servicesData.installments.versement5);
-    }
+    // Aucune surcharge par un total "cloud consolidé" générique (servicesData.installments) :
+    // cette valeur n'est pas propre à chaque élève et pouvait forcer un montant supérieur à la
+    // somme réelle des versements individuels — même principe de non-fabrication que ci-dessus,
+    // et alignement avec reports-view.tsx qui n'applique aucune surcharge de ce type.
 
     const getBadgeStyle = (amount: number) => {
       return amount > 0

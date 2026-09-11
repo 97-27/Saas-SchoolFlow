@@ -480,6 +480,21 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
     setTimeout(() => setToastMessage(null), 5000);
   };
 
+  // Supprimer définitivement un enseignant du registre — cette action n'existait pas du tout
+  // (l'icône Trash2 était importée mais jamais affichée nulle part) : un enseignant ajouté par
+  // erreur, ou ayant quitté l'établissement, ne pouvait jamais être retiré de la liste.
+  const [showDeleteTeacherConfirm, setShowDeleteTeacherConfirm] = useState(false);
+  const handleDeleteTeacher = () => {
+    if (!selectedTeacher) return;
+    const teacherName = `${selectedTeacher.lastName} ${selectedTeacher.firstName}`;
+    const updated = teachers.filter((t) => t.id !== selectedTeacher.id);
+    saveTeachersToStorage(updated);
+    setSelectedTeacher(null);
+    setShowDeleteTeacherConfirm(false);
+    setToastMessage(`✓ ${teacherName} a été retiré(e) du registre Personnel.`);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* 1. Header principal */}
@@ -910,13 +925,23 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => setSelectedTeacher(null)}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
-              >
-                Fermer sans enregistrer
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTeacher(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Fermer sans enregistrer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteTeacherConfirm(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer</span>
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -925,6 +950,40 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Valider & Enregistrer le Dossier</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Confirmation de suppression définitive d'un enseignant */}
+      {showDeleteTeacherConfirm && selectedTeacher && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-red-200 shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900">Supprimer cet enseignant ?</h3>
+            </div>
+            <p className="text-xs text-slate-600">
+              <strong>{selectedTeacher.lastName} {selectedTeacher.firstName}</strong> sera définitivement retiré(e) du
+              registre Personnel. Cette action est irréversible.
+            </p>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowDeleteTeacherConfirm(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteTeacher}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition-all cursor-pointer"
+              >
+                Confirmer la suppression
               </button>
             </div>
           </div>

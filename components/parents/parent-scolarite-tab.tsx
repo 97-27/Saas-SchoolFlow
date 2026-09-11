@@ -138,17 +138,20 @@ export function ParentScolariteTab({
     // Décomposer les versements 1 à 5
     const installments = activeChild.installments || {};
     const instList = [
-      { key: 'versement1', label: '1er Versement', rec: installments.versement1, defaultAmount: netTuition * 0.4 },
-      { key: 'versement2', label: '2ème Versement', rec: installments.versement2, defaultAmount: netTuition * 0.2 },
-      { key: 'versement3', label: '3ème Versement', rec: installments.versement3, defaultAmount: netTuition * 0.2 },
-      { key: 'versement4', label: '4ème Versement', rec: installments.versement4, defaultAmount: netTuition * 0.1 },
-      { key: 'versement5', label: '5ème Versement (Solde)', rec: installments.versement5, defaultAmount: netTuition * 0.1 },
+      { key: 'versement1', label: '1er Versement', rec: installments.versement1 },
+      { key: 'versement2', label: '2ème Versement', rec: installments.versement2 },
+      { key: 'versement3', label: '3ème Versement', rec: installments.versement3 },
+      { key: 'versement4', label: '4ème Versement', rec: installments.versement4 },
+      { key: 'versement5', label: '5ème Versement (Solde)', rec: installments.versement5 },
     ].map((inst) => {
       const isPaid = Boolean(inst.rec && inst.rec.amount && inst.rec.amount > 0);
       return {
         key: inst.key,
         label: inst.label,
-        amount: isPaid ? inst.rec!.amount : inst.defaultAmount,
+        // Jamais de montant estimé/proportionnel pour une tranche non réglée : 0 tant qu'aucun
+        // versement réel n'est enregistré, à l'identique de la règle déjà appliquée au Dashboard
+        // et aux Rapports côté Direction.
+        amount: isPaid ? inst.rec!.amount : 0,
         isPaid,
         method: inst.rec?.paymentMethod || inst.rec?.method || 'Espèces',
         date: inst.rec?.date || activeChild.paymentDate || '—',
@@ -300,7 +303,9 @@ export function ParentScolariteTab({
       return emptyBoarding;
     }
 
-    const monthlyRate = customSub?.monthlyRate || 75000;
+    // Même tarif par défaut que la page Internat elle-même (boarding-view.tsx) — un tarif
+    // différent ici affichait un total différent pour le même élève selon la page consultée.
+    const monthlyRate = customSub?.monthlyRate || 25000;
     const pavilion =
       customSub?.pavilion ||
       (activeChild.gender === 'female'

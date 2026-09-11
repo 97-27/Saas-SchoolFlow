@@ -326,28 +326,12 @@ export function ParentBulletinsView({
           };
         }
       }
-      if (activeSession?.fullName) {
-        const normName = activeSession.fullName.toLowerCase().trim();
-        const found = allParentFamilies.find((f) =>
-          f.guardianName.toLowerCase().includes(normName) || normName.includes(f.guardianName.toLowerCase())
-        );
-        if (found) return found;
-
-        const directMatch = allStudents.filter((s) => {
-          const g = (s.guardianName || '').toLowerCase().trim();
-          return g && (g.includes(normName) || normName.includes(g));
-        });
-        if (directMatch.length > 0) {
-          return {
-            key: 'parent_direct',
-            guardianName: directMatch[0].guardianName,
-            phone: directMatch[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
-            whatsapp: directMatch[0].whatsappPhone || activeSession.phone || '+225 07 08 09 10 11',
-            children: directMatch,
-          };
-        }
-      }
-      return allParentFamilies[0] || null;
+      // Aucun repli par correspondance approximative de nom, et surtout jamais de repli sur
+      // "la première famille de la liste" : ce dernier cas exposait systématiquement les
+      // bulletins d'une famille AU HASARD à tout parent dont la session n'avait pas de
+      // matchedChildrenIds valide. matchedChildrenIds (fixé une seule fois à la connexion, par
+      // téléphone) est la seule source fiable pour un parent — sans elle, il ne doit rien voir.
+      return null;
     }
 
     if (selectedParentKey) {

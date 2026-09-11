@@ -682,10 +682,12 @@ export function LoginView({
     e.preventDefault();
     setErrorMessage('');
 
-    // 1. Validation des champs d'identité
+    // 1. Validation des champs d'identité — le nom du Fondateur n'est PAS exigé séparément : dans
+    // une petite école, le Directeur et le Fondateur sont souvent la même personne, et forcer la
+    // saisie d'un second nom (parfois inventé juste pour passer le formulaire) n'apportait aucune
+    // sécurité réelle, seulement de la friction inutile à l'inscription.
     if (
       !signupResponsableName.trim() ||
-      !signupFounderName.trim() ||
       !signupSchoolName.trim() ||
       !signupSchoolShortName.trim() ||
       !signupSchoolAddress.trim() ||
@@ -771,7 +773,9 @@ export function LoginView({
         country: 'Côte d’Ivoire',
         district: 'Abidjan',
         ministryCode: '',
-        founderName: signupFounderName.trim() || 'Fondateur / Promoteur',
+        // Si le Fondateur n'est pas renseigné séparément, le Directeur en fait aussi office —
+        // cas le plus courant pour une petite école (un seul et même responsable).
+        founderName: signupFounderName.trim() || signupResponsableName.trim() || 'Fondateur / Promoteur',
         directorName: signupResponsableName.trim() || 'Directeur Général',
         studiesDirectorName: signupResponsableName.trim() || 'Direction des Études',
         logoUrl: '',
@@ -814,7 +818,7 @@ export function LoginView({
         addLiveStaffUser(
           {
             id: `staff-fondateur-${Date.now() + 1}`,
-            fullName: signupFounderName.trim(),
+            fullName: signupFounderName.trim() || signupResponsableName.trim(),
             role: 'Fondateur & Promoteur (Supervision Suprême)',
             roleId: 'fondateur',
             email: signupEmail.trim(),
@@ -849,15 +853,29 @@ export function LoginView({
         console.error('Erreur création école:', err);
       }
 
+      // Vérifier que l'école est bien visible dans la base Cloud partagée avant de confirmer le
+      // succès : la sauvegarde vers Supabase se fait normalement en arrière-plan sans jamais
+      // remonter d'erreur au Directeur — si elle échoue (réseau, configuration), l'établissement
+      // restait invisible sur tout autre appareil sans que personne ne le sache.
+      let cloudWarning = '';
+      try {
+        const verify = await getAllSchoolsFromSupabase();
+        if (!verify.some((s) => s.slug === slug)) {
+          cloudWarning = ' ⚠️ Sauvegarde en ligne non confirmée — vérifiez votre connexion internet, sinon votre espace restera limité à cet appareil.';
+        }
+      } catch (e) {
+        cloudWarning = ' ⚠️ Impossible de confirmer la sauvegarde en ligne — vérifiez votre connexion internet.';
+      }
+
       setSuccessToast({
-        title: 'Abonnement activé avec succès !',
-        subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.`,
+        title: cloudWarning ? 'Abonnement activé — vérification requise' : 'Abonnement activé avec succès !',
+        subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.${cloudWarning}`,
       });
       setIsLoading(false);
 
       setTimeout(() => {
         router.push(`/${slug}/admin/dashboard`);
-      }, 3500);
+      }, cloudWarning ? 6000 : 3500);
     }, 800);
   };
 
@@ -1380,23 +1398,22 @@ export function LoginView({
 
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
-                      <span>Noms et Prénoms du Fondateur *</span>
-                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Promoteur</span>
+                      <span>Noms et Prénoms du Fondateur</span>
+                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Promoteur (facultatif)</span>
                     </label>
                     <div className="relative">
                       <ShieldCheck className="w-4 h-4 text-amber-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="text"
-                        required
                         autoComplete="off"
                         value={signupFounderName}
                         onChange={(e) => setSignupFounderName(e.target.value)}
-                        placeholder="Ex : M. KOUASSI YAO JEAN"
+                        placeholder="Laisser vide si le Directeur est aussi le Fondateur"
                         className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                       />
                     </div>
                     <p className="text-[10.5px] text-amber-800 font-semibold flex items-center gap-1 mt-0.5">
-                      🏛️ Renseigner le nom du fondateur, propriétaire légal de l'école.
+                      🏛️ Uniquement si le Fondateur est une personne différente du Directeur.
                     </p>
                   </div>
                 </div>
