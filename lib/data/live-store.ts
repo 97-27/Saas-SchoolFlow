@@ -3263,6 +3263,7 @@ export interface ResetScopeOptions {
   specialDiscounts?: boolean;// Réductions accordées
   messages?: boolean;        // Messages WhatsApp & Historique de diffusion
   staff?: boolean;           // Comptes personnel ajoutés (conserve Directeur & Fondateur)
+  personnel?: boolean;       // Registre RH du Personnel (enseignants) — page Personnel, distinct des comptes de connexion ci-dessus
 
   // --- 2. Interfaces des Collaborateurs & Membres (Hors Direction) ---
   secretaireInterface?: boolean; // Interface Secrétaire : admissions, fiches élèves, dossiers scolaires
@@ -3304,6 +3305,7 @@ export function resetSchoolData(
       specialDiscounts: true,
       messages: true,
       staff: true,
+      personnel: true,
       secretaireInterface: true,
       comptableInterface: true,
       enseignantInterface: true,
@@ -3336,6 +3338,15 @@ export function resetSchoolData(
     if (doAll || opt.salaries || opt.comptableInterface) {
       localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_staff_salaries_v1_${slug}`, JSON.stringify([]));
+    }
+
+    // 4bis. Registre RH du Personnel (page Personnel — fiches enseignants, documents, statuts).
+    // Distinct des comptes de connexion gérés par l'option "staff" ci-dessus : ce sont deux
+    // registres totalement séparés dans le code (aucun des deux n'affecte l'autre), donc une
+    // remise à zéro complète doit explicitement vider les deux pour ne laisser aucune fiche
+    // fictive/de test derrière elle.
+    if (doAll || opt.personnel) {
+      localStorage.setItem('schoolflow_teachers_data_v3', JSON.stringify([]));
     }
 
     // 5. Notes, Bulletins & Pédagogie - Si Module grades OU Interface Enseignant

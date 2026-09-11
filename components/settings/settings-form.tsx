@@ -74,6 +74,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     specialDiscounts: true,
     messages: true,
     staff: true,
+    personnel: true,
     // Interfaces Membres & Collaborateurs (hors Direction)
     secretaireInterface: true,
     comptableInterface: true,
@@ -1879,6 +1880,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       key: 'salaries',
                       label: '💼 Salaires & Paie du Personnel',
                       desc: 'Bulletins de paie du personnel, primes, acomptes et cotisations',
+                    },
+                    {
+                      key: 'personnel',
+                      label: '🏫 Registre du Personnel (Enseignants)',
+                      desc: 'Fiches enseignants, pièces et statuts saisis sur la page Personnel',
                     },
                     {
                       key: 'grades',
