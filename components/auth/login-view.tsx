@@ -51,6 +51,7 @@ import {
   updateFullStaffUser,
   updateStaffLoginContact,
   broadcastLiveUpdate,
+  addLiveStaffUser,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { getAllSchoolsFromSupabase } from '@/lib/supabase/services';
@@ -709,11 +710,11 @@ export function LoginView({
 
     setIsLoading(true);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const cleanSigle = signupSchoolShortName.trim().toUpperCase();
 
       // Générer le slug de l'école (priorité au sigle court si pertinent, sinon au nom)
-      const slug =
+      let slug =
         (cleanSigle.length >= 2 ? cleanSigle : signupSchoolName)
           .toLowerCase()
           .trim()
@@ -722,6 +723,27 @@ export function LoginView({
           .replace(/[^a-z0-9\s-]/g, '')
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
+
+      // Vérifier l'unicité du slug (identifiant d'établissement dans l'URL) avant de créer
+      // l'école : deux écoles au sigle proche (ex: deux "EPC") généraient sinon exactement la
+      // même adresse et finissaient par mélanger leurs données dans la même base partagée. On
+      // vérifie contre la base Cloud partagée (toutes écoles) ET la liste locale de cet appareil.
+      try {
+        const [cloudSchools, localSchools] = await Promise.all([
+          getAllSchoolsFromSupabase().catch(() => [] as School[]),
+          Promise.resolve(getRegisteredSchools()),
+        ]);
+        const takenSlugs = new Set<string>([
+          ...cloudSchools.map((s) => s.slug),
+          ...localSchools.map((s) => s.slug),
+        ]);
+        if (takenSlugs.has(slug)) {
+          slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+        }
+      } catch (e) {
+        // En cas d'échec de la vérification réseau, poursuivre avec le slug initial plutôt que
+        // de bloquer l'inscription.
+      }
 
       // Sigle officiel de l'école (renseigné ou déduit)
       const words = signupSchoolName.trim().split(/\s+/);
@@ -761,8 +783,48 @@ export function LoginView({
         createdAt: new Date().toISOString(),
       };
 
+      // Génère un code d'authentification unique aléatoire par établissement — le code générique
+      // "DIR-2026"/"FND-2026" était identique pour TOUTES les nouvelles écoles créées, ce qui
+      // permettait en théorie à quiconque connaissant le nom du Directeur/Fondateur officiel
+      // (souvent une information publique/connue localement) de se connecter à leur espace.
+      const generateUniqueCode = (prefix: string) =>
+        `${prefix}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      const directorAuthCode = generateUniqueCode('DIR');
+      const founderAuthCode = generateUniqueCode('FND');
+
       try {
         registerSchoolWithSubscription(newSchool);
+
+        // Créer les fiches réelles Directeur & Fondateur avec leur code unique, pour que
+        // verifyUserAuthCodeForLogin() les valide sur leur vrai code et non plus sur un
+        // code générique partagé par toutes les écoles.
+        addLiveStaffUser(
+          {
+            id: `staff-directeur-${Date.now()}`,
+            fullName: signupResponsableName.trim(),
+            role: 'Directeur des Études',
+            roleId: 'directeur',
+            email: signupEmail.trim(),
+            phone: cleanSignupPhone,
+            authCode: directorAuthCode,
+            status: 'Actif',
+          },
+          slug
+        );
+        addLiveStaffUser(
+          {
+            id: `staff-fondateur-${Date.now() + 1}`,
+            fullName: signupFounderName.trim(),
+            role: 'Fondateur & Promoteur (Supervision Suprême)',
+            roleId: 'fondateur',
+            email: signupEmail.trim(),
+            phone: cleanSignupPhone,
+            authCode: founderAuthCode,
+            status: 'Actif',
+          },
+          slug
+        );
+
         // Sauvegarder la session active en tant que Directeur Administrateur
         const sessionData = {
           fullName: `Dr. ${signupResponsableName.trim()}`,
@@ -774,13 +836,13 @@ export function LoginView({
           department: 'Direction des Études',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
-          authCode: 'DIR-2026',
+          authCode: directorAuthCode,
           loginTime: new Date().toISOString(),
         };
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
         window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
         const cookiePayload = encodeURIComponent(
-          JSON.stringify({ slug, roleId: 'directeur', authCode: 'DIR-2026' })
+          JSON.stringify({ slug, roleId: 'directeur', authCode: directorAuthCode })
         );
         document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
       } catch (err) {
@@ -789,13 +851,13 @@ export function LoginView({
 
       setSuccessToast({
         title: 'Abonnement activé avec succès !',
-        subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre espace est prêt.`,
+        subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.`,
       });
       setIsLoading(false);
 
       setTimeout(() => {
         router.push(`/${slug}/admin/dashboard`);
-      }, 900);
+      }, 3500);
     }, 800);
   };
 

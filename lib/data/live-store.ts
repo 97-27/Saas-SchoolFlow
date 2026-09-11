@@ -2765,9 +2765,13 @@ export function verifyUserAuthCodeForLogin(
 
     const liveStaff = getLiveStaffUsers(schoolSlug);
     const staffFounder = liveStaff.find((s) => s.roleId === 'fondateur');
+    // Le code de secours générique "FND-2026" n'est utilisé que comme valeur PAR DÉFAUT quand
+    // aucune fiche Fondateur n'existe encore (école tout juste créée avant la génération de son
+    // code unique) — il ne doit jamais rester valide EN PLUS du vrai code une fois celui-ci
+    // configuré, sinon ce code générique reste un accès permanent à toutes les écoles.
     const validFounderCode = (staffFounder?.authCode || 'FND-2026').toUpperCase();
 
-    if (cleanInputCode !== validFounderCode && cleanInputCode !== 'FND-2026') {
+    if (cleanInputCode !== validFounderCode) {
       return {
         isValid: false,
         reason: `❌ Accès refusé : Le Code d'Authentification saisi est incorrect pour le profil Fondateur.`,
@@ -2813,8 +2817,10 @@ export function verifyUserAuthCodeForLogin(
       };
     }
 
+    // Même principe que pour le Fondateur ci-dessus : "DIR-2026" n'est qu'une valeur par défaut
+    // tant qu'aucune fiche Directeur n'existe, jamais un code de secours permanent.
     const validDirectorCode = (staffDirector?.authCode || 'DIR-2026').toUpperCase();
-    if (cleanInputCode !== validDirectorCode && cleanInputCode !== 'DIR-2026') {
+    if (cleanInputCode !== validDirectorCode) {
       return {
         isValid: false,
         reason: `❌ Accès refusé : Le Code d'Authentification saisi est incorrect pour le profil de Direction.`,
@@ -3236,10 +3242,11 @@ export function isSchoolDeleted(slug?: string): boolean {
     const rawDeleted = localStorage.getItem(DELETED_SCHOOLS_KEY);
     if (!rawDeleted) return false;
     const deletedList: string[] = JSON.parse(rawDeleted);
-    if (deletedList.includes('all')) return true;
-    if (slug && deletedList.includes(slug)) return true;
-    if (deletedList.includes('epc-manoi')) return true;
-    return false;
+    // Ne vérifier QUE le slug demandé — un ancien bug ajoutait systématiquement 'epc-manoi' et
+    // le sentinel 'all' à CETTE liste lors de la suppression de N'IMPORTE QUEL compte d'essai,
+    // bloquant ensuite la connexion à toutes les écoles (y compris la production) sur ce même
+    // appareil. deleteSchoolAccount() n'ajoute désormais plus que le slug réellement supprimé.
+    return Boolean(slug && deletedList.includes(slug));
   } catch (e) {
     return false;
   }
@@ -3463,10 +3470,12 @@ export function resetSchoolData(
 export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   try {
-    // 1. Ajouter aux écoles supprimées
+    // 1. Ajouter UNIQUEMENT ce slug aux écoles supprimées — ne jamais y ajouter 'epc-manoi' ou
+    // 'all' en plus : ce navigateur se retrouverait alors bloqué pour se connecter à N'IMPORTE
+    // QUELLE école, y compris la production, après la suppression d'un simple compte d'essai.
     const rawDeleted = localStorage.getItem(DELETED_SCHOOLS_KEY);
     const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-    const updatedDeleted = Array.from(new Set([...prevDeleted, slug, 'epc-manoi', 'all']));
+    const updatedDeleted = Array.from(new Set([...prevDeleted, slug]));
     localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(updatedDeleted));
 
     // 2. Supprimer toutes les données associées

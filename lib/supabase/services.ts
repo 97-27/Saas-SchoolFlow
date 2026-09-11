@@ -1136,21 +1136,13 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
       .eq('role_id', 'system_services_data')
       .maybeSingle();
 
-    let mergedData = servicesData;
-    if (existing?.department) {
-      try {
-        const prev = JSON.parse(existing.department);
-        mergedData = {
-          boardingSubscriptions: (servicesData.boardingSubscriptions && servicesData.boardingSubscriptions.length > 0) ? servicesData.boardingSubscriptions : (prev.boardingSubscriptions || []),
-          boardingPayments: (servicesData.boardingPayments && Object.keys(servicesData.boardingPayments).length > 0) ? servicesData.boardingPayments : (prev.boardingPayments || {}),
-          canteenSubscriptions: (servicesData.canteenSubscriptions && Object.keys(servicesData.canteenSubscriptions).length > 0) ? servicesData.canteenSubscriptions : (prev.canteenSubscriptions || {}),
-          canteenPayments: (servicesData.canteenPayments && Object.keys(servicesData.canteenPayments).length > 0) ? servicesData.canteenPayments : (prev.canteenPayments || {}),
-          transportSubscriptions: (servicesData.transportSubscriptions && Object.keys(servicesData.transportSubscriptions).length > 0) ? servicesData.transportSubscriptions : (prev.transportSubscriptions || {}),
-          transportPayments: (servicesData.transportPayments && Object.keys(servicesData.transportPayments).length > 0) ? servicesData.transportPayments : (prev.transportPayments || {}),
-          installments: (servicesData.installments && Object.keys(servicesData.installments).length > 0) ? servicesData.installments : (prev.installments || {}),
-        };
-      } catch (e) {}
-    }
+    // Les deux appelants de cette fonction (dashboard-view.tsx et /api/sync) reconstruisent et
+    // envoient systématiquement les 6 collections au complet à chaque appel — il n'existe pas de
+    // "mise à jour partielle" où un champ manquant signifierait "ne pas y toucher". Fusionner en
+    // gardant l'ancienne valeur dès qu'une collection arrive vide écrasait donc silencieusement
+    // toute suppression légitime du DERNIER élève d'un service (internat/cantine/transport) : la
+    // liste vide envoyée était rejetée et l'ancien abonné revenait au prochain rafraîchissement.
+    const mergedData = servicesData;
 
     if (existing?.id) {
       await supabase
