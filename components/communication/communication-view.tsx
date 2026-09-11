@@ -31,6 +31,7 @@ import {
   UserCheck,
   ExternalLink,
   ChevronRight,
+  Check,
 } from 'lucide-react';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate, formatFCFA } from '@/lib/utils/formatters';
@@ -243,6 +244,10 @@ export function CommunicationView({
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastProgress, setBroadcastProgress] = useState<number>(0);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
+  // WhatsApp "click-to-chat" n'ouvre qu'UNE conversation à la fois : on ne peut pas envoyer
+  // réellement à tout un groupe en un clic. sentPhones suit qui a VRAIMENT été contacté
+  // (fenêtre WhatsApp ouverte pour ce numéro) pendant cette session de diffusion.
+  const [sentPhones, setSentPhones] = useState<Set<string>>(new Set());
 
   const composeFormRef = useRef<HTMLDivElement>(null);
 
@@ -285,6 +290,22 @@ export function CommunicationView({
   }, [students, composeStudentSearch]);
 
   // Calcul dynamique et exact du nombre de parents ciblés selon les effectifs réels
+  // Construit la liste dédupliquée (par téléphone) des parents réellement joignables pour un
+  // groupe d'élèves — nécessaire pour envoyer un VRAI message à chacun (WhatsApp "click-to-chat"
+  // ne permet d'ouvrir qu'UNE conversation à la fois, il n'existe aucun envoi groupé automatique
+  // sans une intégration WhatsApp Business API, absente de ce projet).
+  const buildRecipientsList = (list: Student[]) => {
+    const seen = new Set<string>();
+    const out: { name: string; phone: string }[] = [];
+    list.forEach((s) => {
+      const phone = (s.whatsappPhone || s.guardianPhone || '').trim();
+      if (!phone || seen.has(phone)) return;
+      seen.add(phone);
+      out.push({ name: s.guardianName || `Parent de ${s.firstName} ${s.lastName}`, phone });
+    });
+    return out;
+  };
+
   const targetedRecipients = useMemo(() => {
     const allUniquePhones = new Set(
       students.map((s) => s.whatsappPhone || s.guardianPhone || '').filter(Boolean)
@@ -292,11 +313,13 @@ export function CommunicationView({
     const totalSchoolParents = allUniquePhones.size > 0 ? allUniquePhones.size : students.length;
 
     if (composeRecipientType === 'all') {
+      const recipientsList = buildRecipientsList(students);
       return {
         label: 'Toute l\'École (Tous les niveaux)',
-        count: totalSchoolParents,
+        count: recipientsList.length || totalSchoolParents,
         samplePhone: students[0]?.whatsappPhone || '+225 07 08 12 34 56',
         sampleParent: 'Tous les Parents d\'Élèves',
+        recipientsList,
       };
     }
     if (composeRecipientType === 'cycle') {
@@ -319,11 +342,13 @@ export function CommunicationView({
       );
       const cycleCount = cyclePhones.size > 0 ? cyclePhones.size : cycleStudents.length;
 
+      const cycleRecipients = buildRecipientsList(cycleStudents);
       return {
         label: cycleNames[composeTargetCycle] || 'Cycle Scolaire',
-        count: cycleCount,
+        count: cycleRecipients.length || cycleCount,
         samplePhone: cycleStudents[0]?.whatsappPhone || '+225 07 08 12 34 56',
         sampleParent: `Parents du ${cycleNames[composeTargetCycle] || 'cycle'}`,
+        recipientsList: cycleRecipients,
       };
     }
     if (composeRecipientType === 'class') {
@@ -332,12 +357,14 @@ export function CommunicationView({
         inClass.map((s) => s.whatsappPhone || s.guardianPhone || '').filter(Boolean)
       );
       const classCount = classPhones.size > 0 ? classPhones.size : inClass.length;
+      const classRecipients = buildRecipientsList(inClass);
 
       return {
         label: `Classe de ${composeTargetClass}`,
-        count: classCount,
+        count: classRecipients.length || classCount,
         samplePhone: inClass[0]?.whatsappPhone || '+225 07 08 12 34 56',
         sampleParent: inClass[0]?.guardianName || `Parents d'élèves de ${composeTargetClass}`,
+        recipientsList: classRecipients,
       };
     }
     if (composeRecipientType === 'individual') {
@@ -347,6 +374,7 @@ export function CommunicationView({
           count: 1,
           samplePhone: selectedStudent.whatsappPhone || '+225 07 08 12 34 56',
           sampleParent: selectedStudent.guardianName || `Parent de ${selectedStudent.firstName}`,
+          recipientsList: buildRecipientsList([selectedStudent]),
         };
       }
       return {
@@ -354,9 +382,10 @@ export function CommunicationView({
         count: 1,
         samplePhone: '+225 07 08 12 34 56',
         sampleParent: 'Parent d\'élève',
+        recipientsList: [] as { name: string; phone: string }[],
       };
     }
-    return { label: 'Destinataires', count: 0, samplePhone: '', sampleParent: '' };
+    return { label: 'Destinataires', count: 0, samplePhone: '', sampleParent: '', recipientsList: [] as { name: string; phone: string }[] };
   }, [composeRecipientType, composeTargetCycle, composeTargetClass, selectedStudent, students]);
 
   // Répertoire complet de toutes les familles / parents de l'école
@@ -503,20 +532,16 @@ export function CommunicationView({
     setIsBroadcasting(false);
   };
 
-  // Exécution réelle de la diffusion
-  const handleExecuteBroadcast = () => {
-    setIsBroadcasting(true);
-    setBroadcastProgress(25);
-
-    // Formatage texte WhatsApp officiel
+  // Construit le texte WhatsApp officiel une seule fois, réutilisé pour chaque destinataire
+  const buildBroadcastMessage = () => {
     const targetInfoText =
       composeRecipientType === 'individual' && selectedStudent
         ? `Élève concerné(e) : *${selectedStudent.lastName} ${selectedStudent.firstName}* (Classe : ${selectedStudent.grade})\n`
         : `Destinataires : *${targetedRecipients.label}*\n`;
 
-    const fullMessage =
+    return (
       `*COMMUNICATION OFFICIELLE — ${currentSchool.name.toUpperCase()}*\n` +
-      `📅 Date : 29/08/2026\n` +
+      `📅 Date : ${new Date().toLocaleDateString('fr-FR')}\n` +
       `🏫 Année Scolaire : ${currentSchool.academicYear}\n` +
       `${targetInfoText}` +
       `─────────────────────────\n` +
@@ -524,42 +549,87 @@ export function CommunicationView({
       `${composeBody}\n\n` +
       `─────────────────────────\n` +
       `✍️ *La Direction de l'Établissement*\n` +
-      `📞 Contact : ${currentSchool.phone || '+225 07 08 09 10 11'}`;
+      `📞 Contact : ${currentSchool.phone || '+225 07 08 09 10 11'}`
+    );
+  };
 
-    const cleanPhone = targetedRecipients.samplePhone.replace(/\D/g, '') || '2250708091011';
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(fullMessage)}`;
+  // Ouvre la conversation WhatsApp d'UN destinataire précis et le marque comme réellement
+  // contacté. WhatsApp ne fournit aucun moyen d'envoyer automatiquement à plusieurs numéros à
+  // la fois (pas d'intégration WhatsApp Business API dans ce projet) — chaque envoi nécessite
+  // encore un clic sur "Envoyer" dans la fenêtre WhatsApp qui s'ouvre.
+  const handleSendToOne = (phone: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const withCountry = cleanPhone.startsWith('225') ? cleanPhone : `225${cleanPhone}`;
+    const whatsappUrl = `https://wa.me/${withCountry}?text=${encodeURIComponent(buildBroadcastMessage())}`;
+    window.open(whatsappUrl, '_blank');
+    setSentPhones((prev) => new Set(prev).add(phone));
+  };
+
+  // Démarre une session de diffusion : ouvre directement le premier destinataire, puis laisse
+  // la liste des suivants visible dans le modal pour un envoi assisté un par un.
+  const handleExecuteBroadcast = () => {
+    setIsBroadcasting(true);
+    setBroadcastProgress(50);
+    setSentPhones(new Set());
+
+    const list = targetedRecipients.recipientsList;
 
     setTimeout(() => {
-      setBroadcastProgress(65);
-      setTimeout(() => {
-        setBroadcastProgress(100);
-        setIsBroadcasting(false);
+      setBroadcastProgress(100);
+      setIsBroadcasting(false);
 
-        // Ouvrir WhatsApp
-        window.open(whatsappUrl, '_blank');
+      if (list.length > 0) {
+        handleSendToOne(list[0].phone);
+      }
 
-        // Enregistrer dans l'historique
+      // N'enregistrer dans l'historique que si un seul destinataire existe (cas individuel) —
+      // pour un groupe, l'historique n'est mis à jour qu'à la fermeture du modal, avec le
+      // NOMBRE RÉEL de fenêtres WhatsApp effectivement ouvertes, jamais la cible théorique.
+      if (list.length <= 1) {
         const newRecord: BroadcastRecord = {
           id: `bc-${Date.now()}`,
-          date: '29/08/2026 ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          date: new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           targetType: composeRecipientType,
           targetLabel: targetedRecipients.label,
-          recipientCount: targetedRecipients.count,
+          recipientCount: list.length,
           channel: composeChannel,
           subject: composeSubject,
           body: composeBody,
         };
         setBroadcasts((prev) => [newRecord, ...prev]);
-
-        setToastMessage(
-          `✓ Message WhatsApp diffusé avec succès à ${targetedRecipients.label} (${targetedRecipients.count} parents) !`
-        );
+        setToastMessage(`✓ Message WhatsApp ouvert pour ${targetedRecipients.sampleParent} !`);
         setShowBroadcastModal(false);
         setComposeSubject('');
         setComposeBody('');
         setActiveTab('history');
-      }, 600);
-    }, 600);
+      }
+    }, 500);
+  };
+
+  // Fermer le modal de diffusion groupée : enregistre le nombre RÉEL de parents contactés
+  // (jamais la cible théorique) dans l'historique, pour rester honnête sur ce qui a été fait.
+  const handleCloseBroadcastModal = () => {
+    if (targetedRecipients.recipientsList.length > 1 && sentPhones.size > 0) {
+      const newRecord: BroadcastRecord = {
+        id: `bc-${Date.now()}`,
+        date: new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        targetType: composeRecipientType,
+        targetLabel: targetedRecipients.label,
+        recipientCount: sentPhones.size,
+        channel: composeChannel,
+        subject: composeSubject,
+        body: composeBody,
+      };
+      setBroadcasts((prev) => [newRecord, ...prev]);
+      setToastMessage(
+        `✓ ${sentPhones.size} sur ${targetedRecipients.recipientsList.length} parent(s) réellement contacté(s) via WhatsApp.`
+      );
+      setComposeSubject('');
+      setComposeBody('');
+      setActiveTab('history');
+    }
+    setShowBroadcastModal(false);
+    setSentPhones(new Set());
   };
 
   return (
@@ -1703,7 +1773,7 @@ export function CommunicationView({
               </div>
               <button
                 type="button"
-                onClick={() => setShowBroadcastModal(false)}
+                onClick={handleCloseBroadcastModal}
                 className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1732,42 +1802,109 @@ export function CommunicationView({
               </div>
             </div>
 
-            {/* Barre de progression pendant l'envoi */}
-            {isBroadcasting && (
-              <div className="space-y-1.5 py-1">
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                  <span>Envoi en cours sur WhatsApp...</span>
-                  <span>{broadcastProgress}%</span>
+            {/* Cas d'un groupe (plusieurs destinataires) : WhatsApp n'offre aucun envoi groupé
+                automatique — chaque parent doit être ouvert et envoyé individuellement. On le dit
+                clairement plutôt que de prétendre à une diffusion en un clic. */}
+            {targetedRecipients.recipientsList.length > 1 ? (
+              <>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    WhatsApp ne permet pas d&apos;envoi groupé automatique : cliquez sur <strong>« Envoyer »</strong> pour
+                    chaque parent ci-dessous — une fenêtre WhatsApp s&apos;ouvre déjà remplie, il ne reste qu&apos;à
+                    confirmer l&apos;envoi dans WhatsApp.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-800 px-1">
+                  <span>Progression réelle</span>
+                  <span>{sentPhones.size} / {targetedRecipients.recipientsList.length} contacté(s)</span>
                 </div>
                 <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-600 transition-all duration-300 rounded-full"
-                    style={{ width: `${broadcastProgress}%` }}
+                    style={{ width: `${(sentPhones.size / targetedRecipients.recipientsList.length) * 100}%` }}
                   />
                 </div>
-              </div>
-            )}
 
-            {/* Actions */}
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                disabled={isBroadcasting}
-                onClick={() => setShowBroadcastModal(false)}
-                className="flex-1 py-3 px-4 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all text-center cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                disabled={isBroadcasting}
-                onClick={handleExecuteBroadcast}
-                className="flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all text-center cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>Confirmer & Envoyer</span>
-              </button>
-            </div>
+                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                  {targetedRecipients.recipientsList.map((r) => {
+                    const isSent = sentPhones.has(r.phone);
+                    return (
+                      <div
+                        key={r.phone}
+                        className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs ${isSent ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{r.name}</p>
+                          <p className="text-[10.5px] text-slate-500 font-mono">{r.phone}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSendToOne(r.phone)}
+                          className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                            isSent
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          }`}
+                        >
+                          {isSent ? <><Check className="w-3 h-3" /> Envoyé</> : <><Send className="w-3 h-3" /> Envoyer</>}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCloseBroadcastModal}
+                    className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 transition-all text-center cursor-pointer"
+                  >
+                    Terminer ({sentPhones.size} contacté{sentPhones.size > 1 ? 's' : ''})
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Barre de progression pendant l'envoi (cas d'un destinataire unique) */}
+                {isBroadcasting && (
+                  <div className="space-y-1.5 py-1">
+                    <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                      <span>Ouverture de WhatsApp...</span>
+                      <span>{broadcastProgress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-600 transition-all duration-300 rounded-full"
+                        style={{ width: `${broadcastProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isBroadcasting}
+                    onClick={handleCloseBroadcastModal}
+                    className="flex-1 py-3 px-4 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 transition-all text-center cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBroadcasting}
+                    onClick={handleExecuteBroadcast}
+                    className="flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-md shadow-emerald-600/30 transition-all text-center cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Confirmer & Envoyer</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

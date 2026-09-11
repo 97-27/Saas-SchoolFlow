@@ -68,8 +68,21 @@ export function AttendanceView({
   const [unlockReason, setUnlockReason] = useState<string>('');
   const [unlockTeacherName, setUnlockTeacherName] = useState<string>('');
 
-  // Map des présences : [slotId_date_studentId] -> { status, reason }
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; reason: string }>>({});
+  // Map des présences : [slotId_date_studentId] -> { status, reason }. Persistée dans
+  // localStorage (clé propre à l'école) : sans cette persistance, "Valider & Verrouiller
+  // l'Appel" n'écrivait qu'un simple drapeau de verrouillage, jamais les présences/absences
+  // elles-mêmes — un rechargement de page effaçait silencieusement tout l'appel du jour, malgré
+  // le message "sauvegardée et sécurisée avec succès".
+  const attendanceStorageKey = `schoolflow_attendance_records_v1_${schoolSlug}`;
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; reason: string }>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem(attendanceStorageKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  });
 
   // Synchronisation des élèves et de l'école
   useEffect(() => {
@@ -83,6 +96,15 @@ export function AttendanceView({
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
+
+  // Sauvegarder chaque modification de l'appel immédiatement — plus besoin d'attendre le clic
+  // sur "Valider" pour que les présences saisies survivent à un rechargement de la page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(attendanceStorageKey, JSON.stringify(attendanceMap));
+    } catch (e) {}
+  }, [attendanceMap, attendanceStorageKey]);
 
   // Vérifier si la session courante est verrouillée
   useEffect(() => {
@@ -106,18 +128,16 @@ export function AttendanceView({
     return students.filter((s) => s.grade === selectedClass);
   }, [students, selectedClass]);
 
-  // Initialisation par défaut de la feuille d'appel pour ce créneau et cette date
+  // Initialisation par défaut de la feuille d'appel pour ce créneau et cette date : tout élève
+  // sans présence déjà saisie démarre "présent" par défaut, jamais présumé absent — un vrai
+  // appel n'a pas encore été pris tant que l'enseignant n'a rien coché.
   useEffect(() => {
     setAttendanceMap((prev) => {
       const next = { ...prev };
-      classStudents.forEach((stu, idx) => {
+      classStudents.forEach((stu) => {
         const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
         if (!next[key]) {
-          const isAbsentDemo = (idx === 2 || idx === 7);
-          next[key] = {
-            status: isAbsentDemo ? 'absent' : 'present',
-            reason: isAbsentDemo ? 'Non justifié' : '',
-          };
+          next[key] = { status: 'present', reason: '' };
         }
       });
       return next;

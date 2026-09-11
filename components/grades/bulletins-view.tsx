@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
 import { defaultSchool } from '@/lib/data/mock-data';
-import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils/formatters';
 import {
@@ -595,6 +595,52 @@ export function BulletinsView({
     };
   }, [studentsWithGrades]);
 
+  // Bulletins déjà validés pour cette classe et ce trimestre (alimente le Tableau d'Honneur)
+  const validatedRankingsForClass = useMemo(
+    () => getValidatedClassRankings(selectedClass, selectedPeriod),
+    [selectedClass, selectedPeriod, studentsWithGrades]
+  );
+
+  // Valider les bulletins de la classe : envoie les lauréats réels (Top 3 + moyenne >= 14) au
+  // Tableau d'Honneur. Sans cet appel, saveValidatedClassRankings() n'était jamais invoqué nulle
+  // part dans le code — la page Distinctions restait bloquée sur "En attente des bulletins" quel
+  // que soit le nombre de notes réellement saisies.
+  const handleValidateBulletins = () => {
+    const graded = studentsWithGrades.filter((s) => s.average !== null);
+    if (graded.length === 0) {
+      setToastMessage('Aucune note saisie pour cette classe : rien à valider.');
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    const laureates = graded
+      .filter((s) => (s.rank !== null && s.rank <= 3) || (s.average as number) >= 14)
+      .map((s) => {
+        const title =
+          s.rank === 1
+            ? '1er de la Classe'
+            : s.rank === 2
+            ? '2ème de la Classe'
+            : s.rank === 3
+            ? '3ème de la Classe'
+            : "Tableau d'Honneur";
+        return {
+          fullName: s.fullName,
+          grade: s.grade,
+          matricule: s.matricule,
+          average: (s.average as number).toFixed(2),
+          rank: s.rank,
+          rankSuffix: s.rankSuffix,
+          title,
+          isBlank: false,
+        };
+      });
+
+    saveValidatedClassRankings(selectedClass, selectedPeriod, laureates);
+    setToastMessage(`✓ Bulletins de la classe de ${selectedClass} validés — ${laureates.length} lauréat(s) désormais visibles au Tableau d'Honneur.`);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
   const handleOpenBulletinModal = (stu: any) => {
     setSelectedStudentForBulletin(stu);
     setIsPrintModalOpen(true);
@@ -890,15 +936,27 @@ export function BulletinsView({
             </p>
           </div>
 
-          <div className="relative w-64">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher élève ou matricule..."
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
-            />
+          <div className="flex items-center gap-3">
+            <div className="relative w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher élève ou matricule..."
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleValidateBulletins}
+              disabled={classStats.gradedCount === 0}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              title="Envoie les lauréats de cette classe au Tableau d'Honneur (page Distinctions)"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {validatedRankingsForClass ? 'Bulletins validés ✓' : 'Valider les bulletins'}
+            </button>
           </div>
         </div>
 
