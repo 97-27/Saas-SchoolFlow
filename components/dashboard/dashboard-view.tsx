@@ -440,18 +440,29 @@ export function DashboardView({
       });
     }
 
-    students.forEach((s) => {
-      const isBoarder = s.isBoarding || s.notes?.toLowerCase().includes('internat (oui)') || s.address?.toLowerCase().includes('internat (oui)');
-      if (isBoarder) {
+    // Compléter avec les élèves ayant de vrais mois d'internat réglés mais pas (ou plus) de fiche
+    // d'abonnement dédiée (mêmes deux critères que la page Internat elle-même, boarding-view.tsx,
+    // qui fait autorité sur "qui est pensionnaire"). Le simple drapeau isBoarding sur la fiche
+    // élève N'EST PLUS utilisé seul ici : il pouvait rester à `true` indéfiniment sur un élève
+    // après la perte ou la suppression de son abonnement réel, gonflant ce compteur au-delà de ce
+    // que la page Internat elle-même affichait pour les mêmes élèves.
+    if (servicesData?.boardingPayments) {
+      students.forEach((s) => {
         const key = s.id || s.studentNumber || s.fullName;
-        if (key && !seenBoarderKeys.has(key) && !seenBoarderKeys.has(s.studentNumber) && !seenBoarderKeys.has(s.matricule)) {
+        if (!key || seenBoarderKeys.has(key) || seenBoarderKeys.has(s.studentNumber) || seenBoarderKeys.has(s.matricule)) return;
+        const studentMonths =
+          servicesData.boardingPayments[s.id] ||
+          (s.studentNumber ? servicesData.boardingPayments[s.studentNumber] : undefined) ||
+          (s.matricule ? servicesData.boardingPayments[s.matricule] : undefined);
+        const hasPaidMonths = studentMonths && Object.values(studentMonths).some(Boolean);
+        if (hasPaidMonths) {
           seenBoarderKeys.add(key);
           boardingCount++;
           if (s.gender === 'female') boardingGirls++;
           else boardingBoys++;
         }
-      }
-    });
+      });
+    }
 
     // Calculs financiers réels (Factures + paiements directs d'internat consolidés)
     let totalCollected = invoices.reduce(
