@@ -1049,7 +1049,10 @@ export function InscriptionsView({
     // Déclencher le signal sonore de succès
     playRegistrationSuccessSound();
 
-    setSuccessModalData(newStudent);
+    // La grande fenêtre de reçu (avec bouton WhatsApp/Impression) ne s'ouvre plus automatiquement
+    // après l'enregistrement — à la demande du Directeur, qui ne veut plus voir de message
+    // s'afficher au milieu de l'écran à ce moment précis. Le reçu (avec son bouton WhatsApp Parent)
+    // reste consultable à tout moment via le bouton "Action" de la page Élèves.
     setShowConfirmModal(false);
     setSuccessToast(`✓ Reçu enregistré pour ${newStudent.fullName} (${newStudent.studentNumber})`);
     setTimeout(() => setSuccessToast(null), 2500);
@@ -2252,10 +2255,12 @@ export function InscriptionsView({
         </div>
       </div>
 
-      {/* Toast Notification Centrée au Milieu de l'Écran (2.5 secondes) */}
+      {/* Confirmation discrète en bas à droite (2.5 secondes) — jamais au milieu de l'écran, pour
+          ne pas interrompre la personne qui vient elle-même d'enregistrer le reçu. Distincte du
+          bandeau centré en haut, qui lui ne s'affiche que sur les AUTRES interfaces. */}
       {successToast && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
-          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-5 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-sm text-center">
+        <div className="fixed bottom-5 right-5 z-[9999] max-w-xs pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-bold">
             <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-4 h-4" />
             </div>
