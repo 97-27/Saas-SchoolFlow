@@ -382,22 +382,24 @@ export async function POST(request: NextRequest) {
       if (cleanInvoices && Array.isArray(cleanInvoices) && cleanInvoices.length > 0) {
         savePromises.push(batchUpsertInvoices(cleanInvoices, slug));
       }
-      const servicesPayload = {
-        boardingSubscriptions: boardingSubscriptions || currentSchool.boardingSubscriptions || [],
-        boardingPayments: boardingPayments || currentSchool.boardingPayments || {},
-        canteenSubscriptions: canteenSubscriptions || currentSchool.canteenSubscriptions || {},
-        canteenPayments: canteenPayments || currentSchool.canteenPayments || {},
-        transportSubscriptions: transportSubscriptions || currentSchool.transportSubscriptions || {},
-        transportPayments: transportPayments || currentSchool.transportPayments || {},
-        installments: body.installments || currentSchool.installments || {
-          versement1: 65000,
-          versement2: 20000,
-          versement3: 20000,
-          versement4: 15000,
-          versement5: 0,
-        },
-      };
-      savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
+      // N'inclure une clé QUE si cette requête l'a réellement fournie — currentSchool vient d'un
+      // cache mémoire par instance serverless (memoryStore), qui peut être vide sur une instance
+      // qui vient de démarrer (cold start). S'en servir comme valeur de repli pour une clé
+      // absente produisait une fausse valeur "confirmée" ([] ou {}) qui écrasait ensuite, côté
+      // saveServicesDataToSupabase, la vraie donnée stockée dans Supabase. En omettant la clé,
+      // c'est saveServicesDataToSupabase (qui lit l'état réel Supabase avant de fusionner) qui
+      // décide correctement de préserver l'existant.
+      const servicesPayload: Record<string, any> = {};
+      if (boardingSubscriptions !== undefined) servicesPayload.boardingSubscriptions = boardingSubscriptions;
+      if (boardingPayments !== undefined) servicesPayload.boardingPayments = boardingPayments;
+      if (canteenSubscriptions !== undefined) servicesPayload.canteenSubscriptions = canteenSubscriptions;
+      if (canteenPayments !== undefined) servicesPayload.canteenPayments = canteenPayments;
+      if (transportSubscriptions !== undefined) servicesPayload.transportSubscriptions = transportSubscriptions;
+      if (transportPayments !== undefined) servicesPayload.transportPayments = transportPayments;
+      if (body.installments !== undefined) servicesPayload.installments = body.installments;
+      if (Object.keys(servicesPayload).length > 0) {
+        savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
+      }
 
       if (diverseNotes !== undefined && Array.isArray(diverseNotes)) {
         savePromises.push(saveDiverseNotesToSupabase(slug, diverseNotes));

@@ -291,8 +291,25 @@ export function DashboardView({
 
       setServicesData(consolidatedServices);
 
+      // N'envoyer vers le Cloud QUE les collections que CET appareil a réellement en cache local
+      // (lecture localStorage non nulle) — jamais une collection devinée/tombée en repli sur [] ou
+      // {} faute de cache. Un appareil qui clique "Actualiser Cloud" sans jamais avoir ouvert la
+      // page Internat/Cantine/Transport n'a par exemple aucune idée réelle de ces données : lui
+      // laisser quand même envoyer un tableau vide écrasait silencieusement un vrai abonnement
+      // enregistré entre-temps par un autre appareil (constaté concrètement sur l'Internat).
+      const pushableServices: Record<string, any> = {};
+      if (rawBoardingSubs) pushableServices.boardingSubscriptions = boardingSubscriptions;
+      if (rawBoardingPay) pushableServices.boardingPayments = boardingPayments;
+      if (rawCanteenSubs) pushableServices.canteenSubscriptions = canteenSubscriptions;
+      if (rawCanteenPay) pushableServices.canteenPayments = canteenPayments;
+      if (rawTransportSubs) pushableServices.transportSubscriptions = transportSubscriptions;
+      if (rawTransportPay) pushableServices.transportPayments = transportPayments;
+      if (servicesData?.installments) pushableServices.installments = installments;
+
       // Sauvegarde directe Supabase Cloud
-      saveServicesDataToSupabase(activeSlug, consolidatedServices).catch(() => {});
+      if (Object.keys(pushableServices).length > 0) {
+        saveServicesDataToSupabase(activeSlug, pushableServices).catch(() => {});
+      }
 
       await fetch('/api/sync', {
         method: 'POST',
@@ -302,7 +319,7 @@ export function DashboardView({
           students: currentLocalStudents,
           invoices: currentLocalInvoices,
           deletedStudentIds: currentDeletedIds,
-          ...consolidatedServices,
+          ...pushableServices,
         }),
       }).catch(() => {});
     } catch (pushErr) {

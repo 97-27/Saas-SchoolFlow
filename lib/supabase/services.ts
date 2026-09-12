@@ -1142,7 +1142,20 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
     // gardant l'ancienne valeur dès qu'une collection arrive vide écrasait donc silencieusement
     // toute suppression légitime du DERNIER élève d'un service (internat/cantine/transport) : la
     // liste vide envoyée était rejetée et l'ancien abonné revenait au prochain rafraîchissement.
-    const mergedData = servicesData;
+    // Fusion par PRESENCE DE CLE (et non par "valeur non vide") : un appelant peut desormais
+    // n'envoyer qu'une partie des 6 collections (ex: seulement boardingSubscriptions) quand il
+    // n'a pas d'information fiable sur les autres - ces cles absentes conservent alors la vraie
+    // valeur actuellement stockee dans Supabase (existing.department), au lieu d'etre ecrasees
+    // par une valeur par defaut devinee. Une cle PRESENTE dans servicesData, meme avec une valeur
+    // vide ([] ou {}), est en revanche toujours acceptee telle quelle - c'est la seule facon de
+    // retirer legitimement le dernier abonne d'un service.
+    let mergedData = servicesData;
+    if (existing?.department) {
+      try {
+        const prev = JSON.parse(existing.department);
+        mergedData = { ...prev, ...servicesData };
+      } catch (e) {}
+    }
 
     if (existing?.id) {
       await supabase
