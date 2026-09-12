@@ -1158,63 +1158,72 @@ export function StudentTable({
               </div>
             </div>
 
-            {/* 3. Détail Chronologique des 5 Versements (Dates, Jours et Règlements) */}
+            {/* 3. Détail Chronologique des 5 Versements (Dates, Jours et Règlements) — UNIQUEMENT
+                les vraies données enregistrées. Cette fenêtre calculait auparavant les 5
+                tranches à partir de montants fixes inventés (100 000/50 000/40 000/35 000/25 000 F)
+                dès qu'un élève n'avait pas de détail par versement, au lieu d'afficher la vérité
+                du terrain — exactement le type de fabrication déjà éliminé ailleurs (Dashboard,
+                Rapports, Portail Parent). */}
             {(() => {
               const paid = viewingStudent.paidAmount || 0;
-              const net = viewingStudent.netAmount || viewingStudent.tuitionAmount || 250000;
               const inst = viewingStudent.installments;
+              const hasDetail = Boolean(
+                inst?.versement1 || inst?.versement2 || inst?.versement3 || inst?.versement4 || inst?.versement5
+              );
+              // Dossier ancien sans ventilation par tranche mais avec un montant réellement
+              // encaissé : classé par défaut en 1er versement (montant réel, jamais inventé),
+              // même règle appliquée partout ailleurs dans l'application.
+              const v1 = inst?.versement1?.amount || (!hasDetail && paid > 0 ? paid : 0);
+              const v2 = inst?.versement2?.amount || 0;
+              const v3 = inst?.versement3?.amount || 0;
+              const v4 = inst?.versement4?.amount || 0;
+              const v5 = inst?.versement5?.amount || 0;
 
-              const v1 = inst?.versement1?.amount || Math.min(paid, 100000);
-              const v2 = inst?.versement2?.amount || (paid > 100000 ? Math.min(paid - 100000, 50000) : 0);
-              const v3 = inst?.versement3?.amount || (paid > 150000 ? Math.min(paid - 150000, 40000) : 0);
-              const v4 = inst?.versement4?.amount || (paid > 190000 ? Math.min(paid - 190000, 35000) : 0);
-              const v5 = inst?.versement5?.amount || (paid > 225000 ? Math.min(paid - 225000, 25000) : 0);
+              const rowStatus = (amount: number) => (amount > 0 ? 'paid' : 'pending');
+              const rowDate = (d?: string) => (d ? d : null);
+              const rowReceipt = (r?: string, amount?: number) =>
+                r || (amount && amount > 0 ? (viewingStudent.studentNumber || viewingStudent.id) : undefined);
 
               const rows = [
                 {
                   title: '1er Versement (Rentrée scolaire)',
                   amount: v1,
-                  expected: 100000,
-                  date: inst?.versement1?.date || viewingStudent.paymentDate || '2026-08-27',
-                  method: inst?.versement1?.method || viewingStudent.paymentMethod || 'Espèces',
-                  receipt: `${viewingStudent.studentNumber || 'ID-001'}-1`,
-                  status: v1 >= 100000 ? 'paid' : v1 > 0 ? 'partial' : 'pending',
+                  date: rowDate(inst?.versement1?.date) || (v1 > 0 ? viewingStudent.paymentDate : undefined),
+                  method: inst?.versement1?.method || (v1 > 0 ? viewingStudent.paymentMethod : undefined),
+                  receipt: rowReceipt(inst?.versement1?.receiptNumber, v1),
+                  status: rowStatus(v1),
                 },
                 {
                   title: '2ème Versement (1ère Échéance Octobre)',
                   amount: v2,
-                  expected: 50000,
-                  date: inst?.versement2?.date || (v2 > 0 ? '2026-10-15' : 'Échéance : 15/10/2026'),
-                  method: inst?.versement2?.method || 'Wave Money',
-                  receipt: v2 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-2` : '—',
-                  status: v2 >= 50000 ? 'paid' : v2 > 0 ? 'partial' : 'pending',
+                  date: rowDate(inst?.versement2?.date),
+                  method: inst?.versement2?.method,
+                  receipt: rowReceipt(inst?.versement2?.receiptNumber, v2),
+                  status: rowStatus(v2),
                 },
                 {
                   title: '3ème Versement (2ème Échéance Décembre)',
                   amount: v3,
-                  expected: 40000,
-                  date: inst?.versement3?.date || (v3 > 0 ? '2026-12-10' : 'Échéance : 10/12/2026'),
-                  method: inst?.versement3?.method || 'Espèces',
-                  receipt: v3 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-3` : '—',
-                  status: v3 >= 40000 ? 'paid' : v3 > 0 ? 'partial' : 'pending',
+                  date: rowDate(inst?.versement3?.date),
+                  method: inst?.versement3?.method,
+                  receipt: rowReceipt(inst?.versement3?.receiptNumber, v3),
+                  status: rowStatus(v3),
                 },
                 {
                   title: '4ème Versement (3ème Échéance Février)',
                   amount: v4,
-                  expected: 35000,
-                  date: inst?.versement4?.date || (v4 > 0 ? '2027-02-15' : 'Échéance : 15/02/2027'),
-                  method: inst?.versement4?.method || 'Orange Money',
-                  receipt: v4 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-4` : '—',
-                  status: v4 >= 35000 ? 'paid' : v4 > 0 ? 'partial' : 'pending',
+                  date: rowDate(inst?.versement4?.date),
+                  method: inst?.versement4?.method,
+                  receipt: rowReceipt(inst?.versement4?.receiptNumber, v4),
+                  status: rowStatus(v4),
                 },
                 {
                   title: '5ème Versement (Solde Final Avril)',
                   amount: v5,
-                  expected: 25000,
-                  date: inst?.versement5?.date || (v5 > 0 ? '2027-04-10' : 'Échéance : 10/04/2027'),
-                  method: inst?.versement5?.method || 'Espèces',
-                  receipt: v5 > 0 ? `${viewingStudent.studentNumber || 'ID-001'}-5` : '—',
-                  status: v5 >= 25000 ? 'paid' : v5 > 0 ? 'partial' : 'pending',
+                  date: rowDate(inst?.versement5?.date),
+                  method: inst?.versement5?.method,
+                  receipt: rowReceipt(inst?.versement5?.receiptNumber, v5),
+                  status: rowStatus(v5),
                 },
               ];
 
@@ -1235,8 +1244,12 @@ export function StudentTable({
                               📅 {r.date && typeof r.date === 'string' && r.date.includes('-') ? formatDate(r.date) : (r.date || '—')}
                             </span>
                             <span>•</span>
-                            <span>{r.method}</span>
-                            {r.receipt !== '—' && (
+                            {r.method && (
+                              <>
+                                <span>{r.method}</span>
+                              </>
+                            )}
+                            {r.receipt && (
                               <>
                                 <span>•</span>
                                 <span className="font-mono text-emerald-800 font-bold">{r.receipt}</span>
@@ -1252,15 +1265,51 @@ export function StudentTable({
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mt-0.5 border ${
                             r.status === 'paid'
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : r.status === 'partial'
-                              ? 'bg-amber-50 text-amber-800 border-amber-300'
                               : 'bg-slate-100 text-slate-500 border-slate-200'
                           }`}>
-                            {r.status === 'paid' ? 'Réglé ✓' : r.status === 'partial' ? 'Partiel' : 'En attente'}
+                            {r.status === 'paid' ? 'Réglé ✓' : 'En attente'}
                           </span>
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 4. Frais Annexes & Tenue tout cousu — statut Payé/Non payé. Ces deux frais n'ont
+                pas de montant chiffré sur la fiche élève (juste une case à cocher lors de
+                l'inscription) : sans cet indicateur, rien ne distinguait un élève qui a déjà
+                réglé ces frais d'un autre qui ne les a pas réglés du tout. */}
+            {(() => {
+              const notes = viewingStudent.notes || '';
+              const fraisAnnexesPaid = notes.includes('Frais Annexes (Payé)');
+              const tenuePaid = notes.includes('Tenue tout cousu (Payé)');
+              return (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
+                    fraisAnnexesPaid ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <span className="text-[11px] font-bold text-slate-700">📎 Frais Annexes</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      fraisAnnexesPaid
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    }`}>
+                      {fraisAnnexesPaid ? 'Payé ✓' : 'Non payé'}
+                    </span>
+                  </div>
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
+                    tenuePaid ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <span className="text-[11px] font-bold text-slate-700">👕 Tenue Tout Cousu</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      tenuePaid
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    }`}>
+                      {tenuePaid ? 'Payé ✓' : 'Non payé'}
+                    </span>
                   </div>
                 </div>
               );

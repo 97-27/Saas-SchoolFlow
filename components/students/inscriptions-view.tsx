@@ -764,8 +764,11 @@ export function InscriptionsView({
       setIsBoarding(!!stu.isBoarding);
       setIsCanteen(!!stu.isCanteen);
       setIsTransport(!!stu.isTransport);
+      // "Tenue tout cousu" (jamais "cousue") est l'orthographe réellement enregistrée à la
+      // sauvegarde plus bas dans ce même fichier — un accord fautif ici faisait toujours
+      // réapparaître la case décochée en rouvrant un dossier déjà marqué payé.
       setFraisAnnexesPaid(stu.notes?.includes('Frais Annexes (Payé)') || false);
-      setTenueCousuePaid(stu.notes?.includes('Tenue tout cousue (Payé)') || false);
+      setTenueCousuePaid(stu.notes?.includes('Tenue tout cousu (Payé)') || false);
 
       // Mémoriser l'état initial des versements pour verrouiller l'enregistrement tant qu'aucun nouveau versement n'est saisi
       const initTotal = (Number(v1?.amount) || 0) + (Number(v2?.amount) || 0) + (Number(v3?.amount) || 0) + (Number(v4?.amount) || 0) + (Number(v5?.amount) || 0);
@@ -2268,23 +2271,23 @@ export function InscriptionsView({
         </div>
       )}
 
-      {/* Alerte Détection Collaborateur en direct (Flottant discret en haut au centre, 3 secondes) */}
+      {/* Alerte Détection Collaborateur en direct (bandeau sobre en haut au centre, 3 secondes) —
+          n'apparaît jamais chez la personne qui vient elle-même d'enregistrer, uniquement sur les
+          autres interfaces. Style volontairement neutre/professionnel (fond blanc, liseré vert,
+          icône fixe) plutôt qu'une alerte clignotante. */}
       {collaboratorAlert && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] max-w-md w-[92%] sm:w-auto pointer-events-none animate-in fade-in slide-in-from-top-3 duration-200">
-          <div className="pointer-events-auto bg-slate-900/95 text-white border border-amber-500/60 px-4 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="pointer-events-auto bg-white text-slate-900 border border-slate-200 border-l-4 border-l-emerald-600 px-4 py-2.5 rounded-xl shadow-lg flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="flex h-2.5 w-2.5 relative shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-              </span>
-              <p className="truncate text-slate-100 text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <p className="truncate text-slate-700 text-xs font-medium">
                 {collaboratorAlert.message}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setCollaboratorAlert(null)}
-              className="text-slate-400 hover:text-white p-1 rounded-full hover:bg-slate-800 transition-colors cursor-pointer shrink-0 font-bold text-xs"
+              className="text-slate-400 hover:text-slate-700 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer shrink-0 font-bold text-xs"
               title="Fermer"
             >
               ✕
