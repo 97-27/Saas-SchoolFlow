@@ -18,7 +18,6 @@ const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
   // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
   educateur: ['dashboard', 'classes', 'notes-diverses'],
-  informaticien: ['dashboard', 'classes', 'notes-diverses'],
 };
 
 // Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.

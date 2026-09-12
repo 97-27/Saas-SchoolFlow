@@ -61,7 +61,6 @@ export type UserRole =
   | 'assistant_direction'
   | 'fondateur'
   | 'educateur'
-  | 'informaticien'
   | 'comptable'
   | 'secretaire'
   | 'enseignant'
@@ -121,16 +120,6 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     defaultUserName: '',
     description: 'Suivi de la discipline, retards, assiduité, autorisations et encadrement des élèves.',
     allowedModules: 'Présences, Classes, Notes Diverses, Communication Parents, Bulletins',
-  },
-  informaticien: {
-    id: 'informaticien',
-    title: 'Informaticien / Responsable IT (Systèmes & Réseau)',
-    badge: '💻 Informaticien (IT)',
-    department: 'Systèmes d’Information & Informatique',
-    defaultAuthCode: 'INF-2026',
-    defaultUserName: '',
-    description: 'Administration technique, maintenance du parc informatique, réseau et sécurité des données.',
-    allowedModules: 'Tableau de bord, Administration, Paramètres, Sécurité, Sauvegardes',
   },
   comptable: {
     id: 'comptable',
@@ -1142,7 +1131,6 @@ export function LoginView({
                       <option value="directeur">👑 Directeur / Directrice des Études (Admin Principal)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
-                      <option value="informaticien">💻 Informaticien / Responsable IT (Systèmes & Réseau)</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>

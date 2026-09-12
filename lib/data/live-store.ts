@@ -2235,7 +2235,7 @@ export interface StaffUser {
   id: string;
   fullName: string;
   role: string;
-  roleId: 'directeur' | 'assistant_direction' | 'fondateur' | 'educateur' | 'informaticien' | 'comptable' | 'secretaire' | 'enseignant' | 'parent';
+  roleId: 'directeur' | 'assistant_direction' | 'fondateur' | 'educateur' | 'comptable' | 'secretaire' | 'enseignant' | 'parent';
   matricule?: string;
   subjectOrGrade?: string;
   assignedClasses?: string;
@@ -2941,13 +2941,12 @@ export function verifyUserAuthCodeForLogin(
     };
   }
 
-  // 3. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Éducateur, Informaticien, Enseignant) :
+  // 3. Profils Membres du Personnel (Secrétaire, Comptable, Assistant(e), Éducateur, Enseignant) :
   const roleNameMap: Record<string, string> = {
     secretaire: 'Secrétaire de Direction',
     comptable: 'Comptable / Gestionnaire',
     assistant_direction: 'Assistant(e) de Direction',
     educateur: 'Éducateur / Conseiller d’Éducation',
-    informaticien: 'Informaticien / Responsable IT',
     enseignant: 'Enseignant / Professeur',
   };
 

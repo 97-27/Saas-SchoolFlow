@@ -50,7 +50,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'ajout — Postes nécessitant un code d'authentification uniquement
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
-  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
+  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
   const [newMatricule, setNewMatricule] = useState('');
   const [newSubject, setNewSubject] = useState('Toutes les matières (Enseignant Titulaire / Polyvalent)');
   const [newClasses, setNewClasses] = useState('Toutes les classes');
@@ -69,7 +69,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien'>('enseignant');
+  const [editRole, setEditRole] = useState<'fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -119,8 +119,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         ? 'AST'
         : role === 'educateur'
         ? 'EDU'
-        : role === 'informaticien'
-        ? 'INF'
         : role === 'comptable'
         ? 'CPT'
         : role === 'secretaire'
@@ -134,8 +132,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const openEditModal = (staff: StaffUser) => {
     setEditingStaff(staff);
     setEditFullName(staff.fullName);
-    const validRoles: ('fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'informaticien')[] = [
-      'fondateur', 'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur', 'informaticien'
+    const validRoles: ('fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur')[] = [
+      'fondateur', 'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
     setEditMatricule(
@@ -219,7 +217,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       directeur: 'Directeur des Études (Admin)',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
-      informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
@@ -311,7 +308,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const roleTitleMap: Record<string, string> = {
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
-      informaticien: 'Informaticien / Responsable IT (Systèmes & Réseau)',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
@@ -563,7 +559,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <option value="comptable">Comptables</option>
               <option value="assistant_direction">Assistant(e) Direction</option>
               <option value="educateur">Éducateurs (Vie Scolaire)</option>
-              <option value="informaticien">Informaticiens (IT)</option>
             </select>
           </div>
         </div>
@@ -628,8 +623,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                             ? 'bg-teal-50 text-teal-800 border-teal-200'
                             : member.roleId === 'educateur'
                             ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                            : member.roleId === 'informaticien'
-                            ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
                             : 'bg-slate-100 text-slate-800 border-slate-200'
                         }`}>
                           <span>
@@ -647,8 +640,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                               ? '📋 Assistante'
                               : member.roleId === 'educateur'
                               ? '🛡️ Éducateur'
-                              : member.roleId === 'informaticien'
-                              ? '💻 IT'
                               : member.role}
                           </span>
                           <span className="font-mono text-[10px] opacity-75 border-l border-current/30 pl-1.5">
@@ -1052,7 +1043,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     <option value="comptable">💼 Comptable / Gestionnaire</option>
                     <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                     <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
-                    <option value="informaticien">💻 Informaticien / Responsable IT</option>
                   </select>
                 </div>
 
@@ -1241,7 +1231,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <option value="comptable">💼 Comptable / Gestionnaire</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
-                      <option value="informaticien">💻 Informaticien / Responsable IT</option>
                     </select>
                   )}
                 </div>
