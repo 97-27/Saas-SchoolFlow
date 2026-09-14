@@ -347,7 +347,7 @@ export function NewStudentModal({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={discountAmount}
                     onChange={(e) => {
                       const d = parseInt(e.target.value) || 0;

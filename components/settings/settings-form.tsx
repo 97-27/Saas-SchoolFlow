@@ -1277,7 +1277,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     <input
                       type="number"
                       min="0"
-                      step="1000"
+                      step="1"
                       value={school.defaultRegistrationFee ?? ''}
                       onChange={(e) => handleInputChange('defaultRegistrationFee', parseInt(e.target.value, 10) || 0)}
                       placeholder="Ex: 25000"

@@ -2838,7 +2838,7 @@ export function InscriptionsView({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={registrationFee === 0 ? '' : registrationFee}
                     onChange={(e) => setRegistrationFee(parseInt(e.target.value, 10) || 0)}
                     placeholder="Saisissez le montant"
@@ -2853,7 +2853,7 @@ export function InscriptionsView({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={tuitionAmount === 0 ? '' : tuitionAmount}
                     onChange={(e) => {
                       const val = parseInt(e.target.value, 10) || 0;
@@ -2878,7 +2878,7 @@ export function InscriptionsView({
                 <input
                   type="number"
                   min="0"
-                  step="1000"
+                  step="1"
                   value={discountAmount === 0 ? '' : discountAmount}
                   onChange={(e) => {
                     const val = parseInt(e.target.value, 10) || 0;
@@ -2952,7 +2952,7 @@ export function InscriptionsView({
                 <input
                   type="number"
                   min="0"
-                  step="1000"
+                  step="1"
                   value={remainingAmount === 0 ? '' : remainingAmount}
                   onChange={(e) => setRemainingAmount(parseInt(e.target.value, 10) || 0)}
                   placeholder="0"
@@ -3100,7 +3100,7 @@ export function InscriptionsView({
                           <input
                             type="number"
                             min="0"
-                            step="1000"
+                            step="1"
                             value={v.amount === 0 ? '' : v.amount}
                             onChange={(e) => handleUpdateVersement(v.idx, 'amount', e.target.value)}
                             placeholder="0"

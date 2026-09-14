@@ -1157,7 +1157,7 @@ export function SalariesView({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={baseSalary === 0 ? '' : baseSalary}
                     onChange={(e) => setBaseSalary(Number(e.target.value))}
                     placeholder="0"
@@ -1172,7 +1172,7 @@ export function SalariesView({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={bonuses === 0 ? '' : bonuses}
                     onChange={(e) => setBonuses(Number(e.target.value))}
                     placeholder="0"
@@ -1187,7 +1187,7 @@ export function SalariesView({
                   <input
                     type="number"
                     min="0"
-                    step="1000"
+                    step="1"
                     value={deductions === 0 ? '' : deductions}
                     onChange={(e) => setDeductions(Number(e.target.value))}
                     placeholder="0"

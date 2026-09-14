@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { DATA_UPDATED_EVENT, startCrossDeviceSync } from '@/lib/data/live-store';
+import { DATA_UPDATED_EVENT, startCrossDeviceSync, CLIENT_INSTANCE_ID } from '@/lib/data/live-store';
 import { CheckCircle2, Bell, X } from 'lucide-react';
 
 interface RealtimeNotifierProps {
@@ -31,6 +31,14 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     const handleUpdate = (e: any) => {
       const detail = e?.detail;
       if (!detail) return;
+
+      // N'afficher CETTE notification que pour l'action d'un AUTRE appareil/onglet — jamais pour
+      // sa propre sauvegarde. broadcastLiveUpdate() diffuse d'abord l'événement localement dans
+      // l'onglet qui vient d'enregistrer (avec son propre senderId), avant de le relayer aux
+      // autres appareils : sans cette vérification, l'auteur de l'enregistrement voyait toujours
+      // apparaître cette même alerte "Un reçu vient d'être enregistré" chez lui aussi, en plus de
+      // son propre message de confirmation.
+      if (!detail.senderId || detail.senderId === CLIENT_INSTANCE_ID) return;
 
       // On affiche une notification si l'action provient d'un autre appareil ou d'un autre onglet
       if (detail.action === 'student_registered' && detail.student) {
