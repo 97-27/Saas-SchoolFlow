@@ -94,6 +94,13 @@ export function BoardingView({
   school,
   schoolSlug,
 }: BoardingViewProps) {
+  // L'école pilote (epc-manoi) garde les clés historiques non suffixées (données réelles déjà
+  // stockées ainsi) ; toute autre école reçoit une clé dédiée pour ne jamais partager ses
+  // pensionnaires/paiements internat avec une autre école sur le même navigateur.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedBoardingSubKey = isPilotSchool ? BOARDING_SUBSCRIPTIONS_KEY : `${BOARDING_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
+  const scopedBoardingPayKey = isPilotSchool ? BOARDING_PAYMENTS_KEY : `${BOARDING_PAYMENTS_KEY}_${schoolSlug}`;
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -144,7 +151,7 @@ export function BoardingView({
   const [monthlyPayments, setMonthlyPayments] = useState<Record<string, Record<string, boolean>>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(BOARDING_PAYMENTS_KEY);
+        const saved = localStorage.getItem(scopedBoardingPayKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -168,7 +175,7 @@ export function BoardingView({
   >(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
+        const saved = localStorage.getItem(scopedBoardingSubKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -215,9 +222,9 @@ export function BoardingView({
 
       if (typeof window !== 'undefined') {
         try {
-          const savedPayments = localStorage.getItem(BOARDING_PAYMENTS_KEY);
+          const savedPayments = localStorage.getItem(scopedBoardingPayKey);
           if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
-          const savedSubs = localStorage.getItem(BOARDING_SUBSCRIPTIONS_KEY);
+          const savedSubs = localStorage.getItem(scopedBoardingSubKey);
           if (savedSubs) {
             const parsed: any[] = JSON.parse(savedSubs);
             const deletedIds = getDeletedStudentIds();

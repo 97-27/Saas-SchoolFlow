@@ -65,6 +65,13 @@ export function TransportView({
   school,
   schoolSlug,
 }: TransportViewProps) {
+  // L'école pilote (epc-manoi) garde les clés historiques non suffixées (données réelles déjà
+  // stockées ainsi) ; toute autre école reçoit une clé dédiée pour ne jamais partager ses
+  // abonnés/paiements transport avec une autre école sur le même navigateur.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedTransportSubKey = isPilotSchool ? TRANSPORT_SUBSCRIPTIONS_KEY : `${TRANSPORT_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
+  const scopedTransportPayKey = isPilotSchool ? TRANSPORT_PAYMENTS_KEY : `${TRANSPORT_PAYMENTS_KEY}_${schoolSlug}`;
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +111,7 @@ export function TransportView({
   const [monthlyPayments, setMonthlyPayments] = useState<Record<string, Record<string, boolean>>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(TRANSPORT_PAYMENTS_KEY);
+        const saved = localStorage.getItem(scopedTransportPayKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -115,7 +122,7 @@ export function TransportView({
   const [customTransportMap, setCustomTransportMap] = useState<Record<string, { stop: string; rate: number; discount?: number }>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(TRANSPORT_SUBSCRIPTIONS_KEY);
+        const saved = localStorage.getItem(scopedTransportSubKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -181,9 +188,9 @@ export function TransportView({
       setCurrentSchool(getLiveSchool(activeSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const savedPayments = localStorage.getItem(TRANSPORT_PAYMENTS_KEY);
+          const savedPayments = localStorage.getItem(scopedTransportPayKey);
           if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
-          const savedCustom = localStorage.getItem(TRANSPORT_SUBSCRIPTIONS_KEY);
+          const savedCustom = localStorage.getItem(scopedTransportSubKey);
           if (savedCustom) setCustomTransportMap(JSON.parse(savedCustom));
         } catch (e) {}
       }
@@ -510,8 +517,8 @@ export function TransportView({
 
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextCustom));
-        localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(nextPayments));
+        localStorage.setItem(scopedTransportSubKey, JSON.stringify(nextCustom));
+        localStorage.setItem(scopedTransportPayKey, JSON.stringify(nextPayments));
       } catch (e) {}
     }
 
@@ -591,7 +598,7 @@ export function TransportView({
       setCustomTransportMap(nextMap);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+          localStorage.setItem(scopedTransportSubKey, JSON.stringify(nextMap));
         } catch (e) {}
       }
 
@@ -603,7 +610,7 @@ export function TransportView({
       setMonthlyPayments(nextPayments);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(nextPayments));
+          localStorage.setItem(scopedTransportPayKey, JSON.stringify(nextPayments));
         } catch (e) {}
       }
 
@@ -663,7 +670,7 @@ export function TransportView({
       setCustomTransportMap(nextMap);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(TRANSPORT_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+          localStorage.setItem(scopedTransportSubKey, JSON.stringify(nextMap));
         } catch (e) {}
       }
 
@@ -674,7 +681,7 @@ export function TransportView({
       setMonthlyPayments(nextPayments);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(TRANSPORT_PAYMENTS_KEY, JSON.stringify(nextPayments));
+          localStorage.setItem(scopedTransportPayKey, JSON.stringify(nextPayments));
         } catch (e) {}
       }
 

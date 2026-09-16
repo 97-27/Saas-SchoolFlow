@@ -246,11 +246,13 @@ function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
         })
       );
     } else if (payload.action === 'transport_updated') {
+      const transportSubKey = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${cleanSlug}`;
+      const transportPayKey = isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${cleanSlug}`;
       if (payload.customTransportMap) {
-        localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(payload.customTransportMap));
+        localStorage.setItem(transportSubKey, JSON.stringify(payload.customTransportMap));
       }
       if (payload.monthlyPayments) {
-        localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(payload.monthlyPayments));
+        localStorage.setItem(transportPayKey, JSON.stringify(payload.monthlyPayments));
       }
       window.dispatchEvent(
         new CustomEvent(DATA_UPDATED_EVENT, {
@@ -258,14 +260,17 @@ function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
         })
       );
     } else if (payload.action === 'canteen_updated') {
+      const canteenSubKey = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${cleanSlug}`;
+      const canteenPayKey = isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${cleanSlug}`;
+      const canteenMenuKey = isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${cleanSlug}`;
       if (payload.customCanteenMap) {
-        localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(payload.customCanteenMap));
+        localStorage.setItem(canteenSubKey, JSON.stringify(payload.customCanteenMap));
       }
       if (payload.monthlyPayments) {
-        localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+        localStorage.setItem(canteenPayKey, JSON.stringify(payload.monthlyPayments));
       }
       if (payload.weeklyMenu) {
-        localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(payload.weeklyMenu));
+        localStorage.setItem(canteenMenuKey, JSON.stringify(payload.weeklyMenu));
       }
       window.dispatchEvent(
         new CustomEvent(DATA_UPDATED_EVENT, {
@@ -273,11 +278,13 @@ function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
         })
       );
     } else if (payload.action === 'boarding_updated') {
+      const boardingSubKey = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${cleanSlug}`;
+      const boardingPayKey = isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${cleanSlug}`;
       if (payload.customSubscriptions) {
-        localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(payload.customSubscriptions));
+        localStorage.setItem(boardingSubKey, JSON.stringify(payload.customSubscriptions));
       }
       if (payload.monthlyPayments) {
-        localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(payload.monthlyPayments));
+        localStorage.setItem(boardingPayKey, JSON.stringify(payload.monthlyPayments));
       }
       if (payload.boardingCapacity !== undefined) {
         localStorage.setItem(`schoolflow_boarding_capacity_${cleanSlug}`, payload.boardingCapacity.toString());
@@ -948,35 +955,35 @@ export function syncSchoolDataWithServer(slug: string): void {
 
         // 6. Synchroniser Transport
         if (data.transportSubscriptions) {
-          localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(data.transportSubscriptions));
+          localStorage.setItem(isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify(data.transportSubscriptions));
           hasChanges = true;
         }
         if (data.transportPayments) {
-          localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(data.transportPayments));
+          localStorage.setItem(isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify(data.transportPayments));
           hasChanges = true;
         }
 
         // 7. Synchroniser Cantine
         if (data.canteenSubscriptions) {
-          localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(data.canteenSubscriptions));
+          localStorage.setItem(isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify(data.canteenSubscriptions));
           hasChanges = true;
         }
         if (data.canteenPayments) {
-          localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(data.canteenPayments));
+          localStorage.setItem(isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify(data.canteenPayments));
           hasChanges = true;
         }
         if (data.canteenWeeklyMenu) {
-          localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(data.canteenWeeklyMenu));
+          localStorage.setItem(isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${slug}`, JSON.stringify(data.canteenWeeklyMenu));
           hasChanges = true;
         }
 
         // 8. Synchroniser Internat
         if (data.boardingSubscriptions) {
-          localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(data.boardingSubscriptions));
+          localStorage.setItem(isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${slug}`, JSON.stringify(data.boardingSubscriptions));
           hasChanges = true;
         }
         if (data.boardingPayments) {
-          localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(data.boardingPayments));
+          localStorage.setItem(isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${slug}`, JSON.stringify(data.boardingPayments));
           hasChanges = true;
         }
         if (data.boardingCapacity !== undefined) {
@@ -1688,8 +1695,9 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
     // Auto-consolidation des souscriptions d'internat pour le journal des encaissements
     try {
-      const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
-      const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+      const isPilotForBoarding = slug === 'epc-manoi';
+      const rawBoarding = localStorage.getItem(isPilotForBoarding ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${slug}`);
+      const rawBoardingPay = localStorage.getItem(isPilotForBoarding ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${slug}`);
       if (rawBoarding) {
         const boardingSubs: any[] = JSON.parse(rawBoarding);
         const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
@@ -3145,31 +3153,14 @@ export function verifySchoolSubscriptionForLogin(
     };
   }
 
-  // Établissement principal EPC MANOI & Espace de travail de Mouhamed toujours autorisé et actif
-  if (
-    schoolSlug === 'epc-manoi' ||
-    !schoolSlug ||
-    clean.includes('manoi') ||
-    clean.includes('mohamed') ||
-    clean.includes('mouhamed') ||
-    clean.includes('lawani') ||
-    clean.includes('epc') ||
-    clean.includes('konate') ||
-    clean.includes('cisse') ||
-    clean.includes('toure') ||
-    clean.includes('diaby') ||
-    clean.includes('kouassi') ||
-    clean.includes('admin') ||
-    clean.includes('directeur') ||
-    clean.includes('excellence') ||
-    clean.includes('diallo') ||
-    clean.includes('kone') ||
-    clean.includes('soro') ||
-    clean.includes('traore') ||
-    clean.includes('bamba') ||
-    clean.includes('koffi') ||
-    !clean
-  ) {
+  // Établissement principal EPC MANOI (pilote) toujours autorisé et actif. Attention : cette
+  // vérification était auparavant contournable par n'importe quel nom/email contenant un
+  // sous-ensemble de patronymes très courants (Koffi, Diallo, Traoré, Koné, etc.) ou des mots
+  // génériques ("admin", "directeur") - n'importe quelle nouvelle école non abonnée dont un
+  // membre du personnel porte un de ces noms passait cette vérification. Seul le slug exact du
+  // pilote donne un accès automatique désormais ; toute autre école doit être retrouvée par
+  // abonnement réel ci-dessous.
+  if (schoolSlug === 'epc-manoi') {
     return { isValid: true };
   }
 
@@ -3396,10 +3387,13 @@ export function resetSchoolData(
       localStorage.setItem(`schoolflow_broadcast_records_v1_${slug}`, JSON.stringify([]));
     }
 
-    // 9. Cantine scolaire
+    // 9. Cantine scolaire (clé historique non suffixee ET clé par ecole, pour ne jamais
+    // laisser une donnee residuelle dans l'une ou l'autre quel que soit le slug appelant)
     if (doAll || opt.canteen) {
       localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
+      localStorage.setItem(`schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify({}));
       localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
+      localStorage.setItem(`schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify({}));
       localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
       localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
       localStorage.removeItem('schoolflow_canteen_meals_history_v2');
@@ -3408,13 +3402,17 @@ export function resetSchoolData(
     // 10. Transport scolaire
     if (doAll || opt.transport) {
       localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify({}));
+      localStorage.setItem(`schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify({}));
       localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify({}));
+      localStorage.setItem(`schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify({}));
     }
 
     // 11. Internat & Hébergement
     if (doAll || opt.boarding) {
       localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_boarding_subscriptions_v3_${slug}`, JSON.stringify([]));
       localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify({}));
+      localStorage.setItem(`schoolflow_boarding_monthly_payments_v3_${slug}`, JSON.stringify({}));
       localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
     }
 
@@ -3517,11 +3515,17 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
     localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
     localStorage.removeItem('schoolflow_canteen_subscriptions_v3');
+    localStorage.removeItem(`schoolflow_canteen_subscriptions_v3_${slug}`);
     localStorage.removeItem('schoolflow_canteen_monthly_payments_v3');
+    localStorage.removeItem(`schoolflow_canteen_monthly_payments_v3_${slug}`);
     localStorage.removeItem('schoolflow_transport_subscriptions_v2');
+    localStorage.removeItem(`schoolflow_transport_subscriptions_v2_${slug}`);
     localStorage.removeItem('schoolflow_transport_monthly_payments_v2');
+    localStorage.removeItem(`schoolflow_transport_monthly_payments_v2_${slug}`);
     localStorage.removeItem('schoolflow_boarding_subscriptions_v3');
+    localStorage.removeItem(`schoolflow_boarding_subscriptions_v3_${slug}`);
     localStorage.removeItem('schoolflow_boarding_monthly_payments_v3');
+    localStorage.removeItem(`schoolflow_boarding_monthly_payments_v3_${slug}`);
     localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
     localStorage.removeItem('schoolflow_parent_messages_v1');
     localStorage.removeItem(`schoolflow_parent_messages_v1_${slug}`);
@@ -3739,9 +3743,10 @@ export function saveLiveTransportData(
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  const isPilot = slug === 'epc-manoi';
   try {
-    localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(customTransportMap));
-    localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(monthlyPayments));
+    localStorage.setItem(isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify(customTransportMap));
+    localStorage.setItem(isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify(monthlyPayments));
 
     fetch('/api/sync', {
       method: 'POST',
@@ -3775,11 +3780,12 @@ export function saveLiveCanteenData(
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  const isPilot = slug === 'epc-manoi';
   try {
-    localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(customCanteenMap));
-    localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(monthlyPayments));
+    localStorage.setItem(isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify(customCanteenMap));
+    localStorage.setItem(isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify(monthlyPayments));
     if (weeklyMenu) {
-      localStorage.setItem('schoolflow_canteen_weekly_menu_v2', JSON.stringify(weeklyMenu));
+      localStorage.setItem(isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${slug}`, JSON.stringify(weeklyMenu));
     }
 
     fetch('/api/sync', {
@@ -3816,9 +3822,12 @@ export function saveLiveBoardingData(
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  const isPilot = slug === 'epc-manoi';
+  const boardingSubKey = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${slug}`;
+  const boardingPayKey = isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${slug}`;
   try {
-    localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(customSubscriptions));
-    localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(monthlyPayments));
+    localStorage.setItem(boardingSubKey, JSON.stringify(customSubscriptions));
+    localStorage.setItem(boardingPayKey, JSON.stringify(monthlyPayments));
     if (capacity !== undefined) {
       localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, capacity.toString());
     }

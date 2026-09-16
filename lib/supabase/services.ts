@@ -14,7 +14,11 @@ const schoolIdCache = new Map<string, string>([
 ]); // slug → UUID
 
 async function getSchoolId(slug: string): Promise<string | null> {
-  const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
+  // Ne jamais retomber silencieusement sur l'ecole pilote quand le slug est vide/undefined
+  // (bug de course possible avant hydratation) : cela lisait/ecrivait dans les vraies donnees
+  // de production d'EPC MANOI a la place de l'ecole appelante.
+  if (!slug) return null;
+  const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
   if (schoolIdCache.has(cleanSlug)) return schoolIdCache.get(cleanSlug)!;
   try {
     const { data } = await supabase
@@ -252,9 +256,9 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
 
 // 2. GESTION DES ÉLÈVES (STUDENTS)
 export async function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> {
-  if (!isSupabaseConfigured) return [];
+  if (!isSupabaseConfigured || !schoolSlug) return [];
   try {
-    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     const slugs = [cleanSlug];
 
     const { data: schools } = await supabase
@@ -376,9 +380,9 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 }
 
 export async function saveStudentToSupabase(student: Student, schoolSlug: string): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+  if (!isSupabaseConfigured || !schoolSlug) return false;
   try {
-    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     // Utiliser le cache pour éviter une requête school à chaque appel
     let schoolId = await getSchoolId(cleanSlug);
 
@@ -488,9 +492,9 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
 }
 
 export async function batchUpsertStudents(students: Student[], schoolSlug: string): Promise<boolean> {
-  if (!isSupabaseConfigured || !students || students.length === 0) return false;
+  if (!isSupabaseConfigured || !students || students.length === 0 || !schoolSlug) return false;
   try {
-    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     const schoolId = await getSchoolId(cleanSlug);
     if (!schoolId) return false;
 
@@ -656,9 +660,9 @@ export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: 
 
 // 3. GESTION DES FACTURES (INVOICES)
 export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoice[]> {
-  if (!isSupabaseConfigured) return [];
+  if (!isSupabaseConfigured || !schoolSlug) return [];
   try {
-    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     const slugs = [cleanSlug];
 
     const { data: schools } = await supabase
@@ -717,9 +721,9 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
 }
 
 export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
+  if (!isSupabaseConfigured || !schoolSlug) return false;
   try {
-    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     // Utiliser le cache pour éviter une requête school à chaque appel
     let schoolId = await getSchoolId(cleanSlug);
 
@@ -854,9 +858,9 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 }
 
 export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: string): Promise<boolean> {
-  if (!isSupabaseConfigured || !invoices || invoices.length === 0) return false;
+  if (!isSupabaseConfigured || !invoices || invoices.length === 0 || !schoolSlug) return false;
   try {
-    const cleanSlug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     const schoolId = await getSchoolId(cleanSlug);
     if (!schoolId) return false;
 
@@ -943,9 +947,9 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
 
 // 4. GESTION DU PERSONNEL (STAFF USERS)
 export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any[]> {
-  if (!isSupabaseConfigured) return [];
+  if (!isSupabaseConfigured || !schoolSlug) return [];
   try {
-    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : (schoolSlug || 'epc-manoi');
+    const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
     const slugs = [cleanSlug];
 
     // Utiliser le cache pour éviter des requêtes répétées sur schools

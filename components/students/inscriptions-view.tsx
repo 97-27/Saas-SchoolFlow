@@ -313,35 +313,35 @@ export function InscriptionsView({
 
     if (index === 1) {
       if (field === 'amount') {
-        newV1 = parseInt(value as string, 10) || 0;
+        newV1 = Math.max(0, parseInt(value as string, 10) || 0);
         setVersement1Amount(newV1);
       }
       if (field === 'method') setVersement1Method(value as string);
       if (field === 'date') setVersement1Date(value as string);
     } else if (index === 2) {
       if (field === 'amount') {
-        newV2 = parseInt(value as string, 10) || 0;
+        newV2 = Math.max(0, parseInt(value as string, 10) || 0);
         setVersement2Amount(newV2);
       }
       if (field === 'method') setVersement2Method(value as string);
       if (field === 'date') setVersement2Date(value as string);
     } else if (index === 3) {
       if (field === 'amount') {
-        newV3 = parseInt(value as string, 10) || 0;
+        newV3 = Math.max(0, parseInt(value as string, 10) || 0);
         setVersement3Amount(newV3);
       }
       if (field === 'method') setVersement3Method(value as string);
       if (field === 'date') setVersement3Date(value as string);
     } else if (index === 4) {
       if (field === 'amount') {
-        newV4 = parseInt(value as string, 10) || 0;
+        newV4 = Math.max(0, parseInt(value as string, 10) || 0);
         setVersement4Amount(newV4);
       }
       if (field === 'method') setVersement4Method(value as string);
       if (field === 'date') setVersement4Date(value as string);
     } else if (index === 5) {
       if (field === 'amount') {
-        newV5 = parseInt(value as string, 10) || 0;
+        newV5 = Math.max(0, parseInt(value as string, 10) || 0);
         setVersement5Amount(newV5);
       }
       if (field === 'method') setVersement5Method(value as string);
@@ -2840,7 +2840,7 @@ export function InscriptionsView({
                     min="0"
                     step="1"
                     value={registrationFee === 0 ? '' : registrationFee}
-                    onChange={(e) => setRegistrationFee(parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => setRegistrationFee(Math.max(0, parseInt(e.target.value, 10) || 0))}
                     placeholder="Saisissez le montant"
                     className="w-full px-3.5 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold text-slate-900 transition-all"
                   />
@@ -2856,7 +2856,7 @@ export function InscriptionsView({
                     step="1"
                     value={tuitionAmount === 0 ? '' : tuitionAmount}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10) || 0;
+                      const val = Math.max(0, parseInt(e.target.value, 10) || 0);
                       setTuitionAmount(val);
                       const net = Math.max(0, val - discountAmount);
                       const totalPaid = versement1Amount + versement2Amount + versement3Amount + versement4Amount + versement5Amount;
@@ -2881,7 +2881,7 @@ export function InscriptionsView({
                   step="1"
                   value={discountAmount === 0 ? '' : discountAmount}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value, 10) || 0;
+                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
                     setDiscountAmount(val);
                     const net = Math.max(0, tuitionAmount - val);
                     const totalPaid = versement1Amount + versement2Amount + versement3Amount + versement4Amount + versement5Amount;

@@ -100,6 +100,14 @@ export function CanteenView({
   school,
   schoolSlug,
 }: CanteenViewProps) {
+  // L'école pilote (epc-manoi) garde les clés historiques non suffixées (données réelles déjà
+  // stockées ainsi) ; toute autre école reçoit une clé dédiée pour ne jamais partager ses
+  // abonnés/paiements cantine avec une autre école sur le même navigateur.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedCanteenSubKey = isPilotSchool ? CANTEEN_SUBSCRIPTIONS_KEY : `${CANTEEN_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
+  const scopedCanteenPayKey = isPilotSchool ? CANTEEN_PAYMENTS_KEY : `${CANTEEN_PAYMENTS_KEY}_${schoolSlug}`;
+  const scopedCanteenMenuKey = isPilotSchool ? CANTEEN_MENU_KEY : `${CANTEEN_MENU_KEY}_${schoolSlug}`;
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -131,7 +139,7 @@ export function CanteenView({
   const [weeklyMenu, setWeeklyMenu] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(CANTEEN_MENU_KEY);
+        const saved = localStorage.getItem(scopedCanteenMenuKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -150,7 +158,7 @@ export function CanteenView({
   const [monthlyPayments, setMonthlyPayments] = useState<Record<string, Record<string, boolean>>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(CANTEEN_PAYMENTS_KEY);
+        const saved = localStorage.getItem(scopedCanteenPayKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -161,7 +169,7 @@ export function CanteenView({
   const [customDietMap, setCustomDietMap] = useState<Record<string, { diet: string; rate: number; discount?: number }>>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(CANTEEN_SUBSCRIPTIONS_KEY);
+        const saved = localStorage.getItem(scopedCanteenSubKey);
         if (saved) return JSON.parse(saved);
       } catch (e) {}
     }
@@ -182,11 +190,11 @@ export function CanteenView({
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const savedPayments = localStorage.getItem(CANTEEN_PAYMENTS_KEY);
+          const savedPayments = localStorage.getItem(scopedCanteenPayKey);
           if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
-          const savedCustom = localStorage.getItem(CANTEEN_SUBSCRIPTIONS_KEY);
+          const savedCustom = localStorage.getItem(scopedCanteenSubKey);
           if (savedCustom) setCustomDietMap(JSON.parse(savedCustom));
-          const savedMenu = localStorage.getItem(CANTEEN_MENU_KEY);
+          const savedMenu = localStorage.getItem(scopedCanteenMenuKey);
           if (savedMenu) setWeeklyMenu(JSON.parse(savedMenu));
         } catch (e) {}
       }
@@ -514,8 +522,8 @@ export function CanteenView({
 
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextCustom));
-        localStorage.setItem(CANTEEN_PAYMENTS_KEY, JSON.stringify(nextPayments));
+        localStorage.setItem(scopedCanteenSubKey, JSON.stringify(nextCustom));
+        localStorage.setItem(scopedCanteenPayKey, JSON.stringify(nextPayments));
       } catch (e) {}
     }
 
@@ -596,7 +604,7 @@ export function CanteenView({
       setCustomDietMap(nextMap);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+          localStorage.setItem(scopedCanteenSubKey, JSON.stringify(nextMap));
         } catch (e) {}
       }
 
@@ -664,7 +672,7 @@ export function CanteenView({
       setCustomDietMap(nextMap);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(CANTEEN_SUBSCRIPTIONS_KEY, JSON.stringify(nextMap));
+          localStorage.setItem(scopedCanteenSubKey, JSON.stringify(nextMap));
         } catch (e) {}
       }
 
@@ -675,7 +683,7 @@ export function CanteenView({
       setMonthlyPayments(nextPayments);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(CANTEEN_PAYMENTS_KEY, JSON.stringify(nextPayments));
+          localStorage.setItem(scopedCanteenPayKey, JSON.stringify(nextPayments));
         } catch (e) {}
       }
 
@@ -757,7 +765,7 @@ export function CanteenView({
     e.preventDefault();
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(CANTEEN_MENU_KEY, JSON.stringify(weeklyMenu));
+        localStorage.setItem(scopedCanteenMenuKey, JSON.stringify(weeklyMenu));
       } catch (e) {}
     }
     setIsMenuModalOpen(false);
