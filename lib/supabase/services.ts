@@ -254,6 +254,133 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
   }
 }
 
+// Durée de chaque forfait d'abonnement, en mois — sert à calculer l'échéance réelle.
+const SUBSCRIPTION_PLAN_MONTHS: Record<string, number> = {
+  mensuel: 1,
+  annuel: 12,
+  triennal: 36,
+};
+
+export interface SchoolSubscriptionInfo {
+  isExpired: boolean;
+  endDate: string; // ISO
+  plan: string;
+  daysRemaining: number;
+}
+
+/**
+ * Calcule l'échéance réelle de l'abonnement d'une école directement depuis la base Cloud
+ * partagée (jamais depuis le localStorage, qui peut être vidé ou falsifié depuis l'appareil).
+ * L'échéance de base = date d'inscription réelle (created_at, colonne immuable posée une seule
+ * fois à la création de la ligne) + la durée du forfait souscrit. Un renouvellement manuel
+ * (paiement confirmé hors application) peut prolonger cette échéance via renewSchoolSubscription
+ * ci-dessous, stocké dans une fiche staff_users synthétique (même procédé déjà utilisé pour le
+ * cachet officiel et les données de services — aucune colonne dédiée n'existe sur "schools").
+ */
+export async function getSchoolSubscriptionInfo(slug: string): Promise<SchoolSubscriptionInfo | null> {
+  if (!isSupabaseConfigured || !slug) return null;
+  try {
+    const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
+    const { data: school } = await supabase
+      .from('schools')
+      .select('id, created_at, subscription_plan')
+      .eq('slug', cleanSlug)
+      .maybeSingle();
+    if (!school?.id || !school.created_at) return null;
+
+    const months = SUBSCRIPTION_PLAN_MONTHS[school.subscription_plan] || 12;
+    const baseEnd = new Date(school.created_at);
+    baseEnd.setMonth(baseEnd.getMonth() + months);
+
+    let overrideEnd: Date | null = null;
+    const { data: overrideRow } = await supabase
+      .from('staff_users')
+      .select('department')
+      .eq('school_id', school.id)
+      .eq('role_id', 'system_subscription_override')
+      .maybeSingle();
+    if (overrideRow?.department) {
+      try {
+        const parsed = JSON.parse(overrideRow.department);
+        if (parsed.overrideEndDate) {
+          const d = new Date(parsed.overrideEndDate);
+          if (!isNaN(d.getTime())) overrideEnd = d;
+        }
+      } catch (e) {}
+    }
+
+    const effectiveEnd = overrideEnd && overrideEnd.getTime() > baseEnd.getTime() ? overrideEnd : baseEnd;
+    const now = new Date();
+    const daysRemaining = Math.ceil((effectiveEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    return {
+      isExpired: now.getTime() > effectiveEnd.getTime(),
+      endDate: effectiveEnd.toISOString(),
+      plan: school.subscription_plan || 'annuel',
+      daysRemaining,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Renouvelle manuellement l'abonnement d'une école (paiement confirmé hors application, par
+ * ex. virement/Orange Money reçu directement) en prolongeant son échéance de N mois à partir
+ * d'aujourd'hui OU de son échéance actuelle si elle n'est pas encore dépassée (le renouvellement
+ * s'ajoute au temps restant plutôt que de le perdre).
+ */
+export async function renewSchoolSubscription(
+  slug: string,
+  additionalMonths: number,
+  note?: string
+): Promise<{ success: boolean; newEndDate?: string }> {
+  if (!isSupabaseConfigured || !slug || additionalMonths <= 0) return { success: false };
+  try {
+    const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
+    const schoolId = await getSchoolId(cleanSlug);
+    if (!schoolId) return { success: false };
+
+    const current = await getSchoolSubscriptionInfo(cleanSlug);
+    const base = current && !current.isExpired ? new Date(current.endDate) : new Date();
+    base.setMonth(base.getMonth() + additionalMonths);
+    const newEndDate = base.toISOString();
+
+    const payload = {
+      overrideEndDate: newEndDate,
+      renewedAt: new Date().toISOString(),
+      additionalMonths,
+      note: note || '',
+    };
+
+    const { data: existing } = await supabase
+      .from('staff_users')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('role_id', 'system_subscription_override')
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase.from('staff_users').update({ department: JSON.stringify(payload) }).eq('id', existing.id);
+    } else {
+      await supabase.from('staff_users').insert({
+        school_id: schoolId,
+        role_id: 'system_subscription_override',
+        role_title: 'Renouvellement Abonnement (Système)',
+        full_name: 'SYSTEM SUBSCRIPTION OVERRIDE',
+        auth_code: 'SYS-SUB-OVERRIDE',
+        is_active: true,
+        department: JSON.stringify(payload),
+      });
+    }
+
+    return { success: true, newEndDate };
+  } catch (e) {
+    console.error('Erreur renewSchoolSubscription:', e);
+    return { success: false };
+  }
+}
+
 // 2. GESTION DES ÉLÈVES (STUDENTS)
 export async function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> {
   if (!isSupabaseConfigured || !schoolSlug) return [];

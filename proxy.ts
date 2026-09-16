@@ -57,6 +57,18 @@ export function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
     }
 
+    // Blocage réel à l'échéance d'abonnement (1, 2 ou 3 ans) — la date de fin a été calculée
+    // et posée dans le cookie au moment de la connexion (contre la base Cloud, jamais depuis un
+    // localStorage falsifiable). L'établissement pilote epc-manoi ne doit JAMAIS être bloqué par
+    // ce mécanisme, quoi qu'il arrive. Un cookie ancien sans cette date (posé avant ce correctif)
+    // n'est pas bloqué non plus : il sera réévalué à la prochaine connexion (cookie 30 jours).
+    if (normalizedEcole !== 'epc-manoi' && session.subscriptionEndDate) {
+      const endDate = new Date(session.subscriptionEndDate).getTime();
+      if (!isNaN(endDate) && Date.now() > endDate) {
+        return NextResponse.redirect(new URL(`/${ecole}/admin/login?expired=true`, request.url));
+      }
+    }
+
     const roleId = session.roleId;
     const allowedPaths = roleId ? ROLE_ALLOWED_PATHS[roleId] : undefined;
     // directeur et fondateur (absents de la liste) gardent l'accès total.

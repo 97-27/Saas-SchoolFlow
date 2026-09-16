@@ -54,7 +54,7 @@ import {
   addLiveStaffUser,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
-import { getAllSchoolsFromSupabase } from '@/lib/supabase/services';
+import { getAllSchoolsFromSupabase, getSchoolSubscriptionInfo } from '@/lib/supabase/services';
 
 export type UserRole =
   | 'directeur'
@@ -199,6 +199,7 @@ export function LoginView({
   // État de l'établissement
   const [currentSchool, setCurrentSchool] = useState<School>(initialSchool);
   const [isDeletedSchool, setIsDeletedSchool] = useState(false);
+  const [isExpiredSchool, setIsExpiredSchool] = useState(false);
   const activeSlug = currentSchool?.slug || schoolSlug;
 
   // Formulaire de Connexion (Comptes Existants)
@@ -357,9 +358,21 @@ export function LoginView({
 
       const isDeleted = params.get('deleted') === 'true' || isSchoolDeleted(schoolSlug);
       setIsDeletedSchool(isDeleted);
+
+      if (params.get('expired') === 'true') {
+        setIsExpiredSchool(true);
+        setErrorMessage(
+          "❌ Abonnement expiré. L'accès à l'espace de gestion est suspendu. Veuillez renouveler votre abonnement pour continuer à utiliser SchoolFlow."
+        );
+      }
     }
 
-    // Synchronisation automatique des établissements abonnés depuis Supabase Cloud
+    // Synchronisation automatique des établissements abonnés depuis Supabase Cloud. Ecrit
+    // dans la MEME cle que celle lue par getRegisteredSchools()/verifySchoolSubscriptionForLogin
+    // ('schoolflow_registered_schools_v2') - un ancien decalage de nom de cle (v1 vs v2) faisait
+    // que cette synchronisation n'etait jamais vue par la verification d'abonnement : un membre
+    // du personnel se connectant pour la premiere fois sur un appareil qui n'avait jamais servi
+    // a l'inscription de l'ecole se voyait refuser l'acces meme avec un abonnement actif.
     getAllSchoolsFromSupabase().then((remoteSchools) => {
       if (remoteSchools && remoteSchools.length > 0) {
         try {
@@ -367,7 +380,7 @@ export function LoginView({
           const map = new Map<string, School>();
           for (const s of current) map.set(s.slug, s);
           for (const s of remoteSchools) map.set(s.slug, s);
-          localStorage.setItem('schoolflow_registered_schools_v1', JSON.stringify(Array.from(map.values())));
+          localStorage.setItem('schoolflow_registered_schools_v2', JSON.stringify(Array.from(map.values())));
           window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
         } catch (e) {}
       }
@@ -391,7 +404,7 @@ export function LoginView({
   // ═══════════════════════════════════════════════════════════════
   // 1. GESTION DE LA CONNEXION (COMPTES ET PERSONNELS EXISTANTS)
   // ═══════════════════════════════════════════════════════════════
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -401,6 +414,11 @@ export function LoginView({
       );
       return;
     }
+
+    // Remarque : isExpiredSchool (posé depuis l'URL ?expired=true après un renvoi par proxy.ts)
+    // n'est qu'informatif ici — il ne bloque pas la resoumission, car il peut être obsolète
+    // (renouvellement effectué depuis). La vérification réelle et à jour se fait juste après,
+    // directement contre la base Cloud (voir getSchoolSubscriptionInfo ci-dessous).
 
     const trimmedName = userName.trim();
     if (!trimmedName) {
@@ -429,6 +447,30 @@ export function LoginView({
           '❌ Accès refusé : Aucun abonnement actif n’est associé à cet établissement. Veuillez d’abord créer un compte et souscrire un abonnement.'
       );
       return;
+    }
+
+    // Vérification réelle de l'échéance d'abonnement (1, 2 ou 3 ans) contre la base Cloud
+    // partagée — jamais l'établissement pilote epc-manoi, qui doit rester toujours actif quoi
+    // qu'il arrive à ce mécanisme. La date de fin est calculée depuis la date d'inscription
+    // réelle en base (created_at, immuable) + la durée du forfait, avec un éventuel
+    // renouvellement manuel enregistré séparément — impossible à falsifier en local.
+    let subscriptionEndDateForCookie: string | undefined;
+    if (activeSlug && activeSlug !== 'epc-manoi' && activeSlug !== 'college-excellence') {
+      try {
+        const subInfo = await getSchoolSubscriptionInfo(activeSlug);
+        if (subInfo) {
+          subscriptionEndDateForCookie = subInfo.endDate;
+          if (subInfo.isExpired) {
+            setErrorMessage(
+              `❌ Abonnement expiré le ${new Date(subInfo.endDate).toLocaleDateString('fr-FR')}. L'accès à l'espace de gestion est suspendu. Veuillez renouveler votre abonnement pour continuer.`
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        // Panne réseau/Supabase : ne pas bloquer un établissement en règle sur un simple
+        // problème de connexion — seule une expiration confirmée bloque l'accès.
+      }
     }
 
     let matchedParentStudents: Student[] = [];
@@ -638,7 +680,12 @@ export function LoginView({
         // Cookie de session lu par proxy.ts pour protéger les pages /admin côté serveur
         // (le localStorage seul n'est pas lisible avant le rendu, et ne bloque donc rien).
         const cookiePayload = encodeURIComponent(
-          JSON.stringify({ slug: activeSlug, roleId: selectedRole, authCode: cleanAuthCode })
+          JSON.stringify({
+            slug: activeSlug,
+            roleId: selectedRole,
+            authCode: cleanAuthCode,
+            ...(subscriptionEndDateForCookie ? { subscriptionEndDate: subscriptionEndDateForCookie } : {}),
+          })
         );
         document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
       } catch (err) {
@@ -834,8 +881,21 @@ export function LoginView({
         };
         localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
         window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+
+        // Échéance d'abonnement calculée dès la création (date d'inscription + durée du
+        // forfait choisi) et posée dans le cookie, comme au login — évite qu'une toute
+        // nouvelle école reste sans date de contrôle jusqu'à sa prochaine connexion.
+        const planMonths: Record<string, number> = { mensuel: 1, annuel: 12, triennal: 36 };
+        const newSchoolEndDate = new Date();
+        newSchoolEndDate.setMonth(newSchoolEndDate.getMonth() + (planMonths[selectedPlan] || 12));
+
         const cookiePayload = encodeURIComponent(
-          JSON.stringify({ slug, roleId: 'directeur', authCode: directorAuthCode })
+          JSON.stringify({
+            slug,
+            roleId: 'directeur',
+            authCode: directorAuthCode,
+            subscriptionEndDate: newSchoolEndDate.toISOString(),
+          })
         );
         document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
       } catch (err) {
