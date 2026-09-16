@@ -54,6 +54,12 @@ export function Topbar({
   breadcrumbs = ['Tableau de bord', "Vue d'ensemble"],
 }: TopbarProps) {
   const router = useRouter();
+  // École pilote : clé historique non suffixée. Toute autre école : clé dédiée — le repli
+  // précédent vers la clé globale non suffixée faisait que la cloche de notifications de cette
+  // barre supérieure (active sur toutes les pages admin) pouvait afficher les messages parents
+  // réels d'une AUTRE école partageant le même navigateur.
+  const isPilotSchoolTopbar = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedParentMsgKeyTopbar = isPilotSchoolTopbar ? 'schoolflow_parent_messages_v1' : `schoolflow_parent_messages_v1_${schoolSlug}`;
   const [currentSchool, setCurrentSchool] = useState<School>(() => getLiveSchool(schoolSlug, defaultSchool));
   const [activeSession, setActiveSession] = useState<{
     fullName: string;
@@ -404,9 +410,7 @@ export function Topbar({
       const myPhoneDigits = (session.phone || '').replace(/\D/g, '');
       const myName = (session.fullName || '').toLowerCase().trim();
 
-      const raw =
-        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
-        localStorage.getItem('schoolflow_parent_messages_v1');
+      const raw = localStorage.getItem(scopedParentMsgKeyTopbar);
       const allMsgs: any[] = raw ? JSON.parse(raw) : [];
 
       const seenRaw = cleanAuthCode ? localStorage.getItem(`${PARENT_SEEN_REPLIES_KEY}_${cleanAuthCode}`) : null;
@@ -461,9 +465,7 @@ export function Topbar({
         return;
       }
 
-      const raw =
-        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
-        localStorage.getItem('schoolflow_parent_messages_v1');
+      const raw = localStorage.getItem(scopedParentMsgKeyTopbar);
       if (raw) {
         const parsed: any[] = JSON.parse(raw);
         const real = parsed.filter(
@@ -529,14 +531,13 @@ export function Topbar({
           const cloudAll: any[] = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
           if (cloudAll.length === 0) return;
           try {
-            const rawLocal = localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`);
+            const rawLocal = localStorage.getItem(scopedParentMsgKeyTopbar);
             const localAll: any[] = rawLocal ? JSON.parse(rawLocal) : [];
             const byId = new Map<string, any>();
             localAll.forEach((m) => byId.set(m.id, m));
             cloudAll.forEach((m) => byId.set(m.id, m));
             const merged = Array.from(byId.values());
-            localStorage.setItem(`schoolflow_parent_messages_v1_${schoolSlug}`, JSON.stringify(merged));
-            localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify(merged));
+            localStorage.setItem(scopedParentMsgKeyTopbar, JSON.stringify(merged));
           } catch (e) {}
           loadParentNotifications();
         })
@@ -567,14 +568,11 @@ export function Topbar({
     }
 
     try {
-      const raw =
-        localStorage.getItem(`schoolflow_parent_messages_v1_${schoolSlug}`) ||
-        localStorage.getItem('schoolflow_parent_messages_v1');
+      const raw = localStorage.getItem(scopedParentMsgKeyTopbar);
       if (raw) {
         const parsed: any[] = JSON.parse(raw);
         const updated = parsed.map((m) => ({ ...m, status: 'resolved', unread: false }));
-        localStorage.setItem(`schoolflow_parent_messages_v1_${schoolSlug}`, JSON.stringify(updated));
-        localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify(updated));
+        localStorage.setItem(scopedParentMsgKeyTopbar, JSON.stringify(updated));
         broadcastLiveUpdate({ action: 'parent_messages_read', schoolSlug });
       }
     } catch (e) {}

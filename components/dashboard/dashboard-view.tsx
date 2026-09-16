@@ -55,6 +55,16 @@ export function DashboardView({
   initialServices,
 }: DashboardViewProps) {
   const cleanSlug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
+  // École pilote : clés historiques non suffixées. Toute autre école : clé dédiée — sans ça, le
+  // Tableau de Bord d'une école non pilote pouvait afficher les abonnés/paiements Internat,
+  // Cantine ou Transport d'une AUTRE école (repli vers la clé globale partagée par défaut).
+  const isPilotDash = cleanSlug === 'epc-manoi';
+  const dashBoardingSubKey = isPilotDash ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${cleanSlug}`;
+  const dashBoardingPayKey = isPilotDash ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${cleanSlug}`;
+  const dashCanteenSubKey = isPilotDash ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${cleanSlug}`;
+  const dashCanteenPayKey = isPilotDash ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${cleanSlug}`;
+  const dashTransportSubKey = isPilotDash ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${cleanSlug}`;
+  const dashTransportPayKey = isPilotDash ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${cleanSlug}`;
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, cleanSlug));
   const [invoices, setInvoices] = useState<Invoice[]>(() => getLiveInvoices(initialInvoices, cleanSlug));
   const [schoolState, setSchoolState] = useState<School>(() => getLiveSchool(cleanSlug, school));
@@ -137,7 +147,7 @@ export function DashboardView({
           setStudents(liveStus);
           try {
             localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
-            localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+            if (isPilotDash) localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
           } catch (e) {}
           hasNewData = true;
         }
@@ -146,7 +156,7 @@ export function DashboardView({
           setInvoices(liveInvs);
           try {
             localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
-            localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
+            if (isPilotDash) localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
           } catch (e) {}
           hasNewData = true;
         }
@@ -160,27 +170,22 @@ export function DashboardView({
         if (sbServices) {
           setServicesData(sbServices);
           if (sbServices.boardingSubscriptions) {
-            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(sbServices.boardingSubscriptions));
-            localStorage.setItem(`schoolflow_boarding_subscriptions_v3_${activeSlug}`, JSON.stringify(sbServices.boardingSubscriptions));
+            localStorage.setItem(dashBoardingSubKey, JSON.stringify(sbServices.boardingSubscriptions));
           }
           if (sbServices.boardingPayments) {
-            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(sbServices.boardingPayments));
+            localStorage.setItem(dashBoardingPayKey, JSON.stringify(sbServices.boardingPayments));
           }
           if (sbServices.canteenSubscriptions) {
-            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(sbServices.canteenSubscriptions));
-            localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(sbServices.canteenSubscriptions));
-            localStorage.setItem(`schoolflow_canteen_subscriptions_v3_${activeSlug}`, JSON.stringify(sbServices.canteenSubscriptions));
+            localStorage.setItem(dashCanteenSubKey, JSON.stringify(sbServices.canteenSubscriptions));
           }
           if (sbServices.canteenPayments) {
-            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(sbServices.canteenPayments));
-            localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(sbServices.canteenPayments));
+            localStorage.setItem(dashCanteenPayKey, JSON.stringify(sbServices.canteenPayments));
           }
           if (sbServices.transportSubscriptions) {
-            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(sbServices.transportSubscriptions));
-            localStorage.setItem(`schoolflow_transport_subscriptions_v2_${activeSlug}`, JSON.stringify(sbServices.transportSubscriptions));
+            localStorage.setItem(dashTransportSubKey, JSON.stringify(sbServices.transportSubscriptions));
           }
           if (sbServices.transportPayments) {
-            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(sbServices.transportPayments));
+            localStorage.setItem(dashTransportPayKey, JSON.stringify(sbServices.transportPayments));
           }
           hasNewData = true;
         }
@@ -200,7 +205,7 @@ export function DashboardView({
             setStudents(liveStus);
             try {
               localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
-              localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+              if (isPilotDash) localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
             } catch (e) {}
           }
           if (res.data.invoices && Array.isArray(res.data.invoices) && res.data.invoices.length > 0) {
@@ -208,31 +213,29 @@ export function DashboardView({
             setInvoices(liveInvs);
             try {
               localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
-              localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
+              if (isPilotDash) localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
             } catch (e) {}
           }
           if (res.data.boardingSubscriptions || res.data.canteenSubscriptions || res.data.transportSubscriptions || res.data.installments) {
             setServicesData(res.data);
           }
           if (res.data.boardingSubscriptions) {
-            localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(res.data.boardingSubscriptions));
+            localStorage.setItem(dashBoardingSubKey, JSON.stringify(res.data.boardingSubscriptions));
           }
           if (res.data.boardingPayments) {
-            localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(res.data.boardingPayments));
+            localStorage.setItem(dashBoardingPayKey, JSON.stringify(res.data.boardingPayments));
           }
           if (res.data.canteenSubscriptions) {
-            localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify(res.data.canteenSubscriptions));
-            localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(res.data.canteenSubscriptions));
+            localStorage.setItem(dashCanteenSubKey, JSON.stringify(res.data.canteenSubscriptions));
           }
           if (res.data.canteenPayments) {
-            localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify(res.data.canteenPayments));
-            localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(res.data.canteenPayments));
+            localStorage.setItem(dashCanteenPayKey, JSON.stringify(res.data.canteenPayments));
           }
           if (res.data.transportSubscriptions) {
-            localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(res.data.transportSubscriptions));
+            localStorage.setItem(dashTransportSubKey, JSON.stringify(res.data.transportSubscriptions));
           }
           if (res.data.transportPayments) {
-            localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(res.data.transportPayments));
+            localStorage.setItem(dashTransportPayKey, JSON.stringify(res.data.transportPayments));
           }
           window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
         }
@@ -257,12 +260,12 @@ export function DashboardView({
       const currentLocalInvoices = getLiveInvoices([], activeSlug);
       const currentDeletedIds = Array.from(getDeletedStudentIds());
 
-      let rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem(`schoolflow_boarding_subscriptions_v3_${activeSlug}`);
-      let rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
-      let rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3') || localStorage.getItem('schoolflow_canteen_subscriptions_v2') || localStorage.getItem(`schoolflow_canteen_subscriptions_v3_${activeSlug}`);
-      let rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3') || localStorage.getItem('schoolflow_canteen_monthly_payments_v2');
-      let rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2') || localStorage.getItem(`schoolflow_transport_subscriptions_v2_${activeSlug}`);
-      let rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
+      let rawBoardingSubs = localStorage.getItem(dashBoardingSubKey);
+      let rawBoardingPay = localStorage.getItem(dashBoardingPayKey);
+      let rawCanteenSubs = localStorage.getItem(dashCanteenSubKey);
+      let rawCanteenPay = localStorage.getItem(dashCanteenPayKey);
+      let rawTransportSubs = localStorage.getItem(dashTransportSubKey);
+      let rawTransportPay = localStorage.getItem(dashTransportPayKey);
 
       const boardingSubscriptions = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : (servicesData?.boardingSubscriptions || []);
       const boardingPayments = rawBoardingPay ? JSON.parse(rawBoardingPay) : (servicesData?.boardingPayments || {});
@@ -342,7 +345,7 @@ export function DashboardView({
             (s: any) => !delSet.has(s.id) && !delSet.has(s.studentNumber) && !delSet.has(s.matricule)
           );
           localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
-          localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+          if (isPilotDash) localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
           setStudents(liveStus);
         }
         if (result.data.invoices && Array.isArray(result.data.invoices)) {
@@ -350,26 +353,26 @@ export function DashboardView({
             (inv: any) => !delSet.has(inv.id) && !delSet.has(inv.studentId) && !delSet.has(inv.invoiceNumber)
           );
           localStorage.setItem(`schoolflow_registered_invoices_v1_${activeSlug}`, JSON.stringify(liveInvs));
-          localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
+          if (isPilotDash) localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(liveInvs));
           setInvoices(liveInvs);
         }
         if (result.data.boardingSubscriptions) {
-          localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify(result.data.boardingSubscriptions));
+          localStorage.setItem(dashBoardingSubKey, JSON.stringify(result.data.boardingSubscriptions));
         }
         if (result.data.boardingPayments) {
-          localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify(result.data.boardingPayments));
+          localStorage.setItem(dashBoardingPayKey, JSON.stringify(result.data.boardingPayments));
         }
         if (result.data.canteenSubscriptions) {
-          localStorage.setItem('schoolflow_canteen_subscriptions_v2', JSON.stringify(result.data.canteenSubscriptions));
+          localStorage.setItem(dashCanteenSubKey, JSON.stringify(result.data.canteenSubscriptions));
         }
         if (result.data.canteenPayments) {
-          localStorage.setItem('schoolflow_canteen_monthly_payments_v2', JSON.stringify(result.data.canteenPayments));
+          localStorage.setItem(dashCanteenPayKey, JSON.stringify(result.data.canteenPayments));
         }
         if (result.data.transportSubscriptions) {
-          localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify(result.data.transportSubscriptions));
+          localStorage.setItem(dashTransportSubKey, JSON.stringify(result.data.transportSubscriptions));
         }
         if (result.data.transportPayments) {
-          localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify(result.data.transportPayments));
+          localStorage.setItem(dashTransportPayKey, JSON.stringify(result.data.transportPayments));
         }
         window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'manual_sync_completed' } }));
       }
@@ -410,7 +413,7 @@ export function DashboardView({
     if (typeof window !== 'undefined') {
       try {
         const deletedIds = getDeletedStudentIds();
-        const rawBoarding = localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem(`schoolflow_boarding_subscriptions_v3_${cleanSlug}`);
+        const rawBoarding = localStorage.getItem(dashBoardingSubKey);
         if (rawBoarding) {
           const subs: any[] = JSON.parse(rawBoarding);
           subs.forEach((b) => {
@@ -472,8 +475,8 @@ export function DashboardView({
 
     if (typeof window !== 'undefined') {
       try {
-        const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
-        const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+        const rawBoardingPay = localStorage.getItem(dashBoardingPayKey);
+        const rawBoardingSubs = localStorage.getItem(dashBoardingSubKey);
         if (rawBoardingPay && rawBoardingSubs) {
           const monthlyPayments: Record<string, Record<string, boolean>> = JSON.parse(rawBoardingPay);
           const subs: Array<{ studentId: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
@@ -717,6 +720,7 @@ export function DashboardView({
         invoices={invoices}
         students={students}
         servicesData={servicesData}
+        schoolSlug={cleanSlug}
       />
 
       {/* Tableau des factures & encaissements avec colonne Statut Nouveau / Ancien */}

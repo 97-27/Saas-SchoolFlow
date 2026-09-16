@@ -11,6 +11,7 @@ interface RevenueSummaryProps {
   invoices?: Invoice[];
   students?: Student[];
   servicesData?: any;
+  schoolSlug?: string;
 }
 
 export function RevenueSummary({
@@ -18,8 +19,22 @@ export function RevenueSummary({
   invoices = [],
   students = [],
   servicesData,
+  schoolSlug = 'epc-manoi',
 }: RevenueSummaryProps) {
   const [serviceVersion, setServiceVersion] = useState(0);
+
+  // École pilote : clés historiques non suffixées. Toute autre école : clé dédiée — ce
+  // composant lisait auparavant des clés globales (dont une contenant littéralement
+  // "epc-manoi" en dur), affichant potentiellement les chiffres d'internat/cantine/transport
+  // d'une AUTRE école dans "Structure des encaissements". servicesData (déjà correctement
+  // scopé par l'appelant via Supabase) est désormais toujours prioritaire sur ce cache local.
+  const isPilotRevenue = !schoolSlug || schoolSlug === 'epc-manoi';
+  const revBoardingSubKey = isPilotRevenue ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${schoolSlug}`;
+  const revBoardingPayKey = isPilotRevenue ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${schoolSlug}`;
+  const revCanteenSubKey = isPilotRevenue ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${schoolSlug}`;
+  const revCanteenPayKey = isPilotRevenue ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${schoolSlug}`;
+  const revTransportSubKey = isPilotRevenue ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${schoolSlug}`;
+  const revTransportPayKey = isPilotRevenue ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${schoolSlug}`;
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -50,12 +65,11 @@ export function RevenueSummary({
     // Calcul Internat (Strictement synchronisé avec la page Internat & Supabase Cloud)
     try {
       const rawBoardingSubs =
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('schoolflow_boarding_subscriptions_v3') || localStorage.getItem('schoolflow_boarding_subscriptions_v3_epc-manoi')
-          : null) || (servicesData?.boardingSubscriptions ? JSON.stringify(servicesData.boardingSubscriptions) : null);
+        (servicesData?.boardingSubscriptions ? JSON.stringify(servicesData.boardingSubscriptions) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revBoardingSubKey) : null);
       const rawBoardingPay =
-        (typeof window !== 'undefined' ? localStorage.getItem('schoolflow_boarding_monthly_payments_v3') : null) ||
-        (servicesData?.boardingPayments ? JSON.stringify(servicesData.boardingPayments) : null);
+        (servicesData?.boardingPayments ? JSON.stringify(servicesData.boardingPayments) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revBoardingPayKey) : null);
 
       const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
       const boardingSubsList: Array<{ studentId: string; studentName?: string; matricule?: string; className?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
@@ -138,13 +152,11 @@ export function RevenueSummary({
     // Calcul Cantine
     try {
       const rawCanteenSubs =
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('schoolflow_canteen_subscriptions_v3') || localStorage.getItem('schoolflow_canteen_subscriptions_v2')
-          : null) || (servicesData?.canteenSubscriptions ? JSON.stringify(servicesData.canteenSubscriptions) : null);
+        (servicesData?.canteenSubscriptions ? JSON.stringify(servicesData.canteenSubscriptions) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revCanteenSubKey) : null);
       const rawCanteenPay =
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('schoolflow_canteen_monthly_payments_v3') || localStorage.getItem('schoolflow_canteen_monthly_payments_v2')
-          : null) || (servicesData?.canteenPayments ? JSON.stringify(servicesData.canteenPayments) : null);
+        (servicesData?.canteenPayments ? JSON.stringify(servicesData.canteenPayments) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revCanteenPayKey) : null);
 
       const customDietMap: Record<string, { diet?: string; rate: number; discount?: number }> = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : {};
       const monthlyPayments: Record<string, Record<string, boolean>> = rawCanteenPay ? JSON.parse(rawCanteenPay) : {};
@@ -179,13 +191,11 @@ export function RevenueSummary({
     // Calcul Transport
     try {
       const rawTransportSubs =
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('schoolflow_transport_subscriptions_v2') || localStorage.getItem('schoolflow_transport_subscriptions_v3')
-          : null) || (servicesData?.transportSubscriptions ? JSON.stringify(servicesData.transportSubscriptions) : null);
+        (servicesData?.transportSubscriptions ? JSON.stringify(servicesData.transportSubscriptions) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revTransportSubKey) : null);
       const rawTransportPay =
-        (typeof window !== 'undefined'
-          ? localStorage.getItem('schoolflow_transport_monthly_payments_v2') || localStorage.getItem('schoolflow_transport_monthly_payments_v3')
-          : null) || (servicesData?.transportPayments ? JSON.stringify(servicesData.transportPayments) : null);
+        (servicesData?.transportPayments ? JSON.stringify(servicesData.transportPayments) : null) ||
+        (typeof window !== 'undefined' ? localStorage.getItem(revTransportPayKey) : null);
 
       const customTransportMap: Record<string, { stop?: string; rate: number; discount?: number }> = rawTransportSubs ? JSON.parse(rawTransportSubs) : {};
       const monthlyPayments: Record<string, Record<string, boolean>> = rawTransportPay ? JSON.parse(rawTransportPay) : {};
@@ -272,7 +282,7 @@ export function RevenueSummary({
       totalCollected,
       targetAnnual: totalCollected + (students.reduce((acc, s) => acc + (s.balanceRemaining || 0), 0)),
     };
-  }, [students, invoices, serviceVersion]);
+  }, [students, invoices, serviceVersion, servicesData, schoolSlug]);
 
   // Recouvrement des 5 Échéances lié STRICTEMENT aux 5 Versements (Indépendant du mois calendaire de saisie)
   // 1er Versement -> Octobre 2026

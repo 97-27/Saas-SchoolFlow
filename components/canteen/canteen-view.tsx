@@ -620,7 +620,8 @@ export function CanteenView({
       const invoiceId = `inv-canteen-${studentId}`;
       if (typeof window !== 'undefined') {
         try {
-          const rawInvoices = localStorage.getItem('schoolflow_registered_invoices_v1');
+          const invoicesKey = isPilotSchool ? 'schoolflow_registered_invoices_v1' : `schoolflow_registered_invoices_v1_${schoolSlug}`;
+          const rawInvoices = localStorage.getItem(invoicesKey);
           if (rawInvoices) {
             const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
             const filteredInvoices = prevInvoices.filter(
@@ -630,7 +631,7 @@ export function CanteenView({
                 !inv.invoiceNumber?.startsWith(`CAN-${studentNumber}`) &&
                 !inv.invoiceNumber?.startsWith(`QUI-CAN-${studentNumber}`)
             );
-            localStorage.setItem('schoolflow_registered_invoices_v1', JSON.stringify(filteredInvoices));
+            localStorage.setItem(invoicesKey, JSON.stringify(filteredInvoices));
           }
         } catch (e) {}
       }

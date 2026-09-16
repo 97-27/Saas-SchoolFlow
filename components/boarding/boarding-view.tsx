@@ -794,18 +794,20 @@ export function BoardingView({
     } else {
       // Aucun versement d'internat -> nettoyer toute facture résiduelle à zéro franc
       try {
-        const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-        if (rawInvoices) {
-          const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-          const cleaned = prevInvoices.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType?.toLowerCase().includes('internat'))));
-          localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(cleaned));
-        }
         const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
         const rawInvSchool = localStorage.getItem(invSchoolKey);
         if (rawInvSchool) {
           const prevInvSchool: Invoice[] = JSON.parse(rawInvSchool);
           const cleaned = prevInvSchool.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType?.toLowerCase().includes('internat'))));
           localStorage.setItem(invSchoolKey, JSON.stringify(cleaned));
+        }
+        if (isPilotSchool) {
+          const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+          if (rawInvoices) {
+            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
+            const cleaned = prevInvoices.filter((i) => !(i.id === invoiceId || (i.studentId === targetStudentId && i.feeType?.toLowerCase().includes('internat'))));
+            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(cleaned));
+          }
         }
       } catch (e) {}
     }
@@ -878,13 +880,14 @@ export function BoardingView({
       const invoiceId = `inv-boarding-${studentId}`;
       if (typeof window !== 'undefined') {
         try {
-          const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+          const invoicesKey = isPilotSchool ? INVOICES_STORAGE_KEY : `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
+          const rawInvoices = localStorage.getItem(invoicesKey);
           if (rawInvoices) {
             const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
             const filteredInvoices = prevInvoices.filter(
               (inv) => inv.id !== invoiceId && inv.studentId !== studentId && !inv.invoiceNumber?.startsWith(`QUI-INT-${studentNumber}`)
             );
-            localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(filteredInvoices));
+            localStorage.setItem(invoicesKey, JSON.stringify(filteredInvoices));
           }
         } catch (e) {}
       }

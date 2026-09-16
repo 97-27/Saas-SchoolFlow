@@ -76,30 +76,41 @@ export function ParentScolariteTab({
   const [boardingSubs, setBoardingSubs] = useState<any[]>([]);
   const [boardingPayments, setBoardingPayments] = useState<Record<string, Record<string, boolean>>>({});
 
+  // École pilote : clés historiques non suffixées. Toute autre école : clé dédiée — sans ça,
+  // l'espace parent d'une école pouvait afficher les abonnés/paiements Cantine/Transport/
+  // Internat d'une AUTRE école partageant le même navigateur.
+  const isPilotParentTab = !schoolSlug || schoolSlug === 'epc-manoi';
+  const parentCanteenSubKey = isPilotParentTab ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${schoolSlug}`;
+  const parentCanteenPayKey = isPilotParentTab ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${schoolSlug}`;
+  const parentTransportSubKey = isPilotParentTab ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${schoolSlug}`;
+  const parentTransportPayKey = isPilotParentTab ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${schoolSlug}`;
+  const parentBoardingSubKey = isPilotParentTab ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${schoolSlug}`;
+  const parentBoardingPayKey = isPilotParentTab ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${schoolSlug}`;
+
   // Charger les données de prestations en temps réel depuis le localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     try {
       // 1. Cantine
-      const rawCanteenSubs = localStorage.getItem('schoolflow_canteen_subscriptions_v3');
+      const rawCanteenSubs = localStorage.getItem(parentCanteenSubKey);
       if (rawCanteenSubs) setCanteenSubs(JSON.parse(rawCanteenSubs));
 
-      const rawCanteenPay = localStorage.getItem('schoolflow_canteen_monthly_payments_v3');
+      const rawCanteenPay = localStorage.getItem(parentCanteenPayKey);
       if (rawCanteenPay) setCanteenPayments(JSON.parse(rawCanteenPay));
 
       // 2. Transport
-      const rawTransportSubs = localStorage.getItem('schoolflow_transport_subscriptions_v2');
+      const rawTransportSubs = localStorage.getItem(parentTransportSubKey);
       if (rawTransportSubs) setTransportSubs(JSON.parse(rawTransportSubs));
 
-      const rawTransportPay = localStorage.getItem('schoolflow_transport_monthly_payments_v2');
+      const rawTransportPay = localStorage.getItem(parentTransportPayKey);
       if (rawTransportPay) setTransportPayments(JSON.parse(rawTransportPay));
 
       // 3. Internat
-      const rawBoardingSubs = localStorage.getItem('schoolflow_boarding_subscriptions_v3');
+      const rawBoardingSubs = localStorage.getItem(parentBoardingSubKey);
       if (rawBoardingSubs) setBoardingSubs(JSON.parse(rawBoardingSubs));
 
-      const rawBoardingPay = localStorage.getItem('schoolflow_boarding_monthly_payments_v3');
+      const rawBoardingPay = localStorage.getItem(parentBoardingPayKey);
       if (rawBoardingPay) setBoardingPayments(JSON.parse(rawBoardingPay));
     } catch (e) {
       console.error('Erreur lecture données scolarité/prestations:', e);
