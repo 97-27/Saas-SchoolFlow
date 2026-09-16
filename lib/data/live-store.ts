@@ -2271,7 +2271,7 @@ export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-founder',
     fullName: 'LAWANI MOUSSA',
-    role: 'Fondateur & Promoteur (Supervision Suprême)',
+    role: 'Contrôle Total',
     roleId: 'fondateur',
     matricule: 'FND-001',
     subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -2288,7 +2288,7 @@ export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-001',
     fullName: 'LAWANI MOUHAMED',
-    role: 'Directeur des Études (Admin)',
+    role: 'Contrôle',
     roleId: 'directeur',
     matricule: 'DIR-001',
     subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -2322,7 +2322,7 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     {
       id: 'staff-founder',
       fullName: cleanFounder,
-      role: 'Fondateur & Promoteur (Supervision Suprême)',
+      role: 'Contrôle Total',
       roleId: 'fondateur',
       matricule: 'FND-001',
       subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -2339,7 +2339,7 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     {
       id: 'staff-001',
       fullName: cleanDirector,
-      role: 'Directeur des Études (Admin)',
+      role: 'Contrôle',
       roleId: 'directeur',
       matricule: 'DIR-001',
       subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -2409,7 +2409,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
             ...u,
             fullName: finalName,
             avatarUrl: persistentAvatar,
-            role: def.roleId === 'fondateur' ? 'Fondateur & Promoteur (Supervision Suprême)' : def.roleId === 'directeur' ? 'Directeur des Études (Admin)' : (u.role || def.role),
+            role: def.roleId === 'fondateur' ? 'Contrôle Total' : def.roleId === 'directeur' ? 'Contrôle' : (u.role || def.role),
             roleId: def.roleId || u.roleId,
             matricule: def.roleId === 'fondateur' ? 'FND-001' : def.roleId === 'directeur' ? 'DIR-001' : (u.matricule || def.matricule),
             joinDate: def.roleId === 'fondateur' ? 'Fondateur de l\'Établissement (Depuis 2026)' : (u.joinDate || def.joinDate),
@@ -3311,31 +3311,37 @@ export function resetSchoolData(
       parentInterface: true,
     };
 
+    // École pilote : les clés globales/non suffixées ci-dessous sont celles réellement lues
+    // pour epc-manoi (convention isPilot). Les écrire à vide pour une AUTRE école effaçait
+    // auparavant les vraies données de production du pilote à chaque réinitialisation d'un
+    // simple compte d'essai — désormais réservé à la réinitialisation du pilote lui-même.
+    const isResettingPilot = slug === 'epc-manoi';
+
     // 1. Vider le registre des élèves (Inscriptions & Dossiers) - Si Module students OU Interface Secrétaire
     if (doAll || opt.students || opt.secretaireInterface) {
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify([]));
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_${slug}`, JSON.stringify([]));
       localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     }
 
     // 2. Factures, Scolarités, Caisse & Dépenses - Si Module invoices OU Interface Comptable
     if (doAll || opt.invoices || opt.comptableInterface) {
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify([]));
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_${slug}`, JSON.stringify([]));
-      localStorage.setItem('schoolflow_school_expenses_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_school_expenses_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_school_expenses_v1_${slug}`, JSON.stringify([]));
       localStorage.removeItem('schoolflow_expenses_v1');
     }
 
     // 3. Réductions spéciales
     if (doAll || opt.specialDiscounts || opt.comptableInterface) {
-      localStorage.setItem('schoolflow_special_discounts_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_special_discounts_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_special_discounts_v1_${slug}`, JSON.stringify([]));
     }
 
     // 4. Salaires du personnel
     if (doAll || opt.salaries || opt.comptableInterface) {
-      localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_staff_salaries_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_staff_salaries_v1_${slug}`, JSON.stringify([]));
     }
 
@@ -3345,12 +3351,13 @@ export function resetSchoolData(
     // remise à zéro complète doit explicitement vider les deux pour ne laisser aucune fiche
     // fictive/de test derrière elle.
     if (doAll || opt.personnel) {
-      localStorage.setItem('schoolflow_teachers_data_v3', JSON.stringify([]));
+      localStorage.setItem(`schoolflow_teachers_data_v3_${slug}`, JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_teachers_data_v3', JSON.stringify([]));
     }
 
     // 5. Notes, Bulletins & Pédagogie - Si Module grades OU Interface Enseignant
     if (doAll || opt.grades || opt.enseignantInterface) {
-      localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_diverse_notes_v1_${slug}`, JSON.stringify([]));
       localStorage.removeItem('schoolflow_notes_diverses_v1');
       localStorage.removeItem(VALIDATED_BULLETINS_KEY);
@@ -3369,11 +3376,26 @@ export function resetSchoolData(
     // 6. Présences & Assiduité - Si Module attendance OU Interface Enseignant
     if (doAll || opt.attendance || opt.enseignantInterface) {
       localStorage.removeItem('schoolflow_attendance_v1');
+      // Vraie clé utilisée par attendance-view.tsx ('schoolflow_attendance_records_v1_<slug>')
+      // + les verrous de séance par date/créneau/classe ('schoolflow_attendance_locked_<slug>_...') -
+      // l'ancienne clé ci-dessus ('schoolflow_attendance_v1') n'est plus celle réellement lue,
+      // donc une réinitialisation "Présences" ne remettait en réalité rien à zéro.
+      localStorage.removeItem(`schoolflow_attendance_records_v1_${slug}`);
+      try {
+        const attendanceKeysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(`schoolflow_attendance_locked_${slug}_`)) {
+            attendanceKeysToRemove.push(key);
+          }
+        }
+        attendanceKeysToRemove.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {}
     }
 
     // 7. Documents scolaires & Certificats - Si Module documents OU Interface Secrétaire
     if (doAll || opt.documents || opt.secretaireInterface) {
-      localStorage.removeItem(DOCS_STATUS_KEY);
+      if (isResettingPilot) localStorage.removeItem(DOCS_STATUS_KEY);
       localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
       localStorage.removeItem('schoolflow_documents_status_v2');
       localStorage.removeItem('schoolflow_documents_status_v3');
@@ -3382,18 +3404,20 @@ export function resetSchoolData(
 
     // 8. Messagerie & Diffusion - Si Module messages OU Interface Parent
     if (doAll || opt.messages || opt.parentInterface) {
-      localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_parent_messages_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_parent_messages_v1_${slug}`, JSON.stringify([]));
-      localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
+      if (isResettingPilot) localStorage.setItem('schoolflow_broadcast_records_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_broadcast_records_v1_${slug}`, JSON.stringify([]));
     }
 
-    // 9. Cantine scolaire (clé historique non suffixee ET clé par ecole, pour ne jamais
-    // laisser une donnee residuelle dans l'une ou l'autre quel que soit le slug appelant)
+    // 9. Cantine scolaire (clé historique non suffixée UNIQUEMENT pour le pilote lui-même —
+    // l'écrire pour une autre école effaçait les vraies données Cantine de production epc-manoi)
     if (doAll || opt.canteen) {
-      localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
+      if (isResettingPilot) {
+        localStorage.setItem('schoolflow_canteen_subscriptions_v3', JSON.stringify({}));
+        localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
+      }
       localStorage.setItem(`schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify({}));
-      localStorage.setItem('schoolflow_canteen_monthly_payments_v3', JSON.stringify({}));
       localStorage.setItem(`schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify({}));
       localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
       localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
@@ -3402,17 +3426,21 @@ export function resetSchoolData(
 
     // 10. Transport scolaire
     if (doAll || opt.transport) {
-      localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify({}));
+      if (isResettingPilot) {
+        localStorage.setItem('schoolflow_transport_subscriptions_v2', JSON.stringify({}));
+        localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify({}));
+      }
       localStorage.setItem(`schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify({}));
-      localStorage.setItem('schoolflow_transport_monthly_payments_v2', JSON.stringify({}));
       localStorage.setItem(`schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify({}));
     }
 
     // 11. Internat & Hébergement
     if (doAll || opt.boarding) {
-      localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify([]));
+      if (isResettingPilot) {
+        localStorage.setItem('schoolflow_boarding_subscriptions_v3', JSON.stringify([]));
+        localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify({}));
+      }
       localStorage.setItem(`schoolflow_boarding_subscriptions_v3_${slug}`, JSON.stringify([]));
-      localStorage.setItem('schoolflow_boarding_monthly_payments_v3', JSON.stringify({}));
       localStorage.setItem(`schoolflow_boarding_monthly_payments_v3_${slug}`, JSON.stringify({}));
       localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
     }
@@ -3424,7 +3452,7 @@ export function resetSchoolData(
         {
           id: 'staff-founder',
           fullName: (school.founderName || 'LAWANI MOUSSA').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim(),
-          role: 'Fondateur / Promotrice (Admin)',
+          role: 'Contrôle Total',
           roleId: 'fondateur',
           matricule: 'EMP-FND-001',
           subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -3441,7 +3469,7 @@ export function resetSchoolData(
         {
           id: 'staff-001',
           fullName: (school.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim(),
-          role: 'Directeur des Études (Admin)',
+          role: 'Contrôle',
           roleId: 'directeur',
           matricule: 'EMP-DIR-001',
           subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -3496,62 +3524,74 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     const updatedDeleted = Array.from(new Set([...prevDeleted, slug]));
     localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(updatedDeleted));
 
-    // 2. Supprimer toutes les données associées
-    localStorage.removeItem(STUDENTS_STORAGE_KEY);
+    // 2. Supprimer toutes les données associées à CE slug uniquement. Les clés globales/non
+    // suffixées ci-dessous sont celles réellement utilisées par l'école pilote epc-manoi (voir
+    // convention isPilot partout ailleurs dans ce fichier) : les effacer inconditionnellement,
+    // quel que soit le slug reçu, effaçait les VRAIES données de production du pilote (élèves,
+    // factures, personnel, paramètres) à chaque suppression d'un simple compte d'essai. Ne
+    // toucher les clés globales que si c'est bien epc-manoi qui est supprimé.
+    const isDeletingPilot = slug === 'epc-manoi';
     localStorage.removeItem(`${STUDENTS_STORAGE_KEY}_${slug}`);
-    localStorage.removeItem(INVOICES_STORAGE_KEY);
     localStorage.removeItem(`${INVOICES_STORAGE_KEY}_${slug}`);
     localStorage.removeItem(DELETED_STUDENTS_STORAGE_KEY);
     localStorage.removeItem('schoolflow_notes_diverses_v1');
-    localStorage.removeItem('schoolflow_diverse_notes_v1');
     localStorage.removeItem(`schoolflow_diverse_notes_v1_${slug}`);
-    localStorage.removeItem('schoolflow_special_discounts_v1');
     localStorage.removeItem(`schoolflow_special_discounts_v1_${slug}`);
-    localStorage.removeItem('schoolflow_staff_salaries_v1');
     localStorage.removeItem(`schoolflow_staff_salaries_v1_${slug}`);
-    localStorage.removeItem('schoolflow_school_expenses_v1');
     localStorage.removeItem(`schoolflow_school_expenses_v1_${slug}`);
     localStorage.removeItem('schoolflow_expenses_v1');
     localStorage.removeItem('schoolflow_attendance_v1');
-    localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
-    localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
-    localStorage.removeItem('schoolflow_canteen_subscriptions_v3');
+    localStorage.removeItem(`schoolflow_attendance_records_v1_${slug}`);
     localStorage.removeItem(`schoolflow_canteen_subscriptions_v3_${slug}`);
-    localStorage.removeItem('schoolflow_canteen_monthly_payments_v3');
     localStorage.removeItem(`schoolflow_canteen_monthly_payments_v3_${slug}`);
-    localStorage.removeItem('schoolflow_transport_subscriptions_v2');
     localStorage.removeItem(`schoolflow_transport_subscriptions_v2_${slug}`);
-    localStorage.removeItem('schoolflow_transport_monthly_payments_v2');
     localStorage.removeItem(`schoolflow_transport_monthly_payments_v2_${slug}`);
-    localStorage.removeItem('schoolflow_boarding_subscriptions_v3');
     localStorage.removeItem(`schoolflow_boarding_subscriptions_v3_${slug}`);
-    localStorage.removeItem('schoolflow_boarding_monthly_payments_v3');
     localStorage.removeItem(`schoolflow_boarding_monthly_payments_v3_${slug}`);
     localStorage.removeItem(`schoolflow_boarding_capacity_${slug}`);
-    localStorage.removeItem('schoolflow_parent_messages_v1');
     localStorage.removeItem(`schoolflow_parent_messages_v1_${slug}`);
-    localStorage.removeItem('schoolflow_broadcast_records_v1');
     localStorage.removeItem(`schoolflow_broadcast_records_v1_${slug}`);
     localStorage.removeItem('schoolflow_active_session_v2');
     localStorage.removeItem(VALIDATED_BULLETINS_KEY);
-    localStorage.removeItem(DOCS_STATUS_KEY);
     localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
-    localStorage.removeItem('schoolflow_documents_status_v5');
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
-    localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
-    localStorage.removeItem('schoolflow_teachers_data_v2');
     localStorage.removeItem(`schoolflow_teachers_data_v2_${slug}`);
-    localStorage.removeItem('schoolflow_teachers_v1');
-    localStorage.removeItem('schoolflow_teachers_v2');
     localStorage.removeItem(`${STAFF_USERS_STORAGE_KEY}_${slug}`);
-    localStorage.removeItem(STAFF_USERS_STORAGE_KEY);
+
+    if (isDeletingPilot) {
+      localStorage.removeItem(STUDENTS_STORAGE_KEY);
+      localStorage.removeItem(INVOICES_STORAGE_KEY);
+      localStorage.removeItem('schoolflow_diverse_notes_v1');
+      localStorage.removeItem('schoolflow_special_discounts_v1');
+      localStorage.removeItem('schoolflow_staff_salaries_v1');
+      localStorage.removeItem('schoolflow_school_expenses_v1');
+      localStorage.removeItem('schoolflow_canteen_subscriptions_v2');
+      localStorage.removeItem('schoolflow_canteen_monthly_payments_v2');
+      localStorage.removeItem('schoolflow_canteen_subscriptions_v3');
+      localStorage.removeItem('schoolflow_canteen_monthly_payments_v3');
+      localStorage.removeItem('schoolflow_transport_subscriptions_v2');
+      localStorage.removeItem('schoolflow_transport_monthly_payments_v2');
+      localStorage.removeItem('schoolflow_boarding_subscriptions_v3');
+      localStorage.removeItem('schoolflow_boarding_monthly_payments_v3');
+      localStorage.removeItem('schoolflow_parent_messages_v1');
+      localStorage.removeItem('schoolflow_broadcast_records_v1');
+      localStorage.removeItem(DOCS_STATUS_KEY);
+      localStorage.removeItem('schoolflow_documents_status_v5');
+      localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
+      localStorage.removeItem('schoolflow_teachers_data_v2');
+      localStorage.removeItem('schoolflow_teachers_v1');
+      localStorage.removeItem('schoolflow_teachers_v2');
+      localStorage.removeItem(STAFF_USERS_STORAGE_KEY);
+    }
 
     // 3. Marquer le statut comme supprimé
     const status = getSchoolSubscription(slug);
     status.isDeleted = true;
     status.deletedAt = new Date().toISOString();
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${slug}`, JSON.stringify(status));
-    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
+    if (isDeletingPilot) {
+      localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
+    }
 
     // 4. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({

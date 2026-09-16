@@ -285,8 +285,9 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
           return [];
         }
         const saved =
-          localStorage.getItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(TEACHERS_STORAGE_KEY);
+          schoolSlug === 'epc-manoi'
+            ? localStorage.getItem(TEACHERS_STORAGE_KEY)
+            : localStorage.getItem(`${TEACHERS_STORAGE_KEY}_${schoolSlug}`);
         if (saved) {
           const parsed: TeacherRecord[] = JSON.parse(saved);
           // Nettoyer automatiquement toute ancienne donnée comportant le Lycée
