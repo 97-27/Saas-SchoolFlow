@@ -101,13 +101,16 @@ export function ClassesView({
     updateRegisteredStudent(updated, schoolSlug);
   };
 
-  // Documents synchronisés depuis Documents Scolaires (DOCS_STATUS_KEY)
+  // Documents synchronisés depuis Documents Scolaires (DOCS_STATUS_KEY, scopée par école — voir
+  // documents-view.tsx : deux écoles partageaient sinon le même dossier documentaire).
   const [docRecords, setDocRecords] = useState<Record<string, StudentDocumentRecord>>({});
+  const isPilotSchoolForDocs = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedDocsStatusKey = isPilotSchoolForDocs ? DOCS_STATUS_KEY : `${DOCS_STATUS_KEY}_${schoolSlug}`;
 
   const loadDocumentsStatus = () => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(DOCS_STATUS_KEY);
+        const saved = localStorage.getItem(scopedDocsStatusKey);
         if (saved) {
           setDocRecords(JSON.parse(saved));
         }

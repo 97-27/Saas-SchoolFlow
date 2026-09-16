@@ -98,6 +98,11 @@ export function SpecialDiscountsView({
   schoolSlug,
 }: SpecialDiscountsViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
+  // École pilote : clé historique non suffixée. Toute autre école : clé dédiée — le repli
+  // précédent vers la clé globale faisait qu'une école neuve voyait les réductions familiales
+  // réelles (téléphones, montants) d'une autre école partageant le même navigateur.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedDiscountsKey = isPilotSchool ? DISCOUNTS_STORAGE_KEY : `${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`;
   const sanitizeReceipts = (list: FamilyDiscountReceipt[]): FamilyDiscountReceipt[] => {
     return (list || []).filter(
       (r) =>
@@ -118,9 +123,7 @@ export function SpecialDiscountsView({
   const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved =
-          localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(DISCOUNTS_STORAGE_KEY);
+        const saved = localStorage.getItem(scopedDiscountsKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeReceipts(parsed);
@@ -179,7 +182,7 @@ export function SpecialDiscountsView({
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       if (typeof window !== 'undefined') {
         try {
-          const saved = localStorage.getItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(DISCOUNTS_STORAGE_KEY);
+          const saved = localStorage.getItem(scopedDiscountsKey);
           const list = saved ? JSON.parse(saved) : [];
           setSavedReceipts(list);
           if (list.length === 0) {
@@ -521,8 +524,7 @@ export function SpecialDiscountsView({
 
     setSavedReceipts(updatedList);
     try {
-      localStorage.setItem(`${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(updatedList));
-      localStorage.setItem(DISCOUNTS_STORAGE_KEY, JSON.stringify(updatedList));
+      localStorage.setItem(scopedDiscountsKey, JSON.stringify(updatedList));
     } catch (e) {}
 
     // Synchronisation automatique des enfants dans le répertoire global des élèves et de la scolarité
@@ -545,8 +547,6 @@ export function SpecialDiscountsView({
           const lName = parts[0]?.toUpperCase() || 'ÉLÈVE';
           const fName = parts.slice(1).join(' ') || '';
           const tuition = child.tuitionAmount || 200000;
-          const net = Math.max(0, tuition - childDiscount);
-          const remaining = Math.max(0, net - childPaid);
 
           // Vérifier si l'élève existe déjà par son nom ou ID
           const existing = currentStudents.find(
@@ -554,6 +554,16 @@ export function SpecialDiscountsView({
           );
 
           if (existing) {
+            // Additif, jamais un remplacement direct : un élève ayant déjà des versements
+            // enregistrés via l'inscription normale (existing.paidAmount/installments) verrait
+            // sinon ce montant réel silencieusement écrasé par le seul calcul de ce reçu familial
+            // (tuitionAmount total / nombre d'enfants), qui n'a aucun lien avec les tranches déjà
+            // payées. Ce reçu ajoute sa contribution au lieu de remplacer l'historique existant.
+            const combinedDiscount = (existing.discountAmount || 0) + childDiscount;
+            const combinedPaid = (existing.paidAmount || 0) + childPaid;
+            const net = Math.max(0, tuition - combinedDiscount);
+            const remaining = Math.max(0, net - combinedPaid);
+
             const updatedStu: Student = {
               ...existing,
               grade: child.grade || existing.grade,
@@ -563,17 +573,20 @@ export function SpecialDiscountsView({
               whatsappPhone: parentPhone || existing.whatsappPhone,
               address: parentAddress || existing.address,
               tuitionAmount: tuition,
-              discountAmount: childDiscount,
+              discountAmount: combinedDiscount,
               netAmount: net,
-              paidAmount: childPaid,
+              paidAmount: combinedPaid,
               balanceRemaining: remaining,
               paymentDate: issueDate || existing.paymentDate,
-              tuitionStatus: childPaid >= net ? 'paid' : childPaid > 0 ? 'partial' : 'unpaid',
+              tuitionStatus: combinedPaid >= net ? 'paid' : combinedPaid > 0 ? 'partial' : 'unpaid',
             };
             updateRegisteredStudent(updatedStu, schoolSlug);
           } else {
             maxSeq += 1;
             const idStr = `ID-${String(maxSeq).padStart(3, '0')}`;
+            // Nouvel élève, aucun historique à préserver : calcul direct depuis ce reçu.
+            const net = Math.max(0, tuition - childDiscount);
+            const remaining = Math.max(0, net - childPaid);
 
             const newStu: Student = {
               id: idStr,

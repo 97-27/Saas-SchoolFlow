@@ -97,6 +97,8 @@ export async function GET(request: NextRequest) {
           if (sbServices.transportSubscriptions) schoolData.transportSubscriptions = sbServices.transportSubscriptions;
           if (sbServices.transportPayments) schoolData.transportPayments = sbServices.transportPayments;
           if (sbServices.installments) schoolData.installments = sbServices.installments;
+          if (sbServices.canteenWeeklyMenu) schoolData.canteenWeeklyMenu = sbServices.canteenWeeklyMenu;
+          if (sbServices.boardingCapacity !== undefined) schoolData.boardingCapacity = sbServices.boardingCapacity;
         }
         if (sbSchool) {
           schoolData.schoolSettings = {
@@ -397,6 +399,8 @@ export async function POST(request: NextRequest) {
       if (transportSubscriptions !== undefined) servicesPayload.transportSubscriptions = transportSubscriptions;
       if (transportPayments !== undefined) servicesPayload.transportPayments = transportPayments;
       if (body.installments !== undefined) servicesPayload.installments = body.installments;
+      if (canteenWeeklyMenu !== undefined) servicesPayload.canteenWeeklyMenu = canteenWeeklyMenu;
+      if (boardingCapacity !== undefined) servicesPayload.boardingCapacity = boardingCapacity;
       if (Object.keys(servicesPayload).length > 0) {
         savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
       }

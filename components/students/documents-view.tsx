@@ -53,6 +53,13 @@ export function DocumentsView({
   schoolSlug,
   initialSearch = '',
 }: DocumentsViewProps) {
+  // L'école pilote (epc-manoi) garde la clé historique non suffixée (données réelles déjà
+  // stockées ainsi) ; toute autre école reçoit une clé dédiée — les identifiants d'élèves étant
+  // générés séquentiellement par école (ID-001, ID-002...), deux écoles différentes partageaient
+  // sinon littéralement le même dossier documentaire pour leur "ID-001" respectif.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedDocsStatusKey = isPilotSchool ? DOCS_STATUS_KEY : `${DOCS_STATUS_KEY}_${schoolSlug}`;
+
   // 1. Synchronisation temps réel
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
@@ -73,7 +80,7 @@ export function DocumentsView({
 
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem(DOCS_STATUS_KEY);
+        const saved = localStorage.getItem(scopedDocsStatusKey);
         if (saved) {
           return { ...records, ...JSON.parse(saved) };
         }
@@ -113,7 +120,7 @@ export function DocumentsView({
   const loadDocsStatus = () => {
     if (typeof window === 'undefined') return;
     try {
-      const saved = localStorage.getItem(DOCS_STATUS_KEY);
+      const saved = localStorage.getItem(scopedDocsStatusKey);
       if (saved) {
         setDocRecords((prev) => ({ ...prev, ...JSON.parse(saved) }));
       }
@@ -410,7 +417,7 @@ export function DocumentsView({
       const nextRecords = { ...prev, [selectedStudentForDoc]: updated };
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(DOCS_STATUS_KEY, JSON.stringify(nextRecords));
+          localStorage.setItem(scopedDocsStatusKey, JSON.stringify(nextRecords));
           // Émettre l'événement global pour actualisation instantanée de Classes et Niveaux
           window.dispatchEvent(
             new CustomEvent(DATA_UPDATED_EVENT, {
@@ -454,7 +461,7 @@ export function DocumentsView({
       const next = { ...prev, [studentId]: updated };
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(DOCS_STATUS_KEY, JSON.stringify(next));
+          localStorage.setItem(scopedDocsStatusKey, JSON.stringify(next));
         } catch (e) {}
       }
       return next;

@@ -63,6 +63,7 @@ export interface ExpenseItem {
 }
 
 const EXPENSES_STORAGE_KEY = 'schoolflow_school_expenses_v1';
+const SALARIES_STORAGE_KEY = 'schoolflow_staff_salaries_v1';
 
 const INITIAL_EXPENSES: ExpenseItem[] = [];
 
@@ -137,6 +138,24 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     return [];
   });
 
+  // École pilote : clé historique non suffixée. Toute autre école : clé dédiée (même convention
+  // que salaries-view.tsx).
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedSalariesKey = isPilotSchool ? SALARIES_STORAGE_KEY : `${SALARIES_STORAGE_KEY}_${schoolSlug}`;
+
+  // Salaires réellement payés via le module dédié (Salaires & Paie) — sans cette lecture, un
+  // salaire payé là-bas n'apparaissait jamais dans le Solde Net de Caisse, forçant une saisie
+  // manuelle en double ici pour le refléter (avec un risque réel de double comptage).
+  const [salaryPayments, setSalaryPayments] = useState<{ netSalary: number }[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(scopedSalariesKey);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+    }
+    return [];
+  });
+
   // Filtres & Recherche
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Toutes les catégories');
@@ -169,6 +188,10 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
     const loadAndSanitize = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
       setInvoices(getLiveInvoices([], schoolSlug));
+      try {
+        const rawSalaries = localStorage.getItem(scopedSalariesKey);
+        setSalaryPayments(rawSalaries ? JSON.parse(rawSalaries) : []);
+      } catch (e) {}
       if (typeof window !== 'undefined') {
         try {
           const saved =
@@ -227,10 +250,16 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
 
   // Statistiques Financières Clés (100% dynamiques et liées aux encaissements réels)
   const stats = useMemo(() => {
-    const totalExpenses = expenses.reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
-    const salaryExpenses = expenses
-      .filter((e) => e.category === 'Salaires & Primes du Personnel')
-      .reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
+    // Salaires réellement payés via le module dédié — ajoutés une seule fois ici, jamais
+    // ré-additionnés avec une saisie manuelle "Salaires & Primes du Personnel" faite dans CETTE
+    // page pour le même paiement (voir note dans le bloc Solde Net de Caisse de l'interface).
+    const payrollSalaryTotal = salaryPayments.reduce((acc, s) => acc + (Number(s.netSalary) || 0), 0);
+    const manualExpensesTotal = expenses.reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0);
+    const totalExpenses = manualExpensesTotal + payrollSalaryTotal;
+    const salaryExpenses =
+      expenses
+        .filter((e) => e.category === 'Salaires & Primes du Personnel')
+        .reduce((acc, exp) => acc + (Number(exp.amount) || 0), 0) + payrollSalaryTotal;
     const operatingExpenses = totalExpenses - salaryExpenses;
 
     // Recettes réelles de scolarité en caisse — strictement inscription & scolarité. L'internat,
@@ -273,7 +302,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
       netBalance,
       expensesCount: expenses.length,
     };
-  }, [expenses, invoices]);
+  }, [expenses, invoices, salaryPayments]);
 
   // Ouvrir modale d'ajout
   const handleOpenAddModal = () => {

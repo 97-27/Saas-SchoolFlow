@@ -535,9 +535,16 @@ export function GradesView({
     const withMoy = list.filter((item) => item.moyenne !== null) as Array<(typeof list)[0] & { moyenne: number }>;
     withMoy.sort((a, b) => b.moyenne - a.moyenne);
 
+    // Rang partagé en cas d'ex-aequo (même moyenne = même rang), comme dans bulletins-view.tsx —
+    // sans ça, deux élèves à moyenne strictement identique recevaient des rangs différents ici
+    // alors que le bulletin officiel les affiche à égalité.
     const rankMap = new Map<string, number>();
+    let currentRank = 1;
     withMoy.forEach((item, index) => {
-      rankMap.set(item.studentId, index + 1);
+      if (index > 0 && item.moyenne < withMoy[index - 1].moyenne) {
+        currentRank = index + 1;
+      }
+      rankMap.set(item.studentId, currentRank);
     });
 
     return list.map((item) => ({

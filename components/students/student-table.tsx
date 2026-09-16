@@ -203,7 +203,7 @@ export function StudentTable({
 
   // Fonction pour récupérer l'état réel et synchronisé des pièces du dossier de l'élève (Strictement en attente tant qu'aucun document n'a été importé)
   const getLiveDocsForStudent = (studentId: string) => {
-    return getStudentDocumentRecord(studentId);
+    return getStudentDocumentRecord(studentId, schoolSlug);
   };
 
   // Filtered students

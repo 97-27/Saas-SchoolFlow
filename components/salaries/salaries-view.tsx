@@ -98,6 +98,12 @@ export function SalariesView({
     () => initialSchool || defaultSchool
   );
 
+  // École pilote : clé historique non suffixée. Toute autre école : clé dédiée — le repli
+  // précédent vers la clé globale faisait qu'une école neuve voyait les salaires réels
+  // (téléphones, montants) d'une autre école partageant le même navigateur.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedSalariesKey = isPilotSchool ? STORAGE_KEY : `${STORAGE_KEY}_${schoolSlug}`;
+
   const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] => {
     return (list || []).filter(
       (s) =>
@@ -115,8 +121,7 @@ export function SalariesView({
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored =
-          localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(scopedSalariesKey);
         if (stored) {
           const parsed = JSON.parse(stored);
           return sanitizeSalaries(parsed);
@@ -134,13 +139,11 @@ export function SalariesView({
     setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
     setStaffUsers(getLiveStaffUsers(schoolSlug));
     try {
-      const stored =
-        localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(scopedSalariesKey);
       const list = stored ? JSON.parse(stored) : [];
       const cleaned = sanitizeSalaries(list);
       if (cleaned.length !== list.length) {
-        localStorage.setItem(`${STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+        localStorage.setItem(scopedSalariesKey, JSON.stringify(cleaned));
       }
       setSalaries(cleaned);
       setSelectedSalary(cleaned[0] || EMPTY_SALARY);
@@ -150,7 +153,7 @@ export function SalariesView({
       setCurrentSchool(getLiveSchool(schoolSlug, initialSchool || defaultSchool));
       setStaffUsers(getLiveStaffUsers(schoolSlug));
       try {
-        const stored = localStorage.getItem(`${STORAGE_KEY}_${schoolSlug}`) || localStorage.getItem(STORAGE_KEY);
+        const stored = localStorage.getItem(scopedSalariesKey);
         const list = stored ? JSON.parse(stored) : [];
         setSalaries(list);
         setSelectedSalary(list[0] || EMPTY_SALARY);
@@ -163,10 +166,7 @@ export function SalariesView({
   const saveSalaries = (newList: SalaryPayment[]) => {
     setSalaries(newList);
     try {
-      localStorage.setItem(`${STORAGE_KEY}_${schoolSlug}`, JSON.stringify(newList));
-      if (schoolSlug === 'epc-manoi' ) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
-      }
+      localStorage.setItem(scopedSalariesKey, JSON.stringify(newList));
       window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
     } catch (e) {}
   };

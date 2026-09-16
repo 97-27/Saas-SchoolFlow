@@ -82,7 +82,16 @@ export function CommunicationView({
 }: CommunicationViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school || defaultSchool);
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
-  
+
+  // L'école pilote (epc-manoi) garde les clés historiques non suffixées (données réelles déjà
+  // stockées ainsi) ; toute autre école reçoit une clé dédiée. Le repli précédent vers la clé
+  // globale non suffixée dès que la clé propre à l'école était vide faisait qu'une école neuve
+  // voyait les messages parents réels (et réponses de Direction) d'une autre école sur le même
+  // navigateur — et chaque écriture polluait ensuite cette même clé partagée pour tout le monde.
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedMessagesKey = isPilotSchool ? PARENT_MESSAGES_KEY : `${PARENT_MESSAGES_KEY}_${schoolSlug}`;
+  const scopedBroadcastKey = isPilotSchool ? BROADCAST_RECORDS_KEY : `${BROADCAST_RECORDS_KEY}_${schoolSlug}`;
+
   const sanitizeMessages = (list: ParentMessage[]): ParentMessage[] => {
     return (list || []).filter(
       (m) =>
@@ -108,9 +117,7 @@ export function CommunicationView({
   const [messages, setMessages] = useState<ParentMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved =
-          localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(PARENT_MESSAGES_KEY);
+        const saved = localStorage.getItem(scopedMessagesKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeMessages(parsed);
@@ -123,9 +130,7 @@ export function CommunicationView({
   const [broadcasts, setBroadcasts] = useState<BroadcastRecord[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved =
-          localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(BROADCAST_RECORDS_KEY);
+        const saved = localStorage.getItem(scopedBroadcastKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeBroadcasts(parsed);
@@ -146,30 +151,24 @@ export function CommunicationView({
       setStudents(upStus);
       if (typeof window !== 'undefined') {
         try {
-          const savedMsgs =
-            localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) ||
-            localStorage.getItem(PARENT_MESSAGES_KEY);
+          const savedMsgs = localStorage.getItem(scopedMessagesKey);
           if (savedMsgs) {
             const parsed = JSON.parse(savedMsgs);
             const cleaned = sanitizeMessages(parsed);
             if (cleaned.length !== parsed.length) {
-              localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
-              localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(cleaned));
+              localStorage.setItem(scopedMessagesKey, JSON.stringify(cleaned));
             }
             setMessages(cleaned);
           } else {
             setMessages([]);
           }
 
-          const savedBcs =
-            localStorage.getItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`) ||
-            localStorage.getItem(BROADCAST_RECORDS_KEY);
+          const savedBcs = localStorage.getItem(scopedBroadcastKey);
           if (savedBcs) {
             const parsedB = JSON.parse(savedBcs);
             const cleanedB = sanitizeBroadcasts(parsedB);
             if (cleanedB.length !== parsedB.length) {
-              localStorage.setItem(`${BROADCAST_RECORDS_KEY}_${schoolSlug}`, JSON.stringify(cleanedB));
-              localStorage.setItem(BROADCAST_RECORDS_KEY, JSON.stringify(cleanedB));
+              localStorage.setItem(scopedBroadcastKey, JSON.stringify(cleanedB));
             }
             setBroadcasts(cleanedB);
           } else {
@@ -205,8 +204,7 @@ export function CommunicationView({
             cleaned.forEach((m) => merged.set(m.id, m));
             const list = Array.from(merged.values());
             try {
-              localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(list));
-              localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(list));
+              localStorage.setItem(scopedMessagesKey, JSON.stringify(list));
             } catch (e) {}
             return list;
           });
@@ -458,8 +456,7 @@ export function CommunicationView({
       );
 
       try {
-        localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(updated));
-        localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(updated));
+        localStorage.setItem(scopedMessagesKey, JSON.stringify(updated));
       } catch (e) {}
 
       const touched = updated.find((m) => m.id === id);

@@ -47,10 +47,19 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   resolved: { label: 'Traité par la Direction', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 };
 
+const PARENT_MESSAGES_BASE_KEY = 'schoolflow_parent_messages_v1';
+
 export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchool, initialStudents }: ParentCommunicationViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School | undefined>(initialSchool);
   const [allStudents, setAllStudents] = useState<Student[]>(initialStudents || []);
   const [activeSession, setActiveSession] = useState<any>(null);
+
+  // École pilote : clé historique non suffixée. Toute autre école : clé dédiée — le repli
+  // précédent vers la clé globale, combiné au numéro de téléphone factice partagé plus bas,
+  // faisait qu'un parent d'une école pouvait voir les messages privés d'un parent d'une autre
+  // école (les deux filtrant sur le même numéro factice ou tombant sur le même compartiment).
+  const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
+  const scopedParentMsgKey = isPilotSchool ? PARENT_MESSAGES_BASE_KEY : `${PARENT_MESSAGES_BASE_KEY}_${schoolSlug}`;
 
   useEffect(() => {
     const updateSchool = () => {
@@ -77,7 +86,10 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
       if (matched.length > 0) {
         return {
           guardianName: activeSession.fullName || matched[0].guardianName || 'Parent d\'élève',
-          phone: matched[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
+          // Aucun numéro générique de repli : un numéro factice partagé par tous les parents
+          // sans téléphone renseigné faisait que deux familles différentes (même de deux écoles
+          // différentes) filtrant sur ce même numéro voyaient les messages privés l'une de l'autre.
+          phone: matched[0].guardianPhone || activeSession.phone || '',
           children: matched,
         };
       }
@@ -112,8 +124,7 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
   const loadHistory = useMemo(
     () => () => {
       try {
-        const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
-        const raw = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`) || localStorage.getItem(PARENT_MESSAGES_KEY);
+        const raw = localStorage.getItem(scopedParentMsgKey);
         const all: ParentMessage[] = raw ? JSON.parse(raw) : [];
         const myPhone = (activeFamily?.phone || '').replace(/\D/g, '');
         const myName = (activeSession?.fullName || '').toLowerCase().trim();
@@ -138,14 +149,12 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
           const cloudAll: ParentMessage[] = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
           if (cloudAll.length === 0) return;
           try {
-            const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
-            const rawLocal = localStorage.getItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`);
+            const rawLocal = localStorage.getItem(scopedParentMsgKey);
             const localAll: ParentMessage[] = rawLocal ? JSON.parse(rawLocal) : [];
             const byId = new Map<string, ParentMessage>();
             [...localAll, ...cloudAll].forEach((m) => byId.set(m.id, m));
             const merged = Array.from(byId.values()).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
-            localStorage.setItem(`${PARENT_MESSAGES_KEY}_${schoolSlug}`, JSON.stringify(merged));
-            localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(merged));
+            localStorage.setItem(scopedParentMsgKey, JSON.stringify(merged));
           } catch (e) {}
           loadHistory();
         })
@@ -168,7 +177,7 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
     }
 
     const parentName = activeSession?.fullName || activeFamily?.guardianName || 'Parent d’élève';
-    const parentPhone = activeFamily?.phone || '+225 07 08 09 10 11';
+    const parentPhone = activeFamily?.phone || '';
     const childName = activeChild ? `${activeChild.firstName} ${activeChild.lastName}` : 'Élève';
     const childGrade = activeChild?.grade || 'Collège';
 
@@ -189,17 +198,10 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
     setIsSending(true);
 
     try {
-      const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
-      const keySchool = `${PARENT_MESSAGES_KEY}_${schoolSlug}`;
-      const rawSchool = localStorage.getItem(keySchool);
+      const rawSchool = localStorage.getItem(scopedParentMsgKey);
       const prevSchool = rawSchool ? JSON.parse(rawSchool) : [];
       const updatedSchool = [newMsg, ...prevSchool];
-      localStorage.setItem(keySchool, JSON.stringify(updatedSchool));
-
-      const rawGlobal = localStorage.getItem(PARENT_MESSAGES_KEY);
-      const prevGlobal = rawGlobal ? JSON.parse(rawGlobal) : [];
-      const updatedGlobal = [newMsg, ...prevGlobal];
-      localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(updatedGlobal));
+      localStorage.setItem(scopedParentMsgKey, JSON.stringify(updatedSchool));
 
       broadcastLiveUpdate({ action: 'parent_message_sent', message: newMsg, schoolSlug });
       setSentMessages((prev) => [newMsg, ...prev]);

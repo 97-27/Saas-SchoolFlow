@@ -3374,6 +3374,7 @@ export function resetSchoolData(
     // 7. Documents scolaires & Certificats - Si Module documents OU Interface Secrétaire
     if (doAll || opt.documents || opt.secretaireInterface) {
       localStorage.removeItem(DOCS_STATUS_KEY);
+      localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
       localStorage.removeItem('schoolflow_documents_status_v2');
       localStorage.removeItem('schoolflow_documents_status_v3');
       localStorage.removeItem('schoolflow_documents_status_v5');
@@ -3534,6 +3535,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem('schoolflow_active_session_v2');
     localStorage.removeItem(VALIDATED_BULLETINS_KEY);
     localStorage.removeItem(DOCS_STATUS_KEY);
+    localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
     localStorage.removeItem('schoolflow_documents_status_v5');
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
@@ -3669,7 +3671,7 @@ export interface StudentDocumentRecord {
  * Récupère le statut documentaire d'un élève.
  * STRICTEMENT FALSE / EN ATTENTE par défaut tant qu'aucun document réel n'a été importé.
  */
-export function getStudentDocumentRecord(studentId: string): StudentDocumentRecord {
+export function getStudentDocumentRecord(studentId: string, schoolSlug: string = 'epc-manoi'): StudentDocumentRecord {
   if (typeof window === 'undefined') {
     return {
       studentId,
@@ -3681,7 +3683,9 @@ export function getStudentDocumentRecord(studentId: string): StudentDocumentReco
     };
   }
   try {
-    const raw = localStorage.getItem(DOCS_STATUS_KEY);
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? DOCS_STATUS_KEY : `${DOCS_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
     if (raw) {
       const all: Record<string, StudentDocumentRecord> = JSON.parse(raw);
       if (all[studentId]) return all[studentId];
@@ -3701,18 +3705,21 @@ export function getStudentDocumentRecord(studentId: string): StudentDocumentReco
 /**
  * Enregistre ou met à jour le dossier documentaire d'un élève et notifie toutes les pages (Classes, Documents, Élèves).
  */
-export function saveStudentDocumentRecord(studentId: string, record: StudentDocumentRecord): void {
+export function saveStudentDocumentRecord(studentId: string, record: StudentDocumentRecord, schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem(DOCS_STATUS_KEY);
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? DOCS_STATUS_KEY : `${DOCS_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
     const all: Record<string, StudentDocumentRecord> = raw ? JSON.parse(raw) : {};
     all[studentId] = record;
-    localStorage.setItem(DOCS_STATUS_KEY, JSON.stringify(all));
+    localStorage.setItem(key, JSON.stringify(all));
 
     broadcastLiveUpdate({
       action: 'document_updated',
       studentId,
       record,
+      schoolSlug,
     });
   } catch (e) {
     console.error('Erreur sauvegarde dossier documentaire:', e);
@@ -3722,10 +3729,12 @@ export function saveStudentDocumentRecord(studentId: string, record: StudentDocu
 /**
  * Récupère tous les dossiers documentaires enregistrés.
  */
-export function getAllStudentDocumentRecords(): Record<string, StudentDocumentRecord> {
+export function getAllStudentDocumentRecords(schoolSlug: string = 'epc-manoi'): Record<string, StudentDocumentRecord> {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = localStorage.getItem(DOCS_STATUS_KEY);
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? DOCS_STATUS_KEY : `${DOCS_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : {};
   } catch (e) {
     return {};
