@@ -127,15 +127,15 @@ export function Topbar({
               email: cleanEmail,
               phone: parsed.phone || staffMember?.phone || '',
               role: isFounder
-                ? 'Fondateur & Promoteur'
+                ? 'Contrôle Total'
                 : isDirector
-                ? 'Directeur des Études (Admin)'
+                ? 'Contrôle'
                 : (staffMember?.role || parsed.role || 'Personnel'),
               roleId: parsed.roleId || 'directeur',
               roleBadge: isFounder
-                ? '👑 Fondateur (Admin)'
+                ? '👑 Contrôle Total'
                 : isDirector
-                ? '👑 Direction (Admin)'
+                ? '👑 Contrôle'
                 : (parsed.roleBadge || 'Personnel'),
               department: parsed.department || (isFounder ? 'Présidence & Conseil' : isDirector ? 'Direction Générale' : 'Direction'),
               avatarUrl: persistentAvatar,
@@ -171,9 +171,9 @@ export function Topbar({
         fullName: defaultName,
         email: defaultDir?.email || '',
         phone: defaultDir?.phone || '',
-        role: 'Directeur des Études (Admin)',
+        role: 'Contrôle',
         roleId: 'directeur',
-        roleBadge: '👑 Direction (Admin)',
+        roleBadge: '👑 Contrôle',
         department: 'Direction des Études',
         avatarUrl: persistentDirAvatar,
       });
@@ -237,10 +237,14 @@ export function Topbar({
     } catch (e) {}
 
     try {
-      const allStaff = getLiveStaffUsers(schoolSlug);
-      const nextStaff = allStaff.map((s) => {
-        if (s.roleId === activeSession.roleId || s.authCode === (activeSession as any).authCode || s.id === 'staff-founder' || s.id === 'staff-001') {
-          if (s.roleId === activeSession.roleId) {
+      // Identification stricte par code d'accès personnel uniquement — jamais par rôle, qui
+      // peut être partagé par plusieurs personnes (ex: deux comptables) et écraserait alors
+      // le nom/email/téléphone de la mauvaise personne.
+      const sessionAuthCode = ((activeSession as any).authCode || '').toUpperCase();
+      if (sessionAuthCode) {
+        const allStaff = getLiveStaffUsers(schoolSlug);
+        const nextStaff = allStaff.map((s) => {
+          if (s.authCode?.toUpperCase() === sessionAuthCode) {
             return {
               ...s,
               fullName: cleanName || s.fullName,
@@ -248,10 +252,10 @@ export function Topbar({
               phone: cleanPhone,
             };
           }
-        }
-        return s;
-      });
-      saveLiveStaffUsers(nextStaff, schoolSlug);
+          return s;
+        });
+        saveLiveStaffUsers(nextStaff, schoolSlug);
+      }
     } catch (e) {}
 
     try {
@@ -833,7 +837,7 @@ export function Topbar({
                   suppressHydrationWarning
                   className="text-[10px] font-bold text-emerald-700 truncate max-w-[160px]"
                 >
-                  {activeSession.roleId === 'directeur' ? '👑 Admin' : (activeSession.roleBadge || activeSession.role || 'Personnel')}
+                  {activeSession.roleId === 'directeur' ? '👑 Contrôle' : (activeSession.roleBadge || activeSession.role || 'Personnel')}
                 </span>
               </div>
             </button>
@@ -883,7 +887,7 @@ export function Topbar({
                     </h4>
                     <p className="text-xs font-bold text-emerald-300 leading-tight mt-0.5">
                       {activeSession.roleId === 'directeur'
-                        ? 'DR • Directeur des Études'
+                        ? 'Contrôle'
                         : activeSession.roleId === 'comptable'
                         ? 'Comptable / Gestionnaire'
                         : activeSession.roleId === 'secretaire'
@@ -893,7 +897,7 @@ export function Topbar({
                         : activeSession.roleId === 'enseignant'
                         ? 'Enseignant / Professeur'
                         : activeSession.roleId === 'fondateur'
-                        ? 'Fondateur / Fondatrice'
+                        ? 'Contrôle Total'
                         : activeSession.roleId === 'parent'
                         ? "Parent d'Élève"
                         : activeSession.role}

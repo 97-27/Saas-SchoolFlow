@@ -83,7 +83,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                     Action Non Autorisée
                   </h3>
                   <p className="text-xs text-amber-800 font-medium">
-                    Profil Fondateur / Fondatrice (Supervision)
+                    Profil Contrôle Total (Supervision)
                   </p>
                 </div>
               </div>
@@ -103,7 +103,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                 <span>Mode Consultation & Supervision Uniquement</span>
               </div>
               <p className="leading-relaxed">
-                Le profil <strong>Fondateur / Fondatrice</strong> est en <strong>Supervision Globale</strong>. Vous pouvez observer l&apos;intégralité des tableaux de bord, effectifs, finances et bulletins, mais aucune modification ne peut être effectuée sans les droits d&apos;administration.
+                Le profil <strong>Contrôle Total</strong> est en <strong>Supervision Globale</strong>. Vous pouvez observer l&apos;intégralité des tableaux de bord, effectifs, finances et bulletins, mais aucune modification ne peut être effectuée sans les droits d&apos;administration.
               </p>
             </div>
 

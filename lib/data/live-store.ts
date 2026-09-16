@@ -1879,8 +1879,14 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     // 3. Sauvegarder la facture dans la clé globale
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
+    // Dedoublonnage par eleve + type de frais (pas seulement par id/numero de recu) : le
+    // numero de recu peut changer de format au fil du temps, ce qui laisserait sinon une
+    // ancienne facture orpheline en plus de la nouvelle et fausserait le Solde Net de Caisse.
     const filteredInvoices = prevInvoices.filter(
-      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+      (inv) =>
+        inv.id !== invoice.id &&
+        inv.invoiceNumber !== invoice.invoiceNumber &&
+        !(inv.studentId === invoice.studentId && inv.feeType === invoice.feeType)
     );
     const invoiceWithSlug = { ...invoice, schoolSlug: slug, schoolId: slug };
     const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
@@ -1891,7 +1897,10 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     const rawInvSchool = localStorage.getItem(invSchoolKey);
     const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
     const filteredInvSchool = prevInvSchool.filter(
-      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+      (inv) =>
+        inv.id !== invoice.id &&
+        inv.invoiceNumber !== invoice.invoiceNumber &&
+        !(inv.studentId === invoice.studentId && inv.feeType === invoice.feeType)
     );
     localStorage.setItem(invSchoolKey, JSON.stringify([invoiceWithSlug, ...filteredInvSchool]));
 

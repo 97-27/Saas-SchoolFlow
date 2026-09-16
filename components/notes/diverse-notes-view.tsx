@@ -117,7 +117,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
         if (stored) return JSON.parse(stored);
       } catch (e) {}
     }
-    return { roleId: 'directeur', roleBadge: '👑 Direction (Admin)', fullName: 'Direction Générale' };
+    return { roleId: 'directeur', roleBadge: '👑 Contrôle', fullName: 'Direction Générale' };
   });
 
   const activeRoleId = activeSession?.roleId || 'directeur';

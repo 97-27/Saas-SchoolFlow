@@ -81,8 +81,8 @@ export interface RoleConfig {
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   fondateur: {
     id: 'fondateur',
-    title: 'Fondateur / Promotrice (Admin Suprême — Contrôle Total)',
-    badge: '👑 Fondateur (Admin)',
+    title: 'Contrôle Total (Fondateur / Promoteur)',
+    badge: '👑 Contrôle Total',
     department: 'Présidence & Conseil d’Administration',
     defaultAuthCode: 'FND-2026',
     defaultUserName: '',
@@ -92,8 +92,8 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   },
   directeur: {
     id: 'directeur',
-    title: 'Directeur des Études (Admin — Direction des Études)',
-    badge: '👑 Direction (Admin)',
+    title: 'Contrôle (Directeur des Études)',
+    badge: '👑 Contrôle',
     department: 'Direction des Études',
     defaultAuthCode: 'DIR-2026',
     defaultUserName: '',
@@ -574,15 +574,15 @@ export function LoginView({
       }
       const roleBadge =
         selectedRole === 'fondateur'
-          ? '👑 Fondateur (Admin)'
+          ? '👑 Contrôle Total'
           : selectedRole === 'directeur'
-          ? '👑 Direction (Admin)'
+          ? '👑 Contrôle'
           : ROLE_CONFIGS[selectedRole].badge;
       const roleTitle =
         selectedRole === 'fondateur'
-          ? 'Fondateur / Promotrice'
+          ? 'Contrôle Total'
           : selectedRole === 'directeur'
-          ? 'DR'
+          ? 'Contrôle'
           : (verifiedStaffUser?.role || ROLE_CONFIGS[selectedRole].title);
 
       const sessionData = {
@@ -795,7 +795,7 @@ export function LoginView({
           {
             id: `staff-directeur-${Date.now()}`,
             fullName: signupResponsableName.trim(),
-            role: 'Directeur des Études',
+            role: 'Contrôle',
             roleId: 'directeur',
             email: signupEmail.trim(),
             phone: cleanSignupPhone,
@@ -808,7 +808,7 @@ export function LoginView({
           {
             id: `staff-fondateur-${Date.now() + 1}`,
             fullName: signupFounderName.trim() || signupResponsableName.trim(),
-            role: 'Fondateur & Promoteur (Supervision Suprême)',
+            role: 'Contrôle Total',
             roleId: 'fondateur',
             email: signupEmail.trim(),
             phone: cleanSignupPhone,
@@ -823,9 +823,9 @@ export function LoginView({
           fullName: `Dr. ${signupResponsableName.trim()}`,
           civility: 'Mr',
           pureName: signupResponsableName.trim(),
-          role: 'Directeur des Études',
+          role: 'Contrôle',
           roleId: 'directeur',
-          roleBadge: '👑 Admin',
+          roleBadge: '👑 Contrôle',
           department: 'Direction des Études',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
@@ -1127,8 +1127,8 @@ export function LoginView({
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
-                      <option value="fondateur">👑 Fondateur / Promotrice (Admin Suprême — Contrôle Total)</option>
-                      <option value="directeur">👑 Directeur / Directrice des Études (Admin Principal)</option>
+                      <option value="fondateur">👑 Contrôle Total (Fondateur / Promoteur)</option>
+                      <option value="directeur">👑 Contrôle (Directeur / Directrice des Études)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>

@@ -213,8 +213,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     if (!editingStaff || !editFullName.trim()) return;
 
     const roleTitleMap: Record<string, string> = {
-      fondateur: 'Fondateur & Promoteur (Supervision Suprême)',
-      directeur: 'Directeur des Études (Admin)',
+      fondateur: 'Contrôle Total',
+      directeur: 'Contrôle',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       comptable: 'Comptable / Gestionnaire',
@@ -627,9 +627,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         }`}>
                           <span>
                             {member.roleId === 'fondateur'
-                              ? '👑 Fondateur'
+                              ? '👑 Contrôle Total'
                               : member.roleId === 'directeur'
-                              ? '👑 Directeur des Études'
+                              ? '👑 Contrôle'
                               : member.roleId === 'enseignant'
                               ? '👨‍🏫 Enseignant'
                               : member.roleId === 'secretaire'
@@ -822,7 +822,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
                     <div>
                       <span className="text-slate-500 text-[11px] block">Statut Légal :</span>
-                      <strong className="text-amber-950 font-bold">Fondateur & Promoteur Légal</strong>
+                      <strong className="text-amber-950 font-bold">Contrôle Total (Fondateur & Promoteur Légal)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 text-[11px] block">Réf. Promoteur & Mandat :</span>
@@ -843,7 +843,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
                     <div>
                       <span className="text-slate-500 text-[11px] block">Fonction Officielle :</span>
-                      <strong className="text-emerald-950 font-bold">Directeur des Études (Admin Principal)</strong>
+                      <strong className="text-emerald-950 font-bold">Contrôle (Directeur des Études)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 text-[11px] block">Réf. Direction :</span>
@@ -1213,12 +1213,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   {editingStaff.roleId === 'fondateur' ? (
                     <div className="w-full px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span>👑 Fondateur & Promoteur (Supervision Suprême)</span>
+                      <span>👑 Contrôle Total (Fondateur / Promoteur)</span>
                     </div>
                   ) : editingStaff.roleId === 'directeur' ? (
                     <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>👑 Directeur des Études (Admin)</span>
+                      <span>👑 Contrôle (Directeur des Études)</span>
                     </div>
                   ) : (
                     <select

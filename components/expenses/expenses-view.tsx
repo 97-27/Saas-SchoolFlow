@@ -249,8 +249,19 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
         num.startsWith('TRP-')
       );
     };
+    // Dedoublonnage defensif : une meme facture (eleve + type de frais) peut apparaitre deux
+    // fois si un ancien numero de recu orphelin subsiste (changement de format historique) -
+    // ne garder que la plus recente pour ne pas compter le meme versement deux fois.
+    const seenTuitionKeys = new Set<string>();
     const totalRevenues = invoices
       .filter((inv) => !isServiceFee(inv))
+      .sort((a, b) => new Date(b.issueDate || 0).getTime() - new Date(a.issueDate || 0).getTime())
+      .filter((inv) => {
+        const key = `${inv.studentId || inv.studentName}__${inv.feeType}`;
+        if (seenTuitionKeys.has(key)) return false;
+        seenTuitionKeys.add(key);
+        return true;
+      })
       .reduce((acc, inv) => acc + (Number(inv.paidAmount) || 0), 0);
     const netBalance = totalRevenues - totalExpenses;
 

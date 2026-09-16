@@ -802,6 +802,22 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       if (byId && byId.length > 0) existingInvoiceId = byId[0].id;
     }
 
+    // Cle metier reelle : un eleve n'a qu'UNE seule facture par type de frais (scolarite,
+    // internat, cantine, transport). Chercher par (eleve + type de frais) avant le numero de
+    // recu, car ce numero a change de format au fil du temps (REC-2026-XXX -> ID-XXX) et une
+    // recherche par numero seul ne retrouve plus l'ancienne facture : ca cree un doublon qui
+    // fausse le Solde Net de Caisse en comptant deux fois le meme paiement.
+    if (!existingInvoiceId) {
+      const { data: byStudentAndType } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('student_id', validStudentUUID)
+        .eq('fee_type', payload.fee_type)
+        .limit(1);
+      if (byStudentAndType && byStudentAndType.length > 0) existingInvoiceId = byStudentAndType[0].id;
+    }
+
     if (!existingInvoiceId && invoice.invoiceNumber) {
       const { data: byNum } = await supabase
         .from('invoices')
