@@ -13,6 +13,7 @@ import {
   ResetScopeOptions,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
+import { getSchoolSubscriptionInfo, SchoolSubscriptionInfo } from '@/lib/supabase/services';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import { formatDate } from '@/lib/utils/formatters';
 import {
@@ -60,6 +61,19 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SchoolSubscriptionStatus>(() =>
     getSchoolSubscription(initialSchool.slug || 'epc-manoi')
   );
+
+  // Échéance réelle calculée côté serveur (date d'inscription réelle + durée du forfait), la
+  // même que celle qui bloque effectivement l'accès à la connexion — sans ça, cet onglet
+  // affichait des dates fictives codées en dur (ex: "30/06/2027" pour toute école, quelle que
+  // soit sa vraie date de souscription).
+  const [realSubInfo, setRealSubInfo] = useState<SchoolSubscriptionInfo | null>(null);
+  useEffect(() => {
+    const slug = initialSchool.slug || 'epc-manoi';
+    if (slug === 'epc-manoi') return;
+    getSchoolSubscriptionInfo(slug).then((info) => {
+      if (info) setRealSubInfo(info);
+    });
+  }, [initialSchool.slug]);
 
   // Modales de sécurité & Sélection granulaire des portées de réinitialisation
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -1458,8 +1472,8 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     Formule d&apos;abonnement, réinitialisation complète des effectifs ou suppression définitive du compte école
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  Abonnement Actif ✓
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${realSubInfo?.isExpired ? 'bg-red-100 text-red-800 border-red-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}`}>
+                  {realSubInfo?.isExpired ? 'Abonnement Expiré ✕' : 'Abonnement Actif ✓'}
                 </span>
               </div>
 
@@ -1497,8 +1511,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       {formatDate(school.subscriptionStartDate || school.createdAt || '2026-09-01')}
                     </span>
                     <span className="text-[10px] font-bold text-slate-500">Échéance :</span>
-                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      {formatDate(school.subscriptionEndDate || (school.subscriptionPlan === 'mensuel' ? '2026-10-01' : school.subscriptionPlan === 'triennal' ? '2029-06-30' : '2027-06-30'))}
+                    <span className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border ${realSubInfo?.isExpired ? 'text-red-800 bg-red-50 border-red-200' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                      {realSubInfo
+                        ? formatDate(realSubInfo.endDate)
+                        : formatDate(school.subscriptionEndDate || (school.subscriptionPlan === 'mensuel' ? '2026-10-01' : school.subscriptionPlan === 'triennal' ? '2029-06-30' : '2027-06-30'))}
+                      {realSubInfo?.isExpired ? ' (expiré)' : ''}
                     </span>
                   </div>
                 </div>
