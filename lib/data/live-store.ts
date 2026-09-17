@@ -606,6 +606,35 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
         deleteArray.forEach((id) => delete map[id]);
         localStorage.setItem(TRANSPORT_KEY, JSON.stringify(map));
       }
+
+      // Nettoyer aussi les cartes de MOIS PAYÉS (distinctes des souscriptions ci-dessus) : sans
+      // cela, un élève supprimé depuis la fiche élève (au lieu du bouton dédié de chaque module)
+      // laissait ses mois cochés comme payés sous son ancien identifiant. Comme les identifiants
+      // séquentiels sont réattribués au prochain élève inscrit, un nouvel élève héritant du même
+      // identifiant recyclé se serait vu afficher à tort des mois déjà "payés" par l'élève supprimé.
+      const BOARDING_PAY_KEY = isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${cleanSlug}`;
+      const rawBoardingPay = localStorage.getItem(BOARDING_PAY_KEY);
+      if (rawBoardingPay) {
+        const map: Record<string, any> = JSON.parse(rawBoardingPay);
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(BOARDING_PAY_KEY, JSON.stringify(map));
+      }
+
+      const CANTEEN_PAY_KEY = isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${cleanSlug}`;
+      const rawCanteenPay = localStorage.getItem(CANTEEN_PAY_KEY);
+      if (rawCanteenPay) {
+        const map: Record<string, any> = JSON.parse(rawCanteenPay);
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(CANTEEN_PAY_KEY, JSON.stringify(map));
+      }
+
+      const TRANSPORT_PAY_KEY = isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${cleanSlug}`;
+      const rawTransportPay = localStorage.getItem(TRANSPORT_PAY_KEY);
+      if (rawTransportPay) {
+        const map: Record<string, any> = JSON.parse(rawTransportPay);
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(TRANSPORT_PAY_KEY, JSON.stringify(map));
+      }
     } catch (e) {
       console.warn('Erreur nettoyage souscriptions prestations:', e);
     }

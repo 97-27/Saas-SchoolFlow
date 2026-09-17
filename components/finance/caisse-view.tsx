@@ -155,16 +155,32 @@ export function CaisseView({
     selectedPaymentMethod !== 'all' ||
     selectedStatus !== 'all';
 
+  // Dédoublonnage défensif (même principe que la page Dépenses) : une même facture (élève +
+  // type de frais) peut apparaître deux fois si un ancien numéro de reçu orphelin subsiste
+  // (changement de format historique) — ne garder que la plus récente pour ne jamais compter
+  // le même versement deux fois dans les totaux de caisse ci-dessous.
+  const dedupedInvoices = useMemo(() => {
+    const seen = new Set<string>();
+    return [...invoices]
+      .sort((a, b) => new Date(b.issueDate || 0).getTime() - new Date(a.issueDate || 0).getTime())
+      .filter((inv) => {
+        const key = `${inv.studentId || inv.studentName}__${inv.feeType}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [invoices]);
+
   // Live KPI metrics computation from invoices
   const totalCollected = useMemo(() => {
-    return invoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
-  }, [invoices]);
+    return dedupedInvoices.reduce((acc, inv) => acc + (inv.paidAmount || 0), 0);
+  }, [dedupedInvoices]);
 
   // 1. Total Encaissé en Espèces / Caisse physique
   const { totalEspeces, especesCount } = useMemo(() => {
     let sum = 0;
     let count = 0;
-    invoices.forEach((inv) => {
+    dedupedInvoices.forEach((inv) => {
       const pm = (inv.paymentMethod || '').toLowerCase();
       const isOnline =
         pm.includes('wave') ||
@@ -182,13 +198,13 @@ export function CaisseView({
       }
     });
     return { totalEspeces: sum, especesCount: count };
-  }, [invoices]);
+  }, [dedupedInvoices]);
 
   // 2. Total Encaissé en Ligne & Virements (Mobile Money Wave/Orange/MTN + Virements bancaires)
   const { totalEnLigneEtVirement, enLigneCount } = useMemo(() => {
     let sum = 0;
     let count = 0;
-    invoices.forEach((inv) => {
+    dedupedInvoices.forEach((inv) => {
       const pm = (inv.paymentMethod || '').toLowerCase();
       const isOnline =
         pm.includes('wave') ||
@@ -206,13 +222,13 @@ export function CaisseView({
       }
     });
     return { totalEnLigneEtVirement: sum, enLigneCount: count };
-  }, [invoices]);
+  }, [dedupedInvoices]);
 
   // 3. Scolarité en Retard : Somme totale restante de tous les élèves du tableau
   const { totalScolariteEnRetard, unpaidCount } = useMemo(() => {
     let sum = 0;
     let count = 0;
-    invoices.forEach((inv) => {
+    dedupedInvoices.forEach((inv) => {
       const net = inv.netAmount || (inv.amount - (inv.discountAmount || 0));
       const paid = inv.paidAmount || 0;
       const remaining = inv.balanceRemaining !== undefined ? inv.balanceRemaining : Math.max(0, net - paid);
@@ -222,11 +238,11 @@ export function CaisseView({
       }
     });
     return { totalScolariteEnRetard: sum, unpaidCount: count };
-  }, [invoices]);
+  }, [dedupedInvoices]);
 
   const totalExigible = useMemo(() => {
-    return invoices.reduce((acc, inv) => acc + (inv.netAmount || inv.amount), 0);
-  }, [invoices]);
+    return dedupedInvoices.reduce((acc, inv) => acc + (inv.netAmount || inv.amount), 0);
+  }, [dedupedInvoices]);
 
   const collectionRate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '100';
 
