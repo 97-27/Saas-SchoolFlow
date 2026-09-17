@@ -1138,11 +1138,15 @@ export function getGradesPortalStatus(schoolSlug: string): GradesPortalStatus {
   };
 
   if (typeof window === 'undefined') return defaultStatus;
+  const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
   try {
-    const raw = localStorage.getItem(`${GRADES_PORTAL_KEY}_${schoolSlug}`);
-    if (raw) return JSON.parse(raw);
-    const globalRaw = localStorage.getItem(GRADES_PORTAL_KEY);
-    if (globalRaw) return JSON.parse(globalRaw);
+    if (isPilot) {
+      const globalRaw = localStorage.getItem(GRADES_PORTAL_KEY);
+      if (globalRaw) return JSON.parse(globalRaw);
+    } else {
+      const raw = localStorage.getItem(`${GRADES_PORTAL_KEY}_${schoolSlug}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch (e) {}
 
   return defaultStatus;
@@ -1150,10 +1154,14 @@ export function getGradesPortalStatus(schoolSlug: string): GradesPortalStatus {
 
 export function saveGradesPortalStatus(schoolSlug: string, status: GradesPortalStatus): void {
   if (typeof window === 'undefined') return;
+  const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
   try {
     const json = JSON.stringify(status);
-    localStorage.setItem(`${GRADES_PORTAL_KEY}_${schoolSlug}`, json);
-    localStorage.setItem(GRADES_PORTAL_KEY, json);
+    if (isPilot) {
+      localStorage.setItem(GRADES_PORTAL_KEY, json);
+    } else {
+      localStorage.setItem(`${GRADES_PORTAL_KEY}_${schoolSlug}`, json);
+    }
 
     broadcastLiveUpdate({
       action: 'grades_portal_updated',

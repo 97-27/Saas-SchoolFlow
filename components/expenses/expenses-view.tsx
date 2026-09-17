@@ -984,7 +984,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
                     {currentSchool.name}
                   </h2>
                   <div className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300">
-                    ({currentSchool.shortName || 'EPC MANOI'})
+                    ({currentSchool.shortName})
                   </div>
                   <p className="text-[10px] font-bold text-emerald-800 italic">
                     {currentSchool.motto || '« Discipline • Rigueur • Réussite »'}
@@ -993,7 +993,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
                     {currentSchool.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux'}
                   </p>
                   <div className="inline-block bg-slate-900 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-2xs">
-                    Code Établissement : {currentSchool.ministryCode || 'MENA-04829-CI'}
+                    Code Établissement : {currentSchool.ministryCode || 'Non renseigné'}
                   </div>
                 </div>
 
@@ -1085,7 +1085,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
                     Cachet Caisse & Direction
                   </span>
                   <div className="h-16 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/40 flex flex-col items-center justify-center p-1 text-emerald-900 relative shadow-2xs">
-                    <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName || 'EPC MANOI'}</span>
+                    <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName}</span>
                     <span className="text-[8px] font-bold text-emerald-700">SERVICE COMPTABILITÉ</span>
                     <span className="text-[8px] font-mono text-slate-500 mt-0.5">DÉCAISSÉ & CERTIFIÉ ✓</span>
                   </div>

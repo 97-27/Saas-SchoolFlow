@@ -253,10 +253,10 @@ export function ClassesView({
                 RÉPUBLIQUE DE CÔTE D&apos;IVOIRE • MINISTÈRE DE L&apos;ÉDUCATION NATIONALE
               </span>
               <h1 className="text-sm sm:text-base font-black font-heading uppercase text-slate-950 mt-0.5">
-                {currentSchool.name} ({currentSchool.shortName || 'EPC MANOI'})
+                {currentSchool.name}{currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
               </h1>
               <p className="text-[9.5px] text-slate-600 font-medium">
-                Code Établissement : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 27 22 44 11 00'} • {currentSchool.city || 'Abidjan'}
+                Code Établissement : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'} • {currentSchool.city || 'Non renseigné'}
               </p>
             </div>
           </div>

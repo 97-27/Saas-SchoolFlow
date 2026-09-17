@@ -322,8 +322,8 @@ export function ParentBulletinsView({
           return {
             key: 'parent_session',
             guardianName: activeSession.fullName || matched[0].guardianName || 'Parent d\'élève',
-            phone: matched[0].guardianPhone || activeSession.phone || '+225 07 08 09 10 11',
-            whatsapp: matched[0].whatsappPhone || activeSession.phone || '+225 07 08 09 10 11',
+            phone: matched[0].guardianPhone || activeSession.phone || '',
+            whatsapp: matched[0].whatsappPhone || activeSession.phone || '',
             children: matched,
           };
         }
@@ -1070,19 +1070,19 @@ export function ParentBulletinsView({
                 className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm block w-full leading-tight truncate"
                 title={currentSchool.name}
               >
-                {currentSchool.name || 'EPC MARKAZ AHLI SOUNNAH'}
+                {currentSchool.name}
               </h2>
               <p className="font-extrabold text-emerald-800 text-[10.5px] sm:text-[11.5px] tracking-wide leading-none">
-                ({currentSchool.shortName || 'EPC MANOI'})
+                {currentSchool.shortName ? `(${currentSchool.shortName})` : ''}
               </p>
               <p className="font-semibold text-emerald-900 italic text-[8.5px] sm:text-[9.5px] truncate">
                 « {currentSchool.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
               </p>
               <p className="text-slate-700 font-medium leading-tight text-[8px] sm:text-[9px] truncate">
-                {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || '+225 27 22 44 11 00'}
+                {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
               </p>
               <div className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[8px] sm:text-[8.5px]">
-                <span>Code MENA : {currentSchool.ministryCode || 'MENA-04829-CI'}</span>
+                <span>Code MENA : {currentSchool.ministryCode || 'Non renseigné'}</span>
               </div>
             </div>
 
@@ -1249,7 +1249,7 @@ export function ParentBulletinsView({
                 3. Le Chef d’Établissement / Le Directeur
               </p>
               <p className="text-[8px] text-slate-500 font-mono">
-                Fait à {currentSchool.city || 'Abidjan'}, le {formatDate(new Date())}
+                Fait à {currentSchool.city || 'Non renseigné'}, le {formatDate(new Date())}
               </p>
             </div>
 

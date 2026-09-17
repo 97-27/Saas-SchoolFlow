@@ -442,7 +442,10 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
       setToastMessage(`✏️ Note N° ${editingNote.noteNumber} mise à jour avec succès !`);
     } else {
       // Nouvelle note
-      const nextNum = notes.length + 1;
+      const nextNum = notes.reduce((max, n) => {
+        const m = n.noteNumber?.match(/(\d+)$/);
+        return m ? Math.max(max, parseInt(m[1], 10)) : max;
+      }, 0) + 1;
       const formatted = String(nextNum).padStart(3, '0');
       const newNote: DiverseNote = {
         id: `note-${Date.now()}`,
@@ -1239,17 +1242,23 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
                   <h2 className="text-sm sm:text-base font-extrabold text-slate-900 font-heading uppercase leading-tight">
                     {currentSchool.name}
                   </h2>
-                  <div className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300">
-                    ({currentSchool.shortName || 'EPC MANOI'})
-                  </div>
-                  <p className="text-[10px] font-bold text-emerald-800 italic">
-                    {currentSchool.motto || '« Discipline • Rigueur • Réussite »'}
-                  </p>
-                  <p className="text-[9px] font-bold text-amber-700 italic">
-                    {currentSchool.slogan || '✦ Former les élites et leaders de demain pour un avenir radieux'}
-                  </p>
+                  {currentSchool.shortName && (
+                    <div className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300">
+                      ({currentSchool.shortName})
+                    </div>
+                  )}
+                  {currentSchool.motto && (
+                    <p className="text-[10px] font-bold text-emerald-800 italic">
+                      {currentSchool.motto}
+                    </p>
+                  )}
+                  {currentSchool.slogan && (
+                    <p className="text-[9px] font-bold text-amber-700 italic">
+                      {currentSchool.slogan}
+                    </p>
+                  )}
                   <div className="inline-block bg-slate-900 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-2xs">
-                    Code : {currentSchool.ministryCode || 'MENA-04829-CI'}
+                    Code : {currentSchool.ministryCode || 'Non renseigné'}
                   </div>
                 </div>
 
@@ -1356,7 +1365,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
                     Visa & Direction
                   </span>
                   <div className="w-36 h-20 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/40 flex flex-col items-center justify-center p-1 text-emerald-900 relative shadow-2xs">
-                    <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName || 'EPC MANOI'}</span>
+                    <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName}</span>
                     <span className="text-[8px] font-bold text-emerald-700">DIRECTION PÉDAGOGIQUE</span>
                     <span className="text-[8px] font-mono text-slate-500 mt-0.5">ENREGISTRÉ ✓</span>
                     <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">

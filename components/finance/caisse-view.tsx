@@ -637,7 +637,7 @@ export function CaisseView({
                     « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                   </p>
                   <p className="text-[9px] text-slate-600 mt-0.5 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
-                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • {currentSchool.phone || '+225 27 22 44 11 00'}
+                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • {currentSchool.phone || 'Non renseigné'}
                   </p>
                 </div>
 

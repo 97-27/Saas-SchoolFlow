@@ -395,8 +395,8 @@ export function CommunicationView({
       if (!map.has(key)) {
         map.set(key, {
           guardianName: stu.guardianName || `${stu.lastName} Parent`,
-          phone: stu.guardianPhone || stu.whatsappPhone || '+225 07 08 09 10 11',
-          whatsapp: stu.whatsappPhone || stu.guardianPhone || '+225 07 08 09 10 11',
+          phone: stu.guardianPhone || stu.whatsappPhone || '',
+          whatsapp: stu.whatsappPhone || stu.guardianPhone || '',
           children: [],
         });
       }
@@ -546,7 +546,7 @@ export function CommunicationView({
       `${composeBody}\n\n` +
       `─────────────────────────\n` +
       `✍️ *La Direction de l'Établissement*\n` +
-      `📞 Contact : ${currentSchool.phone || '+225 07 08 09 10 11'}`
+      `📞 Contact : ${currentSchool.phone || 'Non renseigné'}`
     );
   };
 
@@ -1407,7 +1407,7 @@ export function CommunicationView({
                         </h4>
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
                           <Phone className="w-3 h-3 text-slate-400" />
-                          <span>{parent.phone}</span>
+                          <span>{parent.phone || 'Non renseigné'}</span>
                         </div>
                       </div>
                     </div>
@@ -1419,7 +1419,7 @@ export function CommunicationView({
                   {/* Bouton WhatsApp direct avec le parent */}
                   <div className="pt-1">
                     <a
-                      href={`https://wa.me/${parent.whatsapp.replace(/\D/g, '') || '2250708091011'}?text=${encodeURIComponent(`Bonjour ${parent.guardianName}, la Direction de ${currentSchool.name} vous transmet les informations scolaires de votre enfant.`)}`}
+                      href={`https://wa.me/${parent.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Bonjour ${parent.guardianName}, la Direction de ${currentSchool.name} vous transmet les informations scolaires de votre enfant.`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 transition-colors"
@@ -1552,9 +1552,9 @@ export function CommunicationView({
                 <div className="flex-1 min-w-0 px-1 text-center space-y-0.5">
                   <h2
                     className="font-black uppercase tracking-tight text-slate-950 font-heading text-xs sm:text-sm md:text-base block w-full leading-tight break-words"
-                    title={`${currentSchool.name} (${currentSchool.shortName || 'EPC MANOI'})`}
+                    title={`${currentSchool.name}${currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}`}
                   >
-                    {currentSchool.name || 'EPC MARKAZ AHLI SOUNNAH'}
+                    {currentSchool.name}
                     {currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
                   </h2>
                   <p className="font-semibold text-emerald-900 italic text-[9.5px] sm:text-[11px] truncate">
@@ -1566,10 +1566,10 @@ export function CommunicationView({
                     </p>
                   )}
                   <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px] truncate">
-                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || '+225 27 22 44 11 00'}
+                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
                   </p>
                   <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[9px] sm:text-[10px]">
-                    <span>Code Établissement : {currentSchool.ministryCode || 'MENA-04829-CI'}</span>
+                    <span>Code Établissement : {currentSchool.ministryCode || 'Non renseigné'}</span>
                   </div>
                 </div>
 
@@ -1722,7 +1722,7 @@ export function CommunicationView({
                     3. Le Chef d’Établissement
                   </p>
                   <p className="text-[9px] text-slate-500 font-mono">
-                    Fait à {currentSchool.city || 'Abidjan'}, le {formatDate(new Date())}
+                    Fait à {currentSchool.city || 'Non renseigné'}, le {formatDate(new Date())}
                   </p>
                 </div>
 

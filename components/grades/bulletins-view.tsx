@@ -188,7 +188,7 @@ function OfficialLandscapeBulletin({
 
           {/* Ligne 2 : Sigle de l'école seul sur sa propre ligne */}
           <p className="text-xs sm:text-[13px] font-black text-emerald-800 tracking-wider font-heading">
-            {school.shortName || 'EPC MANOI'}
+            {school.shortName}
           </p>
 
           {/* Ligne 3 : Devise de l'école sur sa propre ligne */}
@@ -203,7 +203,7 @@ function OfficialLandscapeBulletin({
 
           {/* Ligne 5 : Contact & Code Établissement */}
           <p className="text-[9px] font-semibold text-slate-400 font-mono">
-            Code Établissement : {school.ministryCode || '321119'} • Tél : {school.phone || '+225 01 02 61 14 09'} • {school.city || 'Abidjan'}
+            Code Établissement : {school.ministryCode || 'Non renseigné'} • Tél : {school.phone || 'Non renseigné'} • {school.city || 'Non renseigné'}
           </p>
 
           {/* Ligne 6 : Bandeau officiel du titre et Année Scolaire Centrés */}

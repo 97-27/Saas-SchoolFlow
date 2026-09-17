@@ -315,8 +315,8 @@ export function BoardingView({
             grade: cs.className || '6ème',
             address: 'Abidjan, Côte d\'Ivoire',
             guardianName: 'Parent / Tuteur',
-            guardianPhone: cs.parentContact || '+225 07 00 00 00 00',
-            whatsappPhone: cs.parentContact || '+225 07 00 00 00 00',
+            guardianPhone: cs.parentContact || '',
+            whatsappPhone: cs.parentContact || '',
             tuitionAmount: (cs.monthlyRate || 0) * 9,
             paidAmount: 0,
             paymentDate: cs.paymentDate || getTodayFrenchDateStr(),
@@ -492,7 +492,7 @@ export function BoardingView({
       setFormGender(activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M');
       setFormPavilion(activeBoarder.pavilion);
       setFormRoom(activeBoarder.roomNumber);
-      setFormParentContact(activeBoarder.student.whatsappPhone || activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00');
+      setFormParentContact(activeBoarder.student.whatsappPhone || activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '');
       setFormSecondaryPhones(activeBoarder.student.secondaryPhones || []);
       setFormMonthlyRate(activeBoarder.monthlyRate || 0);
 
@@ -611,7 +611,7 @@ export function BoardingView({
     const initialGender = activeBoarder.student.gender === 'female' || (activeBoarder.student.gender as any) === 'F' ? 'F' : 'M';
     const initialPavilion = activeBoarder.pavilion || 'Pavillon A (Garçons)';
     const initialRoom = activeBoarder.roomNumber || '';
-    const initialContact = activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '+225 07 00 00 00 00';
+    const initialContact = activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '';
     const initialRate = activeBoarder.monthlyRate || 0;
     const initialMethod = activeBoarder.student.paymentMethod || 'Espèces';
 
@@ -1109,11 +1109,11 @@ export function BoardingView({
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0f172a';
     ctx.font = '900 24px Outfit, sans-serif';
-    ctx.fillText((currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
+    ctx.fillText((currentSchool.name || '').toUpperCase(), 600, 95);
 
     ctx.fillStyle = '#047857';
     ctx.font = 'bold 18px Outfit, sans-serif';
-    ctx.fillText((currentSchool.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
+    ctx.fillText((currentSchool.shortName || '').toUpperCase(), 600, 124);
 
     if (currentSchool.motto) {
       ctx.fillStyle = '#b45309';
@@ -1123,14 +1123,14 @@ export function BoardingView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`${currentSchool.district || currentSchool.city || 'Abidjan'} • Tél : ${currentSchool.phone || '+225 27 22 44 11 00'}`, 600, 170);
+    ctx.fillText(`${currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : ${currentSchool.phone || 'Non renseigné'}`, 600, 170);
 
     drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 13px monospace';
-    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'MENA-04829-CI'}`, 600, 206);
+    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'Non renseigné'}`, 600, 206);
 
     // Titre Reçu
     drawRoundRect(45, 305, 1110, 56, 12);
@@ -1420,8 +1420,8 @@ export function BoardingView({
   // 5. Action directe : Partage WhatsApp Direct avec Salutations Scolaires et Prévisualisation
   const handleDirectWhatsAppShare = async (customPhone?: string, stuName?: string) => {
     const activeName = (formLastName ? `${formLastName.toUpperCase()} ${formFirstName}` : (stuName || formStudentName)).trim() || 'Élève Pensionnaire';
-    const rawPhone = customPhone || formParentContact || '+225 07 48 92 11 00';
-    const cleanPhone = formatCleanWhatsApp(rawPhone) || '2250748921100';
+    const rawPhone = customPhone || formParentContact || '';
+    const cleanPhone = formatCleanWhatsApp(rawPhone);
     const activeReceiptNum = `QUI-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
 
     setToastMessage("📸 Génération du reçu et ouverture de WhatsApp...");
@@ -2717,7 +2717,7 @@ export function BoardingView({
               {/* Centre : Hiérarchie stricte avec nom et sigle sur la même ligne */}
               <div className="text-center flex-1 space-y-0.5 min-w-0">
                 <h1 className="text-xs sm:text-sm font-black text-slate-950 uppercase tracking-tight font-heading leading-tight">
-                  {currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+                  {currentSchool.name}
                 </h1>
                 {currentSchool.shortName && (
                   <div>
@@ -2735,10 +2735,10 @@ export function BoardingView({
                   </p>
                 )}
                 <p className="text-[9.5px] sm:text-[10px] font-medium text-slate-600 leading-tight">
-                  {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
+                  {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
                 </p>
                 <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[9px] font-mono font-bold text-slate-700">
-                  <span>Code Établissement : {currentSchool.ministryCode || '321119'}</span>
+                  <span>Code Établissement : {currentSchool.ministryCode || 'Non renseigné'}</span>
                 </div>
               </div>
 

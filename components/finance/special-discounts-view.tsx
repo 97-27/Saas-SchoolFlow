@@ -424,7 +424,7 @@ export function SpecialDiscountsView({
       alert('La limite maximale de 5 versements par reçu est atteinte.');
       return;
     }
-    const nextNum = installments.length + 1;
+    const nextNum = installments.reduce((max, inst) => Math.max(max, inst.installmentNumber || 0), 0) + 1;
     const newInst: PaymentInstallment = {
       id: `inst-${Date.now()}`,
       installmentNumber: nextNum,
@@ -792,11 +792,11 @@ export function SpecialDiscountsView({
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0f172a';
     ctx.font = '900 24px Outfit, sans-serif';
-    ctx.fillText((currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
+    ctx.fillText((currentSchool.name || '').toUpperCase(), 600, 95);
 
     ctx.fillStyle = '#047857';
     ctx.font = 'bold 18px Outfit, sans-serif';
-    ctx.fillText((currentSchool.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
+    ctx.fillText((currentSchool.shortName || '').toUpperCase(), 600, 124);
 
     if (currentSchool.slogan || currentSchool.motto) {
       ctx.fillStyle = '#b45309';
@@ -806,14 +806,14 @@ export function SpecialDiscountsView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`Situation : ${currentSchool.district || 'Abidjan'} • Tél : ${currentSchool.phone || '+225 27 22 44 11 00'}`, 600, 170);
+    ctx.fillText(`Situation : ${currentSchool.district || 'Non renseigné'} • Tél : ${currentSchool.phone || 'Non renseigné'}`, 600, 170);
 
     drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 13px monospace';
-    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'MENA-04829-CI'}`, 600, 206);
+    ctx.fillText(`Code Établissement : ${currentSchool.ministryCode || 'Non renseigné'}`, 600, 206);
 
     // Titre Reçu
     drawRoundRect(45, 305, 1110, 56, 12);
@@ -1107,12 +1107,12 @@ export function SpecialDiscountsView({
             </p>
 
             <p className="text-[10px] text-slate-600 font-medium">
-              Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Abobo Biabou 2'} • Tél : {currentSchool.receiptHeaderPhone || currentSchool.phone || '+225 01 02 61 14 09'}
+              Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {currentSchool.receiptHeaderPhone || currentSchool.phone || 'Non renseigné'}
             </p>
 
             {/* Code Établissement / Code MENA */}
             <div className="inline-block bg-slate-900 text-white text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
-              Code Établissement : {currentSchool.menaCode || currentSchool.ministryCode || '321119'}
+              Code Établissement : {currentSchool.menaCode || currentSchool.ministryCode || 'Non renseigné'}
             </div>
           </div>
 
@@ -1316,7 +1316,7 @@ export function SpecialDiscountsView({
               Cachet Officiel & Direction
             </span>
             <div className="w-36 h-20 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/40 flex flex-col items-center justify-center p-1 text-emerald-900 shadow-2xs relative">
-              <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName || 'EPC MANOI'}</span>
+              <span className="text-[9px] font-black uppercase tracking-wider">{currentSchool.shortName}</span>
               <span className="text-[8px] font-bold text-emerald-700">SERVICE COMPTABILITÉ</span>
               <span className="text-[8px] font-mono text-slate-500 mt-0.5">PAYÉ & CERTIFIÉ ✓</span>
               <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
@@ -2058,10 +2058,10 @@ export function SpecialDiscountsView({
                 href={
                   whatsAppPreviewData.cleanPhone
                     ? `https://wa.me/${whatsAppPreviewData.cleanPhone}?text=${encodeURIComponent(
-                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}._`
+                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name}._`
                       )}`
                     : `https://wa.me/?text=${encodeURIComponent(
-                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name || 'EPC MANOI'}._`
+                        `*Reçu Officiel de Scolarité — ${currentSchool.shortName || currentSchool.name}*\n*N° Reçu :* ${receiptNumber}\n*Date :* ${formatDate(issueDate)}\n*Responsable Légal :* ${parentName}\n*Élèves Inscrits (${children.length}) :* ${children.map((c) => `${c.fullName || 'Élève'} (${c.grade})`).join(', ')}\n-------------------------------\n*Somme Totale :* ${formatFCFA(totalBrutFCFA)}\n*Réduction Spéciale :* -${formatFCFA(discountAmountFCFA)}\n*Net À Payer :* ${formatFCFA(netToPayFCFA)}\n*Somme Versée :* ${formatFCFA(totalPaidFCFA)}\n*Reste À Payer :* ${formatFCFA(remainingBalanceFCFA)}\n-------------------------------\n_(L'image HD du reçu est copiée : faites Coller / Ctrl+V directement dans WhatsApp)._\n\n_Reçu officiel certifié par le Service Comptabilité de ${currentSchool.shortName || currentSchool.name}._`
                       )}`
                 }
                 target="_blank"

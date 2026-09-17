@@ -1283,12 +1283,12 @@ export function InscriptionsView({
     // Ligne 1 : Nom officiel complet
     ctx.fillStyle = '#0f172a';
     ctx.font = '900 24px Outfit, sans-serif';
-    ctx.fillText((schoolState.receiptHeaderFullName || schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL').toUpperCase(), 600, 95);
+    ctx.fillText((schoolState.receiptHeaderFullName || schoolState.name || '').toUpperCase(), 600, 95);
 
     // Ligne 2 : Sigle / Nom court
     ctx.fillStyle = '#047857';
     ctx.font = 'bold 18px Outfit, sans-serif';
-    ctx.fillText((schoolState.shortName || 'EPC MANOI').toUpperCase(), 600, 124);
+    ctx.fillText((schoolState.shortName || '').toUpperCase(), 600, 124);
 
     // Ligne 3 : Slogan / Devise
     if (schoolState.receiptHeaderSlogan || schoolState.slogan) {
@@ -1300,7 +1300,7 @@ export function InscriptionsView({
     // Ligne 4 : Contacts & Situation
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Cocody Angré 8ème Tranche'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || '+225 27 22 44 11 00'}`, 600, 170);
+    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Non renseigné'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || 'Non renseigné'}`, 600, 170);
 
     // Ligne 5 : Badge Code Établissement
     drawRoundRect(380, 186, 440, 30, 8);
@@ -1308,7 +1308,7 @@ export function InscriptionsView({
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 13px monospace';
-    ctx.fillText(`Code Établissement : ${schoolState.menaCode || schoolState.ministryCode || 'MENA-04829-CI'}`, 600, 206);
+    ctx.fillText(`Code Établissement : ${schoolState.menaCode || schoolState.ministryCode || 'Non renseigné'}`, 600, 206);
 
     // --- BANDEAU TITRE DU REÇU ARRONDI (radius 12) ---
     drawRoundRect(45, 305, 1110, 56, 12);
@@ -1621,8 +1621,8 @@ export function InscriptionsView({
     targetReceiptNum?: string
   ) => {
     const activeStudent = targetStudent || successModalData;
-    const rawPhone = customPhone || (activeStudent?.whatsappPhone || activeStudent?.guardianPhone) || whatsappPhone || '+225 07 48 92 11 00';
-    const cleanPhone = formatCleanWhatsApp(rawPhone) || '2250748921100';
+    const rawPhone = customPhone || (activeStudent?.whatsappPhone || activeStudent?.guardianPhone) || whatsappPhone || '';
+    const cleanPhone = formatCleanWhatsApp(rawPhone);
 
     const name = stuName || activeStudent?.fullName || (lastName ? `${lastName.toUpperCase()} ${firstName}` : `${firstName}`).trim() || 'Élève';
     
@@ -1765,7 +1765,7 @@ export function InscriptionsView({
               <h2
                 className="font-black uppercase tracking-tight text-slate-950 font-heading text-[11px] sm:text-xs md:text-sm lg:text-[14px] leading-tight text-center"
               >
-                {schoolState.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL'}
+                {schoolState.name}
               </h2>
               {schoolState.shortName && (
                 <div>
@@ -1783,10 +1783,10 @@ export function InscriptionsView({
                 </p>
               )}
               <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px]">
-                {schoolState.district || `${schoolState.city} — ${schoolState.country}`} • Tél : {schoolState.phone || '+225 27 22 44 11 00'}
+                {schoolState.district || `${schoolState.city} — ${schoolState.country}`} • Tél : {schoolState.phone || 'Non renseigné'}
               </p>
               <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[9px] sm:text-[10px]">
-                <span>Code Établissement : {schoolState.ministryCode || 'MENA-04829-CI'}</span>
+                <span>Code Établissement : {schoolState.ministryCode || 'Non renseigné'}</span>
               </div>
             </div>
 

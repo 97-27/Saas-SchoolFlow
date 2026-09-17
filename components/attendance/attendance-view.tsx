@@ -155,7 +155,7 @@ export function AttendanceView({
       ...prev,
       [key]: {
         status,
-        reason: status === 'present' ? '' : prev[key]?.reason || (status === 'absent' ? 'Non justifié' : 'Retard transport 10 min'),
+        reason: status === 'present' ? '' : prev[key]?.reason || (status === 'absent' ? 'Non justifié' : ''),
       },
     }));
   };
@@ -264,7 +264,7 @@ export function AttendanceView({
           customReason ? ` — Détail / Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de sensibiliser votre enfant sur l'importance du respect des horaires et de la ponctualité aux cours.\n` +
-        `Vie Scolaire : ${currentSchool.phone || '+225 27 22 44 11 00'}.\n\n` +
+        `Vie Scolaire : ${currentSchool.phone || 'Non renseigné'}.\n\n` +
         `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
     } else {
       text =
@@ -274,7 +274,7 @@ export function AttendanceView({
           customReason ? ` — Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de contacter immédiatement la Vie Scolaire au ${
-          currentSchool.phone || '+225 27 22 44 11 00'
+          currentSchool.phone || 'Non renseigné'
         } afin de justifier cette absence.\n\n` +
         `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
     }

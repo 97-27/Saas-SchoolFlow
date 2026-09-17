@@ -213,7 +213,7 @@ export function SalariesView({
       }
       setRole(found.role || found.subjectOrGrade || 'Membre du Personnel');
       setMatricule(found.authCode ? `EMP-${found.authCode}` : `EMP-${found.id}`);
-      setPhone(found.phone || '+225 07 00 00 00 00');
+      setPhone(found.phone || '');
     }
   };
 
@@ -229,7 +229,10 @@ export function SalariesView({
       return;
     }
 
-    const nextIndex = salaries.length + 1;
+    const nextIndex = salaries.reduce((max, s) => {
+      const m = s.receiptNumber?.match(/(\d+)$/);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0) + 1;
     const recNum = `SAL-2026-${String(nextIndex).padStart(3, '0')}`;
     const cleanRef = transactionRef.trim() || `PAY-${paymentMethod.slice(0, 3).toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -240,7 +243,7 @@ export function SalariesView({
       staffName: staffName.trim(),
       role: role.trim() || 'Enseignant / Personnel',
       matricule: matricule.trim() || `EMP-2026-${String(nextIndex).padStart(3, '0')}`,
-      phone: phone.trim() || '+225 07 00 00 00 00',
+      phone: phone.trim(),
       payPeriod: payPeriod,
       paymentDate: paymentDate || '30/09/2026',
       baseSalary: Number(baseSalary) || 0,
@@ -432,7 +435,7 @@ export function SalariesView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(`${currentSchool.receiptHeaderAddress || currentSchool.city || 'Abidjan'} • Tél : ${currentSchool.receiptHeaderPhone || currentSchool.phone || '+225 00 00 00 00'}`, 600, 175);
+    ctx.fillText(`${currentSchool.receiptHeaderAddress || currentSchool.city || 'Non renseigné'} • Tél : ${currentSchool.receiptHeaderPhone || currentSchool.phone || 'Non renseigné'}`, 600, 175);
 
     ctx.font = 'bold 19px monospace';
     ctx.fillStyle = '#475569';
@@ -701,11 +704,11 @@ export function SalariesView({
             </p>
 
             <p suppressHydrationWarning className="text-[9.5px] sm:text-[10px] text-slate-600">
-              Situation : {currentSchool.district || currentSchool.city || 'Abobo Biabou 2'} • Tél : {currentSchool.phone || '+225 01 02 61 14 09'}
+              Situation : {currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'}
             </p>
 
             <div className="inline-block bg-slate-900 text-white text-[9.5px] sm:text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">
-              Code Établissement : {currentSchool.ministryCode || currentSchool.menaCode || '321119'}
+              Code Établissement : {currentSchool.ministryCode || currentSchool.menaCode || 'Non renseigné'}
             </div>
           </div>
 
@@ -852,7 +855,7 @@ export function SalariesView({
               {/* Tampon / Cachet Officiel de l'école */}
               <div className="w-28 h-16 rounded-xl border-2 border-dashed border-emerald-600/70 bg-emerald-50/60 flex flex-col items-center justify-center p-1 transform rotate-[-3deg] shadow-xs">
                 <span className="text-[7.5px] font-black text-emerald-900 uppercase tracking-tighter">
-                  {currentSchool.shortName || currentSchool.name || 'EPC MANOI'}
+                  {currentSchool.shortName || currentSchool.name}
                 </span>
                 <span className="text-[7px] font-bold text-emerald-700 uppercase">
                   COMPTABILITÉ GÉNÉRALE

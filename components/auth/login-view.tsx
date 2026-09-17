@@ -206,7 +206,7 @@ export function LoginView({
   const [selectedRole, setSelectedRole] = useState<UserRole>('directeur');
   const [civility, setCivility] = useState<'Mr' | 'Mme' | 'Mlle'>('Mr');
   const [userName, setUserName] = useState('');
-  const [schoolSigle, setSchoolSigle] = useState(initialSchool.shortName || initialSchool.name || 'EPC MANOI');
+  const [schoolSigle, setSchoolSigle] = useState(initialSchool.shortName || initialSchool.name || '');
   const [showAuthCode, setShowAuthCode] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [parentPhone, setParentPhone] = useState('');

@@ -242,7 +242,7 @@ export function ReportsView({
               {schoolState.name}
             </h1>
             <p className="text-xs text-slate-600 font-medium">
-              {schoolState.shortName || 'Établissement'} • {schoolState.city || 'Abidjan'} — Contact : {schoolState.phone || '+225 27 22 44 11 00'}
+              {schoolState.shortName || 'Établissement'} • {schoolState.city || 'Non renseigné'} — Contact : {schoolState.phone || 'Non renseigné'}
             </p>
           </div>
           <div className="text-right">

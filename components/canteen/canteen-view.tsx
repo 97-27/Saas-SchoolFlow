@@ -1437,7 +1437,7 @@ export function CanteenView({
                     </p>
                   )}
                   <p className="text-[8.5px] text-slate-500 font-mono leading-tight">
-                    Code : {currentSchool.ministryCode || '321119'} • Tél : {currentSchool.phone || '+225 01 02 03 04 05'}
+                    Code : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'}
                   </p>
                 </div>
 

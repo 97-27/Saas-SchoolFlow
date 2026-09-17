@@ -141,12 +141,12 @@ export function DistinctionsView({
 
   // Helper : Génère EXACTEMENT le diplôme avec de très grands textes, logos agrandis à 98px et remplissant 100% de la page A4 Paysage (~198mm)
   const generateOfficialDiplomaHTML = (laureate: any) => {
-    const directorName = currentSchool.directorName || 'LAWANI MOUHAMED';
-    const schoolName = currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL';
-    const schoolShortName = currentSchool.shortName || 'EPC MANOI';
+    const directorName = currentSchool.directorName || 'Non renseigné';
+    const schoolName = currentSchool.name;
+    const schoolShortName = currentSchool.shortName || '';
     const schoolMotto = currentSchool.motto || 'Discipline • Rigueur • Réussite';
-    const schoolDistrict = currentSchool.district || 'Abobo Biabou 2';
-    const ministryCode = currentSchool.ministryCode || '321119';
+    const schoolDistrict = currentSchool.district || 'Non renseigné';
+    const ministryCode = currentSchool.ministryCode || 'Non renseigné';
     const academicYear = currentSchool.academicYear || '2026-2027';
     const currentDateFormatted = formatDate(new Date());
 
@@ -252,7 +252,7 @@ export function DistinctionsView({
               LE CHEF D&apos;ÉTABLISSEMENT / LE DIRECTEUR
             </p>
             <p style="font-size: 9.5px; color: #64748b; margin: 2px 0 4px 0; font-family: monospace;">
-              Fait à ${currentSchool.city || 'Abidjan'}, le ${currentDateFormatted}
+              Fait à ${currentSchool.city || 'Non renseigné'}, le ${currentDateFormatted}
             </p>
             <div style="height: 44px; display: flex; align-items: center; justify-content: flex-end;">
               ${
@@ -332,12 +332,12 @@ export function DistinctionsView({
 
   // Export Microsoft Word (.doc) en Format Paysage A4
   const exportDiplomaToWord = (laureate: any) => {
-    const directorName = currentSchool.directorName || 'LAWANI MOUHAMED';
-    const schoolName = currentSchool.name || 'EPC MARKAZ NOUROUL-OULOUM INTERNATIONAL';
-    const schoolShortName = currentSchool.shortName || 'EPC MANOI';
+    const directorName = currentSchool.directorName || 'Non renseigné';
+    const schoolName = currentSchool.name;
+    const schoolShortName = currentSchool.shortName || '';
     const schoolMotto = currentSchool.motto || 'Discipline • Rigueur • Réussite';
-    const schoolDistrict = currentSchool.district || 'Abobo Biabou 2';
-    const ministryCode = currentSchool.ministryCode || '321119';
+    const schoolDistrict = currentSchool.district || 'Non renseigné';
+    const ministryCode = currentSchool.ministryCode || 'Non renseigné';
     const academicYear = currentSchool.academicYear || '2026-2027';
     const currentDateFormatted = formatDate(new Date());
 
@@ -413,7 +413,7 @@ export function DistinctionsView({
               </td>
               <td style="text-align: right;">
                 <strong>LE CHEF D'ÉTABLISSEMENT / LE DIRECTEUR</strong><br/>
-                <small>Fait à ${currentSchool.city || 'Abidjan'}, le ${currentDateFormatted}</small><br/><br/>
+                <small>Fait à ${currentSchool.city || 'Non renseigné'}, le ${currentDateFormatted}</small><br/><br/>
                 <strong>${directorName}</strong>
               </td>
             </tr>
