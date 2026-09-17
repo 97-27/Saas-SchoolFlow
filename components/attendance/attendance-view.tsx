@@ -74,7 +74,14 @@ export function AttendanceView({
   // elles-mêmes — un rechargement de page effaçait silencieusement tout l'appel du jour, malgré
   // le message "sauvegardée et sécurisée avec succès".
   const attendanceStorageKey = `schoolflow_attendance_records_v1_${schoolSlug}`;
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; reason: string }>>(() => {
+
+  // Lit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à la copie en mémoire chargée une seule fois au montage :
+  // sans cela, un enseignant qui ouvre l'appel d'une classe pendant qu'un autre enseignant (autre
+  // onglet/appareil) enregistre l'appel d'une autre classe voit sa propre sauvegarde réécrire
+  // l'intégralité de la carte des présences avec sa copie périmée, effaçant silencieusement les
+  // présences que l'autre venait d'enregistrer.
+  const readFreshAttendanceMap = (): Record<string, { status: AttendanceStatus; reason: string }> => {
     if (typeof window === 'undefined') return {};
     try {
       const raw = localStorage.getItem(attendanceStorageKey);
@@ -82,7 +89,17 @@ export function AttendanceView({
     } catch (e) {
       return {};
     }
-  });
+  };
+  const persistAttendanceMap = (map: Record<string, { status: AttendanceStatus; reason: string }>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(attendanceStorageKey, JSON.stringify(map));
+    } catch (e) {}
+  };
+
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; reason: string }>>(
+    readFreshAttendanceMap
+  );
 
   // Synchronisation des élèves et de l'école
   useEffect(() => {
@@ -96,15 +113,6 @@ export function AttendanceView({
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
-
-  // Sauvegarder chaque modification de l'appel immédiatement — plus besoin d'attendre le clic
-  // sur "Valider" pour que les présences saisies survivent à un rechargement de la page.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(attendanceStorageKey, JSON.stringify(attendanceMap));
-    } catch (e) {}
-  }, [attendanceMap, attendanceStorageKey]);
 
   // Vérifier si la session courante est verrouillée
   useEffect(() => {
@@ -132,16 +140,10 @@ export function AttendanceView({
   // sans présence déjà saisie démarre "présent" par défaut, jamais présumé absent — un vrai
   // appel n'a pas encore été pris tant que l'enseignant n'a rien coché.
   useEffect(() => {
-    setAttendanceMap((prev) => {
-      const next = { ...prev };
-      classStudents.forEach((stu) => {
-        const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
-        if (!next[key]) {
-          next[key] = { status: 'present', reason: '' };
-        }
-      });
-      return next;
-    });
+    // Se resynchronise depuis la version la plus fraîche à chaque changement de classe/date/
+    // créneau (et non depuis la copie en mémoire chargée au montage) pour refléter tout de suite
+    // les présences déjà enregistrées par un autre enseignant/onglet entre-temps.
+    setAttendanceMap(readFreshAttendanceMap());
   }, [classStudents, selectedDate, selectedSlot]);
 
   // Changer le statut d'un élève (si non verrouillé)
@@ -151,26 +153,29 @@ export function AttendanceView({
       return;
     }
     const key = `${selectedDate}_${selectedSlot}_${studentId}`;
-    setAttendanceMap((prev) => ({
-      ...prev,
+    const fresh = readFreshAttendanceMap();
+    const next = {
+      ...fresh,
       [key]: {
         status,
-        reason: status === 'present' ? '' : prev[key]?.reason || (status === 'absent' ? 'Non justifié' : ''),
+        reason: status === 'present' ? '' : fresh[key]?.reason || (status === 'absent' ? 'Non justifié' : ''),
       },
-    }));
+    };
+    setAttendanceMap(next);
+    persistAttendanceMap(next);
   };
 
   // Marquer toute la classe comme présente
   const markAllPresent = () => {
     if (isSessionLocked) return;
-    setAttendanceMap((prev) => {
-      const next = { ...prev };
-      classStudents.forEach((stu) => {
-        const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
-        next[key] = { status: 'present', reason: '' };
-      });
-      return next;
+    const fresh = readFreshAttendanceMap();
+    const next = { ...fresh };
+    classStudents.forEach((stu) => {
+      const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
+      next[key] = { status: 'present', reason: '' };
     });
+    setAttendanceMap(next);
+    persistAttendanceMap(next);
   };
 
   // Enregistrer et verrouiller la session
@@ -659,10 +664,10 @@ export function AttendanceView({
                             value={record.reason}
                             onChange={(e) => {
                               const val = e.target.value;
-                              setAttendanceMap((prev) => ({
-                                ...prev,
-                                [key]: { ...prev[key], reason: val },
-                              }));
+                              const fresh = readFreshAttendanceMap();
+                              const next = { ...fresh, [key]: { ...fresh[key], reason: val } };
+                              setAttendanceMap(next);
+                              persistAttendanceMap(next);
                             }}
                             placeholder={isAbsent ? 'Motif d’absence...' : 'Minutes de retard / motif...'}
                             className={`w-full px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:ring-2 focus:ring-emerald-500/20 ${

@@ -1510,9 +1510,12 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
     const rawSchool = localStorage.getItem(schoolKey);
     const schoolInvoices: Invoice[] = rawSchool ? JSON.parse(rawSchool) : [];
 
-    // 2. Charger depuis la clé globale
-    const rawGlobal = localStorage.getItem(INVOICES_STORAGE_KEY);
-    const globalInvoices: Invoice[] = rawGlobal ? JSON.parse(rawGlobal) : [];
+    // 2. Charger depuis la clé globale UNIQUEMENT pour l'établissement pilote (EPC MANOI)
+    let globalInvoices: Invoice[] = [];
+    if (slug === 'epc-manoi') {
+      const rawGlobal = localStorage.getItem(INVOICES_STORAGE_KEY);
+      globalInvoices = rawGlobal ? JSON.parse(rawGlobal) : [];
+    }
 
     // 3. Clés démo
     let fallbackInvoices: Invoice[] = [];

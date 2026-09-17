@@ -124,8 +124,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         : role === 'secretaire'
         ? 'SEC'
         : 'STF';
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    return `${prefix}-${rand}`;
+    const existingCodes = new Set(staffList.map((s) => s.authCode));
+    let candidate = '';
+    do {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      candidate = `${prefix}-${rand}`;
+    } while (existingCodes.has(candidate));
+    return candidate;
   };
 
   // Ouvrir la modale d'édition complète (Accessible au Fondateur, Directeur et Personnel)
@@ -282,7 +287,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       const activeRaw = localStorage.getItem('schoolflow_active_session_v2');
       if (activeRaw) {
         const parsed = JSON.parse(activeRaw);
-        if (parsed.roleId === editRole || parsed.authCode === updatedUser.authCode || parsed.fullName === editingStaff.fullName) {
+        if (parsed.authCode === updatedUser.authCode) {
           parsed.fullName = updatedUser.fullName;
           parsed.pureName = updatedUser.fullName;
           parsed.email = updatedUser.email;
@@ -304,7 +309,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     e.preventDefault();
     if (!newFullName.trim()) return;
 
-    const generatedCode = newAuthCode.trim() || generateRandomCode(newRole);
+    const manualCode = newAuthCode.trim().toUpperCase();
+    if (manualCode && staffList.some((s) => s.authCode === manualCode)) {
+      showToast(`⚠️ Le code ${manualCode} est déjà utilisé par un autre membre du personnel.`);
+      return;
+    }
+    const generatedCode = manualCode || generateRandomCode(newRole);
     const roleTitleMap: Record<string, string> = {
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
@@ -317,7 +327,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const autoEmail = newEmail.trim() || `${newFullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@${cleanSlug}.ci`;
 
     const newStaffMember: StaffUser = {
-      id: `staff-${Date.now().toString().slice(-4)}`,
+      id: `staff-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       fullName: newFullName.trim(),
       role: roleTitleMap[newRole] || 'Membre du Personnel',
       roleId: newRole,

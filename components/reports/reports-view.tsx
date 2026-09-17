@@ -183,6 +183,7 @@ export function ReportsView({
       { name: 'Maternelle (P.S. à G.S.)', check: isMaternelle, icon: Sparkles, color: 'emerald' },
       { name: 'Primaire (CP1 à CM2)', check: isPrimaire, icon: GraduationCap, color: 'blue' },
       { name: 'Collège (6ème à 3ème)', check: isCollege, icon: Building2, color: 'amber' },
+      { name: 'Lycée (2nde à Tle)', check: isLycee, icon: GraduationCap, color: 'purple' },
     ].map((c) => {
       const cycStus = students.filter((s) => c.check(s.grade));
       
@@ -421,6 +422,7 @@ export function ReportsView({
             { id: 'maternelle', label: 'Maternelle' },
             { id: 'primaire', label: 'Primaire' },
             { id: 'college', label: 'Collège' },
+            { id: 'lycee', label: 'Lycée' },
           ].map((c) => (
             <button
               key={c.id}
@@ -525,7 +527,7 @@ export function ReportsView({
                 ♂ {stats.boysCount} Garçons
               </span>
               <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-bold text-[11px]">
-                🏠 {students.filter(s => s.isBoarding).length} Internes
+                🏠 {filteredStudents.filter(s => s.isBoarding).length} Internes
               </span>
             </div>
           </div>
@@ -546,7 +548,7 @@ export function ReportsView({
             </p>
           </div>
           <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 self-start sm:self-auto shadow-2xs">
-            4 Cycles Actifs
+            {stats.cyclesData.length} Cycles Actifs
           </span>
         </div>
 
