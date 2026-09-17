@@ -54,7 +54,8 @@ import {
   addLiveStaffUser,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
-import { getAllSchoolsFromSupabase, getSchoolSubscriptionInfo } from '@/lib/supabase/services';
+import { getAllSchoolsFromSupabase, getSchoolSubscriptionInfo, createNewSchoolInSupabase, saveStaffUserToSupabase } from '@/lib/supabase/services';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 
 export type UserRole =
   | 'directeur'
@@ -752,7 +753,7 @@ export function LoginView({
       const cleanSigle = signupSchoolShortName.trim().toUpperCase();
 
       // Générer le slug de l'école (priorité au sigle court si pertinent, sinon au nom)
-      let slug =
+      const baseSlug =
         (cleanSigle.length >= 2 ? cleanSigle : signupSchoolName)
           .toLowerCase()
           .trim()
@@ -762,10 +763,11 @@ export function LoginView({
           .replace(/[\s_-]+/g, '-')
           .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
 
-      // Vérifier l'unicité du slug (identifiant d'établissement dans l'URL) avant de créer
-      // l'école : deux écoles au sigle proche (ex: deux "EPC") généraient sinon exactement la
-      // même adresse et finissaient par mélanger leurs données dans la même base partagée. On
-      // vérifie contre la base Cloud partagée (toutes écoles) ET la liste locale de cet appareil.
+      // Vérification locale indicative (juste pour éviter un aller-retour réseau inutile dans
+      // le cas courant) — la garantie réelle d'unicité vient de createNewSchoolInSupabase
+      // ci-dessous, qui échoue proprement sur la contrainte unique du slug plutôt que de fusionner
+      // silencieusement dans une autre école si cette vérification indicative se trompait.
+      let slug = baseSlug;
       try {
         const [cloudSchools, localSchools] = await Promise.all([
           getAllSchoolsFromSupabase().catch(() => [] as School[]),
@@ -779,8 +781,8 @@ export function LoginView({
           slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
         }
       } catch (e) {
-        // En cas d'échec de la vérification réseau, poursuivre avec le slug initial plutôt que
-        // de bloquer l'inscription.
+        // En cas d'échec de la vérification réseau, poursuivre avec le slug initial : la
+        // véritable protection contre une collision se fait plus bas, à l'écriture réelle.
       }
 
       // Sigle officiel de l'école (renseigné ou déduit)
@@ -823,6 +825,33 @@ export function LoginView({
         createdAt: new Date().toISOString(),
       };
 
+      // Garantie réelle d'unicité : un INSERT (jamais un upsert) échoue sur la contrainte unique
+      // du slug en cas de collision (course entre deux inscriptions simultanées, ou simple
+      // sigle identique choisi par deux écoles différentes) au lieu d'écraser silencieusement
+      // les données d'une autre école déjà existante. En cas de collision, on régénère un
+      // suffixe et on retente, jusqu'à 5 fois — newSchool.slug est tenu à jour à chaque tentative
+      // pour que tout le reste de la création (staff, cookie, redirection) utilise le bon slug.
+      let cloudCreationOk = false;
+      let cloudCreationAttempted = false;
+      if (isSupabaseConfigured) {
+        cloudCreationAttempted = true;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const result = await createNewSchoolInSupabase(newSchool);
+          if (result.success) {
+            cloudCreationOk = true;
+            break;
+          }
+          if (result.collision) {
+            slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+            newSchool.slug = slug;
+            continue;
+          }
+          // Échec non lié à une collision (réseau, config) : inutile de réessayer avec un
+          // nouveau slug, le problème ne vient pas du slug lui-même.
+          break;
+        }
+      }
+
       // Génère un code d'authentification unique aléatoire par établissement — le code générique
       // "DIR-2026"/"FND-2026" était identique pour TOUTES les nouvelles écoles créées, ce qui
       // permettait en théorie à quiconque connaissant le nom du Directeur/Fondateur officiel
@@ -832,6 +861,19 @@ export function LoginView({
       const directorAuthCode = generateUniqueCode('DIR');
       const founderAuthCode = generateUniqueCode('FND');
 
+      // Blocage strict uniquement si la base Cloud est configurée et joignable mais que la
+      // création réelle a échoué pour une raison AUTRE qu'une collision de slug déjà résolue par
+      // les tentatives ci-dessus (ex: erreur serveur) — on ne crée jamais un espace fantôme dont
+      // le Directeur ne pourrait ensuite jamais retrouver l'accès sur un autre appareil.
+      if (cloudCreationAttempted && !cloudCreationOk) {
+        setErrorMessage(
+          "❌ Impossible de créer votre espace pour le moment (problème de connexion au serveur). Veuillez réessayer dans quelques instants."
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      let staffCloudSaveOk = true;
       try {
         registerSchoolWithSubscription(newSchool);
 
@@ -864,6 +906,41 @@ export function LoginView({
           },
           slug
         );
+
+        // addLiveStaffUser sauvegarde déjà vers Supabase en arrière-plan (fire-and-forget), mais
+        // sans jamais faire remonter l'échec : on refait ici les deux mêmes sauvegardes, cette
+        // fois attendues, pour savoir si le code d'accès du Directeur/Fondateur a réellement
+        // atteint le Cloud avant d'annoncer un succès total — sinon ce code resterait valide
+        // uniquement sur cet appareil et son titulaire se retrouverait bloqué sur tout autre.
+        if (cloudCreationAttempted) {
+          const [dirSaved, fndSaved] = await Promise.all([
+            saveStaffUserToSupabase(
+              {
+                fullName: signupResponsableName.trim(),
+                role: 'Contrôle',
+                roleId: 'directeur',
+                email: signupEmail.trim(),
+                phone: cleanSignupPhone,
+                authCode: directorAuthCode,
+                status: 'Actif',
+              },
+              slug
+            ).catch(() => false),
+            saveStaffUserToSupabase(
+              {
+                fullName: signupFounderName.trim() || signupResponsableName.trim(),
+                role: 'Contrôle Total',
+                roleId: 'fondateur',
+                email: signupEmail.trim(),
+                phone: cleanSignupPhone,
+                authCode: founderAuthCode,
+                status: 'Actif',
+              },
+              slug
+            ).catch(() => false),
+          ]);
+          staffCloudSaveOk = dirSaved && fndSaved;
+        }
 
         // Sauvegarder la session active en tant que Directeur Administrateur
         const sessionData = {
@@ -911,6 +988,8 @@ export function LoginView({
         const verify = await getAllSchoolsFromSupabase();
         if (!verify.some((s) => s.slug === slug)) {
           cloudWarning = ' ⚠️ Sauvegarde en ligne non confirmée — vérifiez votre connexion internet, sinon votre espace restera limité à cet appareil.';
+        } else if (!staffCloudSaveOk) {
+          cloudWarning = ' ⚠️ Votre code d’accès n’a pas pu être confirmé en ligne — s’il ne fonctionne pas depuis un autre appareil, reconnectez-vous depuis celui-ci pour le régénérer.';
         }
       } catch (e) {
         cloudWarning = ' ⚠️ Impossible de confirmer la sauvegarde en ligne — vérifiez votre connexion internet.';

@@ -254,6 +254,73 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
   }
 }
 
+/**
+ * Crée une TOUTE NOUVELLE école lors d'une inscription — jamais un upsert(onConflict:'slug')
+ * comme saveSchoolToSupabase (adapté aux mises à jour d'une école déjà existante). Un upsert
+ * ici aurait fusionné silencieusement dans la ligne d'une AUTRE école si le slug généré côté
+ * client entrait en collision (course entre deux inscriptions simultanées, ou simple vérif
+ * d'unicité échouée par une panne réseau passagère) : le sigle, le nom, les coordonnées de
+ * l'ancienne école auraient été écrasés par les nouvelles, et le nouveau Directeur/Fondateur
+ * se serait vu attribuer l'accès aux vraies données (élèves, paiements) de cette autre école.
+ * Un vrai INSERT échoue proprement sur la contrainte d'unicité du slug en cas de collision
+ * (code Postgres 23505) au lieu d'écraser quoi que ce soit — l'appelant peut alors régénérer
+ * un autre slug et réessayer.
+ */
+export async function createNewSchoolInSupabase(
+  school: School
+): Promise<{ success: boolean; collision?: boolean; id?: string }> {
+  if (!isSupabaseConfigured) return { success: false };
+  if (!school.slug || school.slug === 'college-excellence') return { success: false };
+  try {
+    const payload: Record<string, any> = {
+      slug: school.slug,
+      name: school.name,
+      short_name: school.shortName,
+      motto: school.motto,
+      slogan: school.slogan,
+      logo_color: school.logoColor || '#059669',
+      city: school.city,
+      country: school.country,
+      district: school.district,
+      phone: school.phone,
+      whatsapp_phone: school.whatsappPhone,
+      email: school.email,
+      website: school.website,
+      academic_year: school.academicYear || '2026-2027',
+      current_term: school.currentTerm || 'Trimestre 1',
+      founder_name: school.founderName,
+      director_name: school.directorName,
+      subscription_plan: school.subscriptionPlan || 'annuel',
+      subscription_price: school.subscriptionPrice || 250000,
+      status: school.status || 'active',
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('schools')
+      .insert(payload)
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      // Code Postgres pour violation de contrainte unique/exclusion — le slug existe déjà.
+      const isUniqueViolation = (error as any).code === '23505';
+      if (!isUniqueViolation) {
+        console.error('Erreur createNewSchoolInSupabase:', error.message);
+      }
+      return { success: false, collision: isUniqueViolation };
+    }
+
+    if (data?.id) {
+      schoolIdCache.set(school.slug, data.id);
+    }
+    return { success: true, id: data?.id };
+  } catch (err) {
+    console.error('Erreur createNewSchoolInSupabase catch:', err);
+    return { success: false };
+  }
+}
+
 // Durée de chaque forfait d'abonnement, en mois — sert à calculer l'échéance réelle.
 const SUBSCRIPTION_PLAN_MONTHS: Record<string, number> = {
   mensuel: 1,
