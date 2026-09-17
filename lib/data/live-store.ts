@@ -1854,8 +1854,15 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       }
     } catch (e) {}
 
-    // 1. Sauvegarder dans la clé globale
-    const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
+    // École pilote uniquement : la clé globale non suffixée contient les vraies données de
+    // production d'epc-manoi. Toute autre école qui inscrit un élève NE DOIT JAMAIS y toucher -
+    // c'était le cas ici pour CHAQUE inscription d'élève, quelle que soit l'école, injectant ses
+    // élèves dans le registre réel du pilote (et pouvant même en remplacer un si l'id/numéro
+    // généré coïncidait).
+    const isPilotSave = slug === 'epc-manoi';
+
+    // 1. Sauvegarder dans la clé globale (pilote uniquement)
+    const rawStudents = isPilotSave ? localStorage.getItem(STUDENTS_STORAGE_KEY) : null;
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const studentWithSlug = {
       ...student,
@@ -1865,11 +1872,13 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       enrollmentType: student.enrollmentType || 'nouveau',
       updatedAt: student.updatedAt || new Date().toISOString(),
     };
-    const filteredStudents = prevStudents.filter(
-      (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
-    );
-    const updatedStudents = [studentWithSlug, ...filteredStudents];
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+    if (isPilotSave) {
+      const filteredStudents = prevStudents.filter(
+        (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
+      );
+      const updatedStudents = [studentWithSlug, ...filteredStudents];
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+    }
 
     // 2. Sauvegarder dans la clé spécifique à l'école
     const schoolKey = `${STUDENTS_STORAGE_KEY}_${slug}`;
@@ -1884,21 +1893,23 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
       localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify([studentWithSlug, ...filteredSchool]));
     }
 
-    // 3. Sauvegarder la facture dans la clé globale
-    const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+    // 3. Sauvegarder la facture dans la clé globale (pilote uniquement)
+    const rawInvoices = isPilotSave ? localStorage.getItem(INVOICES_STORAGE_KEY) : null;
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
-    // Dedoublonnage par eleve + type de frais (pas seulement par id/numero de recu) : le
-    // numero de recu peut changer de format au fil du temps, ce qui laisserait sinon une
-    // ancienne facture orpheline en plus de la nouvelle et fausserait le Solde Net de Caisse.
-    const filteredInvoices = prevInvoices.filter(
-      (inv) =>
-        inv.id !== invoice.id &&
-        inv.invoiceNumber !== invoice.invoiceNumber &&
-        !(inv.studentId === invoice.studentId && inv.feeType === invoice.feeType)
-    );
     const invoiceWithSlug = { ...invoice, schoolSlug: slug, schoolId: slug };
-    const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
-    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+    if (isPilotSave) {
+      // Dedoublonnage par eleve + type de frais (pas seulement par id/numero de recu) : le
+      // numero de recu peut changer de format au fil du temps, ce qui laisserait sinon une
+      // ancienne facture orpheline en plus de la nouvelle et fausserait le Solde Net de Caisse.
+      const filteredInvoices = prevInvoices.filter(
+        (inv) =>
+          inv.id !== invoice.id &&
+          inv.invoiceNumber !== invoice.invoiceNumber &&
+          !(inv.studentId === invoice.studentId && inv.feeType === invoice.feeType)
+      );
+      const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+    }
 
     // 4. Sauvegarder la facture dans la clé spécifique à l'école
     const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
@@ -1954,16 +1965,19 @@ export function saveLivePaymentInvoice(invoice: Invoice, schoolSlug: string = 'e
 
   try {
     const slug = schoolSlug || 'epc-manoi';
-
-    // 1. Sauvegarder dans la clé globale
-    const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
-    const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
-    const filteredInvoices = prevInvoices.filter(
-      (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-    );
+    const isPilotSave = slug === 'epc-manoi';
     const invoiceWithSlug: Invoice = { ...invoice, schoolSlug: slug, schoolId: slug };
-    const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
-    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+
+    // 1. Sauvegarder dans la clé globale (pilote uniquement)
+    if (isPilotSave) {
+      const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
+      const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
+      const filteredInvoices = prevInvoices.filter(
+        (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
+      );
+      const updatedInvoices = [invoiceWithSlug, ...filteredInvoices];
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
+    }
 
     // 2. Sauvegarder dans la clé spécifique à l'école
     const invSchoolKey = `${INVOICES_STORAGE_KEY}_${slug}`;
@@ -2014,8 +2028,15 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
   if (typeof window === 'undefined') return;
 
   try {
-    // 1. Sauvegarder dans la clé globale et la clé d'école
-    const rawStudents = localStorage.getItem(STUDENTS_STORAGE_KEY);
+    // École pilote : seule elle lit/écrit encore la clé globale non suffixée (données réelles
+    // déjà stockées ainsi). Toute autre école ne doit JAMAIS y toucher : lire/écrire cette clé
+    // pour une autre école mélangeait ses élèves modifiés (édition depuis Classes, Cantine,
+    // Transport, Internat, Réductions...) avec le registre réel du pilote, avec un vrai risque
+    // de remplacer un élève réel du pilote partageant le même id/numéro généré de façon similaire.
+    const isPilotUpdate = !schoolSlug || schoolSlug === 'epc-manoi';
+
+    // 1. Sauvegarder dans la clé globale (pilote uniquement) et la clé d'école
+    const rawStudents = isPilotUpdate ? localStorage.getItem(STUDENTS_STORAGE_KEY) : null;
     const prevStudents: Student[] = rawStudents ? JSON.parse(rawStudents) : [];
     const studentWithSlug = {
       ...student,
@@ -2024,11 +2045,13 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       schoolId: schoolSlug || 'epc-manoi',
       updatedAt: student.updatedAt || new Date().toISOString(),
     };
-    const updatedStudents = [
-      studentWithSlug,
-      ...prevStudents.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
-    ];
-    localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+    if (isPilotUpdate) {
+      const updatedStudents = [
+        studentWithSlug,
+        ...prevStudents.filter((s) => s.id !== student.id && s.studentNumber !== student.studentNumber),
+      ];
+      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
+    }
 
     const schoolKey = `${STUDENTS_STORAGE_KEY}_${schoolSlug || 'epc-manoi'}`;
     const rawSchool = localStorage.getItem(schoolKey);
@@ -2126,13 +2149,15 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       status: student.tuitionStatus === 'paid' ? 'paid' : student.paidAmount > 0 ? 'partial' : 'sent',
     };
 
-    const nextInvoices = [
-      updatedInvoice,
-      ...prevInvoices.filter(
-        (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
-      ),
-    ];
-    localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
+    if (isPilotUpdate) {
+      const nextInvoices = [
+        updatedInvoice,
+        ...prevInvoices.filter(
+          (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
+        ),
+      ];
+      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
+    }
 
     const nextInvSchool = [
       updatedInvoice,
@@ -3360,7 +3385,8 @@ export function resetSchoolData(
       if (isResettingPilot) localStorage.setItem('schoolflow_diverse_notes_v1', JSON.stringify([]));
       localStorage.setItem(`schoolflow_diverse_notes_v1_${slug}`, JSON.stringify([]));
       localStorage.removeItem('schoolflow_notes_diverses_v1');
-      localStorage.removeItem(VALIDATED_BULLETINS_KEY);
+      if (isResettingPilot) localStorage.removeItem(VALIDATED_BULLETINS_KEY);
+      localStorage.removeItem(`${VALIDATED_BULLETINS_KEY}_${slug}`);
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -3495,7 +3521,10 @@ export function resetSchoolData(
     status.isDataReset = true;
     status.lastResetAt = new Date().toISOString();
     localStorage.setItem(`${SCHOOL_STATUS_PREFIX}${slug}`, JSON.stringify(status));
-    localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
+    // Ne jamais écraser le statut d'abonnement du pilote quand une AUTRE école est réinitialisée.
+    if (isResettingPilot) {
+      localStorage.setItem(`${SCHOOL_STATUS_PREFIX}epc-manoi`, JSON.stringify(status));
+    }
 
     // 14. Diffusion temps réel parallèle immédiate
     broadcastLiveUpdate({
@@ -3552,7 +3581,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem(`schoolflow_parent_messages_v1_${slug}`);
     localStorage.removeItem(`schoolflow_broadcast_records_v1_${slug}`);
     localStorage.removeItem('schoolflow_active_session_v2');
-    localStorage.removeItem(VALIDATED_BULLETINS_KEY);
+    localStorage.removeItem(`${VALIDATED_BULLETINS_KEY}_${slug}`);
     localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`schoolflow_teachers_data_v2_${slug}`);
@@ -3577,6 +3606,7 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
       localStorage.removeItem('schoolflow_broadcast_records_v1');
       localStorage.removeItem(DOCS_STATUS_KEY);
       localStorage.removeItem('schoolflow_documents_status_v5');
+      localStorage.removeItem(VALIDATED_BULLETINS_KEY);
       localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
       localStorage.removeItem('schoolflow_teachers_data_v2');
       localStorage.removeItem('schoolflow_teachers_v1');
@@ -3631,10 +3661,17 @@ export function restoreSchoolAccount(slug: string = 'epc-manoi'): void {
 /**
  * Récupère les lauréats officiellement validés depuis les bulletins scolaires pour une classe et un trimestre
  */
-export function getValidatedClassRankings(grade: string, period: string): any[] | null {
+// École pilote : clé historique non suffixée. Toute autre école : clé dédiée — cette clé n'avait
+// auparavant AUCUN scoping par école : deux écoles ayant chacune une classe/trimestre du même
+// nom (très courant, ex "6ème" / "1er Trimestre") partageaient litteralement le même Tableau
+// d'Honneur (noms, moyennes, matricules des lauréats de l'AUTRE école).
+const validatedBulletinsKey = (schoolSlug: string) =>
+  (!schoolSlug || schoolSlug === 'epc-manoi') ? VALIDATED_BULLETINS_KEY : `${VALIDATED_BULLETINS_KEY}_${schoolSlug}`;
+
+export function getValidatedClassRankings(grade: string, period: string, schoolSlug: string = 'epc-manoi'): any[] | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(VALIDATED_BULLETINS_KEY);
+    const raw = localStorage.getItem(validatedBulletinsKey(schoolSlug));
     if (!raw) return null;
     const all = JSON.parse(raw);
     const key = `${grade}_${period}`.toLowerCase().replace(/\s+/g, '_');
@@ -3647,20 +3684,22 @@ export function getValidatedClassRankings(grade: string, period: string): any[] 
 /**
  * Enregistre la validation des bulletins scolaires d'une classe pour générer les Tableaux d'Honneur (avec gestion des Ex æquo)
  */
-export function saveValidatedClassRankings(grade: string, period: string, rankings: any[]): void {
+export function saveValidatedClassRankings(grade: string, period: string, rankings: any[], schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem(VALIDATED_BULLETINS_KEY);
+    const storageKey = validatedBulletinsKey(schoolSlug);
+    const raw = localStorage.getItem(storageKey);
     const all = raw ? JSON.parse(raw) : {};
     const key = `${grade}_${period}`.toLowerCase().replace(/\s+/g, '_');
     all[key] = rankings;
-    localStorage.setItem(VALIDATED_BULLETINS_KEY, JSON.stringify(all));
+    localStorage.setItem(storageKey, JSON.stringify(all));
 
     broadcastLiveUpdate({
       action: 'bulletins_validated',
       grade,
       period,
       count: rankings.length,
+      schoolSlug,
     });
   } catch (e) {}
 }
@@ -3668,20 +3707,22 @@ export function saveValidatedClassRankings(grade: string, period: string, rankin
 /**
  * Réinitialise ou annule la validation des bulletins pour une classe (remet les tableaux d'honneur à vide)
  */
-export function clearValidatedClassRankings(grade: string, period: string): void {
+export function clearValidatedClassRankings(grade: string, period: string, schoolSlug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   try {
-    const raw = localStorage.getItem(VALIDATED_BULLETINS_KEY);
+    const storageKey = validatedBulletinsKey(schoolSlug);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return;
     const all = JSON.parse(raw);
     const key = `${grade}_${period}`.toLowerCase().replace(/\s+/g, '_');
     delete all[key];
-    localStorage.setItem(VALIDATED_BULLETINS_KEY, JSON.stringify(all));
+    localStorage.setItem(storageKey, JSON.stringify(all));
 
     broadcastLiveUpdate({
       action: 'bulletins_cleared',
       grade,
       period,
+      schoolSlug,
     });
   } catch (e) {}
 }

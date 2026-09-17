@@ -280,10 +280,12 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
   const getInitialTeachers = (): TeacherRecord[] => {
     if (typeof window !== 'undefined') {
       try {
-        const sub = getSchoolSubscription(schoolSlug);
-        if (sub?.isDataReset) {
-          return [];
-        }
+        // Remarque : ne JAMAIS se fier au drapeau isDataReset pour décider d'afficher une liste
+        // vide - il reste "true" indéfiniment après le premier reset (jamais remis à false), ce
+        // qui masquait ensuite pour toujours tout enseignant réellement ajouté après ce reset
+        // (il disparaissait de l'écran dès le prochain rafraîchissement). Le contenu réel de
+        // localStorage (déjà vidé par resetSchoolData au moment du reset) est la seule source
+        // fiable de vérité ici.
         const saved =
           schoolSlug === 'epc-manoi'
             ? localStorage.getItem(TEACHERS_STORAGE_KEY)
@@ -302,17 +304,17 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
                   !g.toLowerCase().includes('terminale')
               ),
             }));
-          return sanitized.length > 0 ? sanitized : initialTeachers;
-        }
-        // Pour les nouveaux établissements ou après reset, liste vierge
-        if (schoolSlug !== 'epc-manoi' ) {
-          return [];
+          // Un tableau réel sauvegardé mais vide EST le vrai état (reset volontaire ou personnel
+          // pas encore saisi) - retomber sur les faux enseignants de démonstration ici annulait
+          // silencieusement toute réinitialisation "Personnel" faite depuis les Paramètres.
+          return sanitized;
         }
       } catch (e) {
         // ignore
       }
     }
-    return initialTeachers;
+    // Aucune clé jamais enregistrée : aucun enseignant réel n'existe encore.
+    return [];
   };
 
   const [teachers, setTeachers] = useState<TeacherRecord[]>(getInitialTeachers);
@@ -406,9 +408,16 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
 
   const handleAddTeacher = (e: React.FormEvent) => {
     e.preventDefault();
+    // Prochain numéro = plus grand numéro existant + 1 (jamais teachers.length + 1, qui pouvait
+    // entrer en collision avec un matricule/id déjà utilisé après la suppression d'un
+    // enseignant au milieu de la liste).
+    const nextSeq = teachers.reduce((max, t) => {
+      const m = t.id?.match(/(\d+)$/) || t.matricule?.match(/(\d+)$/);
+      return m ? Math.max(max, parseInt(m[1], 10)) : max;
+    }, 0) + 1;
     const newRecord: TeacherRecord = {
-      id: `tch-${(teachers.length + 1).toString().padStart(3, '0')}`,
-      matricule: `ENS-2026-${(teachers.length + 1).toString().padStart(3, '0')}`,
+      id: `tch-${nextSeq.toString().padStart(3, '0')}`,
+      matricule: `ENS-2026-${nextSeq.toString().padStart(3, '0')}`,
       lastName: formLastName.trim().toUpperCase(),
       firstName: formFirstName.trim(),
       gender: formGender,

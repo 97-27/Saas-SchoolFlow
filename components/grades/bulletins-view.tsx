@@ -597,8 +597,8 @@ export function BulletinsView({
 
   // Bulletins déjà validés pour cette classe et ce trimestre (alimente le Tableau d'Honneur)
   const validatedRankingsForClass = useMemo(
-    () => getValidatedClassRankings(selectedClass, selectedPeriod),
-    [selectedClass, selectedPeriod, studentsWithGrades]
+    () => getValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug),
+    [selectedClass, selectedPeriod, studentsWithGrades, schoolSlug]
   );
 
   // Valider les bulletins de la classe : envoie les lauréats réels (Top 3 + moyenne >= 14) au
@@ -636,7 +636,7 @@ export function BulletinsView({
         };
       });
 
-    saveValidatedClassRankings(selectedClass, selectedPeriod, laureates);
+    saveValidatedClassRankings(selectedClass, selectedPeriod, laureates, schoolSlug);
     setToastMessage(`✓ Bulletins de la classe de ${selectedClass} validés — ${laureates.length} lauréat(s) désormais visibles au Tableau d'Honneur.`);
     setTimeout(() => setToastMessage(null), 4500);
   };

@@ -66,14 +66,14 @@ export function DistinctionsView({
 
   // État de validation des bulletins pour la classe et le trimestre sélectionnés
   const [validatedRankings, setValidatedRankings] = useState<any[] | null>(() =>
-    getValidatedClassRankings(selectedClass, selectedPeriod)
+    getValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug)
   );
 
   const syncLiveState = () => {
     setCurrentSchool(getLiveSchool(schoolSlug, school || defaultSchool));
     const live = getLiveStudents(initialStudents, schoolSlug);
     setStudents(live || []);
-    setValidatedRankings(getValidatedClassRankings(selectedClass, selectedPeriod));
+    setValidatedRankings(getValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug));
   };
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function DistinctionsView({
   }, [validatedRankings]);
 
   const handleClearClassBulletins = () => {
-    clearValidatedClassRankings(selectedClass, selectedPeriod);
+    clearValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug);
     setValidatedRankings(null);
     setToastMessage(`Les diplômes de la classe de ${selectedClass} ont été remis en attente des bulletins.`);
     setTimeout(() => setToastMessage(null), 4000);

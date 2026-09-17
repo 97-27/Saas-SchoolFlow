@@ -202,7 +202,10 @@ export function ParentBulletinsView({
     }
 
     const parentName = activeSession?.fullName || activeFamily?.guardianName || 'Parent d’élève';
-    const parentPhone = activeFamily?.phone || activeFamily?.whatsapp || '+225 07 08 09 10 11';
+    // Aucun numéro générique de repli : un numéro factice partagé par tous les parents sans
+    // téléphone renseigné faisait que deux familles différentes filtrant sur ce même numéro
+    // voyaient les messages privés l'une de l'autre.
+    const parentPhone = activeFamily?.phone || activeFamily?.whatsapp || '';
     const childName = activeChild ? `${activeChild.firstName} ${activeChild.lastName}` : 'Élève';
     const childGrade = activeChild?.grade || 'Collège';
 
@@ -221,17 +224,16 @@ export function ParentBulletinsView({
     };
 
     try {
+      // École pilote : clé historique non suffixée. Toute autre école : clé dédiée - écrire
+      // sans condition dans la clé globale faisait qu'un message envoyé depuis cette page par
+      // une école d'essai atterrissait dans la boîte de réception réelle d'epc-manoi.
       const PARENT_MESSAGES_KEY = 'schoolflow_parent_messages_v1';
-      const keySchool = `${PARENT_MESSAGES_KEY}_${schoolSlug}`;
+      const isPilotMsg = !schoolSlug || schoolSlug === 'epc-manoi';
+      const keySchool = isPilotMsg ? PARENT_MESSAGES_KEY : `${PARENT_MESSAGES_KEY}_${schoolSlug}`;
       const rawSchool = localStorage.getItem(keySchool);
       const prevSchool = rawSchool ? JSON.parse(rawSchool) : [];
       const updatedSchool = [newMsg, ...prevSchool];
       localStorage.setItem(keySchool, JSON.stringify(updatedSchool));
-
-      const rawGlobal = localStorage.getItem(PARENT_MESSAGES_KEY);
-      const prevGlobal = rawGlobal ? JSON.parse(rawGlobal) : [];
-      const updatedGlobal = [newMsg, ...prevGlobal];
-      localStorage.setItem(PARENT_MESSAGES_KEY, JSON.stringify(updatedGlobal));
 
       broadcastLiveUpdate({
         action: 'parent_message_sent',
@@ -280,8 +282,8 @@ export function ParentBulletinsView({
         map.set(key, {
           key,
           guardianName: gName,
-          phone: stu.guardianPhone || stu.whatsappPhone || '+225 07 08 09 10 11',
-          whatsapp: stu.whatsappPhone || stu.guardianPhone || '+225 07 08 09 10 11',
+          phone: stu.guardianPhone || stu.whatsappPhone || '',
+          whatsapp: stu.whatsappPhone || stu.guardianPhone || '',
           children: [],
         });
       }
@@ -412,6 +414,44 @@ export function ParentBulletinsView({
       });
     }
 
+    // Calcule la moyenne générale réelle d'un élève quelconque de la classe à partir des mêmes
+    // notes déjà chargées (chaque clé de matière contient les notes de TOUS les élèves de la
+    // classe, indexées par id) - réutilisé plus bas pour le rang et les moyennes de classe
+    // réelles, au lieu des valeurs fictives codées en dur utilisées auparavant.
+    const calcGeneralAverage = (studentId: string): number | null => {
+      let weighted = 0;
+      let coeffSum = 0;
+      subjectsList.forEach((sub) => {
+        const e = savedSubjectGrades[sub.name]?.[studentId];
+        if (!e) return;
+        const interros = [e.int1, e.int2, e.int3, e.int4, e.int5]
+          .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
+          .filter((v: any): v is number => v !== null);
+        const devoirs = [e.dev1, e.dev2]
+          .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
+          .filter((v: any): v is number => v !== null);
+        const compVal = e.comp !== '' && e.comp !== null && !isNaN(parseFloat(e.comp)) ? parseFloat(e.comp) : null;
+        if (interros.length === 0 && devoirs.length === 0 && compVal === null) return;
+        const avgInt = interros.length > 0 ? interros.reduce((a: number, b: number) => a + b, 0) / interros.length : null;
+        const avgDev = devoirs.length > 0 ? devoirs.reduce((a: number, b: number) => a + b, 0) / devoirs.length : null;
+        let subjAvg: number;
+        if (avgInt !== null && avgDev !== null && compVal !== null) {
+          subjAvg = ((avgInt + avgDev) / 2 + compVal * 2) / 3;
+        } else {
+          const allNotes = [...interros, ...devoirs, ...(compVal !== null ? [compVal, compVal] : [])];
+          subjAvg = allNotes.reduce((a: number, b: number) => a + b, 0) / allNotes.length;
+        }
+        weighted += subjAvg * sub.coef;
+        coeffSum += sub.coef;
+      });
+      return coeffSum > 0 ? weighted / coeffSum : null;
+    };
+
+    const classmates = allStudents.filter((s) => s.grade === activeChild.grade);
+    const classAverages = classmates
+      .map((s) => calcGeneralAverage(s.id))
+      .filter((a): a is number => a !== null);
+
     const computedSubjects: SubjectEvaluation[] = subjectsList.map((sub, idx) => {
       const entry = savedSubjectGrades[sub.name]?.[activeChild.id];
       let subjectAverage: number | null = null;
@@ -472,6 +512,36 @@ export function ParentBulletinsView({
       const totalPointsStr = subjectAverage !== null ? (subjectAverage * sub.coef).toFixed(1) : '—';
       const moyMatStr = subjectAverage !== null ? subjectAverage.toFixed(2) : '—';
 
+      // Rang réel de l'élève dans SA classe pour cette matière (et non plus un rang fictif
+      // dérivé de la position de la matière dans la liste, identique pour tout le monde).
+      let subjectRankStr = '—';
+      if (subjectAverage !== null) {
+        const classmateAverages = classmates
+          .map((cm) => {
+            const cmEntry = savedSubjectGrades[sub.name]?.[cm.id];
+            if (!cmEntry) return null;
+            const cInt = [cmEntry.int1, cmEntry.int2, cmEntry.int3, cmEntry.int4, cmEntry.int5]
+              .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
+              .filter((v: any): v is number => v !== null);
+            const cDev = [cmEntry.dev1, cmEntry.dev2]
+              .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
+              .filter((v: any): v is number => v !== null);
+            const cComp = cmEntry.comp !== '' && cmEntry.comp !== null && !isNaN(parseFloat(cmEntry.comp)) ? parseFloat(cmEntry.comp) : null;
+            if (cInt.length === 0 && cDev.length === 0 && cComp === null) return null;
+            const cAvgInt = cInt.length > 0 ? cInt.reduce((a: number, b: number) => a + b, 0) / cInt.length : null;
+            const cAvgDev = cDev.length > 0 ? cDev.reduce((a: number, b: number) => a + b, 0) / cDev.length : null;
+            if (cAvgInt !== null && cAvgDev !== null && cComp !== null) {
+              return ((cAvgInt + cAvgDev) / 2 + cComp * 2) / 3;
+            }
+            const allN = [...cInt, ...cDev, ...(cComp !== null ? [cComp, cComp] : [])];
+            return allN.reduce((a: number, b: number) => a + b, 0) / allN.length;
+          })
+          .filter((a): a is number => a !== null);
+        const better = classmateAverages.filter((a) => a > subjectAverage).length;
+        const subjRank = better + 1;
+        subjectRankStr = subjRank === 1 ? '1er' : `${subjRank}ème`;
+      }
+
       return {
         name: sub.name,
         coef: sub.coef,
@@ -485,7 +555,7 @@ export function ParentBulletinsView({
         moyDev: dev1Str !== '—' || dev2Str !== '—' ? dev1Str : '—',
         moyMat: moyMatStr,
         points: totalPointsStr,
-        rank: subjectAverage !== null ? (idx === 0 ? '1er' : idx === 1 ? '2ème' : `${idx + 1}e`) : '—',
+        rank: subjectRankStr,
         appreciation,
       };
     });
@@ -494,33 +564,46 @@ export function ParentBulletinsView({
     const generalAverage = hasGrades ? (totalWeightedNotes / totalCoeffWithNotes).toFixed(2) : '—';
     const numAvg = hasGrades ? parseFloat(generalAverage) : null;
 
+    // Rang réel dans la classe (nombre de camarades avec une moyenne strictement supérieure,
+    // + 1), et non plus un rang fictif dérivé de simples paliers de moyenne. La mention reste
+    // basée sur la moyenne elle-même (seuils pédagogiques usuels), mais le rang affiché
+    // correspond désormais à la vraie position parmi les camarades réellement notés.
     let rank = '—';
     let mention = 'En attente de notation';
     let mentionBadge = 'bg-slate-100 text-slate-600 border-slate-200';
 
     if (numAvg !== null) {
+      const betterCount = classAverages.filter((a) => a > numAvg).length;
+      const realRank = betterCount + 1;
+      rank = realRank === 1 ? '1er' : `${realRank}ème`;
+
       if (numAvg >= 16) {
-        rank = '1er';
         mention = 'Tableau d’Honneur & Félicitations';
         mentionBadge = 'bg-emerald-100 text-emerald-900 border-emerald-300 font-extrabold';
       } else if (numAvg >= 14) {
-        rank = '3ème';
         mention = 'Tableau d’Honneur & Encouragements';
         mentionBadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
       } else if (numAvg >= 12) {
-        rank = '7ème';
         mention = 'Tableau d’Honneur';
         mentionBadge = 'bg-amber-50 text-amber-800 border-amber-200';
       } else if (numAvg >= 10) {
-        rank = '15ème';
         mention = 'Passable';
         mentionBadge = 'bg-slate-100 text-slate-700 border-slate-200';
       } else {
-        rank = 'Non classé';
         mention = 'Avertissement Travail';
         mentionBadge = 'bg-rose-50 text-rose-700 border-rose-200';
       }
     }
+
+    // Moyennes de classe réelles (calculées depuis les mêmes notes que ci-dessus, sur tous les
+    // camarades de la classe ayant au moins une note) - '—' si aucun camarade n'a encore de
+    // note, plutôt que les valeurs fixes "12.45 / 17.20 / 07.80" affichées auparavant pour
+    // n'importe quel élève de n'importe quelle classe.
+    const realClassAverage = classAverages.length > 0
+      ? (classAverages.reduce((a, b) => a + b, 0) / classAverages.length).toFixed(2)
+      : '—';
+    const realMaxAverage = classAverages.length > 0 ? Math.max(...classAverages).toFixed(2) : '—';
+    const realMinAverage = classAverages.length > 0 ? Math.min(...classAverages).toFixed(2) : '—';
 
     return {
       computedSubjects,
@@ -530,14 +613,16 @@ export function ParentBulletinsView({
       rank,
       mention,
       mentionBadge,
-      classAverage: hasGrades ? '12.45' : '—',
-      maxAverage: hasGrades ? '17.20' : '—',
-      minAverage: hasGrades ? '07.80' : '—',
-      attendanceRate: '100',
-      absenceHours: '0 heure',
+      classAverage: realClassAverage,
+      maxAverage: realMaxAverage,
+      minAverage: realMinAverage,
+      // Assiduité : aucune donnée de présence réelle n'est encore reliée à cet écran -
+      // afficher "Non renseigné" plutôt qu'un taux de 100% fictif identique pour tout élève.
+      attendanceRate: 'Non renseigné',
+      absenceHours: 'Non renseigné',
       hasGrades,
     };
-  }, [activeChild, subjectsList, schoolSlug, selectedTerm]);
+  }, [activeChild, subjectsList, schoolSlug, selectedTerm, allStudents]);
 
   // Impression STRICTEMENT en Format Paysage A4 (1 Seule Page Pleine Hauteur)
   const handlePrintLandscape = () => {
@@ -1133,11 +1218,11 @@ export function ParentBulletinsView({
                 1. Assiduité & Conduite
               </h4>
               <p className="text-slate-600 text-[9.5px]">
-                Absences : <strong className="text-slate-900">{stats.absenceHours}</strong> • Conduite : <strong className="text-emerald-700 font-bold">Exemplaire</strong>
+                Absences : <strong className="text-slate-900">{stats.absenceHours}</strong>
               </p>
             </div>
             <div className="pt-0.5 border-t border-slate-200">
-              <p className="text-[8.5px] font-bold text-slate-700 uppercase">Le Professeur Principal : <span className="font-serif italic text-slate-800 font-normal">Signé M. Kouamé</span></p>
+              <p className="text-[8.5px] font-bold text-slate-700 uppercase">Le Professeur Principal</p>
             </div>
           </div>
 
@@ -1148,7 +1233,7 @@ export function ParentBulletinsView({
                 2. Avis du Conseil de Classe
               </h4>
               <p className="text-emerald-950 font-medium italic text-[9px] leading-tight">
-                « Trimestre très satisfaisant. Félicitations du conseil pour la rigueur et le travail exemplaire. »
+                « {stats.mention} »
               </p>
             </div>
             <div className="pt-0.5 border-t border-emerald-200 flex justify-between items-center text-[8.5px]">
