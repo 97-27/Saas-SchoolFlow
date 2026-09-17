@@ -108,6 +108,31 @@ export function CanteenView({
   const scopedCanteenPayKey = isPilotSchool ? CANTEEN_PAYMENTS_KEY : `${CANTEEN_PAYMENTS_KEY}_${schoolSlug}`;
   const scopedCanteenMenuKey = isPilotSchool ? CANTEEN_MENU_KEY : `${CANTEEN_MENU_KEY}_${schoolSlug}`;
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à la copie en mémoire chargée au montage ou au dernier
+  // DATA_UPDATED_EVENT : sans cela, un membre du personnel qui enregistre une nouvelle
+  // souscription/un paiement pendant qu'un collègue (autre onglet/appareil) vient d'en
+  // enregistrer un autre écrase silencieusement la modification de l'autre avec sa propre copie
+  // périmée de la carte complète (même bug que celui déjà corrigé sur la page Présences).
+  const readFreshCanteenSubMap = (): Record<string, { diet: string; rate: number; discount?: number }> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedCanteenSubKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+  const readFreshCanteenPayMap = (): Record<string, Record<string, boolean>> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedCanteenPayKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -380,8 +405,9 @@ export function CanteenView({
     const current = subscribers.find((s) => s.id === stuId);
     if (!current) return;
 
+    const freshSub = readFreshCanteenSubMap();
     const nextMap = {
-      ...customDietMap,
+      ...freshSub,
       [stuId]: {
         diet: current.dietaryRestrictions,
         rate: newRate,
@@ -390,7 +416,7 @@ export function CanteenView({
     };
 
     setCustomDietMap(nextMap);
-    saveLiveCanteenData(nextMap, monthlyPayments, undefined, schoolSlug);
+    saveLiveCanteenData(nextMap, readFreshCanteenPayMap(), undefined, schoolSlug);
   };
 
   // Basculer un mois pour l'élève en édition
@@ -424,13 +450,13 @@ export function CanteenView({
 
     const stuId = selectedStudentForMonths.id;
     const nextPayments = {
-      ...monthlyPayments,
+      ...readFreshCanteenPayMap(),
       [stuId]: selectedStudentForMonths.monthsState,
     };
     setMonthlyPayments(nextPayments);
 
     const nextCustom = {
-      ...customDietMap,
+      ...readFreshCanteenSubMap(),
       [stuId]: {
         diet: selectedStudentForMonths.dietaryRestrictions,
         rate: selectedStudentForMonths.monthlyRate,
@@ -495,7 +521,7 @@ export function CanteenView({
     const discount = parseInt(newSubDiscount, 10) || 0;
 
     const nextCustom = {
-      ...customDietMap,
+      ...readFreshCanteenSubMap(),
       [newSubStudentId]: {
         diet: newSubDiet,
         rate,
@@ -505,7 +531,7 @@ export function CanteenView({
     setCustomDietMap(nextCustom);
 
     const nextPayments = {
-      ...monthlyPayments,
+      ...readFreshCanteenPayMap(),
       [newSubStudentId]: {
         Septembre: true,
         Octobre: false,
@@ -597,7 +623,7 @@ export function CanteenView({
       }
 
       // b. Nettoyer customDietMap
-      const nextMap = { ...customDietMap };
+      const nextMap = { ...readFreshCanteenSubMap() };
       delete nextMap[studentId];
       if (studentNumber) delete nextMap[studentNumber];
       if (matricule) delete nextMap[matricule];
@@ -609,7 +635,7 @@ export function CanteenView({
       }
 
       // c. Nettoyer monthlyPayments
-      const nextPayments = { ...monthlyPayments };
+      const nextPayments = { ...readFreshCanteenPayMap() };
       delete nextPayments[studentId];
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];
@@ -666,7 +692,7 @@ export function CanteenView({
       const matricule = selectedStudentForReceipt.matricule;
 
       // Nettoyer map et payments
-      const nextMap = { ...customDietMap };
+      const nextMap = { ...readFreshCanteenSubMap() };
       delete nextMap[studentId];
       if (studentNumber) delete nextMap[studentNumber];
       if (matricule) delete nextMap[matricule];
@@ -677,7 +703,7 @@ export function CanteenView({
         } catch (e) {}
       }
 
-      const nextPayments = { ...monthlyPayments };
+      const nextPayments = { ...readFreshCanteenPayMap() };
       delete nextPayments[studentId];
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];

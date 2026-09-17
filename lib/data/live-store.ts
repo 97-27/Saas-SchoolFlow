@@ -2696,12 +2696,18 @@ export function recordStaffLogin(
     const now = new Date();
     const formattedDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} à ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
+    // Quand un code d'authentification est fourni (cas normal de connexion), c'est le SEUL
+    // critère de correspondance valide : les heuristiques par nom/rôle ci-dessous ne sont
+    // qu'un repli pour l'ancien cas sans code, sinon la connexion d'un enseignant renommait
+    // et marquait "Actif" n'importe quel AUTRE enseignant du même poste dont le nom complet
+    // contenait (même partiellement) celui de la personne connectée, ou tout titulaire du
+    // même rôle Directeur/Fondateur — corruption silencieuse de l'identité d'un tiers.
     const updated = users.map((u) => {
-      if (
-        (authCode && u.authCode.toUpperCase() === authCode.trim().toUpperCase()) ||
-        (u.roleId === roleId && u.fullName.toLowerCase().includes(fullName.trim().toLowerCase())) ||
-        (u.roleId === roleId && (roleId === 'directeur' || roleId === 'fondateur'))
-      ) {
+      const matches = authCode
+        ? u.authCode.toUpperCase() === authCode.trim().toUpperCase()
+        : (u.roleId === roleId && u.fullName.toLowerCase().includes(fullName.trim().toLowerCase())) ||
+          (u.roleId === roleId && (roleId === 'directeur' || roleId === 'fondateur'));
+      if (matches) {
         return {
           ...u,
           fullName: fullName.trim() || u.fullName,

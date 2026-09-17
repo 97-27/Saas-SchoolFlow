@@ -171,6 +171,20 @@ export function SalariesView({
     } catch (e) {}
   };
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à l'état React `salaries` chargé au montage ou au dernier
+  // DATA_UPDATED_EVENT — même bug que celui déjà corrigé sur Présences, Cantine, Transport,
+  // Internat, Documents et Réductions.
+  const readFreshSalaries = (): SalaryPayment[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem(scopedSalariesKey);
+      return stored ? sanitizeSalaries(JSON.parse(stored)) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
   // Formulaire d'enregistrement
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [civility, setCivility] = useState<'Mr' | 'Mme' | 'Mlle'>('Mr');
@@ -229,7 +243,8 @@ export function SalariesView({
       return;
     }
 
-    const nextIndex = salaries.reduce((max, s) => {
+    const freshSalaries = readFreshSalaries();
+    const nextIndex = freshSalaries.reduce((max, s) => {
       const m = s.receiptNumber?.match(/(\d+)$/);
       return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0) + 1;
@@ -257,7 +272,7 @@ export function SalariesView({
       createdAt: new Date().toISOString(),
     };
 
-    const updated = [newPayment, ...salaries];
+    const updated = [newPayment, ...freshSalaries];
     saveSalaries(updated);
     setSelectedSalary(newPayment);
     showToast(`✅ Bulletin & Reçu de salaire ${recNum} généré avec succès pour ${civility} ${staffName} !`);
@@ -269,7 +284,7 @@ export function SalariesView({
 
   const handleDeleteSalary = (id: string, recNum: string) => {
     if (confirm(`Confirmez-vous la suppression du reçu de salaire ${recNum} ?`)) {
-      const filtered = salaries.filter((s) => s.id !== id);
+      const filtered = readFreshSalaries().filter((s) => s.id !== id);
       saveSalaries(filtered);
       if (selectedSalary.id === id && filtered.length > 0) {
         setSelectedSalary(filtered[0]);

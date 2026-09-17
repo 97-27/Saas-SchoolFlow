@@ -72,6 +72,28 @@ export function TransportView({
   const scopedTransportSubKey = isPilotSchool ? TRANSPORT_SUBSCRIPTIONS_KEY : `${TRANSPORT_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
   const scopedTransportPayKey = isPilotSchool ? TRANSPORT_PAYMENTS_KEY : `${TRANSPORT_PAYMENTS_KEY}_${schoolSlug}`;
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à la copie en mémoire chargée au montage ou au dernier
+  // DATA_UPDATED_EVENT (même bug que celui déjà corrigé sur la page Présences et Cantine).
+  const readFreshTransportSubMap = (): Record<string, { stop: string; rate: number; discount?: number }> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedTransportSubKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+  const readFreshTransportPayMap = (): Record<string, Record<string, boolean>> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedTransportPayKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -374,7 +396,7 @@ export function TransportView({
     if (!current) return;
 
     const nextMap = {
-      ...customTransportMap,
+      ...readFreshTransportSubMap(),
       [stuId]: {
         stop: current.pickupStop,
         rate: newRate,
@@ -383,7 +405,7 @@ export function TransportView({
     };
 
     setCustomTransportMap(nextMap);
-    saveLiveTransportData(nextMap, monthlyPayments, schoolSlug);
+    saveLiveTransportData(nextMap, readFreshTransportPayMap(), schoolSlug);
   };
 
   // Basculer le statut d'un mois
@@ -418,12 +440,12 @@ export function TransportView({
     if (!selectedStudentForMonths) return;
     const stuId = selectedStudentForMonths.id;
     const newPayments = {
-      ...monthlyPayments,
+      ...readFreshTransportPayMap(),
       [stuId]: selectedStudentForMonths.monthsState,
     };
 
     const newTransportMap = {
-      ...customTransportMap,
+      ...readFreshTransportSubMap(),
       [stuId]: {
         stop: selectedStudentForMonths.pickupStop,
         rate: selectedStudentForMonths.monthlyRate,
@@ -490,7 +512,7 @@ export function TransportView({
     const discount = parseInt(newSubDiscount, 10) || 0;
 
     const nextCustom = {
-      ...customTransportMap,
+      ...readFreshTransportSubMap(),
       [newSubStudentId]: {
         stop: newSubStop,
         rate,
@@ -500,7 +522,7 @@ export function TransportView({
     setCustomTransportMap(nextCustom);
 
     const nextPayments = {
-      ...monthlyPayments,
+      ...readFreshTransportPayMap(),
       [newSubStudentId]: {
         Septembre: true,
         Octobre: false,
@@ -591,7 +613,7 @@ export function TransportView({
       }
 
       // b. Nettoyer customTransportMap
-      const nextMap = { ...customTransportMap };
+      const nextMap = { ...readFreshTransportSubMap() };
       delete nextMap[studentId];
       if (studentNumber) delete nextMap[studentNumber];
       if (matricule) delete nextMap[matricule];
@@ -603,7 +625,7 @@ export function TransportView({
       }
 
       // c. Nettoyer monthlyPayments
-      const nextPayments = { ...monthlyPayments };
+      const nextPayments = { ...readFreshTransportPayMap() };
       delete nextPayments[studentId];
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];
@@ -664,7 +686,7 @@ export function TransportView({
       const matricule = selectedStudentForReceipt.matricule;
 
       // Nettoyer transport map et payments
-      const nextMap = { ...customTransportMap };
+      const nextMap = { ...readFreshTransportSubMap() };
       delete nextMap[studentId];
       if (studentNumber) delete nextMap[studentNumber];
       if (matricule) delete nextMap[matricule];
@@ -675,7 +697,7 @@ export function TransportView({
         } catch (e) {}
       }
 
-      const nextPayments = { ...monthlyPayments };
+      const nextPayments = { ...readFreshTransportPayMap() };
       delete nextPayments[studentId];
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];

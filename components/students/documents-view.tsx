@@ -117,6 +117,20 @@ export function DocumentsView({
     }
   };
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à l'état React `prev` (potentiellement périmé si un autre
+  // onglet/appareil vient d'enregistrer un document pour un autre élève) — même bug que celui
+  // déjà corrigé sur Présences, Cantine, Transport et Internat.
+  const readFreshDocRecords = (): Record<string, StudentDocumentRecord> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedDocsStatusKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (err) {
+      return {};
+    }
+  };
+
   const loadDocsStatus = () => {
     if (typeof window === 'undefined') return;
     try {
@@ -380,8 +394,9 @@ export function DocumentsView({
       return;
     }
 
-    setDocRecords((prev) => {
-      const current = prev[selectedStudentForDoc] || {
+    {
+      const fresh = readFreshDocRecords();
+      const current = fresh[selectedStudentForDoc] || {
         studentId: selectedStudentForDoc,
         hasBirthCertificate: false,
         hasReportCard: false,
@@ -414,7 +429,8 @@ export function DocumentsView({
         updated.otherDocs.push(newOtherDoc);
       }
 
-      const nextRecords = { ...prev, [selectedStudentForDoc]: updated };
+      const nextRecords = { ...fresh, [selectedStudentForDoc]: updated };
+      setDocRecords(nextRecords);
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(scopedDocsStatusKey, JSON.stringify(nextRecords));
@@ -428,8 +444,7 @@ export function DocumentsView({
           console.error('Erreur sauvegarde doc status', err);
         }
       }
-      return nextRecords;
-    });
+    }
 
     const studentFound = students.find((s) => s.id === selectedStudentForDoc);
     const docLabels: Record<string, string> = {
@@ -451,21 +466,21 @@ export function DocumentsView({
 
   // Suppression d'un autre document
   const handleDeleteOtherDoc = (studentId: string, docId: string) => {
-    setDocRecords((prev) => {
-      const current = prev[studentId];
-      if (!current) return prev;
+    const fresh = readFreshDocRecords();
+    const current = fresh[studentId] || docRecords[studentId];
+    if (current) {
       const updated = {
         ...current,
         otherDocs: current.otherDocs.filter((d) => d.id !== docId),
       };
-      const next = { ...prev, [studentId]: updated };
+      const next = { ...fresh, [studentId]: updated };
+      setDocRecords(next);
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem(scopedDocsStatusKey, JSON.stringify(next));
         } catch (e) {}
       }
-      return next;
-    });
+    }
 
     if (viewOtherDocsStudent) {
       setViewOtherDocsStudent((prev) =>

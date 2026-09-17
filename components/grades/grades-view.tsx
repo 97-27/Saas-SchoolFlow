@@ -603,7 +603,14 @@ export function GradesView({
     }
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(gradesMap));
+        // Fusionne avec la version la plus fraîche présente en stockage plutôt que d'écraser à
+        // l'aveugle avec la seule copie en mémoire — si un autre enseignant/appareil a ajouté un
+        // élève ou une entrée sur cette même classe/matière/trimestre depuis le dernier
+        // chargement de cette page, sa note n'est pas effacée par cette sauvegarde.
+        const raw = localStorage.getItem(storageKey);
+        const fresh = raw ? JSON.parse(raw) : {};
+        const merged = { ...fresh, ...gradesMap };
+        localStorage.setItem(storageKey, JSON.stringify(merged));
       } catch (e) {
         // ignore
       }

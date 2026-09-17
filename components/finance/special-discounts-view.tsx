@@ -120,6 +120,19 @@ export function SpecialDiscountsView({
     );
   };
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à l'état React chargé au montage — même bug que celui
+  // déjà corrigé sur Présences, Cantine, Transport, Internat et Documents.
+  const readFreshDiscountReceipts = (): FamilyDiscountReceipt[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(scopedDiscountsKey);
+      return saved ? sanitizeReceipts(JSON.parse(saved)) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
   const [savedReceipts, setSavedReceipts] = useState<FamilyDiscountReceipt[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -495,8 +508,11 @@ export function SpecialDiscountsView({
 
   // Sauvegarder ou mettre à jour le reçu et synchroniser les élèves dans la liste générale
   const handleSaveReceipt = () => {
+    const fresh = readFreshDiscountReceipts();
+    const exists = fresh.findIndex((r) => r.receiptNumber === receiptNumber);
+
     const updatedReceipt: FamilyDiscountReceipt = {
-      id: savedReceipts[selectedReceiptIndex]?.id || `fam-${Date.now()}`,
+      id: (exists >= 0 ? fresh[exists].id : undefined) || savedReceipts[selectedReceiptIndex]?.id || `fam-${Date.now()}`,
       receiptNumber,
       parentName: parentName || 'Parent Non Renseigné',
       parentPhone,
@@ -512,14 +528,14 @@ export function SpecialDiscountsView({
       installments,
     };
 
-    const exists = savedReceipts.findIndex((r) => r.receiptNumber === receiptNumber);
     let updatedList: FamilyDiscountReceipt[];
     if (exists >= 0) {
-      updatedList = [...savedReceipts];
+      updatedList = [...fresh];
       updatedList[exists] = updatedReceipt;
+      setSelectedReceiptIndex(exists);
     } else {
-      updatedList = [...savedReceipts, updatedReceipt];
-      setSelectedReceiptIndex(savedReceipts.length);
+      updatedList = [...fresh, updatedReceipt];
+      setSelectedReceiptIndex(fresh.length);
     }
 
     setSavedReceipts(updatedList);

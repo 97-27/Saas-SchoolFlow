@@ -101,6 +101,39 @@ export function BoardingView({
   const scopedBoardingSubKey = isPilotSchool ? BOARDING_SUBSCRIPTIONS_KEY : `${BOARDING_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
   const scopedBoardingPayKey = isPilotSchool ? BOARDING_PAYMENTS_KEY : `${BOARDING_PAYMENTS_KEY}_${schoolSlug}`;
 
+  // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un
+  // changement, plutôt que de se fier à la copie en mémoire chargée au montage ou au dernier
+  // DATA_UPDATED_EVENT (même bug que celui déjà corrigé sur Présences, Cantine et Transport).
+  const readFreshBoardingSubList = (): Array<{
+    studentId: string;
+    studentName?: string;
+    matricule?: string;
+    className?: string;
+    gender?: 'M' | 'F';
+    parentContact?: string;
+    pavilion: string;
+    roomNumber: string;
+    monthlyRate: number;
+    paymentDate?: string;
+  }> => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(scopedBoardingSubKey);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  const readFreshBoardingPayMap = (): Record<string, Record<string, boolean>> => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem(scopedBoardingPayKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  };
+
   const [students, setStudents] = useState<Student[]>([]);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [searchQuery, setSearchQuery] = useState('');
@@ -264,7 +297,7 @@ export function BoardingView({
 
   // Sauvegarde persistante des paiements
   const savePaymentsToStorage = (updatedPayments: Record<string, Record<string, boolean>>) => {
-    saveBoardingDataUnified(customSubscriptions, updatedPayments);
+    saveBoardingDataUnified(readFreshBoardingSubList(), updatedPayments);
   };
 
   // Sauvegarde persistante des souscriptions
@@ -282,7 +315,7 @@ export function BoardingView({
       paymentDate?: string;
     }>
   ) => {
-    saveBoardingDataUnified(updatedSubs, monthlyPayments);
+    saveBoardingDataUnified(updatedSubs, readFreshBoardingPayMap());
   };
 
   // Pensionnaires unifiés : Inscriptions avec option Internat + Souscriptions directes
@@ -707,7 +740,7 @@ export function BoardingView({
 
     // 1. Préparer les mois cochés
     const updatedPayments = {
-      ...monthlyPayments,
+      ...readFreshBoardingPayMap(),
       [targetStudentId]: activeMonthsChecked,
     };
     if (matchedExistingStudent?.studentNumber) {
@@ -718,8 +751,9 @@ export function BoardingView({
     }
 
     // 2. Mettre à jour / ajouter dans customSubscriptions
-    const existingIndex = customSubscriptions.findIndex((s) => s.studentId === targetStudentId);
-    let updatedSubs = [...customSubscriptions];
+    const freshSubs = readFreshBoardingSubList();
+    const existingIndex = freshSubs.findIndex((s) => s.studentId === targetStudentId);
+    let updatedSubs = [...freshSubs];
     const subRecord = {
       studentId: targetStudentId,
       studentName: finalFullName,
@@ -867,10 +901,10 @@ export function BoardingView({
       updateRegisteredStudent(updatedStudent, schoolSlug);
 
       // 2. Nettoyer les customSubscriptions et monthlyPayments de manière atomique
-      const updatedSubs = customSubscriptions.filter(
+      const updatedSubs = readFreshBoardingSubList().filter(
         (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
       );
-      const updatedPayments = { ...monthlyPayments };
+      const updatedPayments = { ...readFreshBoardingPayMap() };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];
       if (matricule) delete updatedPayments[matricule];
@@ -923,10 +957,10 @@ export function BoardingView({
       const matricule = activeBoarder.student.matricule;
 
       // Nettoyer les subscriptions et monthly payments de manière atomique
-      const updatedSubs = customSubscriptions.filter(
+      const updatedSubs = readFreshBoardingSubList().filter(
         (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
       );
-      const updatedPayments = { ...monthlyPayments };
+      const updatedPayments = { ...readFreshBoardingPayMap() };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];
       if (matricule) delete updatedPayments[matricule];
