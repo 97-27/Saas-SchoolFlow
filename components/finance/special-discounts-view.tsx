@@ -189,10 +189,14 @@ export function SpecialDiscountsView({
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [activeStudents, setActiveStudents] = useState<Student[]>(() => getLiveStudents([], schoolSlug));
+
   useEffect(() => {
     setCurrentSchool(getLiveSchool(schoolSlug, school));
+    setActiveStudents(getLiveStudents([], schoolSlug));
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setActiveStudents(getLiveStudents([], schoolSlug));
       if (typeof window !== 'undefined') {
         try {
           const saved = localStorage.getItem(scopedDiscountsKey);
@@ -357,16 +361,31 @@ export function SpecialDiscountsView({
 
   const canSave = hasModifications && (parentName.trim().length > 0) && children.some((c) => c.fullName && c.fullName.trim().length > 0);
 
-  // Statistiques globales calculées sur les reçus enregistrés
+  // Statistiques globales calculées sur les reçus enregistrés — un enfant d'un reçu n'a pas
+  // d'identifiant fiable vers sa fiche élève réelle (seulement un nom saisi localement), mais
+  // handleSaveReceipt synchronise chaque enfant vers le répertoire élèves par correspondance
+  // exacte de nom complet (voir plus haut) : on réutilise donc ce même critère ici pour ne
+  // compter, dans ces statistiques "actuelles", que les enfants toujours présents parmi les
+  // élèves réellement actifs — un enfant définitivement supprimé de l'école (et donc absent de
+  // activeStudents) ne doit plus grossir indéfiniment le nombre de bénéficiaires ni le volume de
+  // réductions affichés, alors qu'il ne bénéficie plus d'aucune réduction réelle.
   const globalKpis = useMemo(() => {
     let totalKids = 0;
     let girls = 0;
     let boys = 0;
     let totalDiscountVol = 0;
 
+    const liveNames = new Set(
+      activeStudents.map((s) => (s.fullName || '').toLowerCase().trim()).filter(Boolean)
+    );
+
     savedReceipts.forEach((r) => {
+      const activeChildren = r.children.filter((c) =>
+        liveNames.has((c.fullName || '').toLowerCase().trim())
+      );
+      if (activeChildren.length === 0) return;
       totalDiscountVol += r.discountAmountFCFA || 0;
-      r.children.forEach((c) => {
+      activeChildren.forEach((c) => {
         totalKids++;
         if (c.gender === 'female') girls++;
         else boys++;
@@ -380,7 +399,7 @@ export function SpecialDiscountsView({
       totalDiscountVolume: totalDiscountVol,
       receiptsCount: savedReceipts.length,
     };
-  }, [savedReceipts]);
+  }, [savedReceipts, activeStudents]);
 
   // Gestion des numéros de contact (jusqu'à 3 numéros)
   const handleAddSecondaryPhone = () => {

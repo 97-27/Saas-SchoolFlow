@@ -89,9 +89,27 @@ export function CaisseView({
     }
   };
 
+  // Périmètre strictement inscription + scolarité — internat, cantine et transport ont déjà
+  // leur propre suivi dédié (pages Internat/Cantine/Transport) : les compter aussi ici ferait
+  // afficher un "Total encaissé en caisse" différent de celui de la page Dépenses pour la même
+  // réalité financière, alors que les deux pages doivent représenter le même périmètre de caisse.
+  const isServiceFee = (inv: Invoice) => {
+    const fee = (inv.feeType || '').toLowerCase();
+    const num = inv.invoiceNumber || '';
+    return (
+      fee.includes('internat') ||
+      fee.includes('cantine') ||
+      fee.includes('transport') ||
+      num.startsWith('QUI-') ||
+      num.startsWith('CAN-') ||
+      num.startsWith('TRP-')
+    );
+  };
+
   // Filtered & Sorted Invoices (Toujours du plus récent ID-051, ID-050... vers ID-001)
   const filteredInvoices = useMemo(() => {
     const list = invoices.filter((inv) => {
+      if (isServiceFee(inv)) return false;
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         q === '' ||
@@ -162,6 +180,7 @@ export function CaisseView({
   const dedupedInvoices = useMemo(() => {
     const seen = new Set<string>();
     return [...invoices]
+      .filter((inv) => !isServiceFee(inv))
       .sort((a, b) => new Date(b.issueDate || 0).getTime() - new Date(a.issueDate || 0).getTime())
       .filter((inv) => {
         const key = `${inv.studentId || inv.studentName}__${inv.feeType}`;

@@ -120,12 +120,26 @@ export function DistinctionsView({
 
   // Tableau d'Honneur officiel : Lauréats validés (Top 3 et Ex æquo)
   // Si le bulletin n'est pas validé, la liste est COMPLÈTEMENT VIDE ([]).
+  // Un lauréat dont l'élève a été définitivement supprimé depuis (matricule ou, à défaut, nom
+  // complet absent de la liste réelle des élèves actifs) est écarté de l'affichage : sans ce
+  // filtre, un élève supprimé restait visible pour toujours dans le Tableau d'Honneur officiel,
+  // jusqu'à ce que quelqu'un remette manuellement toute la classe "en attente" — ce qui aurait
+  // aussi effacé la validation des autres lauréats encore réellement inscrits.
   const laureates = useMemo(() => {
     if (!validatedRankings || validatedRankings.length === 0) {
       return [];
     }
-    return validatedRankings;
-  }, [validatedRankings]);
+    const activeMatricules = new Set(
+      students.map((s) => (s.matricule || '').trim()).filter(Boolean)
+    );
+    const activeNames = new Set(
+      students.map((s) => (s.fullName || '').toLowerCase().trim()).filter(Boolean)
+    );
+    return validatedRankings.filter((l) => {
+      if (l.matricule && l.matricule.trim()) return activeMatricules.has(l.matricule.trim());
+      return activeNames.has((l.fullName || '').toLowerCase().trim());
+    });
+  }, [validatedRankings, students]);
 
   const handleClearClassBulletins = () => {
     clearValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug);
