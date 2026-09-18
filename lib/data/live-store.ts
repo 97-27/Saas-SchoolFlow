@@ -635,6 +635,17 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
         deleteArray.forEach((id) => delete map[id]);
         localStorage.setItem(TRANSPORT_PAY_KEY, JSON.stringify(map));
       }
+
+      // Nettoyer la fiche médicale de l'élève supprimé — même risque de collision d'identifiant
+      // recyclé que ci-dessus (un nouvel élève hériterait sinon des allergies/contacts d'urgence
+      // d'un élève différent et déjà supprimé).
+      const HEALTH_KEY = isPilot ? 'schoolflow_health_records_v1' : `schoolflow_health_records_v1_${cleanSlug}`;
+      const rawHealth = localStorage.getItem(HEALTH_KEY);
+      if (rawHealth) {
+        const map: Record<string, any> = JSON.parse(rawHealth);
+        deleteArray.forEach((id) => delete map[id]);
+        localStorage.setItem(HEALTH_KEY, JSON.stringify(map));
+      }
     } catch (e) {
       console.warn('Erreur nettoyage souscriptions prestations:', e);
     }
@@ -3472,6 +3483,13 @@ export function resetSchoolData(
       localStorage.removeItem('schoolflow_documents_status_v2');
       localStorage.removeItem('schoolflow_documents_status_v3');
       localStorage.removeItem('schoolflow_documents_status_v5');
+
+      // Suivi médical (Santé) : rattaché au même bouton que les documents scolaires, dossier
+      // administratif de l'élève au même titre.
+      if (isResettingPilot) localStorage.removeItem(HEALTH_STATUS_KEY);
+      localStorage.removeItem(`${HEALTH_STATUS_KEY}_${slug}`);
+      if (isResettingPilot) localStorage.removeItem(HEALTH_INCIDENTS_KEY);
+      localStorage.removeItem(`${HEALTH_INCIDENTS_KEY}_${slug}`);
     }
 
     // 8. Messagerie & Diffusion - Si Module messages OU Interface Parent
@@ -3629,6 +3647,8 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
     localStorage.removeItem('schoolflow_active_session_v2');
     localStorage.removeItem(`${VALIDATED_BULLETINS_KEY}_${slug}`);
     localStorage.removeItem(`${DOCS_STATUS_KEY}_${slug}`);
+    localStorage.removeItem(`${HEALTH_STATUS_KEY}_${slug}`);
+    localStorage.removeItem(`${HEALTH_INCIDENTS_KEY}_${slug}`);
     localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}${slug}`);
     localStorage.removeItem(`schoolflow_teachers_data_v2_${slug}`);
     localStorage.removeItem(`${STAFF_USERS_STORAGE_KEY}_${slug}`);
@@ -3652,6 +3672,8 @@ export function deleteSchoolAccount(slug: string = 'epc-manoi'): void {
       localStorage.removeItem('schoolflow_broadcast_records_v1');
       localStorage.removeItem(DOCS_STATUS_KEY);
       localStorage.removeItem('schoolflow_documents_status_v5');
+      localStorage.removeItem(HEALTH_STATUS_KEY);
+      localStorage.removeItem(HEALTH_INCIDENTS_KEY);
       localStorage.removeItem(VALIDATED_BULLETINS_KEY);
       localStorage.removeItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`);
       localStorage.removeItem('schoolflow_teachers_data_v2');
@@ -3868,6 +3890,178 @@ export function getAllStudentDocumentRecords(schoolSlug: string = 'epc-manoi'): 
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════
+// GESTION RÉACTIVE & CENTRALISÉE DU SUIVI MÉDICAL (SANTÉ)
+// ═══════════════════════════════════════════════════════════════
+
+export const HEALTH_STATUS_KEY = 'schoolflow_health_records_v1';
+export const HEALTH_INCIDENTS_KEY = 'schoolflow_health_incidents_v1';
+
+export interface VaccinationEntry {
+  id: string;
+  name: string;
+  date: string;
+}
+
+export interface StudentHealthRecord {
+  studentId: string;
+  bloodType: string;
+  allergies: string;
+  chronicConditions: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  vaccinations: VaccinationEntry[];
+  lastUpdated: string;
+}
+
+export interface HealthIncident {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentGrade: string;
+  date: string;
+  description: string;
+  actionTaken: string;
+  notifiedParent: boolean;
+  recordedBy: string;
+  createdAt: string;
+}
+
+const emptyHealthRecord = (studentId: string): StudentHealthRecord => ({
+  studentId,
+  bloodType: '',
+  allergies: '',
+  chronicConditions: '',
+  emergencyContactName: '',
+  emergencyContactPhone: '',
+  vaccinations: [],
+  lastUpdated: '',
+});
+
+/**
+ * Récupère la fiche médicale d'un élève. STRICTEMENT vide par défaut tant qu'aucune
+ * information réelle n'a été saisie — jamais de groupe sanguin ou d'allergie inventés.
+ */
+export function getStudentHealthRecord(studentId: string, schoolSlug: string = 'epc-manoi'): StudentHealthRecord {
+  if (typeof window === 'undefined') return emptyHealthRecord(studentId);
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_STATUS_KEY : `${HEALTH_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const all: Record<string, StudentHealthRecord> = JSON.parse(raw);
+      if (all[studentId]) return all[studentId];
+    }
+  } catch (e) {}
+  return emptyHealthRecord(studentId);
+}
+
+/**
+ * Enregistre la fiche médicale d'un élève. Relit toujours la version la plus fraîche depuis
+ * localStorage juste avant de fusionner (même principe que Présences/Cantine/Transport/
+ * Internat/Documents cette session) : sans cela, la fiche d'un élève enregistrée par un membre
+ * du personnel pouvait écraser silencieusement celle d'un autre élève enregistrée entre-temps
+ * par un collègue sur un autre appareil.
+ */
+export function saveStudentHealthRecord(studentId: string, record: StudentHealthRecord, schoolSlug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_STATUS_KEY : `${HEALTH_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    const all: Record<string, StudentHealthRecord> = raw ? JSON.parse(raw) : {};
+    all[studentId] = record;
+    localStorage.setItem(key, JSON.stringify(all));
+
+    broadcastLiveUpdate({
+      action: 'health_record_updated',
+      studentId,
+      record,
+      schoolSlug,
+    });
+  } catch (e) {
+    console.error('Erreur sauvegarde fiche médicale:', e);
+  }
+}
+
+/**
+ * Récupère toutes les fiches médicales enregistrées.
+ */
+export function getAllStudentHealthRecords(schoolSlug: string = 'epc-manoi'): Record<string, StudentHealthRecord> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_STATUS_KEY : `${HEALTH_STATUS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * Récupère le journal des incidents d'infirmerie, du plus récent au plus ancien.
+ */
+export function getHealthIncidents(schoolSlug: string = 'epc-manoi'): HealthIncident[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_INCIDENTS_KEY : `${HEALTH_INCIDENTS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Ajoute un incident d'infirmerie au journal. Relit toujours la version la plus fraîche avant
+ * d'ajouter (même principe de fusion sûre que le reste de cette section).
+ */
+export function addHealthIncident(incident: HealthIncident, schoolSlug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_INCIDENTS_KEY : `${HEALTH_INCIDENTS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    const list: HealthIncident[] = raw ? JSON.parse(raw) : [];
+    const next = [incident, ...list];
+    localStorage.setItem(key, JSON.stringify(next));
+
+    broadcastLiveUpdate({
+      action: 'health_incident_added',
+      incident,
+      schoolSlug,
+    });
+  } catch (e) {
+    console.error('Erreur ajout incident d’infirmerie:', e);
+  }
+}
+
+/**
+ * Supprime un incident d'infirmerie (erreur de saisie). Relit toujours la version la plus
+ * fraîche avant de filtrer.
+ */
+export function deleteHealthIncident(incidentId: string, schoolSlug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+    const key = isPilot ? HEALTH_INCIDENTS_KEY : `${HEALTH_INCIDENTS_KEY}_${schoolSlug}`;
+    const raw = localStorage.getItem(key);
+    const list: HealthIncident[] = raw ? JSON.parse(raw) : [];
+    const next = list.filter((i) => i.id !== incidentId);
+    localStorage.setItem(key, JSON.stringify(next));
+
+    broadcastLiveUpdate({
+      action: 'health_incident_deleted',
+      incidentId,
+      schoolSlug,
+    });
+  } catch (e) {
+    console.error('Erreur suppression incident d’infirmerie:', e);
+  }
+}
 
 /**
  * Sauvegarde et diffuse en temps réel les souscriptions et paiements de transport

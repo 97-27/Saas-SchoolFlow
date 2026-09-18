@@ -10,28 +10,23 @@ import {
   LayoutDashboard,
   Users,
   School as SchoolIcon,
-  CalendarCheck,
   BookOpen,
   UserCheck,
   Wallet,
   UtensilsCrossed,
-  Bus,
-  BedDouble,
   BarChart3,
   Settings,
   ChevronDown,
-  GraduationCap,
-  Sparkles,
   X,
   Building2,
   BadgePercent,
-  Award,
   MessageSquare,
   FileSpreadsheet,
   KeyRound,
   NotebookPen,
   Receipt,
   Mail,
+  HeartPulse,
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
@@ -145,184 +140,6 @@ export function Sidebar({
       : []),
   ];
 
-  // Tous les items de navigation avec leur clé d'autorisation
-  const allNavItems = [
-    {
-      key: 'dashboard',
-      title: 'Tableau de bord',
-      href: `${baseUrl}/dashboard`,
-      icon: LayoutDashboard,
-      active: pathname.includes('/dashboard'),
-    },
-    ...((roleId === 'directeur' || roleId === 'fondateur')
-      ? [
-          {
-            key: 'administration',
-            title: 'Administration & Codes',
-            href: `${baseUrl}/administration`,
-            icon: KeyRound,
-            active: pathname.includes('/administration'),
-          },
-        ]
-      : []),
-    {
-      key: 'eleves',
-      title: 'Élèves',
-      icon: Users,
-      isGroup: true,
-      isOpen: studentsOpen,
-      onToggle: () => setStudentsOpen(!studentsOpen),
-      active:
-        pathname.includes('/eleves') ||
-        pathname.includes('/inscriptions') ||
-        pathname.includes('/documents'),
-      subItems: [
-        {
-          title: 'Inscriptions',
-          href: `${baseUrl}/inscriptions`,
-          active: pathname.includes('/inscriptions'),
-        },
-        ...(roleId !== 'comptable'
-          ? [
-              {
-                title: "Vue d'ensemble",
-                href: `${baseUrl}/eleves`,
-                active: pathname.endsWith('/eleves'),
-              },
-              {
-                title: 'Documents scolaires',
-                href: `${baseUrl}/documents`,
-                active: pathname.includes('/documents'),
-              },
-            ]
-          : []),
-      ],
-    },
-    ...(availableServices.length > 0
-      ? [
-          {
-            key: 'services',
-            title: 'Services & Prestations',
-            icon: UtensilsCrossed,
-            isGroup: true,
-            isOpen: servicesOpen,
-            onToggle: () => setServicesOpen(!servicesOpen),
-            active:
-              pathname.includes('/cantine') ||
-              pathname.includes('/transport') ||
-              pathname.includes('/internat'),
-            subItems: availableServices,
-          },
-        ]
-      : []),
-      {
-        key: 'finances',
-        title: 'Comptabilité & Finances',
-        icon: Wallet,
-        isGroup: true,
-        isOpen: financeOpen,
-        onToggle: () => setFinanceOpen(!financeOpen),
-        active:
-          pathname.includes('/depenses') ||
-          pathname.includes('/rapports'),
-        subItems: [
-          {
-            title: "Dépenses de l'École",
-            href: `${baseUrl}/depenses`,
-            active: pathname.includes('/depenses'),
-          },
-          {
-            title: 'Rapports & Statistiques',
-            href: `${baseUrl}/rapports`,
-            active: pathname.includes('/rapports'),
-          },
-        ],
-      },
-      {
-        key: 'reductions',
-        title: 'Réductions spéciales',
-        href: `${baseUrl}/reductions`,
-        icon: BadgePercent,
-        active: pathname.includes('/reductions'),
-      },
-      {
-        key: 'salaires',
-        title: 'Salaires du personnel',
-        href: `${baseUrl}/salaires`,
-        icon: Receipt,
-        active: pathname.includes('/salaires'),
-      },
-      {
-        key: 'pedagogie',
-        title: 'Gestion Pédagogique',
-        icon: BookOpen,
-        isGroup: true,
-        isOpen: pedagogyOpen,
-        onToggle: () => setPedagogyOpen(!pedagogyOpen),
-        active:
-          pathname.includes('/classes') ||
-          pathname.includes('/presences') ||
-          pathname.includes('/notes') ||
-          pathname.includes('/bulletins') ||
-          pathname.includes('/distinctions'),
-        subItems: [
-          {
-            title: 'Classes & Niveaux',
-            href: `${baseUrl}/classes`,
-            active: pathname.includes('/classes'),
-          },
-          {
-            title: 'Présences & Absences',
-            href: `${baseUrl}/presences`,
-            active: pathname.includes('/presences'),
-          },
-          {
-            title: 'Pédagogie & Notes',
-            href: `${baseUrl}/notes`,
-            active: pathname.includes('/notes'),
-          },
-          {
-            title: 'Bulletins Scolaires',
-            href: `${baseUrl}/bulletins`,
-            active: pathname.includes('/bulletins'),
-          },
-          {
-            title: "Tableaux d'Honneur",
-            href: `${baseUrl}/distinctions`,
-            active: pathname.includes('/distinctions'),
-          },
-        ],
-      },
-      {
-        key: 'communication',
-        title: 'Communication Parents',
-        href: `${baseUrl}/communication`,
-        icon: MessageSquare,
-        active: pathname.includes('/communication'),
-      },
-      {
-        key: 'personnel',
-        title: 'Enseignants & Personnel',
-        href: `${baseUrl}/personnel`,
-        icon: UserCheck,
-        active: pathname.includes('/personnel'),
-      },
-      {
-        key: 'notes_diverses',
-        title: 'Notes Diverses',
-        href: `${baseUrl}/notes-diverses`,
-        icon: NotebookPen,
-        active: pathname.includes('/notes-diverses'),
-      },
-      {
-        key: 'parametres',
-        title: 'Paramètres',
-        href: `${baseUrl}/parametres`,
-        icon: Settings,
-        active: pathname.includes('/parametres'),
-      },
-    ];
-
   // Construction stricte des éléments de navigation selon le rôle exact
   let navItems: any[] = [];
 
@@ -382,6 +199,7 @@ export function Sidebar({
       },
       communicationGroupItem,
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
+      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
@@ -427,6 +245,7 @@ export function Sidebar({
       },
       communicationGroupItem,
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
+      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'secretaire') {
@@ -439,6 +258,7 @@ export function Sidebar({
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
+      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
     ];
   } else if (roleId === 'comptable') {
     // 💼 COMPTABLE : Élèves (3 pages), Tableau de bord avec Services (3 pages), Comptabilité & Finances (2 pages), Réductions, Salaires, Notes Diverses
@@ -503,6 +323,7 @@ export function Sidebar({
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
       { key: 'documents', title: 'Documents Scolaires', href: `${baseUrl}/documents`, icon: FileSpreadsheet, active: pathname.includes('/documents') },
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
+      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'parent') {
@@ -513,6 +334,14 @@ export function Sidebar({
     navItems = [
       { key: 'bulletins-parents', title: 'Notes & Bulletins Scolaires', href: `${baseUrl}/bulletins-parents`, icon: MessageSquare, active: pathname.includes('/bulletins-parents') },
       { key: 'messagerie-parent', title: 'Écrire à la Direction', href: `${baseUrl}/messagerie-parent`, icon: Mail, active: pathname.includes('/messagerie-parent') },
+      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+    ];
+  } else if (roleId === 'educateur') {
+    // 🧑‍🏫 ÉDUCATEUR / VIE SCOLAIRE : Vue d'ensemble, Classes, Santé & Suivi Médical, Notes Diverses
+    navItems = [
+      { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
+      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else {

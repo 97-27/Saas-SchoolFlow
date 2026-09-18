@@ -1,5 +1,6 @@
 import React from 'react';
-import { ComingSoon } from '@/components/ui/coming-soon';
+import { mockSchools, mockStudents } from '@/lib/data/mock-data';
+import { HealthView } from '@/components/health/health-view';
 
 export default async function Page({
   params,
@@ -7,20 +8,14 @@ export default async function Page({
   params: Promise<{ ecole: string }> | { ecole: string };
 }) {
   const resolvedParams = await params;
+  const ecoleSlug = resolvedParams.ecole;
+  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2.5">
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
-          Santé & Suivi Médical
-        </h1>
-        <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
-          2026-2027
-        </span>
-      </div>
-      <ComingSoon
-        description="Fiches médicales confidentielles, suivi des allergies, carnet de vaccination et incidents d’infirmerie."
-        schoolSlug={resolvedParams.ecole}
-      />
-    </div>
+    <HealthView
+      initialStudents={mockStudents}
+      school={school}
+      schoolSlug={ecoleSlug}
+    />
   );
 }

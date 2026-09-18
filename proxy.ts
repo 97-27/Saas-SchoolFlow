@@ -9,15 +9,15 @@ import type { NextRequest } from 'next/server';
  * ne protégeait rien côté serveur.
  */
 const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
-  secretaire: ['dashboard', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel'],
+  secretaire: ['dashboard', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
   comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
   enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
-  assistant_direction: ['dashboard', 'classes', 'documents', 'personnel', 'notes-diverses'],
+  assistant_direction: ['dashboard', 'classes', 'documents', 'personnel', 'notes-diverses', 'sante'],
   // "communication" est volontairement absent : c'est la boîte de réception interne de la
   // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Les parents ont
   // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
-  educateur: ['dashboard', 'classes', 'notes-diverses'],
+  educateur: ['dashboard', 'classes', 'notes-diverses', 'sante'],
 };
 
 // Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.
