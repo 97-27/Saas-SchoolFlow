@@ -19,6 +19,7 @@ import {
   getParentMessagesFromSupabase,
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
+import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
 import {
   requireSession,
   isAdmin,
@@ -108,6 +109,10 @@ function parentOwnsMessage(message: any, parentPhones: string[]): boolean {
 function filterForSession(data: Record<string, any>, session: SessionPayload): Record<string, any> {
   const out: Record<string, any> = { ...data };
   const ownCode = upperCode(session.code);
+
+  if (Array.isArray(out.students)) {
+    out.students = out.students.filter((s: any) => !isLegacyDemoStudent(s));
+  }
 
   if (Array.isArray(out.diverseNotes)) {
     out.diverseNotes = out.diverseNotes.filter((n: any) => upperCode(n?.authorCode) === ownCode);
@@ -357,8 +362,16 @@ export async function POST(request: NextRequest) {
 
     // Chaque collection n'est prise en compte que si le rôle connecté a le droit de l'écrire ;
     // les autres sont ignorées (jamais transmises à la base).
-    const students = canWriteStudents ? body.students : undefined;
-    const invoices = canWriteStudents ? body.invoices : undefined;
+    // Les anciens élèves/factures de démonstration encore présents dans certains navigateurs ne
+    // doivent jamais revenir en base (ils y avaient créé 15 doublons) : voir lib/data/legacy-ids.ts.
+    const students =
+      canWriteStudents && Array.isArray(body.students)
+        ? body.students.filter((s: any) => !isLegacyDemoStudent(s))
+        : undefined;
+    const invoices =
+      canWriteStudents && Array.isArray(body.invoices)
+        ? body.invoices.filter((inv: any) => !isLegacyDemoInvoice(inv))
+        : undefined;
     const deletedStudentIds = canDelete ? body.deletedStudentIds : undefined;
     const restoreStudentIds = canDelete ? body.restoreStudentIds : undefined;
     const schoolSettings = admin && body.schoolSettings ? { ...body.schoolSettings, slug } : undefined;

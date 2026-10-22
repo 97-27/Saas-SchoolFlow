@@ -28,6 +28,7 @@ import {
   DELETE_ROLES,
   SERVICES_WRITE_ROLES,
 } from '@/lib/server/auth';
+import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,10 +114,12 @@ export async function POST(request: NextRequest) {
 
     case 'saveStudent':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
+      if (isLegacyDemoStudent(args[0])) return ok(false);
       return ok(await saveStudentToSupabase(args[0], slug));
 
     case 'saveInvoice':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
+      if (isLegacyDemoInvoice(args[0])) return ok(false);
       return ok(await saveInvoiceToSupabase(args[0], slug));
 
     case 'deleteStudent':

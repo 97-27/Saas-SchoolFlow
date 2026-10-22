@@ -3,6 +3,7 @@
 import { supabaseAdmin as supabase } from './admin';
 import { isSupabaseConfigured } from './client';
 import { School, Student, Invoice } from '@/lib/data/types';
+import { LEGACY_DEMO_STUDENT_IDS } from '@/lib/data/legacy-ids';
 import { cleanDisplayAddress } from '@/lib/utils/formatters';
 
 /**
@@ -64,6 +65,8 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
         .select('avatar_url, department')
         .eq('school_id', data.id)
         .eq('role_id', 'school_stamp')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (stampRow?.avatar_url) {
         stampUrl = stampRow.avatar_url;
@@ -223,6 +226,8 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
           .select('id')
           .eq('school_id', schoolId)
           .eq('role_id', 'school_stamp')
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         const updatePayload: Record<string, any> = { department: extraInfo };
@@ -368,6 +373,8 @@ export async function getSchoolSubscriptionInfo(slug: string): Promise<SchoolSub
       .select('department')
       .eq('school_id', school.id)
       .eq('role_id', 'system_subscription_override')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (overrideRow?.department) {
       try {
@@ -428,6 +435,8 @@ export async function renewSchoolSubscription(
       .select('id')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_subscription_override')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existing?.id) {
@@ -477,6 +486,7 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
     const seen = new Set<string>();
     const uniqueData: any[] = [];
     for (const d of data) {
+      if (LEGACY_DEMO_STUDENT_IDS.has(d.id)) continue;
       const numKey = (d.student_number || '').trim().toUpperCase();
       const nameKey = (d.full_name || `${d.last_name || ''} ${d.first_name || ''}`).trim().toLowerCase().replace(/\s+/g, ' ');
       const matKey = (d.matricule || '').trim().toUpperCase();
@@ -1240,13 +1250,35 @@ export async function saveStaffUserToSupabase(staff: {
       is_active: staff.status === 'Actif',
     };
 
-    // Vérifier si le membre du personnel existe déjà
-    const { data: existingStaff } = await supabase
-      .from('staff_users')
-      .select('id')
-      .eq('school_id', schoolId)
-      .eq('auth_code', staff.authCode)
-      .limit(1);
+    // Retrouver la fiche existante : d'abord par son identifiant réel (un changement de code ne
+    // doit pas créer une nouvelle fiche), puis par code, et pour Directeur/Fondateur par rôle (une
+    // seule fiche par école). Sans cela, des enregistrements simultanés depuis plusieurs appareils
+    // avaient créé 4 fiches Directeur et 4 fiches Fondateur.
+    let existingStaff: { id: string }[] | null = null;
+    const staffId = (staff as { id?: string }).id;
+    if (staffId && isUUID(staffId)) {
+      const { data } = await supabase.from('staff_users').select('id').eq('school_id', schoolId).eq('id', staffId).limit(1);
+      existingStaff = data;
+    }
+    if (!existingStaff || existingStaff.length === 0) {
+      const { data } = await supabase
+        .from('staff_users')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('auth_code', staff.authCode)
+        .limit(1);
+      existingStaff = data;
+    }
+    if ((!existingStaff || existingStaff.length === 0) && (staff.roleId === 'directeur' || staff.roleId === 'fondateur')) {
+      const { data } = await supabase
+        .from('staff_users')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('role_id', staff.roleId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      existingStaff = data;
+    }
 
     if (existingStaff && existingStaff.length > 0) {
       const { error: updateErr } = await supabase
@@ -1354,6 +1386,8 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
       .select('id, department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_services_data')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     // Les deux appelants de cette fonction (dashboard-view.tsx et /api/sync) reconstruisent et
@@ -1416,6 +1450,8 @@ export async function getServicesDataFromSupabase(schoolSlug: string): Promise<a
       .select('department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_services_data')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (data?.department) {
@@ -1455,6 +1491,8 @@ export async function saveDiverseNotesToSupabase(schoolSlug: string, notes: any[
       .select('id')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_diverse_notes')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existing?.id) {
@@ -1480,6 +1518,8 @@ export async function getDiverseNotesFromSupabase(schoolSlug: string): Promise<a
       .select('department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_diverse_notes')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     // null = lecture impossible (l'appelant ne doit alors rien écraser) ; [] = aucune note.
@@ -1518,6 +1558,8 @@ export async function saveParentMessagesToSupabase(schoolSlug: string, messages:
       .select('id')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_parent_messages')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existing?.id) {
@@ -1543,6 +1585,8 @@ export async function getParentMessagesFromSupabase(schoolSlug: string): Promise
       .select('department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_parent_messages')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     // null = lecture impossible (l'appelant ne doit alors rien écraser) ; [] = aucun message.

@@ -359,6 +359,22 @@ div[class*="dev-tools-indicator"] {
   body.print-receipt-only #official-receipt-printable * {
     visibility: visible !important;
   }
+  /* Les reçus Transport / Cantine s'affichent dans une fenêtre modale « .fixed », que la règle
+     d'impression générale masque (display:none) : le reçu disparaissait alors avec elle et la page
+     imprimée restait blanche. On ré-affiche uniquement la modale qui contient le reçu. */
+  body.print-receipt-only .fixed:has(#official-receipt-printable) {
+    display: block !important;
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+  body.print-receipt-only .fixed:has(#official-receipt-printable) > div {
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
   body.print-receipt-only #official-receipt-printable {
     position: absolute !important;
     left: 0 !important;

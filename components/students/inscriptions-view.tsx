@@ -52,6 +52,17 @@ interface InscriptionsViewProps {
   schoolSlug?: string;
 }
 
+/**
+ * Numéro de dossier d'un élève (ID-007 → 7). Lu uniquement depuis un vrai numéro de dossier :
+ * l'identifiant technique (UUID) d'un élève ne doit jamais être interprété comme un numéro.
+ */
+function dossierNumber(s: { studentNumber?: string; id?: string } | null | undefined): number {
+  const source = s?.studentNumber || (/^(ID|stu)-\d+$/i.test(s?.id || '') ? s?.id : '') || '';
+  const match = source.match(/\d+/);
+  const n = match ? parseInt(match[0], 10) : 0;
+  return !isNaN(n) && n > 0 && n < 100000 ? n : 0;
+}
+
 export function InscriptionsView({
   initialStudents,
   school,
@@ -406,20 +417,12 @@ export function InscriptionsView({
     });
   }, [students]);
 
-  // Compute next available Student ID sequence number — comble le premier numéro réellement
-  // libre (ni occupé par un élève existant, ni bloqué dans la liste des suppressions), au lieu
-  // de toujours avancer au plus haut+1. Un numéro bloqué par le passé (ex: supprimé une fois
-  // puis débloqué) est ainsi naturellement récupéré par la prochaine inscription, sans laisser
-  // de trou définitif dans la numérotation.
+  // Prochain numéro de dossier = plus grand numéro existant + 1. Un numéro n'est JAMAIS réutilisé :
+  // l'ancien comblement du « premier trou » réattribuait le numéro d'un élève supprimé (ex: ID-131
+  // proposé alors que le dernier dossier était ID-133), et ses anciens reçus portaient le même
+  // numéro que ceux du nouvel élève.
   const nextSeq = useMemo(() => {
-    const existingNums = new Set<number>(
-      (students || [])
-        .map((s) => {
-          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-          return match ? parseInt(match[0], 10) : 0;
-        })
-        .filter((n) => !isNaN(n) && n > 0)
-    );
+    const existingNums = new Set<number>((students || []).map(dossierNumber).filter((n) => n > 0));
 
     let delSet: Set<string>;
     try {
@@ -428,7 +431,7 @@ export function InscriptionsView({
       delSet = new Set();
     }
 
-    let candidate = 1;
+    let candidate = existingNums.size > 0 ? Math.max(...Array.from(existingNums)) + 1 : 1;
     while (
       existingNums.has(candidate) ||
       delSet.has(`ID-${candidate.toString().padStart(3, '0')}`) ||
@@ -902,9 +905,8 @@ export function InscriptionsView({
     try {
       const localStudents = getLiveStudents(initialStudents, schoolSlug);
       localStudents.forEach((s) => {
-        const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-        const n = match ? parseInt(match[0], 10) : 0;
-        if (!isNaN(n) && n > 0) combinedExistingNums.add(n);
+        const n = dossierNumber(s);
+        if (n > 0) combinedExistingNums.add(n);
       });
 
       // Inutile pour la modification d'un élève déjà existant (son numéro ne change pas) —
@@ -917,22 +919,21 @@ export function InscriptionsView({
         const result = await res.json();
         const serverStudents = Array.isArray(result?.data?.students) ? result.data.students : [];
         serverStudents.forEach((s: any) => {
-          const match = (s?.studentNumber || s?.id || '')?.match(/\d+/);
-          const n = match ? parseInt(match[0], 10) : 0;
-          if (!isNaN(n) && n > 0) combinedExistingNums.add(n);
+          const n = dossierNumber(s);
+          if (n > 0) combinedExistingNums.add(n);
         });
       }
     } catch (e) {
       // Le serveur n'a pas répondu à temps : on continue avec la meilleure estimation locale
       // plutôt que de bloquer indéfiniment l'enregistrement du reçu.
     }
-    // Même logique de comblement du premier numéro libre que nextSeq, mais sur les données les
-    // plus fraîches possibles (locales + serveur), pour éviter qu'un numéro tout juste pris par
-    // un autre appareil ne soit réattribué en double.
+    // Même logique que nextSeq (plus grand numéro + 1), mais sur les données les plus fraîches
+    // possibles (locales + serveur), pour éviter qu'un numéro tout juste pris par un autre
+    // appareil ne soit réattribué en double.
     let computedNextSeq = nextSeq;
     try {
       const delSet = getDeletedStudentIds();
-      computedNextSeq = 1;
+      computedNextSeq = combinedExistingNums.size > 0 ? Math.max(...Array.from(combinedExistingNums)) + 1 : 1;
       while (
         combinedExistingNums.has(computedNextSeq) ||
         delSet.has(`ID-${computedNextSeq.toString().padStart(3, '0')}`) ||

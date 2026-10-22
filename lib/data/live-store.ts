@@ -17,6 +17,7 @@ import {
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
+import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
 
 export const normalizeWords = (name: string): string =>
   (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
@@ -536,6 +537,7 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           let hasLocalNewStudents = false;
           prevStudents.forEach((localStu: Student) => {
             if (
+              isLegacyDemoStudent(localStu) ||
               delSet.has(localStu.id) ||
               (localStu.studentNumber && delSet.has(localStu.studentNumber)) ||
               (localStu.matricule && delSet.has(localStu.matricule))
@@ -1084,6 +1086,7 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     // Priorité absolue aux élèves enregistrés
     for (const stu of allCandidates) {
       if (!isValidStudent(stu)) continue;
+      if (isLegacyDemoStudent(stu)) continue;
       if (
         deletedIds.has(stu.id) ||
         (stu.studentNumber && deletedIds.has(stu.studentNumber)) ||
