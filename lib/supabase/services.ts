@@ -1,4 +1,7 @@
-import { supabase, isSupabaseConfigured } from './client';
+// Module SERVEUR uniquement : utilise la clé service_role (lib/supabase/admin.ts). Les composants
+// navigateur doivent importer lib/supabase/remote.ts, qui passe par les routes API protégées.
+import { supabaseAdmin as supabase } from './admin';
+import { isSupabaseConfigured } from './client';
 import { School, Student, Invoice } from '@/lib/data/types';
 import { cleanDisplayAddress } from '@/lib/utils/formatters';
 
@@ -1178,6 +1181,7 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       .neq('role_id', 'system_services_data')
       .neq('role_id', 'system_diverse_notes')
       .neq('role_id', 'system_parent_messages')
+      .neq('role_id', 'system_subscription_override')
       .order('created_at', { ascending: true });
 
     if (error || !data) return [];
@@ -1192,7 +1196,9 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       authCode: d.auth_code,
       status: d.is_active ? 'Actif' : 'Verrouillé',
       avatarUrl: d.avatar_url,
-      matricule: d.matricule || `EMP-${d.auth_code}`,
+      // Jamais dérivé du code d'accès : le matricule est imprimé (fiches de paie, listes) et
+      // "EMP-<code>" révélait le code de connexion secret de chaque employé.
+      matricule: d.matricule || `EMP-${String(d.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
       subjectOrGrade: d.subject_or_grade || 'Administration',
       assignedClasses: d.assigned_classes || 'Toutes',
       address: d.address || 'Abidjan, Côte d’Ivoire',
@@ -1469,15 +1475,17 @@ export async function getDiverseNotesFromSupabase(schoolSlug: string): Promise<a
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return null;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('staff_users')
       .select('department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_diverse_notes')
       .maybeSingle();
 
+    // null = lecture impossible (l'appelant ne doit alors rien écraser) ; [] = aucune note.
+    if (error) return null;
     if (data?.department) return JSON.parse(data.department);
-    return null;
+    return [];
   } catch (err) {
     console.warn('getDiverseNotesFromSupabase catch:', err);
     return null;
@@ -1530,17 +1538,54 @@ export async function getParentMessagesFromSupabase(schoolSlug: string): Promise
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return null;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('staff_users')
       .select('department')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_parent_messages')
       .maybeSingle();
 
+    // null = lecture impossible (l'appelant ne doit alors rien écraser) ; [] = aucun message.
+    if (error) return null;
     if (data?.department) return JSON.parse(data.department);
-    return null;
+    return [];
   } catch (err) {
     console.warn('getParentMessagesFromSupabase catch:', err);
     return null;
+  }
+}
+
+/**
+ * Met à jour UNIQUEMENT les coordonnées (nom, email, téléphone, photo) du membre du personnel
+ * identifié par son code — jamais son rôle, son code ni son statut. Utilisé quand un membre
+ * non-administrateur met à jour sa propre fiche à la connexion.
+ */
+export async function updateStaffContactInSupabase(
+  schoolSlug: string,
+  authCode: string,
+  contact: { fullName?: string; email?: string; phone?: string; avatarUrl?: string }
+): Promise<boolean> {
+  if (!isSupabaseConfigured || !authCode) return false;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
+
+    const update: Record<string, any> = {};
+    if (contact.fullName) update.full_name = contact.fullName;
+    if (contact.email !== undefined) update.email = contact.email;
+    if (contact.phone !== undefined) update.phone = contact.phone;
+    if (contact.avatarUrl) update.avatar_url = contact.avatarUrl;
+    if (Object.keys(update).length === 0) return true;
+
+    const { error } = await supabase
+      .from('staff_users')
+      .update(update)
+      .eq('school_id', schoolId)
+      .eq('auth_code', authCode)
+      .not('role_id', 'like', 'system_%');
+    return !error;
+  } catch (err) {
+    console.warn('updateStaffContactInSupabase catch:', err);
+    return false;
   }
 }

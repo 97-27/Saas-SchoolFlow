@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
 
 /**
  * Pages /admin/<segment> autorisées par rôle, à l'image exacte du menu affiché dans
@@ -27,14 +28,14 @@ const ROLE_DEFAULT_PATH: Record<string, string> = {
 };
 
 /**
- * Protège les pages /[ecole]/admin/* : sans session valide (cookie posé à la
- * connexion dans login-view.tsx), on redirige vers la page de connexion de
+ * Protège les pages /[ecole]/admin/* : sans session valide (cookie signé posé
+ * par /api/auth/login), on redirige vers la page de connexion de
  * l'école au lieu de laisser passer la requête. Avant ce correctif, ces pages
  * étaient des Server Components sans aucune vérification : quiconque avait le
  * lien direct (ex: via le bouton "Partager l'accès") accédait aux données
  * réelles (élèves, paiements, personnel) sans jamais se connecter.
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const match = pathname.match(/^\/([^/]+)\/admin(?:\/([^/]+))?/);
   if (!match) return NextResponse.next();
@@ -45,13 +46,14 @@ export function proxy(request: NextRequest) {
   // La page de connexion elle-même doit toujours rester accessible.
   if (subPath === 'login') return NextResponse.next();
 
-  const sessionCookie = request.cookies.get('sf_admin_session')?.value;
-  if (!sessionCookie) {
+  // Session signée par le serveur (lib/server/session.ts) : un cookie fabriqué ou modifié à la
+  // main n'a pas de signature valide et renvoie vers la page de connexion.
+  const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value);
+  if (!session) {
     return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
   }
 
   try {
-    const session = JSON.parse(decodeURIComponent(sessionCookie));
     const normalizedEcole = ecole === 'college-excellence' ? 'epc-manoi' : ecole;
     if (!session.slug || (session.slug !== ecole && session.slug !== normalizedEcole)) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
@@ -70,8 +72,12 @@ export function proxy(request: NextRequest) {
     }
 
     const roleId = session.roleId;
-    const allowedPaths = roleId ? ROLE_ALLOWED_PATHS[roleId] : undefined;
-    // directeur et fondateur (absents de la liste) gardent l'accès total.
+    const allowedPaths = ROLE_ALLOWED_PATHS[roleId];
+    // directeur et fondateur (absents de la liste) gardent l'accès total ; tout autre rôle
+    // inconnu est refusé au lieu d'hériter, par défaut, de l'accès total.
+    if (!allowedPaths && roleId !== 'directeur' && roleId !== 'fondateur') {
+      return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
+    }
     if (allowedPaths && !allowedPaths.includes(subPath)) {
       const fallback = ROLE_DEFAULT_PATH[roleId] || allowedPaths[0] || 'dashboard';
       return NextResponse.redirect(new URL(`/${ecole}/admin/${fallback}`, request.url));

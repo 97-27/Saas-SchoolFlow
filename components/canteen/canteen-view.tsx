@@ -6,7 +6,7 @@ import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveCanteenData } from '@/lib/data/live-store';
-import { deleteInvoiceFromSupabase } from '@/lib/supabase/services';
+import { deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   UtensilsCrossed,

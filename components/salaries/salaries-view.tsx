@@ -226,7 +226,8 @@ export function SalariesView({
         setStaffName(found.fullName);
       }
       setRole(found.role || found.subjectOrGrade || 'Membre du Personnel');
-      setMatricule(found.authCode ? `EMP-${found.authCode}` : `EMP-${found.id}`);
+      // Jamais dérivé du code d'accès : le matricule est imprimé sur la fiche de paie.
+      setMatricule(found.matricule || `EMP-${String(found.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`);
       setPhone(found.phone || '');
     }
   };

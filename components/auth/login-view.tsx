@@ -46,16 +46,13 @@ import {
   restoreSchoolAccount,
   saveLiveSchool,
   registerSchoolWithSubscription,
-  verifySchoolSubscriptionForLogin,
-  verifyUserAuthCodeForLogin,
   updateFullStaffUser,
   updateStaffLoginContact,
   broadcastLiveUpdate,
   addLiveStaffUser,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
-import { getAllSchoolsFromSupabase, getSchoolSubscriptionInfo, createNewSchoolInSupabase, saveStaffUserToSupabase } from '@/lib/supabase/services';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { getAllSchoolsFromSupabase, saveStaffUserToSupabase } from '@/lib/supabase/remote';
 
 export type UserRole =
   | 'directeur'
@@ -418,8 +415,8 @@ export function LoginView({
 
     // Remarque : isExpiredSchool (posé depuis l'URL ?expired=true après un renvoi par proxy.ts)
     // n'est qu'informatif ici — il ne bloque pas la resoumission, car il peut être obsolète
-    // (renouvellement effectué depuis). La vérification réelle et à jour se fait juste après,
-    // directement contre la base Cloud (voir getSchoolSubscriptionInfo ci-dessous).
+    // (renouvellement effectué depuis). La vérification réelle et à jour est faite par le
+    // serveur, contre la base Cloud (voir /api/auth/login ci-dessous).
 
     const trimmedName = userName.trim();
     if (!trimmedName) {
@@ -439,43 +436,6 @@ export function LoginView({
       return;
     }
 
-    // Vérification stricte : l'école / le compte doit avoir un abonnement actif souscrit
-    const identifier = cleanEmail || trimmedName;
-    const subCheck = verifySchoolSubscriptionForLogin(identifier, activeSlug);
-    if (!subCheck.isValid) {
-      setErrorMessage(
-        subCheck.reason ||
-          '❌ Accès refusé : Aucun abonnement actif n’est associé à cet établissement. Veuillez d’abord créer un compte et souscrire un abonnement.'
-      );
-      return;
-    }
-
-    // Vérification réelle de l'échéance d'abonnement (1, 2 ou 3 ans) contre la base Cloud
-    // partagée — jamais l'établissement pilote epc-manoi, qui doit rester toujours actif quoi
-    // qu'il arrive à ce mécanisme. La date de fin est calculée depuis la date d'inscription
-    // réelle en base (created_at, immuable) + la durée du forfait, avec un éventuel
-    // renouvellement manuel enregistré séparément — impossible à falsifier en local.
-    let subscriptionEndDateForCookie: string | undefined;
-    if (activeSlug && activeSlug !== 'epc-manoi' && activeSlug !== 'college-excellence') {
-      try {
-        const subInfo = await getSchoolSubscriptionInfo(activeSlug);
-        if (subInfo) {
-          subscriptionEndDateForCookie = subInfo.endDate;
-          if (subInfo.isExpired) {
-            setErrorMessage(
-              `❌ Abonnement expiré le ${new Date(subInfo.endDate).toLocaleDateString('fr-FR')}. L'accès à l'espace de gestion est suspendu. Veuillez renouveler votre abonnement pour continuer.`
-            );
-            return;
-          }
-        }
-      } catch (e) {
-        // Panne réseau/Supabase : ne pas bloquer un établissement en règle sur un simple
-        // problème de connexion — seule une expiration confirmée bloque l'accès.
-      }
-    }
-
-    let matchedParentStudents: Student[] = [];
-
     // Vérification obligatoire du contact téléphonique / WhatsApp pour TOUS les utilisateurs
     const cleanPhone = parentPhone.trim();
     if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 8) {
@@ -487,84 +447,59 @@ export function LoginView({
       return;
     }
 
-    // Validation spécifique et stricte pour les parents d'élèves
-    if (selectedRole === 'parent') {
-      if (!trimmedName || trimmedName.length < 2) {
-        setErrorMessage("Veuillez renseigner votre Nom et Prénoms de parent / tuteur légal.");
-        return;
-      }
-
-      const authCheck = verifyUserAuthCodeForLogin(
-        'parent',
-        '',
-        trimmedName,
-        activeSlug,
-        parentPhone
+    // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
+    if (selectedRole !== 'parent' && !authCodeInput.trim()) {
+      setErrorMessage(
+        selectedRole === 'fondateur'
+          ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur."
+          : selectedRole === 'directeur'
+          ? "Veuillez saisir votre Code d'Authentification officiel de Directeur."
+          : `Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`
       );
-
-      if (!authCheck.isValid) {
-        setErrorMessage(
-          authCheck.reason ||
-            "❌ Accès refusé : Vos coordonnées ne figurent pas dans la base des élèves enregistrés de l'établissement."
-        );
-        return;
-      }
-
-      matchedParentStudents = (authCheck as any).matchedStudents || [];
+      return;
     }
 
-    // Validation de la connexion et des droits d'accès
-    let verifiedStaffUser: any = null;
+    setIsLoading(true);
 
-    if (selectedRole !== 'parent') {
-      const allStaffForSchool = getLiveStaffUsers(activeSlug);
-      const roleExists = allStaffForSchool.some((s) => {
-        if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
-        if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
-        return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
+    // La décision de connexion est prise par le serveur (/api/auth/login), contre la base Cloud :
+    // abonnement, nom officiel, code personnel ou, pour un parent, nom du tuteur + téléphone. Le
+    // serveur pose lui-même le cookie de session signé (httpOnly). Les anciennes vérifications
+    // faites ici dans le navigateur ne protégeaient rien : il suffisait de fabriquer le cookie.
+    let loginResult: any = null;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: activeSlug,
+          roleId: selectedRole,
+          fullName: trimmedName,
+          code: authCodeInput.trim(),
+          phone: cleanPhone,
+          email: cleanEmail,
+        }),
       });
-
-      if (!roleExists) {
+      loginResult = await res.json().catch(() => null);
+      if (!res.ok || !loginResult?.success) {
+        if (res.status === 403 && /expir/i.test(loginResult?.error || '')) setIsExpiredSchool(true);
         setErrorMessage(
-          `❌ Aucun compte n'a encore été créé pour le poste de « ${ROLE_CONFIGS[selectedRole].title} » dans cet établissement. La Direction doit d'abord créer ce compte dans l'espace Personnel.`
+          loginResult?.error || '❌ Connexion impossible pour le moment. Vérifiez votre connexion internet et réessayez.'
         );
+        setIsLoading(false);
         return;
       }
-
-      // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
-      if (!authCodeInput.trim()) {
-        setErrorMessage(
-          selectedRole === 'fondateur'
-            ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur."
-            : selectedRole === 'directeur'
-            ? "Veuillez saisir votre Code d'Authentification officiel de Directeur."
-            : `Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.`
-        );
-        return;
-      }
-
-      // Vérification stricte des identifiants et prérogatives d'accès (Fondateur, Directeur, Collaborateurs)
-      const authCheck = verifyUserAuthCodeForLogin(
-        selectedRole,
-        authCodeInput,
-        trimmedName,
-        activeSlug,
-        parentPhone
-      );
-
-      if (!authCheck.isValid) {
-        setErrorMessage(
-          authCheck.reason ||
-            `❌ Accès refusé pour le poste de ${ROLE_CONFIGS[selectedRole].title}.`
-        );
-        return;
-      }
-      verifiedStaffUser = authCheck.staffUser;
+    } catch (err) {
+      setErrorMessage('❌ Connexion impossible : le serveur est injoignable. Vérifiez votre connexion internet et réessayez.');
+      setIsLoading(false);
+      return;
     }
+
+    const matchedParentStudents: Student[] = loginResult.matchedStudents || [];
+    const verifiedStaffUser: any = loginResult.staffUser || null;
 
     // Les parents n'ont pas de code d'authentification à saisir : leur code d'identité
     // stable et UNIQUE est dérivé de leur numéro de téléphone/WhatsApp officiel vérifié à
-    // l'instant (verifyUserAuthCodeForLogin plus haut). Avant ce correctif, TOUS les
+    // l'instant par le serveur. Avant ce correctif, TOUS les
     // parents (potentiellement 1000 à 3000 familles) recevaient le même code générique
     // "STAFF-AUTH" — sur un même appareil, la photo de profil du premier parent connecté
     // s'affichait alors chez tous les parents suivants (ex: photo du Directeur vue par un
@@ -573,10 +508,7 @@ export function LoginView({
     const cleanAuthCode =
       selectedRole === 'parent'
         ? `PARENT-${cleanPhone.replace(/\D/g, '') || Date.now()}`
-        : authCodeInput.trim().toUpperCase() ||
-          (selectedRole === 'fondateur' ? 'FND-2026' : selectedRole === 'directeur' ? 'DIR-2026' : 'STAFF-AUTH');
-
-    setIsLoading(true);
+        : authCodeInput.trim().toUpperCase();
 
     setTimeout(() => {
       const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'directeur';
@@ -614,6 +546,23 @@ export function LoginView({
           phone: finalPhone,
           avatarUrl: loginAvatar || undefined,
         }, activeSlug);
+        // La liste du personnel n'est plus téléchargée avant la connexion (elle contient les
+        // codes d'accès) : on enregistre donc aussi directement la fiche vérifiée par le serveur.
+        if (verifiedStaffUser) {
+          saveStaffUserToSupabase(
+            {
+              fullName: finalFullName.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim(),
+              email: finalEmail,
+              phone: finalPhone,
+              roleId: verifiedStaffUser.roleId,
+              role: verifiedStaffUser.role,
+              authCode: cleanAuthCode,
+              status: verifiedStaffUser.status || 'Actif',
+              avatarUrl: loginAvatar || verifiedStaffUser.avatarUrl || undefined,
+            },
+            activeSlug
+          ).catch(() => {});
+        }
       }
       const roleBadge =
         selectedRole === 'fondateur'
@@ -678,17 +627,8 @@ export function LoginView({
           user: sessionData,
           schoolSlug: activeSlug,
         });
-        // Cookie de session lu par proxy.ts pour protéger les pages /admin côté serveur
-        // (le localStorage seul n'est pas lisible avant le rendu, et ne bloque donc rien).
-        const cookiePayload = encodeURIComponent(
-          JSON.stringify({
-            slug: activeSlug,
-            roleId: selectedRole,
-            authCode: cleanAuthCode,
-            ...(subscriptionEndDateForCookie ? { subscriptionEndDate: subscriptionEndDateForCookie } : {}),
-          })
-        );
-        document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+        // Le cookie de session (lu par proxy.ts) a déjà été posé par /api/auth/login, signé et
+        // en httpOnly : le navigateur ne l'écrit plus lui-même.
       } catch (err) {
         console.error('Erreur stockage session:', err);
       }
@@ -715,7 +655,7 @@ export function LoginView({
   // ═══════════════════════════════════════════════════════════════
   // 2. GESTION DU NOUVEAU COMPTE & PRISE D'ABONNEMENT ÉTABLISSEMENT
   // ═══════════════════════════════════════════════════════════════
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -749,262 +689,110 @@ export function LoginView({
 
     setIsLoading(true);
 
-    setTimeout(async () => {
-      const cleanSigle = signupSchoolShortName.trim().toUpperCase();
-
-      // Générer le slug de l'école (priorité au sigle court si pertinent, sinon au nom)
-      const baseSlug =
-        (cleanSigle.length >= 2 ? cleanSigle : signupSchoolName)
-          .toLowerCase()
-          .trim()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/[\s_-]+/g, '-')
-          .replace(/^-+|-+$/g, '') || `ecole-${Date.now()}`;
-
-      // Vérification locale indicative (juste pour éviter un aller-retour réseau inutile dans
-      // le cas courant) — la garantie réelle d'unicité vient de createNewSchoolInSupabase
-      // ci-dessous, qui échoue proprement sur la contrainte unique du slug plutôt que de fusionner
-      // silencieusement dans une autre école si cette vérification indicative se trompait.
-      let slug = baseSlug;
-      try {
-        const [cloudSchools, localSchools] = await Promise.all([
-          getAllSchoolsFromSupabase().catch(() => [] as School[]),
-          Promise.resolve(getRegisteredSchools()),
-        ]);
-        const takenSlugs = new Set<string>([
-          ...cloudSchools.map((s) => s.slug),
-          ...localSchools.map((s) => s.slug),
-        ]);
-        if (takenSlugs.has(slug)) {
-          slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-        }
-      } catch (e) {
-        // En cas d'échec de la vérification réseau, poursuivre avec le slug initial : la
-        // véritable protection contre une collision se fait plus bas, à l'écriture réelle.
-      }
-
-      // Sigle officiel de l'école (renseigné ou déduit)
-      const words = signupSchoolName.trim().split(/\s+/);
-      const generatedShortName = cleanSigle || (words.length > 1
-        ? words.map((w) => w[0]).join('').toUpperCase().slice(0, 8)
-        : signupSchoolName.slice(0, 8).toUpperCase());
-
-      // Créer et enregistrer la nouvelle école dans le live-store
-      const newSchool: School = {
-        id: `school_${Date.now()}`,
-        slug: slug,
-        name: signupSchoolName.trim().toUpperCase(),
-        shortName: generatedShortName,
-        logoColor: '#059669',
-        academicYear: '2026-2027',
-        currentTerm: 'Trimestre 1',
-        termType: 'trimestriel',
-        phone: cleanSignupPhone,
-        whatsappPhone: cleanSignupPhone,
-        email: signupEmail.trim(),
-        motto: 'Discipline • Rigueur • Réussite',
-        slogan: 'L’Excellence au service de l’Éducation',
-        city: signupSchoolAddress.trim() || 'Abidjan',
-        address: signupSchoolAddress.trim() || 'Abidjan, Côte d’Ivoire',
-        country: 'Côte d’Ivoire',
-        district: 'Abidjan',
-        ministryCode: '',
-        // Si le Fondateur n'est pas renseigné séparément, le Directeur en fait aussi office —
-        // cas le plus courant pour une petite école (un seul et même responsable).
-        founderName: signupFounderName.trim() || signupResponsableName.trim() || 'Fondateur / Promoteur',
-        directorName: signupResponsableName.trim() || 'Directeur Général',
-        studiesDirectorName: signupResponsableName.trim() || 'Direction des Études',
-        logoUrl: '',
-        stampUrl: '',
-        countryEmblemUrl: '',
-        status: 'active',
-        subscriptionPlan: selectedPlan,
-        subscriptionPrice: selectedPlan === 'mensuel' ? 30000 : selectedPlan === 'annuel' ? 250000 : 750000,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Garantie réelle d'unicité : un INSERT (jamais un upsert) échoue sur la contrainte unique
-      // du slug en cas de collision (course entre deux inscriptions simultanées, ou simple
-      // sigle identique choisi par deux écoles différentes) au lieu d'écraser silencieusement
-      // les données d'une autre école déjà existante. En cas de collision, on régénère un
-      // suffixe et on retente, jusqu'à 5 fois — newSchool.slug est tenu à jour à chaque tentative
-      // pour que tout le reste de la création (staff, cookie, redirection) utilise le bon slug.
-      let cloudCreationOk = false;
-      let cloudCreationAttempted = false;
-      if (isSupabaseConfigured) {
-        cloudCreationAttempted = true;
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const result = await createNewSchoolInSupabase(newSchool);
-          if (result.success) {
-            cloudCreationOk = true;
-            break;
-          }
-          if (result.collision) {
-            slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
-            newSchool.slug = slug;
-            continue;
-          }
-          // Échec non lié à une collision (réseau, config) : inutile de réessayer avec un
-          // nouveau slug, le problème ne vient pas du slug lui-même.
-          break;
-        }
-      }
-
-      // Génère un code d'authentification unique aléatoire par établissement — le code générique
-      // "DIR-2026"/"FND-2026" était identique pour TOUTES les nouvelles écoles créées, ce qui
-      // permettait en théorie à quiconque connaissant le nom du Directeur/Fondateur officiel
-      // (souvent une information publique/connue localement) de se connecter à leur espace.
-      const generateUniqueCode = (prefix: string) =>
-        `${prefix}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-      const directorAuthCode = generateUniqueCode('DIR');
-      const founderAuthCode = generateUniqueCode('FND');
-
-      // Blocage strict uniquement si la base Cloud est configurée et joignable mais que la
-      // création réelle a échoué pour une raison AUTRE qu'une collision de slug déjà résolue par
-      // les tentatives ci-dessus (ex: erreur serveur) — on ne crée jamais un espace fantôme dont
-      // le Directeur ne pourrait ensuite jamais retrouver l'accès sur un autre appareil.
-      if (cloudCreationAttempted && !cloudCreationOk) {
+    // Création réelle côté serveur (/api/auth/signup) : établissement, fiches Directeur et
+    // Fondateur avec des codes d'accès aléatoires cryptographiques, et cookie de session signé.
+    // Le serveur garantit aussi l'unicité du slug (INSERT avec nouvelles tentatives en cas de
+    // collision) : plus besoin de télécharger la liste de toutes les écoles dans le navigateur.
+    let result: any = null;
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schoolName: signupSchoolName,
+          shortName: signupSchoolShortName,
+          address: signupSchoolAddress,
+          email: signupEmail,
+          phone: cleanSignupPhone,
+          responsableName: signupResponsableName,
+          founderName: signupFounderName,
+          plan: selectedPlan,
+        }),
+      });
+      result = await res.json().catch(() => null);
+      if (!res.ok || !result?.success) {
         setErrorMessage(
-          "❌ Impossible de créer votre espace pour le moment (problème de connexion au serveur). Veuillez réessayer dans quelques instants."
+          result?.error ||
+            '❌ Impossible de créer votre espace pour le moment (problème de connexion au serveur). Veuillez réessayer dans quelques instants.'
         );
         setIsLoading(false);
         return;
       }
+    } catch (err) {
+      setErrorMessage('❌ Impossible de créer votre espace pour le moment : le serveur est injoignable. Veuillez réessayer dans quelques instants.');
+      setIsLoading(false);
+      return;
+    }
 
-      let staffCloudSaveOk = true;
-      try {
-        registerSchoolWithSubscription(newSchool);
+    const newSchool: School = result.school;
+    const slug: string = newSchool.slug;
+    const directorAuthCode: string = result.directorAuthCode;
+    const founderAuthCode: string = result.founderAuthCode;
 
-        // Créer les fiches réelles Directeur & Fondateur avec leur code unique, pour que
-        // verifyUserAuthCodeForLogin() les valide sur leur vrai code et non plus sur un
-        // code générique partagé par toutes les écoles.
-        addLiveStaffUser(
-          {
-            id: `staff-directeur-${Date.now()}`,
-            fullName: signupResponsableName.trim(),
-            role: 'Contrôle',
-            roleId: 'directeur',
-            email: signupEmail.trim(),
-            phone: cleanSignupPhone,
-            authCode: directorAuthCode,
-            status: 'Actif',
-          },
-          slug
-        );
-        addLiveStaffUser(
-          {
-            id: `staff-fondateur-${Date.now() + 1}`,
-            fullName: signupFounderName.trim() || signupResponsableName.trim(),
-            role: 'Contrôle Total',
-            roleId: 'fondateur',
-            email: signupEmail.trim(),
-            phone: cleanSignupPhone,
-            authCode: founderAuthCode,
-            status: 'Actif',
-          },
-          slug
-        );
+    try {
+      registerSchoolWithSubscription(newSchool);
 
-        // addLiveStaffUser sauvegarde déjà vers Supabase en arrière-plan (fire-and-forget), mais
-        // sans jamais faire remonter l'échec : on refait ici les deux mêmes sauvegardes, cette
-        // fois attendues, pour savoir si le code d'accès du Directeur/Fondateur a réellement
-        // atteint le Cloud avant d'annoncer un succès total — sinon ce code resterait valide
-        // uniquement sur cet appareil et son titulaire se retrouverait bloqué sur tout autre.
-        if (cloudCreationAttempted) {
-          const [dirSaved, fndSaved] = await Promise.all([
-            saveStaffUserToSupabase(
-              {
-                fullName: signupResponsableName.trim(),
-                role: 'Contrôle',
-                roleId: 'directeur',
-                email: signupEmail.trim(),
-                phone: cleanSignupPhone,
-                authCode: directorAuthCode,
-                status: 'Actif',
-              },
-              slug
-            ).catch(() => false),
-            saveStaffUserToSupabase(
-              {
-                fullName: signupFounderName.trim() || signupResponsableName.trim(),
-                role: 'Contrôle Total',
-                roleId: 'fondateur',
-                email: signupEmail.trim(),
-                phone: cleanSignupPhone,
-                authCode: founderAuthCode,
-                status: 'Actif',
-              },
-              slug
-            ).catch(() => false),
-          ]);
-          staffCloudSaveOk = dirSaved && fndSaved;
-        }
-
-        // Sauvegarder la session active en tant que Directeur Administrateur
-        const sessionData = {
-          fullName: `Dr. ${signupResponsableName.trim()}`,
-          civility: 'Mr',
-          pureName: signupResponsableName.trim(),
+      // Copies locales des fiches Directeur & Fondateur (déjà enregistrées en base par le serveur).
+      addLiveStaffUser(
+        {
+          id: `staff-directeur-${Date.now()}`,
+          fullName: signupResponsableName.trim(),
           role: 'Contrôle',
           roleId: 'directeur',
-          roleBadge: '👑 Contrôle',
-          department: 'Direction des Études',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
           authCode: directorAuthCode,
-          loginTime: new Date().toISOString(),
-        };
-        localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
-        window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+          status: 'Actif',
+        },
+        slug
+      );
+      addLiveStaffUser(
+        {
+          id: `staff-fondateur-${Date.now() + 1}`,
+          fullName: signupFounderName.trim() || signupResponsableName.trim(),
+          role: 'Contrôle Total',
+          roleId: 'fondateur',
+          email: signupEmail.trim(),
+          phone: cleanSignupPhone,
+          authCode: founderAuthCode,
+          status: 'Actif',
+        },
+        slug
+      );
 
-        // Échéance d'abonnement calculée dès la création (date d'inscription + durée du
-        // forfait choisi) et posée dans le cookie, comme au login — évite qu'une toute
-        // nouvelle école reste sans date de contrôle jusqu'à sa prochaine connexion.
-        const planMonths: Record<string, number> = { mensuel: 1, annuel: 12, triennal: 36 };
-        const newSchoolEndDate = new Date();
-        newSchoolEndDate.setMonth(newSchoolEndDate.getMonth() + (planMonths[selectedPlan] || 12));
+      // Sauvegarder la session active en tant que Directeur Administrateur
+      const sessionData = {
+        fullName: `Dr. ${signupResponsableName.trim()}`,
+        civility: 'Mr',
+        pureName: signupResponsableName.trim(),
+        role: 'Contrôle',
+        roleId: 'directeur',
+        roleBadge: '👑 Contrôle',
+        department: 'Direction des Études',
+        email: signupEmail.trim(),
+        phone: cleanSignupPhone,
+        authCode: directorAuthCode,
+        loginTime: new Date().toISOString(),
+      };
+      localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(sessionData));
+      window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+    } catch (err) {
+      console.error('Erreur création école:', err);
+    }
 
-        const cookiePayload = encodeURIComponent(
-          JSON.stringify({
-            slug,
-            roleId: 'directeur',
-            authCode: directorAuthCode,
-            subscriptionEndDate: newSchoolEndDate.toISOString(),
-          })
-        );
-        document.cookie = `sf_admin_session=${cookiePayload}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
-      } catch (err) {
-        console.error('Erreur création école:', err);
-      }
+    const cloudWarning = result.staffSaved
+      ? ''
+      : ' ⚠️ Votre code d’accès n’a pas pu être confirmé en ligne — s’il ne fonctionne pas depuis un autre appareil, contactez le support SchoolFlow.';
 
-      // Vérifier que l'école est bien visible dans la base Cloud partagée avant de confirmer le
-      // succès : la sauvegarde vers Supabase se fait normalement en arrière-plan sans jamais
-      // remonter d'erreur au Directeur — si elle échoue (réseau, configuration), l'établissement
-      // restait invisible sur tout autre appareil sans que personne ne le sache.
-      let cloudWarning = '';
-      try {
-        const verify = await getAllSchoolsFromSupabase();
-        if (!verify.some((s) => s.slug === slug)) {
-          cloudWarning = ' ⚠️ Sauvegarde en ligne non confirmée — vérifiez votre connexion internet, sinon votre espace restera limité à cet appareil.';
-        } else if (!staffCloudSaveOk) {
-          cloudWarning = ' ⚠️ Votre code d’accès n’a pas pu être confirmé en ligne — s’il ne fonctionne pas depuis un autre appareil, reconnectez-vous depuis celui-ci pour le régénérer.';
-        }
-      } catch (e) {
-        cloudWarning = ' ⚠️ Impossible de confirmer la sauvegarde en ligne — vérifiez votre connexion internet.';
-      }
+    setSuccessToast({
+      title: cloudWarning ? 'Abonnement activé — vérification requise' : 'Abonnement activé avec succès !',
+      subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.${cloudWarning}`,
+    });
+    setIsLoading(false);
 
-      setSuccessToast({
-        title: cloudWarning ? 'Abonnement activé — vérification requise' : 'Abonnement activé avec succès !',
-        subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.${cloudWarning}`,
-      });
-      setIsLoading(false);
-
-      setTimeout(() => {
-        router.push(`/${slug}/admin/dashboard`);
-      }, cloudWarning ? 6000 : 3500);
-    }, 800);
+    setTimeout(() => {
+      router.push(`/${slug}/admin/dashboard`);
+    }, cloudWarning ? 6000 : 3500);
   };
 
   const getPlanDetails = (planId: 'mensuel' | 'annuel' | 'triennal') => {

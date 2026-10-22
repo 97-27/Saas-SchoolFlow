@@ -2,8 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // Les erreurs TypeScript bloquent désormais le build (et donc le déploiement Vercel) au lieu
+  // d'être ignorées en silence.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   async redirects() {
     return [

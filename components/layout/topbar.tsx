@@ -13,7 +13,7 @@ import {
   DATA_UPDATED_EVENT,
   broadcastLiveUpdate,
 } from '@/lib/data/live-store';
-import { uploadAvatarToSupabase } from '@/lib/supabase/services';
+import { uploadAvatarToSupabase } from '@/lib/supabase/remote';
 import {
   Menu,
   Bell,
@@ -323,12 +323,8 @@ export function Topbar({
       canvas.toBlob(async (blob) => {
         let finalAvatarUrl = compressedDataUrl;
         if (blob) {
-          const userIdentifier = (
-            (activeSession as any)?.authCode ||
-            activeSession.roleId ||
-            'user'
-          ).toLowerCase().replace(/[^a-z0-9]/g, '_');
-          const fileName = `avatar_${schoolSlug}_${userIdentifier}_${Date.now()}.jpg`;
+          // Jamais le code d'accès dans le nom du fichier : il finirait dans une URL publique.
+          const fileName = `avatar_${schoolSlug}_${activeSession.roleId || 'user'}_${Date.now()}.jpg`;
           try {
             const cloudUrl = await uploadAvatarToSupabase(blob, fileName);
             if (cloudUrl) {
@@ -1095,14 +1091,17 @@ export function Topbar({
 
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       setIsProfileOpen(false);
                       try {
                         localStorage.removeItem('schoolflow_active_session_v2');
                       } catch (e) {}
                       // Efface le cookie lu par proxy.ts : sans ça, le lien admin resterait
-                      // accessible sans reconnexion malgré le bouton "Verrouiller".
-                      document.cookie = 'sf_admin_session=; path=/; max-age=0; SameSite=Lax';
+                      // accessible sans reconnexion malgré le bouton "Verrouiller". Ce cookie est
+                      // httpOnly : seul le serveur peut l'effacer.
+                      try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                      } catch (e) {}
                       router.push(`/${schoolSlug}/login`);
                     }}
                     className="w-full px-4 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 flex items-center justify-center gap-2 border border-rose-200 transition-colors cursor-pointer"

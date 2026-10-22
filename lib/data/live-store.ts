@@ -13,9 +13,10 @@ import {
   deleteStaffUserFromSupabase,
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
-} from '@/lib/supabase/services';
+} from '@/lib/supabase/remote';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
+import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 
 export const normalizeWords = (name: string): string =>
   (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
@@ -83,264 +84,46 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
 }
 
 /**
- * Gestionnaire unifié des flux entrants distants (WebSockets Supabase + SSE)
+ * Applique un message reçu d'un AUTRE appareil via le canal Supabase Realtime.
+ * Ce canal est joignable par quiconque connaît la clé publique : son contenu n'est donc jamais
+ * considéré comme fiable. Il ne sert plus que de signal « des données ont changé », suivi d'une
+ * relecture authentifiée via /api/sync (qui, elle, vérifie la session et le rôle). Seule
+ * exception : l'ouverture/fermeture du portail des notes, qui n'est pas encore stockée côté
+ * serveur et ne contient aucune donnée personnelle.
  */
 function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
   if (!payload || typeof window === 'undefined') return;
-  const isPilot = cleanSlug === 'epc-manoi';
 
-  try {
-    // 1. Nouvel élève & nouveau reçu enregistré par un collaborateur distant
-    if (payload.action === 'student_registered' && payload.student) {
-      const student: Student = payload.student;
-      const invoice: Invoice = payload.invoice;
-
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-      const filteredStudents = prevSchool.filter(
-        (s) => s.id !== student.id && s.studentNumber !== student.studentNumber
-      );
-      const updatedStudents = [student, ...filteredStudents];
-
-      localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
-      if (isPilot) {
-        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
-      }
-
-      if (invoice) {
-        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-        const rawInvSchool = localStorage.getItem(invSchoolKey);
-        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-        const filteredInvoices = prevInvSchool.filter(
-          (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-        );
-        const updatedInvoices = [invoice, ...filteredInvoices];
-
-        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-        if (isPilot) {
-          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-        }
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'payment_recorded' && payload.invoice) {
-      // 2. Encaissement de prestation ou mise à jour facture
-      const invoice: Invoice = payload.invoice;
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-      const rawInvSchool = localStorage.getItem(invSchoolKey);
-      const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-      const filteredInvoices = prevInvSchool.filter(
-        (inv) => inv.id !== invoice.id && inv.invoiceNumber !== invoice.invoiceNumber
-      );
-      const updatedInvoices = [invoice, ...filteredInvoices];
-
-      localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-      if (isPilot) {
-        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'student_updated' && payload.student) {
-      // 3. Mise à jour d'un élève par un collaborateur distant
-      const student: Student = payload.student;
-      const invoice: Invoice = payload.invoice;
-
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-      const rawSchool = localStorage.getItem(schoolKey);
-      const prevSchool: Student[] = rawSchool ? JSON.parse(rawSchool) : [];
-      const updatedStudents = prevSchool.map((s) =>
-        s.id === student.id || (s.studentNumber && s.studentNumber === student.studentNumber)
-          ? { ...s, ...student }
-          : s
-      );
-
-      localStorage.setItem(schoolKey, JSON.stringify(updatedStudents));
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(updatedStudents));
-      if (isPilot) {
-        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedStudents));
-      }
-
-      if (invoice) {
-        const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-        const rawInvSchool = localStorage.getItem(invSchoolKey);
-        const prevInvSchool: Invoice[] = rawInvSchool ? JSON.parse(rawInvSchool) : [];
-        const updatedInvoices = prevInvSchool.map((inv) =>
-          inv.id === invoice.id || (inv.invoiceNumber && inv.invoiceNumber === invoice.invoiceNumber)
-            ? { ...inv, ...invoice }
-            : inv
-        );
-
-        localStorage.setItem(invSchoolKey, JSON.stringify(updatedInvoices));
-        localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(updatedInvoices));
-        if (isPilot) {
-          localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(updatedInvoices));
-        }
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'school_settings_updated' && payload.school) {
-      // 4. Mise à jour des paramètres de l'école
-      const schoolJson = JSON.stringify(payload.school);
-      localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}${cleanSlug}`, schoolJson);
-      if (isPilot) {
-        localStorage.setItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`, schoolJson);
-        localStorage.setItem('schoolflow_active_school_settings_v1', schoolJson);
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'staff_users_updated' && Array.isArray(payload.staffUsers)) {
-      // 5. Mise à jour du personnel et des accès
-      const staffJson = JSON.stringify(payload.staffUsers);
-      localStorage.setItem(`${STAFF_USERS_STORAGE_KEY}_${cleanSlug}`, staffJson);
-      if (isPilot) {
-        localStorage.setItem(STAFF_USERS_STORAGE_KEY, staffJson);
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'session_updated' && payload.session) {
-      if (payload.avatarUrl) {
-        try {
-          if (payload.session.authCode) {
-            localStorage.setItem(`schoolflow_user_avatar_${payload.session.authCode.toUpperCase()}`, payload.avatarUrl);
-          }
-        } catch (e) {}
-      }
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'grades_portal_updated' && payload.portalStatus) {
-      // 6. Ouverture / Fermeture portail des notes
+  if (payload.action === 'grades_portal_updated' && payload.portalStatus && typeof payload.portalStatus === 'object') {
+    try {
       const portalJson = JSON.stringify(payload.portalStatus);
       localStorage.setItem(`${GRADES_PORTAL_KEY}_${cleanSlug}`, portalJson);
       localStorage.setItem(GRADES_PORTAL_KEY, portalJson);
-
       window.dispatchEvent(
         new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
+          detail: { action: 'grades_portal_updated', portalStatus: payload.portalStatus, isRemoteSync: true },
         })
       );
-    } else if (payload.action === 'transport_updated') {
-      const transportSubKey = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${cleanSlug}`;
-      const transportPayKey = isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${cleanSlug}`;
-      if (payload.customTransportMap) {
-        localStorage.setItem(transportSubKey, JSON.stringify(payload.customTransportMap));
-      }
-      if (payload.monthlyPayments) {
-        localStorage.setItem(transportPayKey, JSON.stringify(payload.monthlyPayments));
-      }
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'canteen_updated') {
-      const canteenSubKey = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${cleanSlug}`;
-      const canteenPayKey = isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${cleanSlug}`;
-      const canteenMenuKey = isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${cleanSlug}`;
-      if (payload.customCanteenMap) {
-        localStorage.setItem(canteenSubKey, JSON.stringify(payload.customCanteenMap));
-      }
-      if (payload.monthlyPayments) {
-        localStorage.setItem(canteenPayKey, JSON.stringify(payload.monthlyPayments));
-      }
-      if (payload.weeklyMenu) {
-        localStorage.setItem(canteenMenuKey, JSON.stringify(payload.weeklyMenu));
-      }
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'boarding_updated') {
-      const boardingSubKey = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${cleanSlug}`;
-      const boardingPayKey = isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${cleanSlug}`;
-      if (payload.customSubscriptions) {
-        localStorage.setItem(boardingSubKey, JSON.stringify(payload.customSubscriptions));
-      }
-      if (payload.monthlyPayments) {
-        localStorage.setItem(boardingPayKey, JSON.stringify(payload.monthlyPayments));
-      }
-      if (payload.boardingCapacity !== undefined) {
-        localStorage.setItem(`schoolflow_boarding_capacity_${cleanSlug}`, payload.boardingCapacity.toString());
-      }
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: { ...payload, isRemoteSync: true },
-        })
-      );
-    } else if (payload.action === 'students_deleted' && Array.isArray(payload.deletedIds)) {
-      deleteLiveStudents(payload.deletedIds, cleanSlug);
-    } else if (payload.action === 'force_store_refresh' && Array.isArray(payload.students)) {
-      const students: Student[] = payload.students;
-      const invoices: Invoice[] = payload.invoices || [];
-
-      const schoolKey = `${STUDENTS_STORAGE_KEY}_${cleanSlug}`;
-      localStorage.setItem(schoolKey, JSON.stringify(students));
-      localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(students));
-      if (isPilot) {
-        localStorage.setItem(`${STUDENTS_STORAGE_KEY}_epc-manoi`, JSON.stringify(students));
-      }
-
-      const invSchoolKey = `${INVOICES_STORAGE_KEY}_${cleanSlug}`;
-      localStorage.setItem(invSchoolKey, JSON.stringify(invoices));
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(invoices));
-      if (isPilot) {
-        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(invoices));
-      }
-
-      window.dispatchEvent(
-        new CustomEvent(DATA_UPDATED_EVENT, {
-          detail: {
-            action: 'force_store_refresh',
-            isRemoteSync: true,
-          },
-        })
-      );
-    }
-  } catch (err) {
-    // Ignorer les formats non conformes
+    } catch (e) {}
+    return;
   }
+
+  // Laisser à l'auteur le temps de terminer son enregistrement avant de relire le serveur.
+  setTimeout(() => syncSchoolDataWithServer(cleanSlug, true), 1500);
 }
 
-/**
- * Canal universel hybride (Supabase Realtime WebSockets + SSE) pour synchroniser
- * en temps réel tous les PC, téléphones et tablettes distants.
- */
-let activeEventSource: EventSource | null = null;
-let currentSseSlug = '';
 let activeSupabaseChannel: any = null;
 
+/**
+ * Canal temps réel multi-appareils (Supabase Realtime). L'ancien canal secondaire ntfy.sh a été
+ * supprimé : c'était un service public où le contenu complet de chaque modification (élèves,
+ * paiements, liste du personnel AVEC les codes d'accès) était lisible — et falsifiable — par
+ * quiconque devinait le nom du sujet (schoolflow_sync_<slug>_v4).
+ */
 export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
   if (typeof window === 'undefined') return;
   const cleanSlug = (!slug || slug === 'college-excellence') ? 'epc-manoi' : slug;
 
-  // 1. Canal Supabase Realtime (WebSockets)
   if (isSupabaseConfigured && !activeSupabaseChannel) {
     try {
       const channelSlug = cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -350,58 +133,9 @@ export function startUniversalRealtimeSync(slug: string = 'epc-manoi'): void {
           if (!payload || payload.senderId === CLIENT_INSTANCE_ID) return;
           handleRemoteIncomingPayload(payload, cleanSlug);
         })
-        .on('postgres_changes', { event: '*', schema: 'public' }, (changePayload) => {
-          window.dispatchEvent(
-            new CustomEvent(DATA_UPDATED_EVENT, {
-              detail: { action: 'postgres_cdc_update', payload: changePayload, isRemoteSync: true },
-            })
-          );
-        })
         .subscribe();
     } catch (err) {
       console.warn('Supabase realtime channel notice:', err);
-    }
-  }
-
-  // 2. Canal SSE redondant haute disponibilité
-  if (typeof EventSource !== 'undefined') {
-    if (activeEventSource && currentSseSlug === cleanSlug) return;
-
-    if (activeEventSource) {
-      try {
-        activeEventSource.close();
-      } catch (e) {}
-      activeEventSource = null;
-    }
-
-    currentSseSlug = cleanSlug;
-    const topic = `schoolflow_sync_${cleanSlug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
-
-    try {
-      const es = new EventSource(`https://ntfy.sh/${topic}/sse`);
-      activeEventSource = es;
-
-      es.onmessage = (event) => {
-        try {
-          if (!event.data) return;
-          const msg = JSON.parse(event.data);
-          if (!msg || msg.event !== 'message' || !msg.message) return;
-
-          const payload =
-            typeof msg.message === 'string' ? JSON.parse(msg.message) : msg.message;
-          if (!payload || payload.senderId === CLIENT_INSTANCE_ID) {
-            return;
-          }
-
-          handleRemoteIncomingPayload(payload, cleanSlug);
-        } catch (err) {}
-      };
-
-      es.onerror = () => {
-        // Reconnexion gérée automatiquement par EventSource
-      };
-    } catch (e) {
-      console.warn('Initialisation SSE universel notice:', e);
     }
   }
 }
@@ -434,26 +168,22 @@ export function broadcastLiveUpdate(detail: Record<string, any> = {}): void {
     }
   }
 
-  // 3. Diffusion instantanée via Supabase Realtime WebSockets
-  if (!detail.isRemoteSync && activeSupabaseChannel) {
+  // 3. Signal aux autres appareils : l'action seule, sans aucune donnée. "server_hydrated" n'est
+  // pas relayé (c'est déjà le résultat d'une relecture serveur ; le relayer ferait rebondir les
+  // relectures d'un appareil à l'autre).
+  if (!detail.isRemoteSync && activeSupabaseChannel && detail.action !== 'server_hydrated') {
     try {
       activeSupabaseChannel.send({
         type: 'broadcast',
         event: 'live_update',
-        payload: enrichedDetail,
+        payload: {
+          action: detail.action || 'data_changed',
+          senderId: CLIENT_INSTANCE_ID,
+          timestamp: enrichedDetail.timestamp,
+          ...(detail.action === 'grades_portal_updated' && detail.portalStatus ? { portalStatus: detail.portalStatus } : {}),
+        },
       });
     } catch (e) {}
-  }
-
-  // 4. Diffusion instantanée SSE multi-appareils (téléphones, tablettes, autres PC)
-  if (!detail.isRemoteSync && typeof fetch !== 'undefined') {
-    const slug = detail.schoolSlug || 'epc-manoi';
-    const topic = `schoolflow_sync_${slug.replace(/[^a-zA-Z0-9_-]/g, '_')}_v4`;
-    fetch(`https://ntfy.sh/${topic}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(enrichedDetail),
-    }).catch(() => {});
   }
 }
 
@@ -705,10 +435,11 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
  * Synchronise les données réelles enregistrées depuis l'API serveur pour assurer la persistance
  * lorsque le lien du site est partagé avec d'autres utilisateurs ou ouvert sur d'autres appareils.
  */
-export function syncSchoolDataWithServer(slug: string): void {
+export function syncSchoolDataWithServer(slug: string, force: boolean = false): void {
   if (typeof window === 'undefined' || typeof fetch === 'undefined' || isSyncingServer) return;
   const now = Date.now();
-  if (now - lastSyncTimestamp < 15000) return; // Anti-rafale : 15s minimum entre deux appels
+  // Anti-rafale : 15s minimum entre deux appels (3s quand un autre appareil signale un changement)
+  if (now - lastSyncTimestamp < (force ? 3000 : 15000)) return;
   isSyncingServer = true;
   lastSyncTimestamp = now;
 
@@ -728,7 +459,7 @@ export function syncSchoolDataWithServer(slug: string): void {
         if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds)) {
           const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
           const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-          const serverList = Array.from(new Set(data.deletedStudentIds.filter(Boolean)));
+          const serverList = Array.from(new Set<string>(data.deletedStudentIds.filter(Boolean)));
           if (
             serverList.length !== prevDeleted.length ||
             serverList.some((id) => !prevDeleted.includes(id))
@@ -2624,89 +2355,7 @@ export function updateStaffLoginContact(
   }
 }
 
-/**
- * Vérifie si le numéro saisi par le parent correspond à l'un des numéros enregistrés pour l'élève
- * (Prend en compte jusqu'à 3 numéros : whatsappPhone, guardianPhone, secondaryPhones, avec ou sans indicatif valide).
- * Rejette catégoriquement tout faux indicatif de pays.
- */
-export function checkPhoneMatchesStudent(inputRawPhone: string, stu: Student): boolean {
-  if (!inputRawPhone || !stu) return false;
-  const rawInput = inputRawPhone.trim();
-  const inputDigits = rawInput.replace(/\D/g, '');
-  if (inputDigits.length < 8) return false;
-
-  // Récupérer tous les numéros enregistrés pour cet élève
-  const registeredCandidates: string[] = [
-    stu.whatsappPhone || '',
-    stu.guardianPhone || '',
-    ...(stu.secondaryPhones || []),
-  ].filter(Boolean);
-
-  // Découper les éventuels numéros combinés par /, ;, , ou "ou"
-  const allPhones: string[] = [];
-  for (const item of registeredCandidates) {
-    const parts = item.split(/[/;,|]|\bou\b/i).map((p) => p.trim()).filter(Boolean);
-    allPhones.push(...parts);
-  }
-
-  const hasExplicitPrefix = rawInput.startsWith('+') || rawInput.startsWith('00');
-  let inputPrefix = '';
-  if (rawInput.startsWith('+225') || rawInput.startsWith('00225') || inputDigits.startsWith('225')) {
-    inputPrefix = '225';
-  } else if (rawInput.startsWith('+221') || rawInput.startsWith('00221') || inputDigits.startsWith('221')) {
-    inputPrefix = '221';
-  } else if (rawInput.startsWith('+229') || rawInput.startsWith('00229') || inputDigits.startsWith('229')) {
-    inputPrefix = '229';
-  } else if (rawInput.startsWith('+226') || rawInput.startsWith('00226') || inputDigits.startsWith('226')) {
-    inputPrefix = '226';
-  } else if (rawInput.startsWith('+33') || rawInput.startsWith('0033')) {
-    inputPrefix = '33';
-  }
-
-  for (const regStr of allPhones) {
-    const regDigits = regStr.replace(/\D/g, '');
-    if (regDigits.length < 8) continue;
-
-    let regPrefix = '';
-    if (regStr.startsWith('+225') || regStr.startsWith('00225') || regDigits.startsWith('225')) {
-      regPrefix = '225';
-    } else if (regStr.startsWith('+221') || regStr.startsWith('00221') || regDigits.startsWith('221')) {
-      regPrefix = '221';
-    } else if (regStr.startsWith('+229') || regStr.startsWith('00229') || regDigits.startsWith('229')) {
-      regPrefix = '229';
-    } else if (regStr.startsWith('+226') || regStr.startsWith('00226') || regDigits.startsWith('226')) {
-      regPrefix = '226';
-    }
-
-    // Faux indicatif interdit : si l'utilisateur a saisi un indicatif explicite différent de celui de l'école/enregistré
-    if (hasExplicitPrefix && inputPrefix && regPrefix && inputPrefix !== regPrefix) {
-      continue;
-    }
-
-    // 1. Correspondance exacte des chiffres
-    if (inputDigits === regDigits) return true;
-
-    // 2. Correspondance sans préfixe pays
-    const inputNational = inputPrefix && inputDigits.startsWith(inputPrefix)
-      ? inputDigits.slice(inputPrefix.length)
-      : inputDigits;
-    const regNational = regPrefix && regDigits.startsWith(regPrefix)
-      ? regDigits.slice(regPrefix.length)
-      : regDigits;
-
-    if (inputNational === regNational) return true;
-
-    // 3. Correspondance avec ou sans 0 initial (ex: 0748921100 vs 748921100)
-    if (inputNational.replace(/^0+/, '') === regNational.replace(/^0+/, '')) return true;
-
-    // 4. Correspondance sur les 8 derniers chiffres
-    if (inputNational.length >= 8 && regNational.length >= 8) {
-      if (inputNational.slice(-8) === regNational.slice(-8)) return true;
-    }
-  }
-
-  return false;
-}
+export { checkPhoneMatchesStudent, areNamesMatching };
 
 export function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): void {
   const users = getLiveStaffUsers(schoolSlug);
@@ -2760,53 +2409,6 @@ export function recordStaffLogin(
 
     saveLiveStaffUsers(updated, schoolSlug);
   } catch (e) {}
-}
-
-/**
- * Helper de comparaison intelligente de noms (insensible aux civilités, accents, casse, et ordre).
- * Permet de valider "LAWANI MOUHAMED" face à "Mouhamed Lawani" ou "M. LAWANI Mouhamed".
- */
-export function areNamesMatching(input: string, official: string): boolean {
-  if (!input || !official) return false;
-
-  const normalize = (str: string) =>
-    str
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .trim();
-
-  const HONORIFICS = new Set([
-    'm', 'mr', 'mme', 'mlle', 'madame', 'monsieur', 'dr', 'docteur',
-    'prof', 'professeur', 'frere', 'soeur', 'pasteur', 'imam', 'maitre',
-    'directeur', 'directrice', 'fondateur', 'fondatrice', 'general', 'generale'
-  ]);
-
-  const inputTokens = normalize(input)
-    .split(/\s+/)
-    .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
-
-  const officialTokens = normalize(official)
-    .split(/\s+/)
-    .filter((t) => t.length >= 2 && !HONORIFICS.has(t));
-
-  if (inputTokens.length === 0 || officialTokens.length === 0) return false;
-
-  const inputSet = new Set(inputTokens);
-  const officialSet = new Set(officialTokens);
-
-  // Tous les mots officiels sont présents dans la saisie ou inversement
-  const officialInInput = officialTokens.every((t) => inputSet.has(t));
-  const inputInOfficial = inputTokens.every((t) => officialSet.has(t));
-  if (officialInInput || inputInOfficial) return true;
-
-  // Au moins 2 mots clés majeurs correspondent
-  const commonTokens = inputTokens.filter((t) => officialSet.has(t));
-  if (commonTokens.length >= 2) return true;
-  if (commonTokens.length >= 1 && (inputTokens.length === 1 || officialTokens.length === 1)) return true;
-
-  return false;
 }
 
 /**

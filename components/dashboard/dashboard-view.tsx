@@ -35,7 +35,7 @@ import {
   getInvoicesFromSupabase,
   getServicesDataFromSupabase,
   saveServicesDataToSupabase,
-} from '@/lib/supabase/services';
+} from '@/lib/supabase/remote';
 
 interface DashboardViewProps {
   school: School;

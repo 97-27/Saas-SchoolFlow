@@ -7,9 +7,6 @@ import {
   getInvoicesFromSupabase,
   getStaffUsersFromSupabase,
   saveSchoolToSupabase,
-  saveStudentToSupabase,
-  saveInvoiceToSupabase,
-  saveStaffUserToSupabase,
   deleteStudentFromSupabase,
   deleteInvoiceFromSupabase,
   saveServicesDataToSupabase,
@@ -22,8 +19,16 @@ import {
   getParentMessagesFromSupabase,
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
-
-const PROTECTED_STUDENT_NUMBERS = new Set<string>();
+import {
+  requireSession,
+  isAdmin,
+  hasRole,
+  jsonError,
+  STUDENT_WRITE_ROLES,
+  DELETE_ROLES,
+  SERVICES_WRITE_ROLES,
+} from '@/lib/server/auth';
+import { SessionPayload } from '@/lib/server/session';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -56,11 +61,87 @@ function ensureDataFile() {
 // Initialiser au premier chargement
 ensureDataFile();
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+// Collections "services" rattachées à un élève (tableau d'objets portant studentId, ou objet
+// indexé par l'identifiant de l'élève). canteenWeeklyMenu et boardingCapacity n'en font pas partie.
+const STUDENT_SCOPED_SERVICE_KEYS = [
+  'boardingSubscriptions',
+  'boardingPayments',
+  'canteenSubscriptions',
+  'canteenPayments',
+  'transportSubscriptions',
+  'transportPayments',
+  'installments',
+];
+
+const digitsOnly = (v: unknown) => String(v || '').replace(/\D/g, '');
+const upperCode = (v: unknown) => String(v || '').trim().toUpperCase();
+
+function filterByStudent(value: any, childIds: Set<string>): any {
+  if (Array.isArray(value)) return value.filter((item) => item && childIds.has(item.studentId));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).filter(([key]) => childIds.has(key)));
+  }
+  return value;
+}
+
+/** Un message appartient au parent si son numéro correspond à l'un des numéros de ses enfants. */
+function parentOwnsMessage(message: any, parentPhones: string[]): boolean {
+  const msgDigits = digitsOnly(message?.parentPhone);
+  if (msgDigits.length < 8) return false;
+  return parentPhones.some((p) => p.slice(-8) === msgDigits.slice(-8));
+}
+
+/**
+ * Restreint les données renvoyées au strict nécessaire du rôle connecté :
+ * - Notes diverses : chacun ne reçoit que SES notes (elles sont personnelles par conception).
+ * - Personnel : seuls Fondateur/Directeur reçoivent les codes d'accès ; les autres reçoivent la
+ *   liste avec les codes masqués (sauf le leur).
+ * - Messages parents : réservés à la Direction ; un parent ne reçoit que les siens.
+ * - Parents : uniquement leurs enfants (fiches, encaissements, prestations).
+ */
+function filterForSession(data: Record<string, any>, session: SessionPayload): Record<string, any> {
+  const out: Record<string, any> = { ...data };
+  const ownCode = upperCode(session.code);
+
+  if (Array.isArray(out.diverseNotes)) {
+    out.diverseNotes = out.diverseNotes.filter((n: any) => upperCode(n?.authorCode) === ownCode);
+  }
+
+  if (session.roleId === 'parent') {
+    const childIds = new Set(session.childIds || []);
+    const phones = session.parentPhones || [];
+    out.students = (out.students || []).filter((s: any) => childIds.has(s.id));
+    out.invoices = (out.invoices || []).filter((inv: any) => childIds.has(inv.studentId));
+    out.staffUsers = [];
+    out.parentMessages = (out.parentMessages || []).filter((m: any) => parentOwnsMessage(m, phones));
+    for (const key of STUDENT_SCOPED_SERVICE_KEYS) {
+      if (out[key] !== undefined) out[key] = filterByStudent(out[key], childIds);
+    }
+    delete out.deletedStudentIds;
+    return out;
+  }
+
+  if (!isAdmin(session)) {
+    out.staffUsers = (out.staffUsers || []).map((u: any) =>
+      upperCode(u?.authCode) === ownCode ? u : { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
+    );
+    out.parentMessages = [];
+  }
+  return out;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const rawSlug = searchParams.get('slug') || 'epc-manoi';
-    const slug = rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug;
+    const auth = await requireSession(request, searchParams.get('slug'));
+    if ('error' in auth) return auth.error;
+    const { session, slug } = auth;
 
     ensureDataFile();
     let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
@@ -198,48 +279,121 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const visibleData = filterForSession(schoolData, session);
+
     return NextResponse.json(
       {
         success: true,
         slug,
-        data: Object.keys(schoolData).length > 0 ? schoolData : null,
+        data: Object.keys(visibleData).length > 0 ? visibleData : null,
       },
-      {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
+      { headers: NO_CACHE_HEADERS }
     );
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
+/**
+ * Notes diverses : chaque auteur ne peut remplacer que SES propres notes ; celles des autres
+ * auteurs sont relues en base et conservées telles quelles. Renvoie null si la base n'a pas pu
+ * être relue (on n'écrit alors rien, pour ne jamais effacer les notes des autres).
+ */
+async function mergeOwnDiverseNotes(slug: string, session: SessionPayload, incoming: any[]): Promise<any[] | null> {
+  const current = await getDiverseNotesFromSupabase(slug);
+  if (current === null) return null;
+  const ownCode = upperCode(session.code);
+  const others = current.filter((n: any) => upperCode(n?.authorCode) !== ownCode);
+  const own = incoming
+    .filter((n) => n && typeof n === 'object')
+    .map((n) => ({ ...n, authorCode: n.authorCode || session.code }))
+    .filter((n) => upperCode(n.authorCode) === ownCode);
+  return [...others, ...own];
+}
+
+/**
+ * Messages d'un parent : il peut uniquement AJOUTER de nouveaux messages à son nom (jamais
+ * modifier ou supprimer ceux des autres familles, ni les réponses de la Direction).
+ */
+async function mergeParentNewMessages(slug: string, session: SessionPayload, incoming: any[]): Promise<any[] | null> {
+  const current = await getParentMessagesFromSupabase(slug);
+  if (current === null) return null;
+  const phones = session.parentPhones || [];
+  const knownIds = new Set(current.map((m: any) => m?.id));
+  const clip = (v: unknown, max: number) => String(v || '').slice(0, max);
+
+  const additions = incoming
+    .filter((m) => m && typeof m === 'object' && m.id && !knownIds.has(m.id) && parentOwnsMessage(m, phones))
+    .slice(0, 20)
+    .map((m) => ({
+      id: clip(m.id, 64),
+      parentName: clip(m.parentName, 120),
+      studentName: clip(m.studentName, 120),
+      studentGrade: clip(m.studentGrade, 40),
+      parentPhone: clip(m.parentPhone, 40),
+      subject: clip(m.subject, 200),
+      message: clip(m.message, 5000),
+      category: ['absence', 'finance', 'document', 'info'].includes(m.category) ? m.category : 'info',
+      timestamp: clip(m.timestamp, 40) || new Date().toISOString(),
+      status: 'new',
+      unread: true,
+    }));
+
+  if (additions.length === 0) return current;
+  return [...additions, ...current];
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      slug: rawSlug,
-      students,
-      invoices,
-      schoolSettings,
-      staffUsers,
-      deletedStudentIds,
-      transportSubscriptions,
-      transportPayments,
-      canteenSubscriptions,
-      canteenPayments,
-      canteenWeeklyMenu,
-      boardingSubscriptions,
-      boardingPayments,
-      boardingCapacity,
-      diverseNotes,
-      parentMessages,
-      restoreStudentIds,
-    } = body;
-    const slug = (rawSlug === 'college-excellence' ? 'epc-manoi' : rawSlug) || 'epc-manoi';
+    const auth = await requireSession(request, body?.slug || null);
+    if ('error' in auth) return auth.error;
+    const { session, slug } = auth;
+
+    const admin = isAdmin(session);
+    const canWriteStudents = hasRole(session, STUDENT_WRITE_ROLES);
+    const canDelete = hasRole(session, DELETE_ROLES);
+    const canWriteServices = hasRole(session, SERVICES_WRITE_ROLES);
+
+    // Chaque collection n'est prise en compte que si le rôle connecté a le droit de l'écrire ;
+    // les autres sont ignorées (jamais transmises à la base).
+    const students = canWriteStudents ? body.students : undefined;
+    const invoices = canWriteStudents ? body.invoices : undefined;
+    const deletedStudentIds = canDelete ? body.deletedStudentIds : undefined;
+    const restoreStudentIds = canDelete ? body.restoreStudentIds : undefined;
+    const schoolSettings = admin && body.schoolSettings ? { ...body.schoolSettings, slug } : undefined;
+    const staffUsers = admin ? body.staffUsers : undefined;
+    const transportSubscriptions = canWriteServices ? body.transportSubscriptions : undefined;
+    const transportPayments = canWriteServices ? body.transportPayments : undefined;
+    const canteenSubscriptions = canWriteServices ? body.canteenSubscriptions : undefined;
+    const canteenPayments = canWriteServices ? body.canteenPayments : undefined;
+    const canteenWeeklyMenu = canWriteServices ? body.canteenWeeklyMenu : undefined;
+    const boardingSubscriptions = canWriteServices ? body.boardingSubscriptions : undefined;
+    const boardingPayments = canWriteServices ? body.boardingPayments : undefined;
+    const boardingCapacity = canWriteServices ? body.boardingCapacity : undefined;
+    const installments = canWriteServices ? body.installments : undefined;
+
+    let diverseNotes: any[] | undefined;
+    if (Array.isArray(body.diverseNotes)) {
+      diverseNotes = (await mergeOwnDiverseNotes(slug, session, body.diverseNotes)) ?? undefined;
+    }
+
+    let parentMessages: any[] | undefined;
+    if (Array.isArray(body.parentMessages)) {
+      if (admin) parentMessages = body.parentMessages;
+      else if (session.roleId === 'parent') {
+        parentMessages = (await mergeParentNewMessages(slug, session, body.parentMessages)) ?? undefined;
+      }
+    }
+
+    const acceptedSomething = [
+      students, invoices, deletedStudentIds, restoreStudentIds, schoolSettings, staffUsers,
+      transportSubscriptions, transportPayments, canteenSubscriptions, canteenPayments, canteenWeeklyMenu,
+      boardingSubscriptions, boardingPayments, boardingCapacity, installments, diverseNotes, parentMessages,
+    ].some((v) => v !== undefined);
+    if (!acceptedSomething) {
+      return jsonError('Aucune donnée autorisée pour votre profil dans cette requête.', 403);
+    }
 
     ensureDataFile();
     const currentSchool = memoryStore[slug] || {};
@@ -338,9 +492,9 @@ export async function POST(request: NextRequest) {
       mergedSettings = {
         ...existingSettings,
         ...schoolSettings,
-        // Le slug doit toujours être présent : sans lui, saveSchoolToSupabase()
-        // ignore silencieusement l'écriture (no-op) alors que l'API répond "succès".
-        slug: schoolSettings.slug || existingSettings.slug || slug,
+        // Le slug est imposé par la session : un Directeur ne peut jamais écrire sur la fiche
+        // d'un autre établissement.
+        slug,
         logoUrl: schoolSettings.logoUrl || existingSettings.logoUrl || '',
         countryEmblemUrl: schoolSettings.countryEmblemUrl || existingSettings.countryEmblemUrl || '',
         stampUrl: schoolSettings.stampUrl || existingSettings.stampUrl || '',
@@ -398,17 +552,17 @@ export async function POST(request: NextRequest) {
       if (canteenPayments !== undefined) servicesPayload.canteenPayments = canteenPayments;
       if (transportSubscriptions !== undefined) servicesPayload.transportSubscriptions = transportSubscriptions;
       if (transportPayments !== undefined) servicesPayload.transportPayments = transportPayments;
-      if (body.installments !== undefined) servicesPayload.installments = body.installments;
+      if (installments !== undefined) servicesPayload.installments = installments;
       if (canteenWeeklyMenu !== undefined) servicesPayload.canteenWeeklyMenu = canteenWeeklyMenu;
       if (boardingCapacity !== undefined) servicesPayload.boardingCapacity = boardingCapacity;
       if (Object.keys(servicesPayload).length > 0) {
         savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
       }
 
-      if (diverseNotes !== undefined && Array.isArray(diverseNotes)) {
+      if (diverseNotes !== undefined) {
         savePromises.push(saveDiverseNotesToSupabase(slug, diverseNotes));
       }
-      if (parentMessages !== undefined && Array.isArray(parentMessages)) {
+      if (parentMessages !== undefined) {
         savePromises.push(saveParentMessagesToSupabase(slug, parentMessages));
       }
 
@@ -437,13 +591,7 @@ export async function POST(request: NextRequest) {
         slug,
         message: 'Données synchronisées avec succès',
       },
-      {
-        headers: {
-          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      }
+      { headers: NO_CACHE_HEADERS }
     );
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
