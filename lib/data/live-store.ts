@@ -19,6 +19,8 @@ import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } fr
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const normalizeWords = (name: string): string =>
   (name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
 
@@ -545,6 +547,21 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               return;
             }
             const key = localStu.id || localStu.studentNumber;
+            // Copie locale provisoire (identifiant « stu-… ») d'un élève que le serveur connaît déjà
+            // sous son identifiant définitif (même nom et même classe) : la version du serveur fait
+            // foi. La conserver la faisait renvoyer à chaque synchronisation, et elle écrasait alors la
+            // fiche de l'élève portant le même numéro.
+            const isProvisional = !(localStu.id && UUID_PATTERN.test(localStu.id));
+            if (
+              isProvisional &&
+              incomingStudents.some(
+                (srv: Student) =>
+                  normalizeWords(srv.fullName || '') === normalizeWords(localStu.fullName || '') &&
+                  (srv.grade || '') === (localStu.grade || '')
+              )
+            ) {
+              return;
+            }
             if (!studentMap.has(key)) {
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
@@ -1070,12 +1087,17 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       fallbackStudents = manoiStudents;
     }
 
-    const allCandidates = [
+    // Les fiches déjà enregistrées en base (identifiant UUID définitif) passent toujours avant les
+    // copies locales provisoires (« stu-185 ») : sinon une copie locale ancienne pouvait masquer la
+    // vraie fiche portant le même numéro.
+    const isPersisted = (s: Student) => Boolean(s && s.id && UUID_PATTERN.test(s.id));
+    const rawCandidates = [
       ...schoolStudents,
       ...fallbackStudents,
       ...globalStudents,
       ...(initialStudents || []),
     ];
+    const allCandidates = [...rawCandidates.filter(isPersisted), ...rawCandidates.filter((s) => !isPersisted(s))];
 
     const seenIds = new Set<string>();
     const seenNumbers = new Set<string>();
@@ -1114,10 +1136,13 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
         .join(' ');
       const matKey = (stu.matricule || '').trim().toUpperCase();
 
+      // Le nom ne sert à écarter qu'une copie locale provisoire d'un élève déjà présent : deux fiches
+      // enregistrées en base portant le même nom sont deux enfants différents (ex : deux « BAMBA Awa »
+      // en CE2 et en 6ème), qui étaient jusqu'ici fusionnés et faisaient baisser l'effectif affiché.
       if (
         seenIds.has(idKey) ||
         seenNumbers.has(numKey) ||
-        (nameKey && seenNames.has(nameKey)) ||
+        (!isPersisted(stu) && nameKey && seenNames.has(nameKey)) ||
         (matKey && matKey !== '' && seenMatricules.has(matKey))
       ) {
         continue;

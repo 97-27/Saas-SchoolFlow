@@ -545,11 +545,16 @@ export async function POST(request: NextRequest) {
       if (mergedSettings) {
         savePromises.push(saveSchoolToSupabase(mergedSettings));
       }
-      if (cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0) {
-        savePromises.push(batchUpsertStudents(cleanStudents, slug));
-      }
-      if (cleanInvoices && Array.isArray(cleanInvoices) && cleanInvoices.length > 0) {
-        savePromises.push(batchUpsertInvoices(cleanInvoices, slug));
+      // Élèves PUIS factures : la facture d'un nouvel élève ne peut être rattachée qu'une fois
+      // l'élève enregistré.
+      const hasStudents = Boolean(cleanStudents && Array.isArray(cleanStudents) && cleanStudents.length > 0);
+      const hasInvoices = Boolean(cleanInvoices && Array.isArray(cleanInvoices) && cleanInvoices.length > 0);
+      if (hasStudents || hasInvoices) {
+        savePromises.push(
+          (hasStudents ? batchUpsertStudents(cleanStudents!, slug) : Promise.resolve(true)).then(() =>
+            hasInvoices ? batchUpsertInvoices(cleanInvoices!, slug) : true
+          )
+        );
       }
       // N'inclure une clé QUE si cette requête l'a réellement fournie — currentSchool vient d'un
       // cache mémoire par instance serverless (memoryStore), qui peut être vide sur une instance

@@ -648,36 +648,22 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
       updated_at: new Date().toISOString(),
     };
 
-    // Vérifier si l'élève existe déjà (par id UUID direct ou par student_number)
-    let existingId: string | null = null;
-    if (student.id && isUUID(student.id)) {
-      const { data: byId } = await supabase
-        .from('students')
-        .select('id')
-        .eq('id', student.id)
-        .limit(1);
-      if (byId && byId.length > 0) {
-        existingId = byId[0].id;
-      }
+    // Où écrire, sans jamais écraser la fiche d'un autre élève (voir planStudentWrite)
+    const rows = await loadStudentRows(schoolId);
+    const index = indexStudentRows(rows);
+    const plan = planStudentWrite(student, rows, index.byId, index.byNumber, index.maxNumber);
+    if (plan.action === 'skip') {
+      console.warn(`saveStudentToSupabase: ${student.studentNumber} ignoré (${plan.reason}).`);
+      return true;
     }
+    payload.student_number = plan.studentNumber;
 
-    if (!existingId && student.studentNumber) {
-      const { data: byNum } = await supabase
-        .from('students')
-        .select('id')
-        .eq('school_id', schoolId)
-        .eq('student_number', student.studentNumber)
-        .limit(1);
-      if (byNum && byNum.length > 0) {
-        existingId = byNum[0].id;
-      }
-    }
-
-    if (existingId) {
+    if (plan.action === 'update') {
       const { error: updateErr } = await supabase
         .from('students')
         .update(payload)
-        .eq('id', existingId);
+        .eq('id', plan.id)
+        .eq('school_id', schoolId);
       if (updateErr) {
         console.error('Erreur saveStudentToSupabase update:', updateErr.message);
         return false;
@@ -710,25 +696,27 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
     // 'school_id, student_number'}) ne détecte jamais de conflit et INSÈRE une nouvelle ligne
     // à chaque appel au lieu de mettre à jour — c'est ce qui a fait exploser la table students
     // à plus de 1600 lignes en doublon. On upsert désormais sur l'id (la vraie clé primaire).
-    const studentNumbers = students.map((s) => s.studentNumber).filter(Boolean) as string[];
-    const existingMap = new Map<string, string>(); // student_number -> id
-    if (studentNumbers.length > 0) {
-      const { data: existingRows } = await supabase
-        .from('students')
-        .select('id, student_number')
-        .eq('school_id', schoolId)
-        .in('student_number', studentNumbers);
-      (existingRows || []).forEach((r: any) => {
-        if (r.student_number) existingMap.set(r.student_number, r.id);
-      });
+    // Où écrire chaque élève, sans jamais écraser la fiche d'un autre (voir planStudentWrite).
+    const rows = await loadStudentRows(schoolId);
+    const index = indexStudentRows(rows);
+    const planned: Array<{ student: Student; existingId?: string; studentNumber: string }> = [];
+    for (const student of students) {
+      const plan = planStudentWrite(student, rows, index.byId, index.byNumber, index.maxNumber);
+      if (plan.action === 'skip') continue;
+      const existingId = plan.action === 'update' ? plan.id : undefined;
+      // Réserver le numéro dans ce même lot pour qu'aucun autre élève du lot ne le reprenne.
+      const reserved = { id: existingId || `pending-${planned.length}`, student_number: plan.studentNumber, full_name: student.fullName, grade: student.grade };
+      index.byNumber.set(plan.studentNumber, reserved);
+      if (!existingId) rows.push(reserved);
+      if (planned.some((p) => p.existingId && p.existingId === existingId)) continue; // même fiche deux fois dans le lot
+      planned.push({ student, existingId, studentNumber: plan.studentNumber });
     }
+    if (planned.length === 0) return true;
 
-    const payloads = students.map((student) => {
+    const payloads = planned.map(({ student, existingId, studentNumber }) => {
       const names = (student.fullName || `${student.firstName || ''} ${student.lastName || ''}`).trim().split(' ');
       const firstName = student.firstName || names.slice(1).join(' ') || student.fullName || 'Élève';
       const lastName = student.lastName || names[0] || 'Nom';
-      const existingId = (student.studentNumber && existingMap.get(student.studentNumber)) ||
-        (student.id && isUUID(student.id) ? student.id : undefined);
 
       // La table students n'a pas de colonne dédiée pour la date d'inscription, les versements,
       // les notes, etc. : ces champs sont encodés dans un bloc [SF_META:...] caché en fin
@@ -750,7 +738,7 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
       return {
         ...(existingId ? { id: existingId } : {}),
         school_id: schoolId,
-        student_number: student.studentNumber,
+        student_number: studentNumber,
         matricule: student.matricule || null,
         first_name: firstName,
         last_name: lastName,
@@ -777,13 +765,24 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
       };
     });
 
-    const { error } = await supabase.from('students').upsert(payloads);
-
-    if (error) {
-      console.error('Erreur batchUpsertStudents:', error.message);
-      return false;
+    const toUpdate = payloads.filter((p: any) => p.id);
+    const toInsert = payloads.filter((p: any) => !p.id);
+    let ok = true;
+    if (toUpdate.length > 0) {
+      const { error } = await supabase.from('students').upsert(toUpdate);
+      if (error) {
+        console.error('Erreur batchUpsertStudents (mises à jour):', error.message);
+        ok = false;
+      }
     }
-    return true;
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('students').insert(toInsert);
+      if (error) {
+        console.error('Erreur batchUpsertStudents (nouveaux élèves):', error.message);
+        ok = false;
+      }
+    }
+    return ok;
   } catch (err) {
     console.error('Erreur batchUpsertStudents catch:', err);
     return false;
@@ -793,6 +792,172 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
 const isUUID = (str: string): boolean => {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 };
+
+/** Même élève si les noms contiennent exactement les mêmes mots (ordre, accents et casse ignorés). */
+const isSameStudentName = (a?: string, b?: string): boolean => {
+  const norm = (s?: string) =>
+    (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort()
+      .join(' ');
+  const na = norm(a);
+  return na !== '' && na === norm(b);
+};
+
+interface StudentRowLite {
+  id: string;
+  student_number: string;
+  full_name: string;
+  grade: string;
+}
+
+type StudentWritePlan =
+  | { action: 'update'; id: string; studentNumber: string }
+  | { action: 'insert'; studentNumber: string }
+  | { action: 'skip'; reason: string };
+
+/**
+ * Décide où écrire un élève envoyé par un navigateur, SANS JAMAIS écraser la fiche d'un autre
+ * élève. Avant, un élève encore muni de son identifiant provisoire (« stu-185 ») était retrouvé
+ * par son seul numéro de dossier : si ce numéro appartenait entre-temps à un autre enfant
+ * (inscrit depuis un autre appareil, ou copie locale ancienne), la fiche de cet autre enfant
+ * était écrasée — les fiches « changeaient de nom » d'une synchronisation à l'autre.
+ */
+function planStudentWrite(
+  student: Student,
+  rows: StudentRowLite[],
+  byId: Map<string, StudentRowLite>,
+  byNumber: Map<string, StudentRowLite>,
+  maxNumber: { value: number }
+): StudentWritePlan {
+  const number = student.studentNumber;
+
+  // 1. Fiche déjà en base sous son identifiant définitif : on la met à jour (sans voler le
+  //    numéro d'un autre élève si le numéro envoyé est déjà pris).
+  if (student.id && isUUID(student.id) && byId.has(student.id)) {
+    const row = byId.get(student.id)!;
+    const owner = number ? byNumber.get(number) : undefined;
+    return { action: 'update', id: row.id, studentNumber: owner && owner.id !== row.id ? row.student_number : number || row.student_number };
+  }
+
+  const sameChildElsewhere = rows.find(
+    (r) => isSameStudentName(r.full_name, student.fullName) && (r.grade || '') === (student.grade || '')
+  );
+  const owner = number ? byNumber.get(number) : undefined;
+
+  // 2. Même numéro ET même nom : c'est bien le même élève (identifiant encore provisoire).
+  if (owner && isSameStudentName(owner.full_name, student.fullName)) {
+    return { action: 'update', id: owner.id, studentNumber: owner.student_number };
+  }
+  // 3. Le même enfant existe déjà sous un autre numéro : copie ancienne, ne rien réécrire.
+  if (sameChildElsewhere) {
+    return { action: 'skip', reason: `déjà enregistré sous ${sameChildElsewhere.student_number}` };
+  }
+  // 4. Numéro pris par un AUTRE élève : vrai nouvel élève, on lui attribue le prochain numéro libre.
+  if (owner || !number) {
+    maxNumber.value += 1;
+    return { action: 'insert', studentNumber: `ID-${String(maxNumber.value).padStart(3, '0')}` };
+  }
+  // 5. Numéro libre : nouvel élève.
+  return { action: 'insert', studentNumber: number };
+}
+
+interface InvoiceRowLite {
+  id: string;
+  invoice_number: string;
+  student_id: string;
+  fee_type: string;
+}
+
+/**
+ * Rattache une facture envoyée par un navigateur au BON élève et à la bonne ligne. Avant, une
+ * facture sans identifiant définitif était rattachée à l'élève qui portait le numéro du reçu
+ * (« ID-185 ») — même s'il s'agissait d'un autre enfant — et écrasait sa facture.
+ */
+function planInvoiceWrite(
+  inv: Invoice,
+  students: StudentRowLite[],
+  studentById: Map<string, StudentRowLite>,
+  studentByNumber: Map<string, StudentRowLite>,
+  invoices: InvoiceRowLite[]
+): { studentId: string; existingId?: string; invoiceNumber: string } | null {
+  let stu: StudentRowLite | undefined = inv.studentId && isUUID(inv.studentId) ? studentById.get(inv.studentId) : undefined;
+  if (!stu) {
+    const digits = (inv.studentId || inv.invoiceNumber || '').replace(/\D/g, '');
+    const numbers = [
+      inv.studentId,
+      (inv.invoiceNumber || '').replace('REC-2026-', 'ID-'),
+      digits ? `ID-${digits.padStart(3, '0')}` : '',
+    ].filter(Boolean) as string[];
+    const candidate = numbers.map((n) => studentByNumber.get(n)).find(Boolean);
+    if (inv.studentName) {
+      if (candidate && isSameStudentName(candidate.full_name, inv.studentName)) {
+        stu = candidate;
+      } else {
+        const named = students.filter((r) => isSameStudentName(r.full_name, inv.studentName));
+        stu = named.length === 1 ? named[0] : named.find((r) => (r.grade || '') === (inv.studentGrade || ''));
+      }
+    } else {
+      stu = candidate;
+    }
+  }
+  if (!stu) return null;
+
+  const feeType = inv.feeType || "Frais d'inscription & Scolarité";
+  const byId = inv.id && isUUID(inv.id) ? invoices.find((r) => r.id === inv.id && r.student_id === stu!.id) : undefined;
+  const sameType = invoices.find((r) => r.student_id === stu!.id && r.fee_type === feeType);
+  const byNumber = inv.invoiceNumber ? invoices.find((r) => r.invoice_number === inv.invoiceNumber) : undefined;
+  const existing = byId || sameType || (byNumber && byNumber.student_id === stu.id ? byNumber : undefined);
+
+  let invoiceNumber = inv.invoiceNumber;
+  const numberTakenByOther = byNumber && byNumber.id !== existing?.id;
+  if (numberTakenByOther) {
+    // Numéro de reçu déjà utilisé par la facture d'un AUTRE élève : ne jamais l'écraser.
+    if (existing) {
+      invoiceNumber = existing.invoice_number;
+    } else {
+      const alt = stu.student_number;
+      invoiceNumber = alt && !invoices.some((r) => r.invoice_number === alt) ? alt : `${inv.invoiceNumber}-${stu.id.slice(0, 4).toUpperCase()}`;
+    }
+  }
+  return { studentId: stu.id, existingId: existing?.id, invoiceNumber };
+}
+
+async function loadInvoiceRows(schoolId: string): Promise<InvoiceRowLite[]> {
+  const { data } = await supabase
+    .from('invoices')
+    .select('id, invoice_number, student_id, fee_type')
+    .eq('school_id', schoolId)
+    .limit(20000);
+  return (data || []) as InvoiceRowLite[];
+}
+
+async function loadStudentRows(schoolId: string): Promise<StudentRowLite[]> {
+  const { data } = await supabase
+    .from('students')
+    .select('id, student_number, full_name, grade')
+    .eq('school_id', schoolId)
+    .limit(10000);
+  return (data || []) as StudentRowLite[];
+}
+
+function indexStudentRows(rows: StudentRowLite[]) {
+  const byId = new Map<string, StudentRowLite>();
+  const byNumber = new Map<string, StudentRowLite>();
+  let max = 0;
+  for (const r of rows) {
+    byId.set(r.id, r);
+    if (r.student_number) byNumber.set(r.student_number, r);
+    const n = parseInt((r.student_number || '').replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n > max && n < 100000) max = n;
+  }
+  return { byId, byNumber, maxNumber: { value: max } };
+}
 
 export async function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured || !identifier) return false;
@@ -948,48 +1113,20 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
 
     if (!schoolId) return false;
 
-    // Résoudre l'UUID réel de l'élève — requête ciblée (pas de chargement de TOUS les étudiants)
-    let validStudentUUID: string | null = null;
-    if (invoice.studentId && isUUID(invoice.studentId)) {
-      validStudentUUID = invoice.studentId;
-    } else {
-      // Essayer d'abord par student_number dérivé du numéro de facture
-      const studentNum = invoice.invoiceNumber?.replace('REC-2026-', 'ID-') || invoice.studentId || '';
-      const cleanNum = (invoice.studentId || invoice.invoiceNumber || '').replace(/\D/g, '');
-      const numWithPad = cleanNum ? `ID-${cleanNum.padStart(3, '0')}` : '';
+    // Rattacher la facture au BON élève et à la bonne ligne (voir planInvoiceWrite)
+    const studentRows = await loadStudentRows(schoolId);
+    const studentIndex = indexStudentRows(studentRows);
+    const plan = planInvoiceWrite(invoice, studentRows, studentIndex.byId, studentIndex.byNumber, await loadInvoiceRows(schoolId));
 
-      const candidates = [studentNum, numWithPad].filter(Boolean);
-      if (candidates.length > 0) {
-        const { data: foundRows } = await supabase
-          .from('students')
-          .select('id')
-          .eq('school_id', schoolId)
-          .in('student_number', candidates)
-          .limit(1);
-        if (foundRows && foundRows.length > 0) validStudentUUID = foundRows[0].id;
-      }
-
-      // Fallback par nom si toujours pas trouvé
-      if (!validStudentUUID && invoice.studentName) {
-        const { data: byNameRows } = await supabase
-          .from('students')
-          .select('id')
-          .eq('school_id', schoolId)
-          .ilike('full_name', invoice.studentName)
-          .limit(1);
-        if (byNameRows && byNameRows.length > 0) validStudentUUID = byNameRows[0].id;
-      }
-    }
-
-    if (!validStudentUUID) {
+    if (!plan) {
       console.warn('saveInvoiceToSupabase: impossible de lier la facture à un élève pour', invoice.invoiceNumber);
       return false;
     }
 
     const payload: Record<string, any> = {
       school_id: schoolId,
-      invoice_number: invoice.invoiceNumber,
-      student_id: validStudentUUID,
+      invoice_number: plan.invoiceNumber,
+      student_id: plan.studentId,
       fee_type: invoice.feeType || "Frais d'inscription & Scolarité",
       amount: invoice.amount || 0,
       paid_amount: invoice.paidAmount || 0,
@@ -1002,42 +1139,9 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
       status: invoice.status || 'draft',
     };
 
-    // Vérifier si la facture existe déjà
-    let existingInvoiceId: string | null = null;
-    if (invoice.id && isUUID(invoice.id)) {
-      const { data: byId } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('id', invoice.id)
-        .limit(1);
-      if (byId && byId.length > 0) existingInvoiceId = byId[0].id;
-    }
-
-    // Cle metier reelle : un eleve n'a qu'UNE seule facture par type de frais (scolarite,
-    // internat, cantine, transport). Chercher par (eleve + type de frais) avant le numero de
-    // recu, car ce numero a change de format au fil du temps (REC-2026-XXX -> ID-XXX) et une
-    // recherche par numero seul ne retrouve plus l'ancienne facture : ca cree un doublon qui
-    // fausse le Solde Net de Caisse en comptant deux fois le meme paiement.
-    if (!existingInvoiceId) {
-      const { data: byStudentAndType } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('school_id', schoolId)
-        .eq('student_id', validStudentUUID)
-        .eq('fee_type', payload.fee_type)
-        .limit(1);
-      if (byStudentAndType && byStudentAndType.length > 0) existingInvoiceId = byStudentAndType[0].id;
-    }
-
-    if (!existingInvoiceId && invoice.invoiceNumber) {
-      const { data: byNum } = await supabase
-        .from('invoices')
-        .select('id')
-        .eq('school_id', schoolId)
-        .eq('invoice_number', invoice.invoiceNumber)
-        .limit(1);
-      if (byNum && byNum.length > 0) existingInvoiceId = byNum[0].id;
-    }
+    // Facture existante : même identifiant, ou même élève + même type de frais (un élève n'a qu'une
+    // facture par type), ou même numéro de reçu APPARTENANT à ce même élève.
+    const existingInvoiceId = plan.existingId;
 
     if (existingInvoiceId) {
       const { error: updateErr } = await supabase
@@ -1071,58 +1175,25 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
     const schoolId = await getSchoolId(cleanSlug);
     if (!schoolId) return false;
 
-    // Charger les élèves de l'établissement une seule fois pour résoudre les UUIDs sans requêtes en boucle
-    const { data: schoolStudents } = await supabase
-      .from('students')
-      .select('id, student_number, full_name')
-      .eq('school_id', schoolId);
-
-    const stuMap = new Map<string, string>();
-    (schoolStudents || []).forEach((s: any) => {
-      if (s.id) {
-        stuMap.set(s.id, s.id);
-        if (s.student_number) stuMap.set(s.student_number.toUpperCase(), s.id);
-        if (s.full_name) stuMap.set(s.full_name.trim().toLowerCase(), s.id);
-      }
-    });
-
-    // Résoudre l'id réel (clé primaire) de chaque facture existante avant l'upsert — même
-    // raison que pour batchUpsertStudents : (school_id, invoice_number) n'est pas une
-    // contrainte unique réelle sur cette table, donc onConflict sur ces colonnes ne détecte
-    // jamais rien et chaque appel INSÉRAIT une nouvelle ligne (jusqu'à plus de 100 doublons
-    // pour une seule quittance d'internat).
-    const { data: existingInvoices } = await supabase
-      .from('invoices')
-      .select('id, invoice_number')
-      .eq('school_id', schoolId);
-    const invMap = new Map<string, string>(); // invoice_number -> id
-    (existingInvoices || []).forEach((r: any) => {
-      if (r.invoice_number) invMap.set(r.invoice_number, r.id);
-    });
+    // Élèves et factures de l'établissement chargés une seule fois, puis chaque facture est
+    // rattachée au BON élève et à la bonne ligne (voir planInvoiceWrite).
+    const studentRows = await loadStudentRows(schoolId);
+    const studentIndex = indexStudentRows(studentRows);
+    const invoiceRows = await loadInvoiceRows(schoolId);
 
     const payloads: any[] = [];
     for (const inv of invoices) {
-      let stuUUID: string | null = null;
-      if (inv.studentId && isUUID(inv.studentId)) {
-        stuUUID = inv.studentId;
-      } else if (inv.studentId && stuMap.has(inv.studentId.toUpperCase())) {
-        stuUUID = stuMap.get(inv.studentId.toUpperCase())!;
-      } else if (inv.invoiceNumber) {
-        const studentNum = inv.invoiceNumber.replace('REC-2026-', 'ID-').toUpperCase();
-        if (stuMap.has(studentNum)) stuUUID = stuMap.get(studentNum)!;
-      }
-      if (!stuUUID && inv.studentName && stuMap.has(inv.studentName.trim().toLowerCase())) {
-        stuUUID = stuMap.get(inv.studentName.trim().toLowerCase())!;
-      }
-
-      if (stuUUID) {
-        const existingId = (inv.invoiceNumber && invMap.get(inv.invoiceNumber)) ||
-          (inv.id && isUUID(inv.id) ? inv.id : undefined);
+      const plan = planInvoiceWrite(inv, studentRows, studentIndex.byId, studentIndex.byNumber, invoiceRows);
+      if (plan) {
+        const existingId = plan.existingId;
+        // Réserver le numéro dans ce même lot
+        if (!existingId) invoiceRows.push({ id: `pending-${payloads.length}`, invoice_number: plan.invoiceNumber, student_id: plan.studentId, fee_type: inv.feeType || "Frais d'inscription & Scolarité" });
+        if (existingId && payloads.some((p) => p.id === existingId)) continue; // même facture deux fois dans le lot
         payloads.push({
           ...(existingId ? { id: existingId } : {}),
           school_id: schoolId,
-          student_id: stuUUID,
-          invoice_number: inv.invoiceNumber,
+          student_id: plan.studentId,
+          invoice_number: plan.invoiceNumber,
           fee_type: inv.feeType || "Frais d'inscription & Scolarité",
           amount: inv.amount || 0,
           paid_amount: inv.paidAmount || 0,
@@ -1139,13 +1210,24 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
 
     if (payloads.length === 0) return true;
 
-    const { error } = await supabase.from('invoices').upsert(payloads);
-
-    if (error) {
-      console.warn('Erreur batchUpsertInvoices:', error.message);
-      return false;
+    const toUpdate = payloads.filter((p) => p.id);
+    const toInsert = payloads.filter((p) => !p.id);
+    let ok = true;
+    if (toUpdate.length > 0) {
+      const { error } = await supabase.from('invoices').upsert(toUpdate);
+      if (error) {
+        console.warn('Erreur batchUpsertInvoices (mises à jour):', error.message);
+        ok = false;
+      }
     }
-    return true;
+    if (toInsert.length > 0) {
+      const { error } = await supabase.from('invoices').insert(toInsert);
+      if (error) {
+        console.warn('Erreur batchUpsertInvoices (nouvelles factures):', error.message);
+        ok = false;
+      }
+    }
+    return ok;
   } catch (err) {
     console.warn('Erreur batchUpsertInvoices catch:', err);
     return false;
