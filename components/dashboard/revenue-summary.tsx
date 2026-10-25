@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { formatFCFA } from '@/lib/utils/formatters';
-import { Invoice, Student } from '@/lib/data/types';
+import { Invoice, Student, StudentInstallments } from '@/lib/data/types';
 import { TrendingUp, PieChart, CheckCircle2, Calendar } from 'lucide-react';
-import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { DATA_UPDATED_EVENT, getDeletedStudentIds } from '@/lib/data/live-store';
+import { resolveBoarders } from '@/lib/data/boarding';
 
 interface RevenueSummaryProps {
   academicYear?: string;
@@ -62,91 +63,27 @@ export function RevenueSummary({
     let transportAmount = 0;
     let transportStudentsCount = 0;
 
-    // Calcul Internat (Strictement synchronisé avec la page Internat & Supabase Cloud)
+    // Calcul Internat : MÊME calcul que la page Internat et le Tableau de bord (lib/data/boarding.ts),
+    // pour que le nombre de pensionnaires et les montants soient identiques partout.
     try {
-      const rawBoardingSubs =
-        (servicesData?.boardingSubscriptions ? JSON.stringify(servicesData.boardingSubscriptions) : null) ||
-        (typeof window !== 'undefined' ? localStorage.getItem(revBoardingSubKey) : null);
-      const rawBoardingPay =
-        (servicesData?.boardingPayments ? JSON.stringify(servicesData.boardingPayments) : null) ||
-        (typeof window !== 'undefined' ? localStorage.getItem(revBoardingPayKey) : null);
-
-      const monthlyPayments: Record<string, Record<string, boolean>> = rawBoardingPay ? JSON.parse(rawBoardingPay) : {};
-      const boardingSubsList: Array<{ studentId: string; studentName?: string; matricule?: string; className?: string; monthlyRate: number }> = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : [];
-
-      const seenBoardingIdentifiers = new Set<string>();
-
-      // 1. Calculer à partir de chaque souscription d'internat réelle
-      boardingSubsList.forEach((sub) => {
-        if (!sub || !sub.studentId) return;
-        const stu = students.find(
-          (s) => s.id === sub.studentId || s.studentNumber === sub.studentId || (sub.matricule && s.matricule === sub.matricule)
-        );
-
-        const idKey = sub.studentId;
-        const numKey = stu?.studentNumber;
-        const matKey = sub.matricule || stu?.matricule;
-
-        if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
-          return;
-        }
-
-        seenBoardingIdentifiers.add(idKey);
-        if (numKey) seenBoardingIdentifiers.add(numKey);
-        if (matKey) seenBoardingIdentifiers.add(matKey);
-
-        boardingStudentsCount += 1;
-
-        const rate = typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
-        const months =
-          monthlyPayments[sub.studentId] ||
-          (stu?.id ? monthlyPayments[stu.id] : {}) ||
-          (numKey ? monthlyPayments[numKey] : {}) ||
-          (matKey ? monthlyPayments[matKey] : {}) ||
-          {};
-        const paidCount = Object.values(months).filter(Boolean).length;
-        let studentBoardingPaid = paidCount * rate;
-
-        // Vérifier si une quittance d'internat avec versement direct existe
-        const directInvoice = invoices.find((inv) =>
-          (inv.studentId === sub.studentId || inv.studentId === numKey || (matKey && inv.studentId === matKey)) &&
-          ((inv.feeType || '').toLowerCase().includes('internat') || (inv.invoiceNumber || '').startsWith('QUI-INT-'))
-        );
-        if (directInvoice && directInvoice.paidAmount && directInvoice.paidAmount > studentBoardingPaid) {
-          studentBoardingPaid = directInvoice.paidAmount;
-        }
-
-        boardingAmount += studentBoardingPaid;
-      });
-
-      // 2. Vérifier les élèves inscrits avec option internat active hors customSubscriptions
-      students.forEach((stu) => {
-        if (!stu) return;
-        const idKey = stu.id;
-        const numKey = stu.studentNumber;
-        const matKey = stu.matricule;
-
-        if (seenBoardingIdentifiers.has(idKey) || (numKey && seenBoardingIdentifiers.has(numKey)) || (matKey && seenBoardingIdentifiers.has(matKey))) {
-          return;
-        }
-
-        const months =
-          monthlyPayments[stu.id] ||
-          (numKey ? monthlyPayments[numKey] : {}) ||
-          (matKey ? monthlyPayments[matKey] : {}) ||
-          {};
-        const paidCount = Object.values(months).filter(Boolean).length;
-
-        if (stu.isBoarding || paidCount > 0) {
-          seenBoardingIdentifiers.add(idKey);
-          if (numKey) seenBoardingIdentifiers.add(numKey);
-          if (matKey) seenBoardingIdentifiers.add(matKey);
-
-          boardingStudentsCount += 1;
-          const rate = 25000;
-          boardingAmount += paidCount * rate;
-        }
-      });
+      let boardingSubsList: any[] = Array.isArray(servicesData?.boardingSubscriptions) ? [...servicesData.boardingSubscriptions] : [];
+      let monthlyPayments: Record<string, Record<string, boolean>> = servicesData?.boardingPayments ? { ...servicesData.boardingPayments } : {};
+      let deletedIds = new Set<string>();
+      if (typeof window !== 'undefined') {
+        deletedIds = getDeletedStudentIds();
+        const rawSubs = localStorage.getItem(revBoardingSubKey);
+        const rawPay = localStorage.getItem(revBoardingPayKey);
+        if (rawSubs) boardingSubsList = [...JSON.parse(rawSubs), ...boardingSubsList];
+        if (rawPay) monthlyPayments = { ...monthlyPayments, ...JSON.parse(rawPay) };
+      }
+      const resolved = resolveBoarders(
+        students,
+        boardingSubsList.filter((b) => b && !deletedIds.has(b.studentId) && !(b.matricule && deletedIds.has(b.matricule))),
+        monthlyPayments,
+        invoices
+      );
+      boardingStudentsCount = resolved.length;
+      boardingAmount = resolved.reduce((acc, b) => acc + b.totalPaid, 0);
     } catch (e) {}
 
     // Calcul Cantine
@@ -284,16 +221,53 @@ export function RevenueSummary({
     };
   }, [students, invoices, serviceVersion, servicesData, schoolSlug]);
 
-  // Recouvrement des 5 Échéances lié STRICTEMENT aux 5 Versements (Indépendant du mois calendaire de saisie)
-  // 1er Versement -> Octobre 2026
-  // 2ème Versement -> Novembre 2026
-  // 3ème Versement -> Janvier 2027
-  // 4ème Versement -> Mars 2027
-  // 5ème Versement -> Mai 2027
+  // Sommes de scolarité réellement encaissées CHAQUE MOIS (septembre à décembre), d'après la date
+  // de paiement de chaque versement. Auparavant, le 1er versement était toujours classé en octobre,
+  // le 2e en novembre, etc., quelle que soit sa vraie date : les montants affichés ne
+  // correspondaient pas aux sommes réellement entrées dans le mois.
   const monthlyData = useMemo(() => {
     const isEmpty = students.length === 0 && invoices.length === 0;
+    const startYear = parseInt((academicYear || '').slice(0, 4), 10) || new Date().getFullYear();
+    const MONTHS = [
+      { month: 9, name: 'Septembre' },
+      { month: 10, name: 'Octobre' },
+      { month: 11, name: 'Novembre' },
+      { month: 12, name: 'Décembre' },
+    ];
+    const totals = new Map<number, number>();
+    let otherMonths = 0;
+    let undated = 0;
 
-    let v1 = 0, v2 = 0, v3 = 0, v4 = 0, v5 = 0;
+    // Dates au format JJ/MM/AAAA ou AAAA-MM-JJ
+    const parseMonth = (raw?: string): { month: number; year: number } | null => {
+      const s = (raw || '').trim();
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return { year: Number(m[1]), month: Number(m[2]) };
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return { year: Number(m[3]), month: Number(m[2]) };
+      return null;
+    };
+
+    const addPayment = (amount: number | undefined, date?: string, fallbackDate?: string) => {
+      if (!amount || amount <= 0) return;
+      const d = parseMonth(date) || parseMonth(fallbackDate);
+      if (!d) {
+        undated += amount;
+      } else if (d.year === startYear && d.month >= 9 && d.month <= 12) {
+        totals.set(d.month, (totals.get(d.month) || 0) + amount);
+      } else {
+        otherMonths += amount;
+      }
+    };
+
+    const hasInstallments = (inst?: StudentInstallments) =>
+      Boolean(inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5));
+
+    const addInstallments = (inst: StudentInstallments, fallbackDate?: string) => {
+      [inst.versement1, inst.versement2, inst.versement3, inst.versement4, inst.versement5].forEach((v) => {
+        if (v) addPayment(v.amount, v.date, fallbackDate);
+      });
+    };
 
     // Indexer les factures et leurs versements par étudiant
     const studentInvoicesMap = new Map<string, Invoice[]>();
@@ -319,58 +293,26 @@ export function RevenueSummary({
 
       // Récupérer l'échéancier soit de l'élève, soit de ses factures
       let inst = stu.installments;
-      if (!inst || (!inst.versement1 && !inst.versement2 && !inst.versement3 && !inst.versement4 && !inst.versement5)) {
-        for (const inv of studentInvs) {
-          if (inv.installments && (inv.installments.versement1 || inv.installments.versement2 || inv.installments.versement3 || inv.installments.versement4 || inv.installments.versement5)) {
-            inst = inv.installments;
-            break;
-          }
-        }
+      if (!hasInstallments(inst)) {
+        inst = studentInvs.find((inv) => hasInstallments(inv.installments))?.installments;
       }
 
-      let p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0;
-
-      if (inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5)) {
-        p1 = inst.versement1?.amount || 0;
-        p2 = inst.versement2?.amount || 0;
-        p3 = inst.versement3?.amount || 0;
-        p4 = inst.versement4?.amount || 0;
-        p5 = inst.versement5?.amount || 0;
+      const fallbackDate = stu.paymentDate || stu.enrollmentDate;
+      if (inst && hasInstallments(inst)) {
+        addInstallments(inst, fallbackDate);
       } else if (stu.paidAmount && stu.paidAmount > 0) {
-        // Aucun détail par tranche saisi, mais un montant a bel et bien été réellement encaissé
-        // (dossier ancien saisi avant la ventilation par versement) : ce montant réel — jamais
-        // inventé — est classé par défaut en 1ère échéance tant que le détail exact n'a pas été
-        // ressaisi via Inscriptions, plutôt que de le faire disparaître de tout tableau de
-        // tranches alors qu'il a vraiment été payé.
-        p1 = stu.paidAmount;
+        // Aucun détail par versement saisi, mais un montant a bel et bien été encaissé : il est
+        // classé au mois de sa date de paiement (jamais inventé, jamais perdu).
+        addPayment(stu.paidAmount, stu.paymentDate, stu.enrollmentDate);
       }
-
-      v1 += p1;
-      v2 += p2;
-      v3 += p3;
-      v4 += p4;
-      v5 += p5;
     });
 
     // Prise en compte d'éventuelles factures d'échéances sans objet élève direct
     invoices.forEach((inv) => {
       const sId = inv.studentId || inv.invoiceNumber;
       if (sId && processedStudentIds.has(sId)) return; // Déjà traité ci-dessus
-
-      const inst = inv.installments;
-      if (inst) {
-        v1 += inst.versement1?.amount || 0;
-        v2 += inst.versement2?.amount || 0;
-        v3 += inst.versement3?.amount || 0;
-        v4 += inst.versement4?.amount || 0;
-        v5 += inst.versement5?.amount || 0;
-      }
+      if (inv.installments && hasInstallments(inv.installments)) addInstallments(inv.installments, inv.issueDate);
     });
-
-    // Aucune surcharge par un total "cloud consolidé" générique (servicesData.installments) :
-    // cette valeur n'est pas propre à chaque élève et pouvait forcer un montant supérieur à la
-    // somme réelle des versements individuels — même principe de non-fabrication que ci-dessus,
-    // et alignement avec reports-view.tsx qui n'applique aucune surcharge de ce type.
 
     const getBadgeStyle = (amount: number) => {
       return amount > 0
@@ -378,39 +320,25 @@ export function RevenueSummary({
         : 'bg-amber-50 text-amber-700 border-amber-200';
     };
 
-    return [
-      {
-        month: 'Octobre 2026',
-        label: '1ère Échéance (1er Versement)',
-        collected: isEmpty ? 0 : v1,
-        badgeColor: getBadgeStyle(isEmpty ? 0 : v1),
-      },
-      {
-        month: 'Novembre 2026',
-        label: '2ème Échéance (2ème Versement)',
-        collected: isEmpty ? 0 : v2,
-        badgeColor: getBadgeStyle(isEmpty ? 0 : v2),
-      },
-      {
-        month: 'Janvier 2027',
-        label: '3ème Échéance (3ème Versement)',
-        collected: isEmpty ? 0 : v3,
-        badgeColor: getBadgeStyle(isEmpty ? 0 : v3),
-      },
-      {
-        month: 'Mars 2027',
-        label: '4ème Échéance (4ème Versement)',
-        collected: isEmpty ? 0 : v4,
-        badgeColor: getBadgeStyle(isEmpty ? 0 : v4),
-      },
-      {
-        month: 'Mai 2027',
-        label: '5ème Échéance (5ème Versement)',
-        collected: isEmpty ? 0 : v5,
-        badgeColor: getBadgeStyle(isEmpty ? 0 : v5),
-      },
-    ];
-  }, [students, invoices]);
+    const rows = MONTHS.map(({ month, name }) => {
+      const collected = isEmpty ? 0 : totals.get(month) || 0;
+      return {
+        month: `${name} ${startYear}`,
+        label: `Sommes encaissées en ${name.toLowerCase()}`,
+        collected,
+        badgeColor: getBadgeStyle(collected),
+      };
+    });
+
+    // Rien n'est caché : les versements datés hors de ces 4 mois, ou sans date, sont affichés à part.
+    if (!isEmpty && otherMonths > 0) {
+      rows.push({ month: 'Autres mois', label: 'Versements datés hors septembre – décembre', collected: otherMonths, badgeColor: getBadgeStyle(otherMonths) });
+    }
+    if (!isEmpty && undated > 0) {
+      rows.push({ month: 'Date non renseignée', label: 'Versements enregistrés sans date de paiement', collected: undated, badgeColor: getBadgeStyle(undated) });
+    }
+    return rows;
+  }, [students, invoices, academicYear]);
 
   const totalMonthlyCollected = useMemo(() => {
     return monthlyData.reduce((acc, m) => acc + m.collected, 0);
@@ -431,7 +359,7 @@ export function RevenueSummary({
                   Échéances de Scolarité & Recouvrement
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Total des sommes reçues par échéance à partir d’octobre
+                  Sommes de scolarité réellement encaissées chaque mois
                 </p>
               </div>
             </div>
@@ -440,7 +368,7 @@ export function RevenueSummary({
             </span>
           </div>
 
-          {/* Liste épurée des 5 échéances avec sommes nettes */}
+          {/* Encaissements par mois (septembre à décembre) */}
           <div className="space-y-2.5">
             {monthlyData.map((item) => (
               <div
@@ -474,9 +402,9 @@ export function RevenueSummary({
           </div>
         </div>
 
-        {/* Total cumulé des encaissements des 5 échéances */}
+        {/* Total cumulé des encaissements */}
         <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-          <span className="text-slate-500 font-medium">Cumul total des 5 échéances :</span>
+          <span className="text-slate-500 font-medium">Cumul des encaissements :</span>
           <span className="font-extrabold font-heading text-emerald-700 text-sm sm:text-base">
             {formatFCFA(totalMonthlyCollected)}
           </span>

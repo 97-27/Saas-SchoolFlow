@@ -5,7 +5,8 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData } from '@/lib/data/live-store';
+import { resolveBoarders } from '@/lib/data/boarding';
 import { saveStudentToSupabase, saveInvoiceToSupabase, deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -318,23 +319,17 @@ export function BoardingView({
     saveBoardingDataUnified(updatedSubs, readFreshBoardingPayMap());
   };
 
-  // Pensionnaires unifiés : Inscriptions avec option Internat + Souscriptions directes
+  // Pensionnaires unifiés : calcul commun avec le Tableau de bord (lib/data/boarding.ts), pour que
+  // le nombre de pensionnaires et les montants soient identiques sur tous les écrans.
   const boarders = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenNumbers = new Set<string>();
-
-    // 1. Les pensionnaires issus des customSubscriptions
-    const customList = customSubscriptions
-      .map((cs) => {
-        let foundStudent = students.find(
-          (s) =>
-            s.id === cs.studentId ||
-            (Boolean(cs.studentId) && s.studentNumber === cs.studentId) ||
-            (Boolean(cs.matricule) && Boolean(s.matricule) && s.matricule === cs.matricule)
-        );
+    const liveInvoices = typeof window !== 'undefined' ? getLiveInvoices([], schoolSlug) : [];
+    return resolveBoarders(students, customSubscriptions, monthlyPayments, liveInvoices)
+      .map((rb) => {
+        const cs = rb.sub as (typeof customSubscriptions)[number] | undefined;
+        let foundStudent = rb.student;
 
         // Sécurité anti-disparition : si l'élève n'est pas encore dans l'état local students, reconstruction directe depuis cs
-        if (!foundStudent && cs.studentName) {
+        if (!foundStudent && cs?.studentName) {
           const parsedName = splitFullNameNomFirst(cs.studentName);
           foundStudent = {
             id: cs.studentId,
@@ -362,85 +357,22 @@ export function BoardingView({
 
         if (!foundStudent) return null;
 
-        seenIds.add(foundStudent.id);
-        if (foundStudent.studentNumber) seenNumbers.add(foundStudent.studentNumber);
-        if (foundStudent.matricule) seenNumbers.add(foundStudent.matricule);
-
-        const studentMonths =
-          monthlyPayments[cs.studentId] ||
-          (foundStudent?.id ? monthlyPayments[foundStudent.id] : {}) ||
-          (foundStudent?.studentNumber ? monthlyPayments[foundStudent.studentNumber] : {}) ||
-          (cs.matricule ? monthlyPayments[cs.matricule] : {}) ||
-          {};
-        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const rate = typeof cs.monthlyRate === 'number' && cs.monthlyRate > 0 ? cs.monthlyRate : 25000;
-        const totalPaid = paidMonthsCount * rate;
-        const totalDue = rate * 9; // 9 mois stricts
-        const remainingBalance = Math.max(0, totalDue - totalPaid);
-
         return {
           student: foundStudent,
           isBoarder: true,
-          pavilion: cs.pavilion || (foundStudent.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
-          roomNumber: cs.roomNumber || 'Chambre 101',
-          monthlyRate: rate,
-          paidMonthsCount,
-          totalPaid,
-          totalDue,
-          remainingBalance,
-          isUpToDate: remainingBalance === 0,
+          months: rb.months,
+          pavilion: cs?.pavilion || (foundStudent.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
+          roomNumber: cs?.roomNumber || 'Chambre 101',
+          monthlyRate: rb.monthlyRate,
+          paidMonthsCount: rb.paidMonthsCount,
+          totalPaid: rb.totalPaid,
+          totalDue: rb.totalDue,
+          remainingBalance: rb.remainingBalance,
+          isUpToDate: rb.remainingBalance === 0,
         };
       })
       .filter((b): b is NonNullable<typeof b> => b !== null);
-
-    // 2. Uniquement les élèves inscrits ayant des paiements d'internat déjà enregistrés
-    const registeredBoarders = students
-      .filter((s) => {
-        if (!s) return false;
-        if (seenIds.has(s.id) || (s.studentNumber && seenNumbers.has(s.studentNumber)) || (s.matricule && seenNumbers.has(s.matricule))) {
-          return false;
-        }
-        const studentMonths =
-          monthlyPayments[s.id] ||
-          (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) ||
-          (s.matricule ? monthlyPayments[s.matricule] : {}) ||
-          {};
-        const hasPaidMonths = MONTHS_LIST.some((m) => studentMonths[m]);
-        return hasPaidMonths;
-      })
-      .map((s) => {
-        seenIds.add(s.id);
-        if (s.studentNumber) seenNumbers.add(s.studentNumber);
-        if (s.matricule) seenNumbers.add(s.matricule);
-
-        const studentMonths =
-          monthlyPayments[s.id] ||
-          (s.studentNumber ? monthlyPayments[s.studentNumber] : {}) ||
-          (s.matricule ? monthlyPayments[s.matricule] : {}) ||
-          {};
-        const paidMonthsCount = MONTHS_LIST.filter((m) => studentMonths[m]).length;
-        const sub = customSubscriptions.find((cs) => cs.studentId === s.id || cs.studentId === s.studentNumber || (s.matricule && cs.matricule === s.matricule));
-        const rate = sub && typeof sub.monthlyRate === 'number' && sub.monthlyRate > 0 ? sub.monthlyRate : 25000;
-        const totalPaid = paidMonthsCount * rate;
-        const totalDue = rate * 9;
-        const remainingBalance = Math.max(0, totalDue - totalPaid);
-
-        return {
-          student: s,
-          isBoarder: true,
-          pavilion: s.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)',
-          roomNumber: 'Chambre 101',
-          monthlyRate: rate,
-          paidMonthsCount,
-          totalPaid,
-          totalDue,
-          remainingBalance,
-          isUpToDate: remainingBalance === 0,
-        };
-      });
-
-    return [...customList, ...registeredBoarders];
-  }, [students, customSubscriptions, monthlyPayments]);
+  }, [students, customSubscriptions, monthlyPayments, schoolSlug]);
 
   // Filtrage pour la recherche et la navigation
   const filteredBoarders = useMemo(() => {
@@ -529,7 +461,7 @@ export function BoardingView({
       setFormSecondaryPhones(activeBoarder.student.secondaryPhones || []);
       setFormMonthlyRate(activeBoarder.monthlyRate || 0);
 
-      const months = monthlyPayments[activeBoarder.student.id] || {};
+      const months = activeBoarder.months || {};
       setActiveMonthsChecked(months);
     }
   }, [activeBoarder, isCreatingNew, monthlyPayments]);
@@ -648,7 +580,7 @@ export function BoardingView({
     const initialRate = activeBoarder.monthlyRate || 0;
     const initialMethod = activeBoarder.student.paymentMethod || 'Espèces';
 
-    const initialMonths = monthlyPayments[activeBoarder.student.id] || {};
+    const initialMonths = activeBoarder.months || {};
 
     const lastNameChanged = formLastName.trim().toUpperCase() !== initialLastName;
     const firstNameChanged = formFirstName.trim() !== initialFirstName;
@@ -684,7 +616,7 @@ export function BoardingView({
   const hasPaymentChange = useMemo(() => {
     if (isCreatingNew) return activePaidMonthsCount > 0 && activeTotalCollected > 0;
     if (!activeBoarder) return false;
-    const initialMonths = monthlyPayments[activeBoarder.student.id] || {};
+    const initialMonths = activeBoarder.months || {};
     return MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
   }, [isCreatingNew, activeBoarder, activeMonthsChecked, monthlyPayments, activePaidMonthsCount, activeTotalCollected]);
 
@@ -2203,9 +2135,9 @@ export function BoardingView({
               }`}
             >
               {isCreatingNew && <option value="new">✨ + Nouvelle Souscription (En cours de saisie)</option>}
-              {filteredBoarders.map((b, idx) => (
+              {filteredBoarders.map((b) => (
                 <option key={b.student.id} value={b.student.id}>
-                  {idx + 1}. {(b.student.lastName || '').toUpperCase()} {b.student.firstName} ({b.student.grade || (b.student as any).className || '6ème'} • {b.roomNumber})
+                  {(b.student.lastName || '').toUpperCase()} {b.student.firstName}
                 </option>
               ))}
             </select>
@@ -2213,32 +2145,8 @@ export function BoardingView({
           </div>
         </div>
 
-        {/* Boutons de Navigation Reçu Précédent / Suivant & Bouton Nouvelle Souscription */}
+        {/* Bouton Nouvelle Souscription (le pensionnaire se choisit directement par son nom dans la liste) */}
         <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
-          {!isCreatingNew && (
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={handlePrevReceipt}
-                className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Reçu Précédent"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-[11px] font-extrabold text-slate-700 px-2 font-heading">
-                {filteredBoarders.length > 0 ? `${activeBoarderIndex + 1} / ${filteredBoarders.length}` : '0 / 0'}
-              </span>
-              <button
-                type="button"
-                onClick={handleNextReceipt}
-                className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                title="Reçu Suivant"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
           {isCreatingNew ? (
             <button
               type="button"
@@ -2338,7 +2246,7 @@ export function BoardingView({
               {/* Nom de famille en majuscules */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">
-                  Nom de famille * (MAJUSCULES)
+                  Nom de famille *
                 </label>
                 <input
                   type="text"

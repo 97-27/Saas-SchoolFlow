@@ -29,6 +29,7 @@ import {
   DATA_UPDATED_EVENT,
   startCrossDeviceSync,
 } from '@/lib/data/live-store';
+import { resolveBoarders } from '@/lib/data/boarding';
 import {
   getSchoolFromSupabase,
   getStudentsFromSupabase,
@@ -405,98 +406,46 @@ export function DashboardView({
     const returningBoys = returningStudentsList.filter((s) => s.gender === 'male').length;
     const returningPct = totalCount > 0 ? ((returningCount / totalCount) * 100).toFixed(1) : '0';
 
-    const seenBoarderKeys = new Set<string>();
-    let boardingCount = 0;
-    let boardingGirls = 0;
-    let boardingBoys = 0;
-
+    // Pensionnaires et montants d'internat : MÊME calcul que la page Internat (lib/data/boarding.ts).
+    // Auparavant, un même élève référencé ici par son identifiant interne et là par son numéro de
+    // dossier (ID-001) était compté deux fois.
+    let boardingSubsAll: any[] = [];
+    let boardingPaymentsAll: Record<string, Record<string, boolean>> = {};
+    let deletedIds = new Set<string>();
     if (typeof window !== 'undefined') {
       try {
-        const deletedIds = getDeletedStudentIds();
-        const rawBoarding = localStorage.getItem(dashBoardingSubKey);
-        if (rawBoarding) {
-          const subs: any[] = JSON.parse(rawBoarding);
-          subs.forEach((b) => {
-            if (!deletedIds.has(b.studentId) && !(b.matricule && deletedIds.has(b.matricule))) {
-              const key = b.studentId || b.matricule || b.studentName;
-              if (key && !seenBoarderKeys.has(key)) {
-                seenBoarderKeys.add(key);
-                boardingCount++;
-                if (b.gender === 'F') boardingGirls++;
-                else boardingBoys++;
-              }
-            }
-          });
-        }
+        deletedIds = getDeletedStudentIds();
+        const rawSubs = localStorage.getItem(dashBoardingSubKey);
+        const rawPay = localStorage.getItem(dashBoardingPayKey);
+        if (rawSubs) boardingSubsAll = JSON.parse(rawSubs);
+        if (rawPay) boardingPaymentsAll = JSON.parse(rawPay);
       } catch (e) {}
     }
-
-    if (servicesData?.boardingSubscriptions && Array.isArray(servicesData.boardingSubscriptions)) {
-      servicesData.boardingSubscriptions.forEach((b: any) => {
-        const key = b.studentId || b.matricule || b.studentName;
-        if (key && !seenBoarderKeys.has(key)) {
-          seenBoarderKeys.add(key);
-          boardingCount++;
-          if (b.gender === 'F') boardingGirls++;
-          else boardingBoys++;
-        }
-      });
+    if (Array.isArray(servicesData?.boardingSubscriptions)) {
+      boardingSubsAll = [...boardingSubsAll, ...servicesData.boardingSubscriptions];
     }
-
-    // Compléter avec les élèves ayant de vrais mois d'internat réglés mais pas (ou plus) de fiche
-    // d'abonnement dédiée (mêmes deux critères que la page Internat elle-même, boarding-view.tsx,
-    // qui fait autorité sur "qui est pensionnaire"). Le simple drapeau isBoarding sur la fiche
-    // élève N'EST PLUS utilisé seul ici : il pouvait rester à `true` indéfiniment sur un élève
-    // après la perte ou la suppression de son abonnement réel, gonflant ce compteur au-delà de ce
-    // que la page Internat elle-même affichait pour les mêmes élèves.
     if (servicesData?.boardingPayments) {
-      students.forEach((s) => {
-        const key = s.id || s.studentNumber || s.fullName;
-        if (!key || seenBoarderKeys.has(key) || seenBoarderKeys.has(s.studentNumber) || seenBoarderKeys.has(s.matricule)) return;
-        const studentMonths =
-          servicesData.boardingPayments[s.id] ||
-          (s.studentNumber ? servicesData.boardingPayments[s.studentNumber] : undefined) ||
-          (s.matricule ? servicesData.boardingPayments[s.matricule] : undefined);
-        const hasPaidMonths = studentMonths && Object.values(studentMonths).some(Boolean);
-        if (hasPaidMonths) {
-          seenBoarderKeys.add(key);
-          boardingCount++;
-          if (s.gender === 'female') boardingGirls++;
-          else boardingBoys++;
-        }
-      });
+      boardingPaymentsAll = { ...servicesData.boardingPayments, ...boardingPaymentsAll };
     }
+    const resolvedBoarders = resolveBoarders(
+      students,
+      boardingSubsAll.filter((b) => b && !deletedIds.has(b.studentId) && !(b.matricule && deletedIds.has(b.matricule))),
+      boardingPaymentsAll,
+      invoices
+    );
+    const boardingCount = resolvedBoarders.length;
+    const boardingGirls = resolvedBoarders.filter((b) => b.gender === 'female').length;
+    const boardingBoys = boardingCount - boardingGirls;
 
-    // Calculs financiers réels (Factures + paiements directs d'internat consolidés)
+    // Calculs financiers réels : factures encaissées + mois d'internat cochés qui n'ont pas (encore)
+    // de quittance correspondante.
     let totalCollected = invoices.reduce(
       (acc, inv) => acc + (inv.paidAmount || 0),
       0
     );
-
-    if (typeof window !== 'undefined') {
-      try {
-        const rawBoardingPay = localStorage.getItem(dashBoardingPayKey);
-        const rawBoardingSubs = localStorage.getItem(dashBoardingSubKey);
-        if (rawBoardingPay && rawBoardingSubs) {
-          const monthlyPayments: Record<string, Record<string, boolean>> = JSON.parse(rawBoardingPay);
-          const subs: Array<{ studentId: string; monthlyRate: number }> = JSON.parse(rawBoardingSubs);
-          const rateMap = new Map<string, number>();
-          subs.forEach((sub) => rateMap.set(sub.studentId, sub.monthlyRate || 25000));
-
-          const invoiceStudentIdsWithBoarding = new Set(
-            invoices.filter((i) => i.feeType?.toLowerCase().includes('internat') || i.id?.includes('boarding')).map((i) => i.studentId)
-          );
-
-          Object.entries(monthlyPayments).forEach(([stuId, months]) => {
-            if (!invoiceStudentIdsWithBoarding.has(stuId)) {
-              const paidCount = Object.values(months).filter(Boolean).length;
-              const rate = rateMap.get(stuId) || 25000;
-              totalCollected += paidCount * rate;
-            }
-          });
-        }
-      } catch (e) {}
-    }
+    resolvedBoarders.forEach((b) => {
+      totalCollected += Math.max(0, b.paidFromMonths - b.invoicePaid);
+    });
 
     const totalOverdue = invoices.reduce((acc, inv) => {
       if (typeof inv.balanceRemaining === 'number') {
