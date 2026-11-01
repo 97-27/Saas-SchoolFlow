@@ -860,6 +860,13 @@ function planStudentWrite(
     return { action: 'update', id: row.id, studentNumber: owner && owner.id !== row.id ? row.student_number : number || row.student_number };
   }
 
+  // 1 bis. Identifiant définitif (UUID) inconnu de la base : seule la base attribue ces
+  //    identifiants, donc cette fiche a existé puis a été SUPPRIMÉE. Une copie restée dans un
+  //    autre navigateur ne doit jamais la recréer (c'est ce qui obligeait à supprimer 2 ou 3 fois).
+  if (student.id && isUUID(student.id)) {
+    return { action: 'skip', reason: 'élève supprimé de la base' };
+  }
+
   const sameChildElsewhere = rows.find((r) => isSameChild(r, student));
   const owner = number ? byNumber.get(number) : undefined;
 
@@ -900,6 +907,9 @@ function planInvoiceWrite(
   invoices: InvoiceRowLite[]
 ): { studentId: string; existingId?: string; invoiceNumber: string } | null {
   let stu: StudentRowLite | undefined = inv.studentId && isUUID(inv.studentId) ? studentById.get(inv.studentId) : undefined;
+  // Facture d'un élève supprimé (identifiant définitif disparu de la base) : on ne la rattache à
+  // personne d'autre, même si un autre enfant porte aujourd'hui le même numéro ou le même nom.
+  if (!stu && inv.studentId && isUUID(inv.studentId)) return null;
   if (!stu) {
     const digits = (inv.studentId || inv.invoiceNumber || '').replace(/\D/g, '');
     const numbers = [
@@ -982,34 +992,26 @@ export async function deleteStudentFromSupabase(identifier: string, schoolSlug: 
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return false;
 
-    if (isUUID(identifier)) {
-      // Supprimer d'abord les factures liées pour respecter les contraintes d'intégrité
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', identifier);
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('id', identifier);
-      const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', identifier);
-      if (!error) return true;
-    } else {
-      // Trouver l'ID UUID de l'élève par son matricule ou numéro d'élève
-      const { data: foundRows } = await supabase
-        .from('students')
-        .select('id')
-        .eq('school_id', schoolId)
-        .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
-        .limit(1);
+    // Suppression UNIQUEMENT par l'identifiant définitif (UUID). Avant, un numéro de dossier
+    // (« ID-059 ») ou un matricule suffisait : supprimer une ancienne copie d'élève portant ce
+    // numéro effaçait l'enfant qui le porte aujourd'hui. Un numéro n'identifie pas un élève.
+    if (!isUUID(identifier)) return false;
 
-      if (foundRows && foundRows.length > 0) {
-        const studentIdToDelete = foundRows[0].id;
-        await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', studentIdToDelete);
-        const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', studentIdToDelete);
-        if (!error) return true;
-      }
-
-      // Nettoyage de sécurité direct
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('invoice_number', identifier);
-      await supabase.from('students').delete().eq('school_id', schoolId).eq('student_number', identifier);
-      await supabase.from('students').delete().eq('school_id', schoolId).eq('matricule', identifier);
+    // Factures d'abord (contrainte d'intégrité), puis la fiche.
+    const { error: invErr } = await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', identifier);
+    if (invErr) {
+      console.warn('deleteStudentFromSupabase (factures):', invErr.message);
+      return false;
     }
-    return true;
+    const { error } = await supabase.from('students').delete().eq('school_id', schoolId).eq('id', identifier);
+    if (error) {
+      console.warn('deleteStudentFromSupabase:', error.message);
+      return false;
+    }
+    // Vérification : la fiche ne doit plus exister. On ne déclare la suppression réussie que si
+    // la base le confirme (fini les suppressions « réussies » qu'il fallait refaire).
+    const { data: still } = await supabase.from('students').select('id').eq('school_id', schoolId).eq('id', identifier).limit(1);
+    return !still || still.length === 0;
   } catch (err) {
     console.warn('deleteStudentFromSupabase catch:', err);
     return false;

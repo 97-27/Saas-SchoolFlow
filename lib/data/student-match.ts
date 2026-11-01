@@ -25,6 +25,17 @@ export const studentDisplayName = (s: Pick<Student, 'fullName' | 'lastName' | 'f
 /** Téléphone réduit à ses 8 derniers chiffres (ignore +225, espaces, tirets). */
 export const normalizePhone = (phone: string | undefined | null): string => (phone || '').replace(/\D/g, '').slice(-8);
 
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Identifiants admis dans la liste des élèves supprimés : l'identifiant définitif (UUID donné par
+ * la base) ou un identifiant provisoire local (« stu-185 », « stud-int-… »). JAMAIS un numéro de
+ * dossier (« ID-059 ») ni un matricule : ils passent d'un enfant à l'autre, et un ancien numéro
+ * supprimé cachait l'élève qui le porte aujourd'hui (cas de BAMBA Ismael, ID-059).
+ */
+export const isStudentTombstoneId = (id: unknown): id is string =>
+  typeof id === 'string' && (UUID_RE.test(id) || /^stud?-/i.test(id));
+
 interface StudentRef {
   id?: string | null;
   studentNumber?: string | null;

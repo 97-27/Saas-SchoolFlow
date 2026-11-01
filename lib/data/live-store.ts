@@ -11,14 +11,12 @@ import {
   saveInvoiceToSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
-  deleteStudentFromSupabase,
-  deleteInvoiceFromSupabase,
 } from '@/lib/supabase/remote';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
-import { normalizePhone } from '@/lib/data/student-match';
+import { normalizePhone, isStudentTombstoneId } from '@/lib/data/student-match';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -199,7 +197,9 @@ export function getDeletedStudentIds(): Set<string> {
   try {
     const raw = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
     const parsed: string[] = raw ? JSON.parse(raw) : [];
-    return new Set(parsed);
+    // Les anciennes listes contiennent aussi des numéros de dossier (« ID-059 ») : ils sont
+    // ignorés, car ils cachaient l'élève qui porte aujourd'hui ce numéro.
+    return new Set(parsed.filter(isStudentTombstoneId));
   } catch (error) {
     return new Set();
   }
@@ -208,11 +208,12 @@ export function getDeletedStudentIds(): Set<string> {
 /**
  * Supprime un ou plusieurs élèves de manière centralisée et définitive de toutes les pages.
  */
-export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): void {
-  if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return;
+export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !idsToDelete || idsToDelete.length === 0) return Promise.resolve(false);
 
   const safeIdsToDelete = idsToDelete.filter(Boolean);
-  if (safeIdsToDelete.length === 0) return;
+  if (safeIdsToDelete.length === 0) return Promise.resolve(false);
+  let serverDeletion: Promise<boolean> = Promise.resolve(true);
 
   try {
     const cleanSlug = schoolSlug || 'epc-manoi';
@@ -227,37 +228,36 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       ...(rawGlobal ? JSON.parse(rawGlobal) : []),
     ];
 
+    // Les appelants passent [id, numéro de dossier, matricule]. Seuls les IDENTIFIANTS UNIQUES des
+    // fiches visées sont retenus pour la suppression : un numéro (« ID-059 ») peut désigner un
+    // autre enfant que celui qu'on voulait supprimer (ancienne copie, numéro réattribué).
     const inputIdSet = new Set(safeIdsToDelete);
-    const allDeletedIdentifiers = new Set<string>(safeIdsToDelete);
-
+    const targetIds = new Set<string>(safeIdsToDelete.filter(isStudentTombstoneId));
     for (const s of existingList) {
-      if (
-        inputIdSet.has(s.id) ||
-        (s.studentNumber && inputIdSet.has(s.studentNumber)) ||
-        (s.matricule && inputIdSet.has(s.matricule))
-      ) {
-        if (s.id) allDeletedIdentifiers.add(s.id);
-        if (s.studentNumber) allDeletedIdentifiers.add(s.studentNumber);
-        if (s.matricule) allDeletedIdentifiers.add(s.matricule);
+      if (s && s.id && inputIdSet.has(s.id)) targetIds.add(s.id);
+    }
+
+    // Identifiants à nettoyer dans les données locales (prestations, fiches santé…) : l'identifiant
+    // unique plus le numéro et le matricule de CES fiches-là uniquement.
+    const deleteArray = Array.from(targetIds);
+    const localKeys = new Set<string>(deleteArray);
+    for (const s of existingList) {
+      if (s && targetIds.has(s.id)) {
+        if (s.studentNumber) localKeys.add(s.studentNumber);
+        if (s.matricule) localKeys.add(s.matricule);
       }
     }
 
-    const deleteArray = Array.from(allDeletedIdentifiers);
     const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
     const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-    const updatedDeleted = Array.from(new Set([...prevDeleted, ...deleteArray]));
+    const updatedDeleted = Array.from(new Set([...prevDeleted, ...deleteArray])).filter(isStudentTombstoneId);
     localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(updatedDeleted));
 
     const deleteSet = new Set(updatedDeleted);
+    const removedLocally = (s: Student) => targetIds.has(s.id);
 
     // 1. Filtrer et nettoyer le stockage local des élèves sur TOUTES les clés
-    const filterStudents = (arr: Student[]) =>
-      arr.filter(
-        (s) =>
-          !deleteSet.has(s.id) &&
-          (!s.studentNumber || !deleteSet.has(s.studentNumber)) &&
-          (!s.matricule || !deleteSet.has(s.matricule))
-      );
+    const filterStudents = (arr: Student[]) => arr.filter((s) => s && !deleteSet.has(s.id) && !removedLocally(s));
 
     const prevStudents: Student[] = rawGlobal ? JSON.parse(rawGlobal) : [];
     const remainingGlobal = filterStudents(prevStudents);
@@ -272,13 +272,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
     }
 
     // 2. Filtrer et nettoyer le stockage local des factures / scolarités sur TOUTES les clés
-    const filterInvoices = (arr: Invoice[]) =>
-      arr.filter(
-        (inv) =>
-          !deleteSet.has(inv.id) &&
-          (!inv.studentId || !deleteSet.has(inv.studentId)) &&
-          (!inv.invoiceNumber || !deleteSet.has(inv.invoiceNumber))
-      );
+    const filterInvoices = (arr: Invoice[]) => arr.filter((inv) => inv && !(inv.studentId && targetIds.has(inv.studentId)));
 
     const invGlobalRaw = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = invGlobalRaw ? JSON.parse(invGlobalRaw) : [];
@@ -295,24 +289,31 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(remainingInvSchool));
     }
 
-    // 3. Supprimer immédiatement dans Supabase Cloud pour tous les appareils
-    for (const id of deleteArray) {
-      deleteStudentFromSupabase(id, cleanSlug).catch(() => {});
-      deleteInvoiceFromSupabase(id, cleanSlug).catch(() => {});
-    }
-
-    // 4. Notifier l'API serveur pour répercuter la suppression immédiatement vers tous les ordinateurs et téléphones
-    if (typeof fetch !== 'undefined') {
-      fetch('/api/sync', {
+    // 3-4. Suppression en base, ATTENDUE et CONFIRMÉE par le serveur (une seule requête, qui
+    // n'envoie que les identifiants à supprimer — plus toute la liste des élèves à chaque fois).
+    // En cas d'échec, l'utilisateur est prévenu : la fiche reviendra à la prochaine
+    // synchronisation au lieu de disparaître en apparence seulement.
+    const dbIds = deleteArray.filter((id) => UUID_PATTERN.test(id));
+    if (dbIds.length > 0 && typeof fetch !== 'undefined') {
+      serverDeletion = fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: cleanSlug,
-          students: remainingSchool,
-          invoices: remainingInvSchool,
-          deletedStudentIds: deleteArray,
-        }),
-      }).catch(() => {});
+        body: JSON.stringify({ slug: cleanSlug, deletedStudentIds: dbIds }),
+      })
+        .then(async (res) => {
+          const body = await res.json().catch(() => null);
+          return Boolean(res.ok && body && body.success && (!body.deletionFailed || body.deletionFailed.length === 0));
+        })
+        .catch(() => false)
+        .then((ok) => {
+          if (!ok) {
+            window.alert(
+              "La suppression n'a pas pu être confirmée par le serveur (connexion ou droits insuffisants). " +
+                "L'élève réapparaîtra à la prochaine actualisation : vérifiez la connexion puis recommencez."
+            );
+          }
+          return ok;
+        });
     }
 
     // 5. Nettoyer Internat, Cantine et Transport des élèves supprimés
@@ -321,7 +322,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawBoarding = localStorage.getItem(BOARDING_KEY);
       if (rawBoarding) {
         const list: any[] = JSON.parse(rawBoarding);
-        const filtered = list.filter((b) => !deleteSet.has(b.studentId) && (!b.matricule || !deleteSet.has(b.matricule)));
+        const filtered = list.filter((b) => !localKeys.has(b.studentId) && (!b.matricule || !localKeys.has(b.matricule)));
         localStorage.setItem(BOARDING_KEY, JSON.stringify(filtered));
       }
 
@@ -329,7 +330,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawCanteen = localStorage.getItem(CANTEEN_KEY);
       if (rawCanteen) {
         const map: Record<string, any> = JSON.parse(rawCanteen);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(CANTEEN_KEY, JSON.stringify(map));
       }
 
@@ -337,7 +338,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawTransport = localStorage.getItem(TRANSPORT_KEY);
       if (rawTransport) {
         const map: Record<string, any> = JSON.parse(rawTransport);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(TRANSPORT_KEY, JSON.stringify(map));
       }
 
@@ -350,7 +351,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawBoardingPay = localStorage.getItem(BOARDING_PAY_KEY);
       if (rawBoardingPay) {
         const map: Record<string, any> = JSON.parse(rawBoardingPay);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(BOARDING_PAY_KEY, JSON.stringify(map));
       }
 
@@ -358,7 +359,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawCanteenPay = localStorage.getItem(CANTEEN_PAY_KEY);
       if (rawCanteenPay) {
         const map: Record<string, any> = JSON.parse(rawCanteenPay);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(CANTEEN_PAY_KEY, JSON.stringify(map));
       }
 
@@ -366,7 +367,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawTransportPay = localStorage.getItem(TRANSPORT_PAY_KEY);
       if (rawTransportPay) {
         const map: Record<string, any> = JSON.parse(rawTransportPay);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(TRANSPORT_PAY_KEY, JSON.stringify(map));
       }
 
@@ -377,7 +378,7 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
       const rawHealth = localStorage.getItem(HEALTH_KEY);
       if (rawHealth) {
         const map: Record<string, any> = JSON.parse(rawHealth);
-        deleteArray.forEach((id) => delete map[id]);
+        localKeys.forEach((id) => delete map[id]);
         localStorage.setItem(HEALTH_KEY, JSON.stringify(map));
       }
     } catch (e) {
@@ -392,7 +393,9 @@ export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): 
     });
   } catch (error) {
     console.error('Erreur suppression live-store students:', error);
+    return Promise.resolve(false);
   }
+  return serverDeletion;
 }
 
 let isSyncingServer = false;
@@ -456,19 +459,18 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
         let hasChanges = false;
         const isPilot = slug === 'epc-manoi';
 
-        // 1. Remplacer la liste locale des identifiants supprimés par celle du serveur (source de
-        // vérité unique). Une simple fusion additive ne pouvait jamais faire disparaître un
-        // identifiant débloqué côté serveur (ex: via restoreStudentIds) : ce navigateur continuait
-        // de bloquer ID-016/ID-017 indéfiniment même après leur déblocage confirmé sur le serveur.
-        if (data.deletedStudentIds && Array.isArray(data.deletedStudentIds)) {
+        // 1. Liste des identifiants supprimés = fusion locale + serveur, identifiants uniques
+        // seulement. Elle n'est plus REMPLACÉE par celle du serveur : celle-ci vit dans la mémoire
+        // d'une instance Vercel, effacée à chaque redémarrage, et son remplacement faisait revenir
+        // des élèves tout juste supprimés (il fallait recommencer 2 ou 3 fois). Les anciens numéros
+        // de dossier (« ID-059 ») sont purgés : ils cachaient l'élève qui porte aujourd'hui ce numéro.
+        {
           const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
           const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-          const serverList = Array.from(new Set<string>(data.deletedStudentIds.filter(Boolean)));
-          if (
-            serverList.length !== prevDeleted.length ||
-            serverList.some((id) => !prevDeleted.includes(id))
-          ) {
-            localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(serverList));
+          const serverIds: string[] = Array.isArray(data.deletedStudentIds) ? data.deletedStudentIds : [];
+          const merged = Array.from(new Set<string>([...prevDeleted, ...serverIds].filter(isStudentTombstoneId)));
+          if (merged.length !== prevDeleted.length || merged.some((id) => !prevDeleted.includes(id))) {
+            localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(merged));
             hasChanges = true;
           }
         }
@@ -569,6 +571,9 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               return;
             }
             if (!studentMap.has(key)) {
+              // Fiche à identifiant définitif absente de la liste de la base : elle a été supprimée
+              // (depuis cet appareil ou un autre). On ne la garde pas, sinon elle « revient ».
+              if (!isProvisional && data.studentsFromDatabase === true) return;
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
               hasLocalNewStudents = true;

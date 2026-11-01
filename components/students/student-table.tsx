@@ -1409,18 +1409,23 @@ export function StudentTable({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const ids = studentToDelete.flatMap((s) => [s.id, s.studentNumber, s.matricule].filter(Boolean) as string[]);
-                  deleteLiveStudents(ids, schoolSlug);
-                  setStudents((prev) => prev.filter((s) => !ids.includes(s.id) && (!s.studentNumber || !ids.includes(s.studentNumber))));
+                onClick={async () => {
+                  // Suppression par identifiant unique uniquement : jamais par numéro de dossier,
+                  // qui pourrait désigner un autre enfant.
+                  const targets = studentToDelete;
+                  const ids = targets.map((s) => s.id).filter(Boolean) as string[];
+                  setStudents((prev) => prev.filter((s) => !ids.includes(s.id)));
                   setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
                   setStudentToDelete(null);
-                  setSuccessMessage(
-                    studentToDelete.length === 1
-                      ? "✓ Élève retiré de la liste avec succès."
-                      : `✓ ${studentToDelete.length} élèves retirés de la liste.`
-                  );
-                  setTimeout(() => setSuccessMessage(null), 2500);
+                  const confirmed = await deleteLiveStudents(ids, schoolSlug);
+                  if (confirmed) {
+                    setSuccessMessage(
+                      targets.length === 1
+                        ? '✓ Élève supprimé définitivement de la base.'
+                        : `✓ ${targets.length} élèves supprimés définitivement de la base.`
+                    );
+                    setTimeout(() => setSuccessMessage(null), 3000);
+                  }
                 }}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/30 transition-all cursor-pointer"
               >

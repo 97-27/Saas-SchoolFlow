@@ -8,7 +8,6 @@ import {
   getStaffUsersFromSupabase,
   saveSchoolToSupabase,
   deleteStudentFromSupabase,
-  deleteInvoiceFromSupabase,
   saveServicesDataToSupabase,
   getServicesDataFromSupabase,
   batchUpsertStudents,
@@ -20,6 +19,7 @@ import {
 } from '@/lib/supabase/services';
 import { mockStudents, mockInvoices } from '@/lib/data/mock-data';
 import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
+import { isStudentTombstoneId, UUID_RE } from '@/lib/data/student-match';
 import {
   requireSession,
   isAdmin,
@@ -196,6 +196,11 @@ export async function GET(request: NextRequest) {
         }
         if (sbStudents !== null && Array.isArray(sbStudents) && sbStudents.length > 0) {
           schoolData.students = sbStudents;
+          // Signale au navigateur que la liste vient bien de la base (et non du cache de secours) :
+          // il peut alors écarter les copies locales d'élèves supprimés entre-temps.
+          schoolData.studentsFromDatabase = true;
+        } else {
+          schoolData.studentsFromDatabase = false;
         }
         if (sbInvoices !== null && Array.isArray(sbInvoices) && sbInvoices.length > 0) {
           schoolData.invoices = sbInvoices;
@@ -231,8 +236,10 @@ export async function GET(request: NextRequest) {
 
     if (!schoolData) schoolData = {};
 
-    // Filtrer les élèves et factures contre les identifiants supprimés
-    const rawDeletedIds: string[] = schoolData.deletedStudentIds || [];
+    // Filtrer les élèves et factures contre les identifiants supprimés — identifiants uniques
+    // seulement (jamais un numéro de dossier, qui peut appartenir aujourd'hui à un autre enfant).
+    const rawDeletedIds: string[] = (schoolData.deletedStudentIds || []).filter(isStudentTombstoneId);
+    schoolData.deletedStudentIds = rawDeletedIds;
     const delSet = new Set(rawDeletedIds);
     if (delSet.size > 0) {
       if (Array.isArray(schoolData.students)) {
@@ -414,7 +421,7 @@ export async function POST(request: NextRequest) {
     const autoBannedIds = ['MAT-2026', 'ID-2026002', '25bcb95a-62d2-47b1-bfa6-6820cb30dd6e'];
     let existingDeleted: string[] = Array.from(
       new Set([...(currentSchool.deletedStudentIds || []), ...autoBannedIds])
-    );
+    ).filter(isStudentTombstoneId);
 
     // Soupape de secours explicite : un identifiant tombé une fois dans deletedStudentIds y
     // reste pour toujours (la liste ne fait qu'accumuler), y compris un simple numéro d'élève
@@ -429,19 +436,18 @@ export async function POST(request: NextRequest) {
       existingDeleted = existingDeleted.filter((id) => !restoreSet.has(id));
     }
 
-    // Traitement des suppressions dans Supabase Cloud et mémoisation
+    // Suppressions : uniquement par identifiant unique, et chaque suppression en base est
+    // vérifiée. La liste des échecs est renvoyée au navigateur pour qu'il prévienne l'utilisateur.
+    const deletionFailed: string[] = [];
     if (deletedStudentIds && Array.isArray(deletedStudentIds)) {
-      const safeNewDeleted = deletedStudentIds.filter(Boolean);
+      const safeNewDeleted = deletedStudentIds.filter(isStudentTombstoneId);
       existingDeleted = Array.from(new Set([...existingDeleted, ...safeNewDeleted]));
-      const deletePromises: Promise<any>[] = [];
-      for (const delId of safeNewDeleted) {
-        deletePromises.push(deleteStudentFromSupabase(delId, slug));
-        deletePromises.push(deleteInvoiceFromSupabase(delId, slug));
-      }
-      const delResults = await Promise.allSettled(deletePromises);
-      delResults.forEach((r) => {
-        if (r.status === 'rejected') {
-          console.warn('Erreur suppression Supabase dans /api/sync POST:', r.reason);
+      const dbIds = safeNewDeleted.filter((id) => UUID_RE.test(id));
+      const results = await Promise.allSettled(dbIds.map((id) => deleteStudentFromSupabase(id, slug)));
+      results.forEach((r, i) => {
+        if (r.status === 'rejected' || r.value !== true) {
+          deletionFailed.push(dbIds[i]);
+          console.warn('Suppression Supabase non confirmée pour', dbIds[i], r.status === 'rejected' ? r.reason : '');
         }
       });
     }
@@ -605,9 +611,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        success: true,
+        success: deletionFailed.length === 0,
         slug,
-        message: 'Données synchronisées avec succès',
+        deletionFailed,
+        message:
+          deletionFailed.length === 0
+            ? 'Données synchronisées avec succès'
+            : `${deletionFailed.length} suppression(s) non confirmée(s) par la base.`,
       },
       { headers: NO_CACHE_HEADERS }
     );
