@@ -327,7 +327,8 @@ export function CanteenView({
         // Si aucun mois n'est encore coché manuellement mais qu'un paiement Cantine existe dans invoices
         const matchingInvoices = invoices.filter(
           (inv) =>
-            (inv.studentId === stu.id || inv.studentName === stu.fullName) &&
+            // Par identifiant ; le nom ne sert que pour une ancienne facture sans identifiant.
+            (inv.studentId ? inv.studentId === stu.id || inv.studentId === stu.studentNumber : inv.studentName === stu.fullName) &&
             (inv.feeType === 'Cantine' || inv.invoiceNumber?.startsWith('CAN-') || inv.notes?.toLowerCase().includes('cantine'))
         );
         const invoicePaidTotal = matchingInvoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);

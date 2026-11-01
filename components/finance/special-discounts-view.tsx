@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { School, Student, Invoice } from '@/lib/data/types';
+import { findStudentByRef } from '@/lib/data/student-match';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import {
   getLiveSchool,
@@ -583,10 +584,9 @@ export function SpecialDiscountsView({
           const fName = parts.slice(1).join(' ') || '';
           const tuition = child.tuitionAmount || 200000;
 
-          // Vérifier si l'élève existe déjà par son nom ou ID
-          const existing = currentStudents.find(
-            (s) => s.fullName.toLowerCase() === nameTrimmed.toLowerCase() || s.id === child.id
-          );
+          // Retrouver l'élève par son identifiant ; par le nom seulement s'il n'a pas d'homonyme
+          // (sinon on créditerait le versement au mauvais enfant).
+          const existing = findStudentByRef(currentStudents, { id: child.id, name: nameTrimmed });
 
           if (existing) {
             // Additif, jamais un remplacement direct : un élève ayant déjà des versements

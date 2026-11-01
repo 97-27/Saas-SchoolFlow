@@ -1,5 +1,6 @@
 import { Student, Invoice } from '@/lib/data/types';
 import { LEGACY_DEMO_STUDENT_IDS } from '@/lib/data/legacy-ids';
+import { findStudentByRef } from '@/lib/data/student-match';
 
 /**
  * ══════════════════════════════════════════════════════════════════
@@ -57,28 +58,11 @@ export interface ResolvedBoarder {
   gender: 'female' | 'male';
 }
 
-const normalizeName = (name: string | undefined) =>
-  (name || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .sort()
-    .join(' ');
-
 /** Retrouve la fiche élève d'un abonnement : par identifiant, numéro de dossier, matricule, puis nom. */
 export function findBoardingStudent(students: Student[], sub: BoardingSubscriptionLike): Student | undefined {
-  const byKey = students.find(
-    (s) =>
-      s.id === sub.studentId ||
-      (Boolean(sub.studentId) && s.studentNumber === sub.studentId) ||
-      (Boolean(sub.matricule) && Boolean(s.matricule) && s.matricule === sub.matricule)
-  );
-  if (byKey) return byKey;
-  const subName = normalizeName(sub.studentName);
-  return subName ? students.find((s) => normalizeName(s.fullName || `${s.lastName} ${s.firstName}`) === subName) : undefined;
+  // Le nom ne sert qu'en dernier recours et seulement s'il est porté par un seul élève : avec deux
+  // homonymes, l'abonnement de l'un s'affichait sur la fiche de l'autre.
+  return findStudentByRef(students, { id: sub.studentId, matricule: sub.matricule, name: sub.studentName });
 }
 
 /**

@@ -7,6 +7,7 @@ import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/forma
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
+import { findStudentByRef } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase, deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -657,12 +658,13 @@ export function BoardingView({
     // Trouver l'élève existant correspondant pour réutiliser son identifiant unique réel
     const matchedExistingStudent = selectedEnrolledStudentId
       ? students.find((s) => s.id === selectedEnrolledStudentId || s.studentNumber === selectedEnrolledStudentId)
-      : students.find(
-          (s) =>
-            (formMatricule && (s.matricule === formMatricule || s.studentNumber === formMatricule)) ||
-            (formStudentId && (s.studentNumber === formStudentId || s.id === formStudentId)) ||
-            (s.fullName && s.fullName.toLowerCase() === finalFullName.toLowerCase())
-        );
+      : findStudentByRef(students, {
+          id: formStudentId,
+          studentNumber: formMatricule,
+          matricule: formMatricule,
+          // Nom tapé : utilisé seulement s'il désigne un seul élève (sinon homonyme = risque d'erreur).
+          name: finalFullName,
+        });
 
     const targetStudentId = matchedExistingStudent
       ? matchedExistingStudent.id

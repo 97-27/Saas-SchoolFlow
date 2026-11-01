@@ -201,8 +201,8 @@ export function DocumentsView({
   const [viewOtherDocsStudent, setViewOtherDocsStudent] = useState<{ stu: Student; docs: OtherDocItem[] } | null>(null);
 
   // Clean, Deduplicated, Filtered & Sorted students
+  // Dédoublonnage par identifiant uniquement : deux homonymes sont deux élèves distincts.
   const cleanStudents = useMemo(() => {
-    const seenNames = new Set<string>();
     const seenIds = new Set<string>();
     return (students || []).filter((s) => {
       if (!s) return false;
@@ -213,18 +213,9 @@ export function DocumentsView({
         s.studentNumber === 'MAT-2026'
       ) return false;
 
-      const normName = (s.fullName || `${s.lastName || ''} ${s.firstName || ''}`)
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]/g, ' ')
-        .split(/\s+/)
-        .filter(Boolean)
-        .sort()
-        .join(' ');
       const idKey = s.id || s.studentNumber;
-      if (seenIds.has(idKey) || (normName && seenNames.has(normName))) return false;
+      if (seenIds.has(idKey)) return false;
       seenIds.add(idKey);
-      if (normName) seenNames.add(normName);
       return true;
     });
   }, [students]);

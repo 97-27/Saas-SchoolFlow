@@ -120,10 +120,7 @@ export function InscriptionsView({
           (s) =>
             s.id === eventStudent.id ||
             (eventStudent.studentNumber && s.studentNumber === eventStudent.studentNumber) ||
-            (eventStudent.matricule && s.matricule && s.matricule === eventStudent.matricule) ||
-            (s.fullName &&
-              eventStudent.fullName &&
-              s.fullName.toLowerCase().trim() === eventStudent.fullName.toLowerCase().trim())
+            (eventStudent.matricule && s.matricule && s.matricule === eventStudent.matricule)
         )
       ) {
         combinedLive.push(eventStudent);
@@ -382,7 +379,8 @@ export function InscriptionsView({
     return 'Espèces';
   };
 
-  // Liste triée des élèves par numéro ID croissant (avec dédoublonnage strict anti-doublon)
+  // Liste triée des élèves par numéro ID croissant. Dédoublonnage par identifiant et numéro de
+  // dossier uniquement : deux homonymes sont deux enfants différents et doivent tous deux apparaître.
   const sortedStudentsById = useMemo(() => {
     const seen = new Set<string>();
     const unique: Student[] = [];
@@ -391,22 +389,11 @@ export function InscriptionsView({
       if (!s || (!s.id && !s.studentNumber)) continue;
       const idKey = (s.id || s.studentNumber || '').toUpperCase().trim();
       const numKey = (s.studentNumber || s.id || '').toUpperCase().trim();
-      const nameKey = (s.fullName || `${s.lastName || ''} ${s.firstName || ''}`).toUpperCase().trim().replace(/\s+/g, ' ');
-      const matKey = (s.matricule || '').toUpperCase().trim();
 
-      if (
-        seen.has(idKey) ||
-        seen.has(numKey) ||
-        (nameKey && seen.has(nameKey)) ||
-        (matKey && matKey !== '' && seen.has(matKey))
-      ) {
-        continue;
-      }
+      if (seen.has(idKey) || seen.has(numKey)) continue;
 
       if (idKey) seen.add(idKey);
       if (numKey) seen.add(numKey);
-      if (nameKey) seen.add(nameKey);
-      if (matKey) seen.add(matKey);
       unique.push(s);
     }
 

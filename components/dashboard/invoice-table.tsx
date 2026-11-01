@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Invoice, Student } from '@/lib/data/types';
+import { findStudentByRef } from '@/lib/data/student-match';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, formatDateFrenchLong, formatFullNameNomFirst, formatEnrollmentStatus } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
@@ -104,9 +105,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
     const seenTxKeys = new Set<string>();
 
     invoices.forEach((inv) => {
-      const matchedStudent = students.find(
-        (s) => s.id === inv.studentId || s.studentNumber === inv.studentId || (inv.studentName && s.fullName?.toLowerCase() === inv.studentName?.toLowerCase())
-      );
+      const matchedStudent = findStudentByRef(students, { id: inv.studentId, name: inv.studentName });
       const matriculeCode = matchedStudent?.matricule || (inv as any).matricule || '';
       const enrollmentType: 'nouveau' | 'ancien' = inv.enrollmentType === 'ancien' ? 'ancien' : 'nouveau';
       const inst = inv.installments;

@@ -18,6 +18,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
+import { normalizePhone } from '@/lib/data/student-match';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -555,9 +556,14 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             if (
               isProvisional &&
               incomingStudents.some(
-                (srv: Student) =>
-                  normalizeWords(srv.fullName || '') === normalizeWords(localStu.fullName || '') &&
-                  (srv.grade || '') === (localStu.grade || '')
+                (srv: Student) => {
+                  if (normalizeWords(srv.fullName || '') !== normalizeWords(localStu.fullName || '')) return false;
+                  if ((srv.grade || '') !== (localStu.grade || '')) return false;
+                  // Homonyme de la même classe mais autre parent : c'est un autre enfant, à garder.
+                  const a = normalizePhone(srv.guardianPhone || srv.whatsappPhone);
+                  const b = normalizePhone(localStu.guardianPhone || localStu.whatsappPhone);
+                  return !a || !b || a === b;
+                }
               )
             ) {
               return;

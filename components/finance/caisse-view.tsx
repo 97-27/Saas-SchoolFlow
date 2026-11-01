@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Invoice, School, Student } from '@/lib/data/types';
+import { findStudentByRef } from '@/lib/data/student-match';
 import { InvoiceStatusBadge, GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, formatFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
@@ -500,9 +501,7 @@ export function CaisseView({
               ) : (
                 filteredInvoices.map((inv) => {
                   const isSelected = selectedIds.includes(inv.id);
-                  const matchedStudent = students.find(
-                    (s) => s.id === inv.studentId || s.fullName?.toLowerCase() === inv.studentName?.toLowerCase()
-                  );
+                  const matchedStudent = findStudentByRef(students, { id: inv.studentId, name: inv.studentName });
                   const matriculeStr = matchedStudent?.matricule || (inv as any).matricule || '—';
                   const initialAmount = inv.amount;
                   const discount = inv.discountAmount || 0;

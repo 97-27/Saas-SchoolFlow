@@ -322,7 +322,8 @@ export function TransportView({
         // Si aucun mois n'est encore coché manuellement mais qu'un paiement Transport existe dans invoices
         const matchingInvoices = invoices.filter(
           (inv) =>
-            (inv.studentId === stu.id || inv.studentName === stu.fullName) &&
+            // Par identifiant ; le nom ne sert que pour une ancienne facture sans identifiant.
+            (inv.studentId ? inv.studentId === stu.id || inv.studentId === stu.studentNumber : inv.studentName === stu.fullName) &&
             (inv.feeType === 'Transport' || inv.invoiceNumber?.startsWith('TRP-') || inv.notes?.toLowerCase().includes('transport'))
         );
         const invoicePaidTotal = matchingInvoices.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);

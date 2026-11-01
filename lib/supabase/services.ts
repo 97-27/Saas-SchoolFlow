@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from './client';
 import { School, Student, Invoice } from '@/lib/data/types';
 import { LEGACY_DEMO_STUDENT_IDS } from '@/lib/data/legacy-ids';
 import { cleanDisplayAddress } from '@/lib/utils/formatters';
+import { normalizePhone } from '@/lib/data/student-match';
 
 /**
  * ══════════════════════════════════════════════════════════════════
@@ -483,25 +484,19 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 
     if (error || !data) return [];
 
-    const seen = new Set<string>();
+    // Chaque ligne de la table est un élève réel (la base interdit déjà deux fois le même numéro
+    // de dossier dans une école). On ne retire donc que les répétitions exactes d'identifiant ou de
+    // numéro, JAMAIS par le nom : deux enfants homonymes (ex : deux « BAMBA Awa », CE2 et 6ème)
+    // sont deux élèves distincts, et l'un des deux disparaissait de toutes les listes et effectifs.
+    const seenIds = new Set<string>();
+    const seenNumbers = new Set<string>();
     const uniqueData: any[] = [];
     for (const d of data) {
       if (LEGACY_DEMO_STUDENT_IDS.has(d.id)) continue;
       const numKey = (d.student_number || '').trim().toUpperCase();
-      const nameKey = (d.full_name || `${d.last_name || ''} ${d.first_name || ''}`).trim().toLowerCase().replace(/\s+/g, ' ');
-      const matKey = (d.matricule || '').trim().toUpperCase();
-
-      if (
-        (numKey && seen.has(numKey)) ||
-        (nameKey && seen.has(nameKey)) ||
-        (matKey && matKey !== '' && seen.has(matKey))
-      ) {
-        continue;
-      }
-
-      if (numKey) seen.add(numKey);
-      if (nameKey) seen.add(nameKey);
-      if (matKey) seen.add(matKey);
+      if (seenIds.has(d.id) || (numKey && seenNumbers.has(numKey))) continue;
+      seenIds.add(d.id);
+      if (numKey) seenNumbers.add(numKey);
       uniqueData.push(d);
     }
 
@@ -705,7 +700,13 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
       if (plan.action === 'skip') continue;
       const existingId = plan.action === 'update' ? plan.id : undefined;
       // Réserver le numéro dans ce même lot pour qu'aucun autre élève du lot ne le reprenne.
-      const reserved = { id: existingId || `pending-${planned.length}`, student_number: plan.studentNumber, full_name: student.fullName, grade: student.grade };
+      const reserved = {
+        id: existingId || `pending-${planned.length}`,
+        student_number: plan.studentNumber,
+        full_name: student.fullName,
+        grade: student.grade,
+        guardian_phone: student.guardianPhone || '',
+      };
       index.byNumber.set(plan.studentNumber, reserved);
       if (!existingId) rows.push(reserved);
       if (planned.some((p) => p.existingId && p.existingId === existingId)) continue; // même fiche deux fois dans le lot
@@ -814,7 +815,21 @@ interface StudentRowLite {
   student_number: string;
   full_name: string;
   grade: string;
+  guardian_phone?: string | null;
 }
+
+/**
+ * Même enfant = même nom, même classe ET même téléphone du parent. Le nom et la classe seuls ne
+ * suffisent pas : deux homonymes dans la même classe (cas réel dans les écoles) sont deux enfants,
+ * et le second inscrit était silencieusement refusé à l'enregistrement.
+ */
+const isSameChild = (row: StudentRowLite, student: Student): boolean => {
+  if (!isSameStudentName(row.full_name, student.fullName)) return false;
+  if ((row.grade || '') !== (student.grade || '')) return false;
+  const a = normalizePhone(row.guardian_phone);
+  const b = normalizePhone(student.guardianPhone || student.whatsappPhone);
+  return !a || !b || a === b;
+};
 
 type StudentWritePlan =
   | { action: 'update'; id: string; studentNumber: string }
@@ -845,9 +860,7 @@ function planStudentWrite(
     return { action: 'update', id: row.id, studentNumber: owner && owner.id !== row.id ? row.student_number : number || row.student_number };
   }
 
-  const sameChildElsewhere = rows.find(
-    (r) => isSameStudentName(r.full_name, student.fullName) && (r.grade || '') === (student.grade || '')
-  );
+  const sameChildElsewhere = rows.find((r) => isSameChild(r, student));
   const owner = number ? byNumber.get(number) : undefined;
 
   // 2. Même numéro ET même nom : c'est bien le même élève (identifiant encore provisoire).
@@ -899,8 +912,11 @@ function planInvoiceWrite(
       if (candidate && isSameStudentName(candidate.full_name, inv.studentName)) {
         stu = candidate;
       } else {
+        // Homonymes : on ne rattache que si UN SEUL élève correspond (au besoin en précisant la
+        // classe). Sinon on ne devine pas : mieux vaut ne rien écrire que créditer le mauvais enfant.
         const named = students.filter((r) => isSameStudentName(r.full_name, inv.studentName));
-        stu = named.length === 1 ? named[0] : named.find((r) => (r.grade || '') === (inv.studentGrade || ''));
+        const sameGrade = named.filter((r) => (r.grade || '') === (inv.studentGrade || ''));
+        stu = named.length === 1 ? named[0] : sameGrade.length === 1 ? sameGrade[0] : undefined;
       }
     } else {
       stu = candidate;
@@ -940,7 +956,7 @@ async function loadInvoiceRows(schoolId: string): Promise<InvoiceRowLite[]> {
 async function loadStudentRows(schoolId: string): Promise<StudentRowLite[]> {
   const { data } = await supabase
     .from('students')
-    .select('id, student_number, full_name, grade')
+    .select('id, student_number, full_name, grade, guardian_phone')
     .eq('school_id', schoolId)
     .limit(10000);
   return (data || []) as StudentRowLite[];
