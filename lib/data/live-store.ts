@@ -538,6 +538,28 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             studentMap.set(key, st);
           });
 
+          // Fiches enregistrées (identifiant définitif) encore présentes dans ce navigateur mais
+          // disparues de la base : elles ont été supprimées, ici ou depuis un autre appareil. On les
+          // ajoute à la liste des supprimés pour qu'aucune page (Vue d'ensemble, caisse, factures
+          // reconstituées…) ne les réaffiche — c'était l'écart 216 / 211 avec le tableau de bord.
+          const vanishedIds = new Set<string>();
+          if (data.studentsFromDatabase === true) {
+            const serverIds = new Set<string>(data.students.map((s: any) => s && s.id).filter(Boolean));
+            const localKeysToCheck = isPilot ? [STUDENTS_STORAGE_KEY, schoolKey] : [schoolKey];
+            const localLists = localKeysToCheck.map((k) => {
+                try {
+                  return JSON.parse(localStorage.getItem(k) || '[]') as Student[];
+                } catch (e) {
+                  return [] as Student[];
+                }
+              });
+            for (const list of localLists) {
+              for (const s of list) {
+                if (s && s.id && UUID_PATTERN.test(s.id) && !serverIds.has(s.id)) vanishedIds.add(s.id);
+              }
+            }
+          }
+
           // B. Fusionner avec le stockage local (Sauvegarde des nouveaux inscrits et des modifications de date récentes)
           let hasLocalNewStudents = false;
           prevStudents.forEach((localStu: Student) => {
@@ -573,7 +595,10 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             if (!studentMap.has(key)) {
               // Fiche à identifiant définitif absente de la liste de la base : elle a été supprimée
               // (depuis cet appareil ou un autre). On ne la garde pas, sinon elle « revient ».
-              if (!isProvisional && data.studentsFromDatabase === true) return;
+              if (!isProvisional && data.studentsFromDatabase === true) {
+                vanishedIds.add(localStu.id);
+                return;
+              }
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
               hasLocalNewStudents = true;
@@ -589,6 +614,16 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               }
             }
           });
+
+          if (vanishedIds.size > 0) {
+            try {
+              const prevDel: string[] = JSON.parse(localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY) || '[]');
+              const mergedDel = Array.from(new Set([...prevDel, ...Array.from(vanishedIds)])).filter(isStudentTombstoneId);
+              localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(mergedDel));
+            } catch (e) {}
+            vanishedIds.forEach((id) => delSet.add(id));
+            hasChanges = true;
+          }
 
           // Pour EPC Manoi : s'assurer que les 15 élèves officiels sont TOUJOURS présents — mais
           // seulement si aucun élève réel (identifié par id ou par son numéro déjà attribué,
