@@ -1521,6 +1521,16 @@ export async function uploadAvatarToSupabase(
 export async function saveServicesDataToSupabase(schoolSlug: string, servicesData: any): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
+    // Migration 004 appliquée : abonnements et mois payés ne s'écrivent plus que ligne par ligne
+    // (applyServiceChangesToSupabase). Les listes complètes envoyées par un navigateur — même
+    // d'une ancienne version encore ouverte — sont ignorées : elles écrasaient le travail des
+    // autres postes.
+    if (servicesData && typeof servicesData === 'object' && (await serviceTablesAvailable())) {
+      const rest = { ...servicesData };
+      for (const k of LEGACY_SERVICE_KEYS) delete rest[k];
+      if (Object.keys(rest).length === 0) return true;
+      servicesData = rest;
+    }
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return false;
 
@@ -1607,12 +1617,216 @@ export async function getServicesDataFromSupabase(schoolSlug: string): Promise<a
       .limit(1)
       .maybeSingle();
 
+    let blob: Record<string, any> | null = null;
     if (data?.department) {
-      return JSON.parse(data.department);
+      try {
+        blob = JSON.parse(data.department);
+      } catch (e) {
+        blob = null;
+      }
     }
-    return null;
+    // Migration 004 appliquée : abonnements et mois payés viennent des vraies tables (le bloc ne
+    // garde que la capacité de l'internat, le menu de la cantine et l'échéancier).
+    const fromTables = await readServiceTables(schoolId);
+    if (fromTables) return { ...(blob || {}), ...fromTables };
+    return blob;
   } catch (err) {
     console.warn('getServicesDataFromSupabase catch:', err);
+    return null;
+  }
+}
+
+/* ==========================================================================
+   INTERNAT / CANTINE / TRANSPORT EN VRAIES TABLES (migration 004)
+   ========================================================================== */
+
+const SERVICE_MONTHS = ['Septembre', 'Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai'];
+const LEGACY_SERVICE_KEYS = [
+  'boardingSubscriptions',
+  'boardingPayments',
+  'canteenSubscriptions',
+  'canteenPayments',
+  'transportSubscriptions',
+  'transportPayments',
+];
+
+let serviceTablesCache: { at: number; ok: boolean } | null = null;
+
+/** Vrai si la migration 004 a été exécutée (résultat gardé 1 minute). */
+export async function serviceTablesAvailable(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  if (serviceTablesCache && Date.now() - serviceTablesCache.at < 60000) return serviceTablesCache.ok;
+  const { error } = await supabase.from('service_subscriptions').select('id').limit(1);
+  serviceTablesCache = { at: Date.now(), ok: !error };
+  return !error;
+}
+
+/**
+ * Relit les tables et les présente sous la forme attendue par les écrans (mêmes clés que
+ * l'ancien bloc) : aucun écran de lecture n'a besoin de changer. null si tables absentes.
+ */
+async function readServiceTables(schoolId: string): Promise<Record<string, any> | null> {
+  if (!(await serviceTablesAvailable())) return null;
+  const [subsRes, payRes] = await Promise.all([
+    supabase
+      .from('service_subscriptions')
+      .select('student_id, service, monthly_rate, discount, details, student:students(full_name, grade, gender, matricule, guardian_phone, whatsapp_phone)')
+      .eq('school_id', schoolId)
+      .limit(20000),
+    supabase.from('service_month_payments').select('student_id, service, month').eq('school_id', schoolId).limit(100000),
+  ]);
+  if (subsRes.error || payRes.error) return null;
+
+  const boardingSubscriptions: any[] = [];
+  const canteenSubscriptions: Record<string, any> = {};
+  const transportSubscriptions: Record<string, any> = {};
+  for (const s of (subsRes.data || []) as any[]) {
+    const st = Array.isArray(s.student) ? s.student[0] : s.student;
+    const d = (s.details && typeof s.details === 'object' ? s.details : {}) as Record<string, any>;
+    const female = st?.gender === 'female';
+    if (s.service === 'internat') {
+      boardingSubscriptions.push({
+        studentId: s.student_id,
+        studentName: st?.full_name || '',
+        matricule: st?.matricule || '',
+        className: st?.grade || '',
+        gender: female ? 'F' : 'M',
+        parentContact: d.parentContact || st?.whatsapp_phone || st?.guardian_phone || '',
+        pavilion: d.pavilion || (female ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
+        roomNumber: d.roomNumber || '',
+        monthlyRate: s.monthly_rate,
+        paymentDate: d.paymentDate || '',
+      });
+    } else {
+      const target = s.service === 'cantine' ? canteenSubscriptions : transportSubscriptions;
+      target[s.student_id] = { ...d, rate: s.monthly_rate, discount: s.discount, studentName: st?.full_name || '' };
+    }
+  }
+
+  const payments: Record<string, Record<string, Record<string, boolean>>> = { internat: {}, cantine: {}, transport: {} };
+  for (const p of (payRes.data || []) as any[]) {
+    const bucket = payments[p.service];
+    if (!bucket) continue;
+    (bucket[p.student_id] ||= {})[p.month] = true;
+  }
+
+  return {
+    boardingSubscriptions,
+    boardingPayments: payments.internat,
+    canteenSubscriptions,
+    canteenPayments: payments.cantine,
+    transportSubscriptions,
+    transportPayments: payments.transport,
+  };
+}
+
+export interface ServiceChange {
+  service: ServiceKind;
+  /** Identifiant, numéro de dossier ou matricule de l'élève. */
+  studentKey: string;
+  action: 'subscribe' | 'unsubscribe' | 'setMonth';
+  monthlyRate?: number;
+  discount?: number;
+  details?: Record<string, unknown>;
+  month?: string;
+  paid?: boolean;
+}
+
+export interface ServiceChangeResult {
+  ok: boolean;
+  /** true si la migration 004 n'est pas encore faite (l'ancien bloc reste utilisé). */
+  legacy: boolean;
+  applied: number;
+  skipped: string[];
+}
+
+/**
+ * Applique des changements LIGNE PAR LIGNE (un abonnement, un mois) : un poste ne peut plus
+ * écraser les abonnements ou les mois enregistrés par un autre poste.
+ */
+export async function applyServiceChangesToSupabase(schoolSlug: string, changes: ServiceChange[]): Promise<ServiceChangeResult> {
+  const result: ServiceChangeResult = { ok: true, legacy: false, applied: 0, skipped: [] };
+  if (!isSupabaseConfigured || !Array.isArray(changes)) return { ...result, ok: false };
+  if (!(await serviceTablesAvailable())) return { ...result, legacy: true };
+  const schoolId = await getSchoolId(schoolSlug);
+  if (!schoolId) return { ...result, ok: false };
+
+  const valid = changes
+    .filter((c) => c && ['internat', 'cantine', 'transport'].includes(c.service) && typeof c.studentKey === 'string' && c.studentKey)
+    .slice(0, 500);
+  if (valid.length === 0) return result;
+
+  // Résolution des élèves (identifiant, numéro de dossier ou matricule) en une requête.
+  const keys = Array.from(new Set(valid.map((c) => c.studentKey)));
+  const uuids = keys.filter(isUUID);
+  const others = keys.filter((k) => !isUUID(k));
+  const found: any[] = [];
+  if (uuids.length) {
+    const { data } = await supabase.from('students').select('id, student_number, matricule').eq('school_id', schoolId).in('id', uuids);
+    found.push(...(data || []));
+  }
+  if (others.length) {
+    const { data: byNum } = await supabase.from('students').select('id, student_number, matricule').eq('school_id', schoolId).in('student_number', others);
+    const { data: byMat } = await supabase.from('students').select('id, student_number, matricule').eq('school_id', schoolId).in('matricule', others);
+    found.push(...(byNum || []), ...(byMat || []));
+  }
+  const resolve = (key: string): string | undefined =>
+    (found.find((s) => s.id === key) || found.find((s) => s.student_number === key) || found.find((s) => s.matricule && s.matricule === key))?.id;
+
+  for (const c of valid) {
+    const studentId = resolve(c.studentKey);
+    if (!studentId) {
+      result.skipped.push(c.studentKey);
+      continue;
+    }
+    const base = { school_id: schoolId, student_id: studentId, service: c.service };
+    let error: any = null;
+    if (c.action === 'subscribe') {
+      ({ error } = await supabase.from('service_subscriptions').upsert(
+        {
+          ...base,
+          monthly_rate: Math.max(0, Math.round(Number(c.monthlyRate) || 0)),
+          discount: Math.max(0, Math.round(Number(c.discount) || 0)),
+          details: c.details && typeof c.details === 'object' ? c.details : {},
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'school_id,student_id,service' }
+      ));
+    } else if (c.action === 'unsubscribe') {
+      ({ error } = await supabase.from('service_month_payments').delete().match(base));
+      if (!error) ({ error } = await supabase.from('service_subscriptions').delete().match(base));
+    } else if (c.action === 'setMonth' && c.month && SERVICE_MONTHS.includes(c.month)) {
+      if (c.paid) {
+        ({ error } = await supabase
+          .from('service_month_payments')
+          .upsert({ ...base, month: c.month }, { onConflict: 'school_id,student_id,service,month', ignoreDuplicates: true }));
+      } else {
+        ({ error } = await supabase.from('service_month_payments').delete().match({ ...base, month: c.month }));
+      }
+    } else {
+      result.skipped.push(c.studentKey);
+      continue;
+    }
+    if (error) {
+      console.warn('applyServiceChangesToSupabase:', error.message);
+      result.ok = false;
+    } else {
+      result.applied += 1;
+    }
+  }
+  return result;
+}
+
+/** Compteur de version de l'école (augmente à chaque modification, migration 004). */
+export async function getSchoolDataVersion(schoolSlug: string): Promise<number | null> {
+  if (!isSupabaseConfigured) return null;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return null;
+    const { data, error } = await supabase.from('school_data_versions').select('version').eq('school_id', schoolId).maybeSingle();
+    if (error || !data) return null;
+    return Number(data.version);
+  } catch (e) {
     return null;
   }
 }

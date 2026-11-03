@@ -11,6 +11,8 @@ import {
   saveInvoiceToSupabase,
   deleteInvoiceFromSupabase,
   deleteServiceInvoicesFromSupabase,
+  applyServiceChangesToSupabase,
+  getSchoolDataVersion,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
   updateStaffContactInSupabase,
@@ -130,6 +132,13 @@ export async function POST(request: NextRequest) {
     case 'deleteInvoice':
       if (!hasRole(session, DELETE_ROLES)) return deny();
       return ok(await deleteInvoiceFromSupabase(String(args[0] || ''), slug));
+
+    case 'applyServiceChanges':
+      if (!hasRole(session, SERVICES_WRITE_ROLES)) return deny();
+      return ok(await applyServiceChangesToSupabase(slug, Array.isArray(args[0]) ? args[0] : []));
+
+    case 'getDataVersion':
+      return ok(await getSchoolDataVersion(slug));
 
     case 'deleteServiceInvoices':
       if (!hasRole(session, DELETE_ROLES) && !hasRole(session, SERVICES_WRITE_ROLES)) return deny();

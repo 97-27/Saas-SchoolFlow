@@ -24,6 +24,7 @@ import Link from 'next/link';
 import {
   getLiveStudents,
   rememberDatabaseStudents,
+  rememberServiceBaseline,
   getLiveInvoices,
   getLiveSchool,
   getDeletedStudentIds,
@@ -172,6 +173,7 @@ export function DashboardView({
         }
         if (sbServices) {
           setServicesData(sbServices);
+          rememberServiceBaseline(activeSlug, sbServices);
           if (sbServices.boardingSubscriptions) {
             localStorage.setItem(dashBoardingSubKey, JSON.stringify(sbServices.boardingSubscriptions));
           }
@@ -306,6 +308,7 @@ export function DashboardView({
         if (result.data.transportPayments) {
           localStorage.setItem(dashTransportPayKey, JSON.stringify(result.data.transportPayments));
         }
+        rememberServiceBaseline(activeSlug, result.data);
         window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: 'manual_sync_completed' } }));
       }
     } catch (e) {

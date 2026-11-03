@@ -12,6 +12,9 @@ import {
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
   deleteServiceInvoicesFromSupabase,
+  applyServiceChanges,
+  getDataVersion,
+  type ServiceChange,
 } from '@/lib/supabase/remote';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
@@ -302,6 +305,121 @@ export function notifySaveFailure(what: string): void {
   );
 }
 
+/* --------------------------------------------------------------------------
+   Services (internat / cantine / transport) : enregistrement LIGNE PAR LIGNE
+   --------------------------------------------------------------------------
+   Les pages construisent toujours la liste complète des abonnements et des mois payés. Au lieu
+   de l'envoyer telle quelle (elle écrasait le travail des autres postes), on la compare à l'état
+   de référence — la dernière version reçue de la base ou enregistrée ici — et on n'envoie que
+   la différence : « abonner tel élève », « cocher / décocher tel mois », « retirer tel élève ». */
+
+type ServiceName = 'internat' | 'cantine' | 'transport';
+const SERVICE_MONTH_NAMES = ['Septembre', 'Octobre', 'Novembre', 'Décembre', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai'];
+const SERVICE_DATA_KEYS: Record<ServiceName, { subs: string; pay: string }> = {
+  internat: { subs: 'boardingSubscriptions', pay: 'boardingPayments' },
+  cantine: { subs: 'canteenSubscriptions', pay: 'canteenPayments' },
+  transport: { subs: 'transportSubscriptions', pay: 'transportPayments' },
+};
+const SERVICE_BASELINE_PREFIX = 'schoolflow_service_baseline_v1_';
+
+function readServiceBaseline(slug: string): Record<string, any> | null {
+  try {
+    const raw = localStorage.getItem(`${SERVICE_BASELINE_PREFIX}${slug}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Retient l'état de référence des services (appelé à chaque lecture de la base et après chaque enregistrement). */
+export function rememberServiceBaseline(slug: string, data: Record<string, any>): void {
+  if (typeof window === 'undefined' || !data) return;
+  try {
+    const current = readServiceBaseline(slug) || {};
+    const next = { ...current };
+    for (const k of Object.values(SERVICE_DATA_KEYS).flatMap((v) => [v.subs, v.pay])) {
+      if (data[k] !== undefined && data[k] !== null) next[k] = data[k];
+    }
+    localStorage.setItem(`${SERVICE_BASELINE_PREFIX}${slug}`, JSON.stringify(next));
+  } catch (e) {}
+}
+
+/** Abonnements sous forme « clé élève -> détails » (l'internat est un tableau, les autres un dictionnaire). */
+function serviceSubsToMap(service: ServiceName, subs: any): Record<string, any> {
+  if (service === 'internat') {
+    const map: Record<string, any> = {};
+    (Array.isArray(subs) ? subs : []).forEach((s: any) => {
+      if (s && s.studentId) map[s.studentId] = s;
+    });
+    return map;
+  }
+  return subs && typeof subs === 'object' && !Array.isArray(subs) ? subs : {};
+}
+
+function subscriptionChange(service: ServiceName, key: string, v: any): ServiceChange {
+  if (service === 'internat') {
+    const details: Record<string, unknown> = {};
+    for (const f of ['pavilion', 'roomNumber', 'paymentDate', 'parentContact']) if (v?.[f]) details[f] = v[f];
+    return { service, studentKey: key, action: 'subscribe', monthlyRate: Number(v?.monthlyRate) || 0, discount: 0, details };
+  }
+  const { rate, discount, studentName, ...details } = v || {};
+  void studentName;
+  return { service, studentKey: key, action: 'subscribe', monthlyRate: Number(rate) || 0, discount: Number(discount) || 0, details };
+}
+
+function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: any, prevPay: any, nextPay: any): ServiceChange[] {
+  const changes: ServiceChange[] = [];
+  const before = serviceSubsToMap(service, prevSubs);
+  const after = serviceSubsToMap(service, nextSubs);
+  for (const key of Object.keys(after)) {
+    if (!before[key] || JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      changes.push(subscriptionChange(service, key, after[key]));
+    }
+  }
+  const pb = prevPay && typeof prevPay === 'object' ? prevPay : {};
+  const pa = nextPay && typeof nextPay === 'object' ? nextPay : {};
+  for (const key of Array.from(new Set([...Object.keys(pb), ...Object.keys(pa)]))) {
+    for (const month of SERVICE_MONTH_NAMES) {
+      const was = Boolean(pb[key]?.[month]);
+      const now = Boolean(pa[key]?.[month]);
+      if (was !== now) changes.push({ service, studentKey: key, action: 'setMonth', month, paid: now });
+    }
+  }
+  for (const key of Object.keys(before)) {
+    if (!after[key]) changes.push({ service, studentKey: key, action: 'unsubscribe' });
+  }
+  return changes;
+}
+
+/**
+ * Enregistre en base uniquement ce qui a changé pour un service, puis met à jour l'état de
+ * référence. Avant la migration 004, le serveur répond « legacy » et l'ancien envoi s'applique.
+ */
+function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, nextPay: any, label: string): void {
+  const keys = SERVICE_DATA_KEYS[service];
+  let prevSubs: any;
+  let prevPay: any;
+  const baseline = readServiceBaseline(slug);
+  if (baseline && baseline[keys.subs] !== undefined && baseline[keys.pay] !== undefined) {
+    prevSubs = baseline[keys.subs];
+    prevPay = baseline[keys.pay];
+  } else {
+    // Pas encore d'état de référence (toute première utilisation) : on part du serveur.
+    prevSubs = service === 'internat' ? [] : {};
+    prevPay = {};
+  }
+  const changes = computeServiceChanges(service, prevSubs, nextSubs, prevPay, nextPay);
+  rememberServiceBaseline(slug, { [keys.subs]: nextSubs, [keys.pay]: nextPay });
+  if (changes.length === 0) return;
+  applyServiceChanges(changes, slug)
+    .then((res) => {
+      if (res.legacy) return;
+      if (!res.ok) notifySaveFailure(label);
+      if (res.skipped.length > 0) console.warn(`${label} : élève(s) introuvable(s) dans la base`, res.skipped);
+    })
+    .catch(() => notifySaveFailure(label));
+}
+
 const SERVICE_LOCAL_PATTERNS: Record<'internat' | 'cantine' | 'transport', { word: string; prefixes: string[] }> = {
   internat: { word: 'internat', prefixes: ['QUI-INT-', 'INV-BOARDING-'] },
   cantine: { word: 'cantine', prefixes: ['QUI-CAN-', 'CAN-', 'INV-CANTEEN-'] },
@@ -547,6 +665,7 @@ let isSyncingServer = false;
 let lastSyncTimestamp = 0;
 let crossDeviceSyncStarted = false;
 let activeSyncInterval: any = null;
+let activeVersionInterval: any = null;
 
 /**
  * Démarre la synchronisation temps réel multi-appareils (PC, téléphone, tablettes des collaborateurs)
@@ -574,7 +693,26 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
     syncSchoolDataWithServer(slug);
   });
 
-  // 2. Rafraîchissement d'arrière-plan modéré (toutes les 5 minutes) pour préserver les quotas Postgres et éviter toute saturation
+  // 2. Mise à jour quasi instantanée de tous les écrans : toutes les 15 s, lecture du seul
+  //    compteur de version de l'école (une ligne, migration 004). S'il a changé — un autre poste a
+  //    enregistré quelque chose — l'écran relit les données. Filet de sécurité si le signal temps
+  //    réel s'est perdu (avant, le rattrapage n'avait lieu qu'au bout de 5 minutes).
+  if (activeVersionInterval) clearInterval(activeVersionInterval);
+  let lastKnownVersion: number | null = null;
+  activeVersionInterval = setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    getDataVersion(slug)
+      .then((version) => {
+        if (version === null) return;
+        if (lastKnownVersion !== null && version !== lastKnownVersion) {
+          syncSchoolDataWithServer(slug, true);
+        }
+        lastKnownVersion = version;
+      })
+      .catch(() => {});
+  }, 15000);
+
+  // 3. Rafraîchissement complet d'arrière-plan (toutes les 5 minutes)
   if (activeSyncInterval) clearInterval(activeSyncInterval);
   activeSyncInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
@@ -1012,6 +1150,8 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, data.boardingCapacity.toString());
           hasChanges = true;
         }
+        // Ce que la base vient de renvoyer devient l'état de référence des services.
+        rememberServiceBaseline(slug, data);
 
         if (hasChanges) {
           broadcastLiveUpdate({ action: 'server_hydrated', slug });
@@ -3943,6 +4083,7 @@ export function saveLiveTransportData(
   try {
     localStorage.setItem(isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify(customTransportMap));
     localStorage.setItem(isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify(monthlyPayments));
+    saveServiceDiff(slug, 'transport', customTransportMap, monthlyPayments, 'la modification du transport');
 
     fetch('/api/sync', {
       method: 'POST',
@@ -3982,6 +4123,7 @@ export function saveLiveCanteenData(
   try {
     localStorage.setItem(isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify(customCanteenMap));
     localStorage.setItem(isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify(monthlyPayments));
+    saveServiceDiff(slug, 'cantine', customCanteenMap, monthlyPayments, 'la modification de la cantine');
     if (weeklyMenu) {
       localStorage.setItem(isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${slug}`, JSON.stringify(weeklyMenu));
     }
@@ -4028,6 +4170,7 @@ export function saveLiveBoardingData(
   try {
     localStorage.setItem(boardingSubKey, JSON.stringify(customSubscriptions));
     localStorage.setItem(boardingPayKey, JSON.stringify(monthlyPayments));
+    saveServiceDiff(slug, 'internat', customSubscriptions, monthlyPayments, "la modification de l'internat");
     if (capacity !== undefined) {
       localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, capacity.toString());
     }

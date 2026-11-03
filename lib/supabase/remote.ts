@@ -74,6 +74,34 @@ export function deleteInvoiceFromSupabase(identifier: string, schoolSlug: string
   return callData('deleteInvoice', [identifier, schoolSlug], false);
 }
 
+export interface ServiceChange {
+  service: 'internat' | 'cantine' | 'transport';
+  studentKey: string;
+  action: 'subscribe' | 'unsubscribe' | 'setMonth';
+  monthlyRate?: number;
+  discount?: number;
+  details?: Record<string, unknown>;
+  month?: string;
+  paid?: boolean;
+}
+
+export interface ServiceChangeResult {
+  ok: boolean;
+  legacy: boolean;
+  applied: number;
+  skipped: string[];
+}
+
+/** Enregistre des changements d'abonnements / de mois payés, ligne par ligne. */
+export function applyServiceChanges(changes: ServiceChange[], schoolSlug: string): Promise<ServiceChangeResult> {
+  return callData('applyServiceChanges', [changes, schoolSlug], { ok: false, legacy: false, applied: 0, skipped: [] });
+}
+
+/** Compteur de version des données de l'école (null si indisponible). */
+export function getDataVersion(schoolSlug: string): Promise<number | null> {
+  return callData('getDataVersion', [schoolSlug], null);
+}
+
 /** Supprime les reçus d'un service (internat / cantine / transport) d'un élève. -1 = échec. */
 export function deleteServiceInvoicesFromSupabase(
   studentId: string,
