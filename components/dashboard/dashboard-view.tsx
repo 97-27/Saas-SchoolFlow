@@ -254,84 +254,11 @@ export function DashboardView({
     const activeSlug = cleanSlug;
     setIsSyncing(true);
 
-    // 1. Envoyer d'abord les données et suppressions locales actuelles pour ne jamais les
-    // écraser. Isolé dans son propre try/catch : si UNE des lectures/écritures locales ci-
-    // dessous échoue (ex: une entrée localStorage corrompue), l'étape 2 (la vraie raison
-    // d'être du bouton "Actualiser Cloud" : aller chercher la vérité depuis Supabase) doit
-    // s'exécuter quand même plutôt que d'être bloquée silencieusement par la même exception.
-    try {
-      const currentLocalStudents = getLiveStudents([], activeSlug);
-      const currentLocalInvoices = getLiveInvoices([], activeSlug);
-      const currentDeletedIds = Array.from(getDeletedStudentIds());
-
-      let rawBoardingSubs = localStorage.getItem(dashBoardingSubKey);
-      let rawBoardingPay = localStorage.getItem(dashBoardingPayKey);
-      let rawCanteenSubs = localStorage.getItem(dashCanteenSubKey);
-      let rawCanteenPay = localStorage.getItem(dashCanteenPayKey);
-      let rawTransportSubs = localStorage.getItem(dashTransportSubKey);
-      let rawTransportPay = localStorage.getItem(dashTransportPayKey);
-
-      const boardingSubscriptions = rawBoardingSubs ? JSON.parse(rawBoardingSubs) : (servicesData?.boardingSubscriptions || []);
-      const boardingPayments = rawBoardingPay ? JSON.parse(rawBoardingPay) : (servicesData?.boardingPayments || {});
-      const canteenSubscriptions = rawCanteenSubs ? JSON.parse(rawCanteenSubs) : (servicesData?.canteenSubscriptions || {});
-      const canteenPayments = rawCanteenPay ? JSON.parse(rawCanteenPay) : (servicesData?.canteenPayments || {});
-      const transportSubscriptions = rawTransportSubs ? JSON.parse(rawTransportSubs) : (servicesData?.transportSubscriptions || {});
-      const transportPayments = rawTransportPay ? JSON.parse(rawTransportPay) : (servicesData?.transportPayments || {});
-
-      const installments = servicesData?.installments || {
-        versement1: 65000,
-        versement2: 20000,
-        versement3: 20000,
-        versement4: 15000,
-        versement5: 0,
-      };
-
-      const consolidatedServices = {
-        boardingSubscriptions,
-        boardingPayments,
-        canteenSubscriptions,
-        canteenPayments,
-        transportSubscriptions,
-        transportPayments,
-        installments,
-      };
-
-      setServicesData(consolidatedServices);
-
-      // N'envoyer vers le Cloud QUE les collections que CET appareil a réellement en cache local
-      // (lecture localStorage non nulle) — jamais une collection devinée/tombée en repli sur [] ou
-      // {} faute de cache. Un appareil qui clique "Actualiser Cloud" sans jamais avoir ouvert la
-      // page Internat/Cantine/Transport n'a par exemple aucune idée réelle de ces données : lui
-      // laisser quand même envoyer un tableau vide écrasait silencieusement un vrai abonnement
-      // enregistré entre-temps par un autre appareil (constaté concrètement sur l'Internat).
-      const pushableServices: Record<string, any> = {};
-      if (rawBoardingSubs) pushableServices.boardingSubscriptions = boardingSubscriptions;
-      if (rawBoardingPay) pushableServices.boardingPayments = boardingPayments;
-      if (rawCanteenSubs) pushableServices.canteenSubscriptions = canteenSubscriptions;
-      if (rawCanteenPay) pushableServices.canteenPayments = canteenPayments;
-      if (rawTransportSubs) pushableServices.transportSubscriptions = transportSubscriptions;
-      if (rawTransportPay) pushableServices.transportPayments = transportPayments;
-      if (servicesData?.installments) pushableServices.installments = installments;
-
-      // Sauvegarde directe Supabase Cloud
-      if (Object.keys(pushableServices).length > 0) {
-        saveServicesDataToSupabase(activeSlug, pushableServices).catch(() => {});
-      }
-
-      await fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: activeSlug,
-          students: currentLocalStudents,
-          invoices: currentLocalInvoices,
-          deletedStudentIds: currentDeletedIds,
-          ...pushableServices,
-        }),
-      }).catch(() => {});
-    } catch (pushErr) {
-      console.error('Erreur envoi local -> cloud (Actualiser Cloud, étape 1/2) :', pushErr);
-    }
+    // « Actualiser Cloud » ne fait que RELIRE la base (ci-dessous) : il ne renvoie plus rien vers
+    // elle. Renvoyer d'abord toutes les copies de ce navigateur (élèves, factures, internat,
+    // cantine, transport) écrasait les modifications et suppressions faites depuis un autre poste —
+    // c'est ce qui faisait « revenir » des reçus et des élèves supprimés. Chaque modification est
+    // enregistrée en base au moment où elle est faite.
 
     try {
       // 2. Récupérer les données fraîches synchronisées. Ce bouton sert précisément à trancher

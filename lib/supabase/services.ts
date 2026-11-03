@@ -1026,6 +1026,51 @@ export async function deleteStudentFromSupabase(identifier: string, schoolSlug: 
   }
 }
 
+export type ServiceKind = 'internat' | 'cantine' | 'transport';
+
+const SERVICE_INVOICE_PATTERNS: Record<ServiceKind, { feeType: string; prefixes: string[] }> = {
+  internat: { feeType: 'internat', prefixes: ['QUI-INT-'] },
+  cantine: { feeType: 'cantine', prefixes: ['QUI-CAN-', 'CAN-'] },
+  transport: { feeType: 'transport', prefixes: ['QUI-TRA-', 'QUI-TRP-', 'TRP-'] },
+};
+
+/**
+ * Supprime en base TOUS les reçus d'un service (internat, cantine ou transport) d'un élève, et
+ * seulement ceux-là : son reçu de scolarité n'est jamais touché. Avant, l'écran demandait la
+ * suppression d'un reçu « inv-boarding-… » qui n'existe pas en base : le vrai reçu restait et
+ * revenait à la synchronisation suivante (« ça ne supprime pas »). Renvoie le nombre supprimé,
+ * ou -1 en cas d'échec.
+ */
+export async function deleteServiceInvoicesFromSupabase(studentId: string, kind: ServiceKind, schoolSlug: string): Promise<number> {
+  if (!isSupabaseConfigured || !isUUID(studentId) || !SERVICE_INVOICE_PATTERNS[kind]) return -1;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return -1;
+    const { feeType, prefixes } = SERVICE_INVOICE_PATTERNS[kind];
+    const { data: rows, error } = await supabase
+      .from('invoices')
+      .select('id, invoice_number, fee_type')
+      .eq('school_id', schoolId)
+      .eq('student_id', studentId);
+    if (error) return -1;
+    const targets = (rows || []).filter(
+      (r: any) =>
+        (r.fee_type || '').toLowerCase().includes(feeType) ||
+        prefixes.some((p) => (r.invoice_number || '').toUpperCase().startsWith(p))
+    );
+    if (targets.length === 0) return 0;
+    const { error: delErr } = await supabase
+      .from('invoices')
+      .delete()
+      .eq('school_id', schoolId)
+      .in('id', targets.map((t: any) => t.id));
+    return delErr ? -1 : targets.length;
+  } catch (err) {
+    console.warn('deleteServiceInvoicesFromSupabase catch:', err);
+    return -1;
+  }
+}
+
 export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
   if (!isSupabaseConfigured || !identifier) return false;
   try {

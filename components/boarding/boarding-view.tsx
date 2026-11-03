@@ -5,10 +5,10 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
-import { findStudentByRef } from '@/lib/data/student-match';
-import { saveStudentToSupabase, saveInvoiceToSupabase, deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
+import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
+import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   BedDouble,
@@ -711,11 +711,25 @@ export function BoardingView({
     saveBoardingDataUnified(updatedSubs, updatedPayments);
 
     // 3. Mettre à jour isBoarding: true sur l'élève existant s'il existe (SANS JAMAIS CRÉER DE FAUX ÉLÈVE DANS STUDENTS)
+    // Les coordonnées modifiées ici sont enregistrées dans la FICHE de l'élève (et non plus
+    // seulement dans l'abonnement d'internat) : sinon l'écran réaffichait l'ancienne fiche et la
+    // modification semblait « ne pas marcher ».
     if (matchedExistingStudent) {
       try {
+        const phone = formParentContact.trim();
         const updatedStu: Student = {
           ...matchedExistingStudent,
+          lastName: finalLastName || matchedExistingStudent.lastName,
+          firstName: finalFirstName || matchedExistingStudent.firstName,
+          fullName: finalFullName || matchedExistingStudent.fullName,
+          grade: formClassName || matchedExistingStudent.grade,
+          gender: formGender === 'F' ? 'female' : 'male',
+          matricule: formMatricule.trim() || matchedExistingStudent.matricule,
+          whatsappPhone: phone || matchedExistingStudent.whatsappPhone,
+          guardianPhone: phone || matchedExistingStudent.guardianPhone,
+          secondaryPhones: formSecondaryPhones,
           isBoarding: true,
+          updatedAt: new Date().toISOString(),
         };
         updateRegisteredStudent(updatedStu, schoolSlug);
       } catch (e) {}
@@ -844,23 +858,9 @@ export function BoardingView({
       if (matricule) delete updatedPayments[matricule];
       saveBoardingDataUnified(updatedSubs, updatedPayments);
 
-      // 4. Supprimer la quittance d'internat du journal
-      const invoiceId = `inv-boarding-${studentId}`;
-      if (typeof window !== 'undefined') {
-        try {
-          const invoicesKey = isPilotSchool ? INVOICES_STORAGE_KEY : `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
-          const rawInvoices = localStorage.getItem(invoicesKey);
-          if (rawInvoices) {
-            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-            const filteredInvoices = prevInvoices.filter(
-              (inv) => inv.id !== invoiceId && inv.studentId !== studentId && !inv.invoiceNumber?.startsWith(`QUI-INT-${studentNumber}`)
-            );
-            localStorage.setItem(invoicesKey, JSON.stringify(filteredInvoices));
-          }
-        } catch (e) {}
-      }
-
-      deleteInvoiceFromSupabase(invoiceId, schoolSlug).catch(() => {});
+      // 4. Supprimer les reçus d'INTERNAT de l'élève (ici et en base, confirmé) — jamais son
+      //    reçu de scolarité.
+      const receiptsDeleted = await deleteServiceReceipts(activeBoarder.student, 'internat', schoolSlug);
 
       // 5. Diffuser l'événement en temps réel
       broadcastLiveUpdate({
@@ -872,6 +872,7 @@ export function BoardingView({
 
       setShowDeleteBoardingModal(false);
       setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
+      if (!receiptsDeleted) return;
       setToastMessage(`✓ L'élève ${activeBoarder.student.fullName} a été retiré de l'internat.`);
       setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {
@@ -900,12 +901,13 @@ export function BoardingView({
       if (matricule) delete updatedPayments[matricule];
       saveBoardingDataUnified(updatedSubs, updatedPayments);
 
-      // Supprimer définitivement l'élève et tous ses reçus
+      // Supprimer définitivement l'élève et tous ses reçus (confirmé par la base)
       const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
-      deleteLiveStudents(idsToDelete, schoolSlug);
+      const confirmed = await deleteLiveStudents(idsToDelete, schoolSlug);
 
       setShowDeleteBoardingModal(false);
       setActiveBoarderIndex((prev) => Math.max(0, prev - 1));
+      if (!confirmed && UUID_RE.test(studentId)) return;
       setToastMessage(`✓ Reçu et dossier de ${activeBoarder.student.fullName} définitivement supprimés.`);
       setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {

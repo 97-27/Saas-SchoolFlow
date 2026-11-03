@@ -10,6 +10,7 @@ import {
   getInvoicesFromSupabase,
   saveInvoiceToSupabase,
   deleteInvoiceFromSupabase,
+  deleteServiceInvoicesFromSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
   updateStaffContactInSupabase,
@@ -129,6 +130,10 @@ export async function POST(request: NextRequest) {
     case 'deleteInvoice':
       if (!hasRole(session, DELETE_ROLES)) return deny();
       return ok(await deleteInvoiceFromSupabase(String(args[0] || ''), slug));
+
+    case 'deleteServiceInvoices':
+      if (!hasRole(session, DELETE_ROLES) && !hasRole(session, SERVICES_WRITE_ROLES)) return deny();
+      return ok(await deleteServiceInvoicesFromSupabase(String(args[0] || ''), args[1], slug));
 
     case 'getServicesData':
       if (!isStaff(session)) return deny();

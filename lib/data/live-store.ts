@@ -11,6 +11,7 @@ import {
   saveInvoiceToSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
+  deleteServiceInvoicesFromSupabase,
 } from '@/lib/supabase/remote';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
@@ -272,6 +273,81 @@ function isInDatabaseOrPending(s: Student, snap: DbSnapshot): boolean {
   }
   // Identifiant définitif absent de la photographie : seulement s'il est apparu APRÈS elle.
   return t > snap.at;
+}
+
+/** Reçu d'internat, de cantine ou de transport (par opposition au reçu de scolarité). */
+export function isServiceInvoice(inv: Invoice): boolean {
+  const fee = (inv?.feeType || '').toLowerCase();
+  const num = (inv?.invoiceNumber || '').toUpperCase();
+  const id = (inv?.id || '').toUpperCase();
+  return (
+    fee.includes('internat') ||
+    fee.includes('cantine') ||
+    fee.includes('transport') ||
+    /^(QUI-INT-|QUI-CAN-|QUI-TRA-|QUI-TRP-|CAN-|TRP-)/.test(num) ||
+    /^INV-(BOARDING|CANTEEN|TRANSPORT)-/.test(id)
+  );
+}
+
+let lastSaveAlertAt = 0;
+/** Prévient l'utilisateur qu'un enregistrement n'a pas été confirmé par la base (1 fois / 10 s). */
+export function notifySaveFailure(what: string): void {
+  if (typeof window === 'undefined') return;
+  const now = Date.now();
+  if (now - lastSaveAlertAt < 10000) return;
+  lastSaveAlertAt = now;
+  window.alert(
+    `Attention : ${what} n'a pas pu être enregistrée sur le serveur (connexion ou droits insuffisants). ` +
+      'La modification risque de ne pas être visible sur les autres postes : vérifiez la connexion puis recommencez.'
+  );
+}
+
+const SERVICE_LOCAL_PATTERNS: Record<'internat' | 'cantine' | 'transport', { word: string; prefixes: string[] }> = {
+  internat: { word: 'internat', prefixes: ['QUI-INT-', 'INV-BOARDING-'] },
+  cantine: { word: 'cantine', prefixes: ['QUI-CAN-', 'CAN-', 'INV-CANTEEN-'] },
+  transport: { word: 'transport', prefixes: ['QUI-TRA-', 'QUI-TRP-', 'TRP-', 'INV-TRANSPORT-'] },
+};
+
+/**
+ * Supprime les reçus d'un service (internat / cantine / transport) d'un élève : dans ce navigateur
+ * puis en base, et attend la confirmation. Le reçu de SCOLARITÉ de l'élève n'est jamais touché
+ * (avant, l'écran effaçait localement tous les reçus de l'élève, et le vrai reçu de service
+ * restait en base). Renvoie false si la base n'a pas confirmé.
+ */
+export async function deleteServiceReceipts(
+  student: { id: string; studentNumber?: string },
+  kind: 'internat' | 'cantine' | 'transport',
+  schoolSlug: string
+): Promise<boolean> {
+  if (typeof window === 'undefined' || !student?.id) return false;
+  const { word, prefixes } = SERVICE_LOCAL_PATTERNS[kind];
+  const isServiceReceipt = (inv: Invoice) =>
+    inv &&
+    (inv.studentId === student.id || (!!student.studentNumber && inv.studentId === student.studentNumber)) &&
+    ((inv.feeType || '').toLowerCase().includes(word) ||
+      prefixes.some((p) => (inv.invoiceNumber || '').toUpperCase().startsWith(p) || (inv.id || '').toUpperCase().startsWith(p)));
+
+  const keys = [`${INVOICES_STORAGE_KEY}_${schoolSlug}`];
+  if (schoolSlug === 'epc-manoi') keys.push(INVOICES_STORAGE_KEY);
+  for (const key of keys) {
+    try {
+      const list: Invoice[] = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(list.filter((inv) => !isServiceReceipt(inv))));
+    } catch (e) {}
+  }
+  window.dispatchEvent(new CustomEvent(DATA_UPDATED_EVENT, { detail: { action: `${kind}_receipts_deleted` } }));
+
+  // Élève sans fiche en base (identifiant provisoire) : rien à supprimer côté serveur.
+  if (!UUID_PATTERN.test(student.id)) return true;
+  const removed = await deleteServiceInvoicesFromSupabase(student.id, kind, schoolSlug);
+  if (removed < 0) {
+    window.alert(
+      "La suppression du reçu n'a pas pu être confirmée par le serveur (connexion ou droits insuffisants). " +
+        'Il réapparaîtra à la prochaine actualisation : vérifiez la connexion puis recommencez.'
+    );
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -634,6 +710,7 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
 
           // B. Fusionner avec le stockage local (Sauvegarde des nouveaux inscrits et des modifications de date récentes)
           let hasLocalNewStudents = false;
+          const newLocalStudents: Student[] = [];
           prevStudents.forEach((localStu: Student) => {
             if (
               isLegacyDemoStudent(localStu) ||
@@ -687,6 +764,7 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
               hasLocalNewStudents = true;
+              newLocalStudents.push(localStu);
             } else {
               // Élève déjà connu du serveur (même id réel) : ne conserver la version locale que
               // si elle est STRICTEMENT plus récente — à égalité ou en cas de doute, le serveur
@@ -733,12 +811,13 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             return numA - numB;
           });
 
-          // Si des élèves locaux n'étaient pas sur le serveur, les synchroniser en arrière-plan vers l'API
-          if (hasLocalNewStudents) {
+          // Envoyer au serveur UNIQUEMENT les élèves inscrits ici et pas encore enregistrés — jamais
+          // toute la liste (une copie ancienne écrasait les modifications faites ailleurs).
+          if (hasLocalNewStudents && newLocalStudents.length > 0) {
             fetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug, students: mergedStudents }),
+              body: JSON.stringify({ slug, students: newLocalStudents }),
             }).catch(() => {});
           }
 
@@ -777,6 +856,8 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           });
 
           let hasLocalNewInvoices = false;
+          const newLocalInvoices: Invoice[] = [];
+          const fromDb = data.studentsFromDatabase === true;
           prevInvoices.forEach((localInv: Invoice) => {
             if (
               delSet.has(localInv.id) ||
@@ -787,9 +868,13 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             }
             const key = localInv.id || localInv.invoiceNumber;
             if (!invoiceMap.has(key)) {
+              // Facture à identifiant définitif absente de la base : supprimée ailleurs, on ne la
+              // garde pas (sinon elle « revient »).
+              if (fromDb && localInv.id && UUID_PATTERN.test(localInv.id)) return;
               // Conserver impérativement la facture créée localement
               invoiceMap.set(key, localInv);
               hasLocalNewInvoices = true;
+              newLocalInvoices.push(localInv);
             } else {
               // Facture déjà connue du serveur (même id réel) : le serveur reste la référence —
               // une correction administrative (ex: renumérotation) ne doit pas être écrasée par
@@ -819,11 +904,27 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
             return numA - numB;
           });
 
-          if (hasLocalNewInvoices) {
+          // Uniquement les factures créées ici et pas encore enregistrées — jamais toute la liste —
+          // et seulement si leur élève existe en base ou vient d'être inscrit : la vieille facture
+          // d'un élève supprimé pouvait sinon être rattachée par le serveur à un autre enfant.
+          let invoicesToPush = newLocalInvoices;
+          const snapNow = readDatabaseSnapshot(slug);
+          if (snapNow) {
+            let localStus: Student[] = [];
+            try {
+              localStus = JSON.parse(localStorage.getItem(`${STUDENTS_STORAGE_KEY}_${slug}`) || '[]');
+            } catch (e) {}
+            const liveIds = new Set<string>(snapNow.ids);
+            localStus.forEach((s) => {
+              if (s && s.id && isInDatabaseOrPending(s, snapNow)) liveIds.add(s.id);
+            });
+            invoicesToPush = newLocalInvoices.filter((inv) => inv.studentId && liveIds.has(inv.studentId));
+          }
+          if (hasLocalNewInvoices && invoicesToPush.length > 0) {
             fetch('/api/sync', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ slug, invoices: mergedInvoices }),
+              body: JSON.stringify({ slug, invoices: invoicesToPush }),
             }).catch(() => {});
           }
 
@@ -2019,11 +2120,19 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     const rawInvoices = localStorage.getItem(INVOICES_STORAGE_KEY);
     const prevInvoices: Invoice[] = rawInvoices ? JSON.parse(rawInvoices) : [];
     
-    const existingInv = prevInvoices.find(
-      (inv) => inv.studentId === student.id || inv.invoiceNumber === student.studentNumber
-    ) || prevInvSchool.find(
-      (inv) => inv.studentId === student.id || inv.invoiceNumber === student.studentNumber
-    );
+    // Le reçu de SCOLARITÉ de l'élève (jamais un reçu d'internat, de cantine ou de transport :
+    // avant, la « première facture trouvée » pouvait être un reçu de service, qui était alors
+    // réécrit avec les montants de scolarité).
+    const isTuitionInvoiceOf = (inv: Invoice) =>
+      inv &&
+      (inv.studentId === student.id || inv.invoiceNumber === student.studentNumber) &&
+      !isServiceInvoice(inv);
+    const existingInv = prevInvSchool.find(isTuitionInvoiceOf) || prevInvoices.find(isTuitionInvoiceOf);
+
+    // Montants : ceux de la fiche seulement si elle en porte de vrais (> 0). Une fiche lue en base
+    // a souvent tuition_amount = 0 : recopier ce 0 dans la facture effaçait le montant dû
+    // (37 factures à « montant dû 0 » constatées). Sinon, les montants de la facture sont gardés.
+    const studentHasAmounts = Number(student.tuitionAmount) > 0;
 
     const finalDate = student.paymentDate || student.enrollmentDate || '2026-08-27';
 
@@ -2042,7 +2151,20 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       } : undefined,
     } : undefined;
 
-    const updatedInvoice: Invoice = existingInv ? {
+    const amountFields = studentHasAmounts
+      ? {
+          amount: student.tuitionAmount,
+          discountAmount: student.discountAmount || 0,
+          netAmount: student.netAmount || student.tuitionAmount - (student.discountAmount || 0),
+          paidAmount: student.paidAmount || 0,
+          balanceRemaining:
+            student.balanceRemaining !== undefined
+              ? student.balanceRemaining
+              : Math.max(0, (student.netAmount || student.tuitionAmount) - (student.paidAmount || 0)),
+        }
+      : {};
+
+    const updatedInvoice: Invoice | null = existingInv ? {
       ...existingInv,
       schoolSlug: schoolSlug || 'epc-manoi',
       schoolId: schoolSlug || 'epc-manoi',
@@ -2052,17 +2174,13 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       guardianName: student.guardianName,
       guardianPhone: student.whatsappPhone || student.guardianPhone,
       registrationFee: student.registrationFee !== undefined ? student.registrationFee : existingInv.registrationFee,
-      amount: student.tuitionAmount,
-      discountAmount: student.discountAmount || 0,
-      netAmount: student.netAmount || (student.tuitionAmount - (student.discountAmount || 0)),
-      paidAmount: student.paidAmount,
-      balanceRemaining: student.balanceRemaining !== undefined ? student.balanceRemaining : Math.max(0, (student.netAmount || student.tuitionAmount) - student.paidAmount),
+      ...amountFields,
       enrollmentType: student.enrollmentType || existingInv.enrollmentType,
       installments: updatedInstallments || existingInv.installments,
       paymentMethod: student.paymentMethod || existingInv.paymentMethod,
       issueDate: finalDate,
       dueDate: finalDate,
-    } : {
+    } : !studentHasAmounts ? null : {
       id: `inv-${student.studentNumber.replace(/\D/g, '').padStart(3, '0')}`,
       invoiceNumber: student.studentNumber,
       studentId: student.id,
@@ -2083,37 +2201,26 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       balanceRemaining: student.balanceRemaining !== undefined ? student.balanceRemaining : Math.max(0, (student.netAmount || student.tuitionAmount) - student.paidAmount),
       paymentMethod: student.paymentMethod || 'Espèces en caisse',
       enrollmentType: student.enrollmentType || 'nouveau',
-      installments: updatedInstallments || {
-        versement1: {
-          amount: student.paidAmount || 100000,
-          date: finalDate,
-        },
-      },
+      // Aucun versement inventé : l'échéancier ne reprend que ce qui a réellement été payé (avant,
+      // un versement fictif de 100 000 F était créé quand l'élève n'avait encore rien payé).
+      installments:
+        updatedInstallments ||
+        (student.paidAmount > 0 ? { versement1: { amount: student.paidAmount, date: finalDate } } : undefined),
       issueDate: finalDate,
       dueDate: finalDate,
       status: student.tuitionStatus === 'paid' ? 'paid' : student.paidAmount > 0 ? 'partial' : 'sent',
     };
 
-    if (isPilotUpdate) {
-      const nextInvoices = [
+    if (updatedInvoice) {
+      const replaceIn = (list: Invoice[]) => [
         updatedInvoice,
-        ...prevInvoices.filter(
-          (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
-        ),
+        ...list.filter((inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber),
       ];
-      localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(nextInvoices));
-    }
-
-    const nextInvSchool = [
-      updatedInvoice,
-      ...prevInvSchool.filter(
-        (inv) => inv.id !== updatedInvoice.id && inv.invoiceNumber !== updatedInvoice.invoiceNumber
-      ),
-    ];
-    localStorage.setItem(invSchoolKey, JSON.stringify(nextInvSchool));
-
-    if (schoolSlug === 'epc-manoi') {
-      localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(nextInvSchool));
+      if (isPilotUpdate) localStorage.setItem(INVOICES_STORAGE_KEY, JSON.stringify(replaceIn(prevInvoices)));
+      localStorage.setItem(invSchoolKey, JSON.stringify(replaceIn(prevInvSchool)));
+      if (schoolSlug === 'epc-manoi') {
+        localStorage.setItem(`${INVOICES_STORAGE_KEY}_epc-manoi`, JSON.stringify(replaceIn(prevInvSchool)));
+      }
     }
 
     // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
@@ -2186,21 +2293,15 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       console.warn('Erreur update sync prestations annexes:', err);
     }
 
-    // 4. Synchronisation en arrière-plan avec Supabase Cloud et API Serveur
+    // 4. Enregistrement en base de CET élève et de SA facture uniquement. Avant, toute la liste
+    //    des élèves et des factures de ce navigateur était renvoyée à chaque modification : une
+    //    copie ancienne écrasait alors en base les modifications faites depuis un autre poste.
     saveStudentToSupabase(studentWithSlug, schoolSlug)
-      .then(() => saveInvoiceToSupabase(updatedInvoice, schoolSlug))
-      .catch(() => {});
-    if (typeof fetch !== 'undefined') {
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: schoolSlug || 'epc-manoi',
-          students: updatedSchool,
-          invoices: nextInvSchool,
-        }),
-      }).catch(() => {});
-    }
+      .then((okStudent) => (okStudent && updatedInvoice ? saveInvoiceToSupabase(updatedInvoice, schoolSlug) : okStudent))
+      .then((ok) => {
+        if (!ok) notifySaveFailure(`la fiche de ${student.fullName}`);
+      })
+      .catch(() => notifySaveFailure(`la fiche de ${student.fullName}`));
 
     // 5. Propagation globale de l'événement
     broadcastLiveUpdate({
@@ -3851,7 +3952,9 @@ export function saveLiveTransportData(
         transportSubscriptions: customTransportMap,
         transportPayments: monthlyPayments,
       }),
-    }).catch(() => {});
+    })
+      .then((r) => (r.ok ? null : notifySaveFailure('la modification du transport')))
+      .catch(() => notifySaveFailure('la modification du transport'));
 
     broadcastLiveUpdate({
       action: 'transport_updated',
@@ -3892,7 +3995,9 @@ export function saveLiveCanteenData(
         canteenPayments: monthlyPayments,
         ...(weeklyMenu ? { canteenWeeklyMenu: weeklyMenu } : {}),
       }),
-    }).catch(() => {});
+    })
+      .then((r) => (r.ok ? null : notifySaveFailure('la modification de la cantine')))
+      .catch(() => notifySaveFailure('la modification de la cantine'));
 
     broadcastLiveUpdate({
       action: 'canteen_updated',
@@ -3936,7 +4041,9 @@ export function saveLiveBoardingData(
         boardingPayments: monthlyPayments,
         ...(capacity !== undefined ? { boardingCapacity: capacity } : {}),
       }),
-    }).catch(() => {});
+    })
+      .then((r) => (r.ok ? null : notifySaveFailure("la modification de l'internat")))
+      .catch(() => notifySaveFailure("la modification de l'internat"));
 
     broadcastLiveUpdate({
       action: 'boarding_updated',

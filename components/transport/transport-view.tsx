@@ -5,8 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveTransportData } from '@/lib/data/live-store';
-import { deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveTransportData, deleteServiceReceipts } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   Bus,
@@ -631,32 +630,13 @@ export function TransportView({
       if (studentNumber) delete nextPayments[studentNumber];
       if (matricule) delete nextPayments[matricule];
       setMonthlyPayments(nextPayments);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(scopedTransportPayKey, JSON.stringify(nextPayments));
-        } catch (e) {}
-      }
+      // Enregistrer le retrait EN BASE (avant, il ne l'était que dans ce navigateur : l'élève
+      // réapparaissait dans le transport au rechargement ou sur un autre poste).
+      saveLiveTransportData(nextMap, nextPayments, schoolSlug);
 
-      // d. Supprimer les factures/quittances de transport
-      const invoiceId = `inv-transport-${studentId}`;
-      if (typeof window !== 'undefined') {
-        try {
-          const invoicesKey = isPilotSchool ? 'schoolflow_registered_invoices_v1' : `schoolflow_registered_invoices_v1_${schoolSlug}`;
-          const rawInvoices = localStorage.getItem(invoicesKey);
-          if (rawInvoices) {
-            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-            const filteredInvoices = prevInvoices.filter(
-              (inv) =>
-                inv.id !== invoiceId &&
-                inv.studentId !== studentId &&
-                !inv.invoiceNumber?.startsWith(`TRP-${studentNumber}`) &&
-                !inv.invoiceNumber?.startsWith(`QUI-TRP-${studentNumber}`)
-            );
-            localStorage.setItem(invoicesKey, JSON.stringify(filteredInvoices));
-          }
-        } catch (e) {}
-      }
-      deleteInvoiceFromSupabase(invoiceId, schoolSlug).catch(() => {});
+      // d. Supprimer les reçus de TRANSPORT de l'élève (ici et en base, confirmé) — jamais son
+      //    reçu de scolarité.
+      const receiptsDeleted = await deleteServiceReceipts({ id: studentId, studentNumber }, 'transport', schoolSlug);
 
       // e. Diffuser l'événement
       broadcastLiveUpdate({
@@ -668,6 +648,7 @@ export function TransportView({
 
       setShowDeleteTransportModal(false);
       setSelectedStudentForReceipt(null);
+      if (!receiptsDeleted) return;
       setToastMessage(`✓ L'élève ${selectedStudentForReceipt.fullName} a été retiré du transport scolaire.`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
@@ -709,12 +690,14 @@ export function TransportView({
         } catch (e) {}
       }
 
-      // Supprimer définitivement l'élève et tous ses reçus
+      // Supprimer définitivement l'élève et tous ses reçus (confirmé par la base)
+      saveLiveTransportData(nextMap, nextPayments, schoolSlug);
       const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
-      deleteLiveStudents(idsToDelete, schoolSlug);
+      const confirmed = await deleteLiveStudents(idsToDelete, schoolSlug);
 
       setShowDeleteTransportModal(false);
       setSelectedStudentForReceipt(null);
+      if (!confirmed) return;
       setToastMessage(`✓ Reçu et dossier de ${selectedStudentForReceipt.fullName} définitivement supprimés.`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {

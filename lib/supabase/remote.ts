@@ -74,6 +74,15 @@ export function deleteInvoiceFromSupabase(identifier: string, schoolSlug: string
   return callData('deleteInvoice', [identifier, schoolSlug], false);
 }
 
+/** Supprime les reçus d'un service (internat / cantine / transport) d'un élève. -1 = échec. */
+export function deleteServiceInvoicesFromSupabase(
+  studentId: string,
+  kind: 'internat' | 'cantine' | 'transport',
+  schoolSlug: string
+): Promise<number> {
+  return callData('deleteServiceInvoices', [studentId, kind, schoolSlug], -1);
+}
+
 export function saveStaffUserToSupabase(
   staff: {
     fullName: string;

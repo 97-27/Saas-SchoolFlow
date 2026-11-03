@@ -5,8 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveCanteenData } from '@/lib/data/live-store';
-import { deleteInvoiceFromSupabase } from '@/lib/supabase/remote';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveCanteenData, deleteServiceReceipts } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
   UtensilsCrossed,
@@ -643,26 +642,10 @@ export function CanteenView({
       setMonthlyPayments(nextPayments);
       saveLiveCanteenData(nextMap, nextPayments, undefined, schoolSlug);
 
-      // d. Supprimer les factures/quittances de cantine
-      const invoiceId = `inv-canteen-${studentId}`;
-      if (typeof window !== 'undefined') {
-        try {
-          const invoicesKey = isPilotSchool ? 'schoolflow_registered_invoices_v1' : `schoolflow_registered_invoices_v1_${schoolSlug}`;
-          const rawInvoices = localStorage.getItem(invoicesKey);
-          if (rawInvoices) {
-            const prevInvoices: Invoice[] = JSON.parse(rawInvoices);
-            const filteredInvoices = prevInvoices.filter(
-              (inv) =>
-                inv.id !== invoiceId &&
-                inv.studentId !== studentId &&
-                !inv.invoiceNumber?.startsWith(`CAN-${studentNumber}`) &&
-                !inv.invoiceNumber?.startsWith(`QUI-CAN-${studentNumber}`)
-            );
-            localStorage.setItem(invoicesKey, JSON.stringify(filteredInvoices));
-          }
-        } catch (e) {}
-      }
-      deleteInvoiceFromSupabase(invoiceId, schoolSlug).catch(() => {});
+      // d. Supprimer les reçus de CANTINE de l'élève (ici et en base, confirmé) — jamais son
+      //    reçu de scolarité (avant, tous ses reçus étaient effacés localement et le vrai reçu de
+      //    cantine restait en base).
+      const receiptsDeleted = await deleteServiceReceipts({ id: studentId, studentNumber }, 'cantine', schoolSlug);
 
       // e. Diffuser l'événement
       broadcastLiveUpdate({
@@ -674,6 +657,7 @@ export function CanteenView({
 
       setShowDeleteCanteenModal(false);
       setSelectedStudentForReceipt(null);
+      if (!receiptsDeleted) return;
       setToastMessage(`✓ L'élève ${selectedStudentForReceipt.fullName} a été retiré de la cantine scolaire.`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
@@ -715,12 +699,14 @@ export function CanteenView({
         } catch (e) {}
       }
 
-      // Supprimer définitivement l'élève et tous ses reçus
+      // Supprimer définitivement l'élève et tous ses reçus (confirmé par la base)
+      saveLiveCanteenData(nextMap, nextPayments, undefined, schoolSlug);
       const idsToDelete = [studentId, studentNumber, matricule].filter(Boolean) as string[];
-      deleteLiveStudents(idsToDelete, schoolSlug);
+      const confirmed = await deleteLiveStudents(idsToDelete, schoolSlug);
 
       setShowDeleteCanteenModal(false);
       setSelectedStudentForReceipt(null);
+      if (!confirmed) return;
       setToastMessage(`✓ Reçu et dossier de ${selectedStudentForReceipt.fullName} définitivement supprimés.`);
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
