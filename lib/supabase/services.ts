@@ -867,6 +867,14 @@ function planStudentWrite(
     return { action: 'skip', reason: 'élève supprimé de la base' };
   }
 
+  // 1 ter. Copie provisoire de plus de 24 h jamais enregistrée : c'est le reste d'un élève
+  //    supprimé gardé par un navigateur (GBALÉ Imiran ID-192 a été recréé ainsi le 01/11). Une
+  //    vraie inscription hors connexion est envoyée dès le retour du réseau, bien avant 24 h.
+  const touched = student.updatedAt ? new Date(student.updatedAt).getTime() : 0;
+  if (touched && touched < Date.now() - 24 * 60 * 60 * 1000) {
+    return { action: 'skip', reason: 'copie provisoire ancienne, jamais enregistrée' };
+  }
+
   const sameChildElsewhere = rows.find((r) => isSameChild(r, student));
   const owner = number ? byNumber.get(number) : undefined;
 

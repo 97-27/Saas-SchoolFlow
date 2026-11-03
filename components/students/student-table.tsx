@@ -32,7 +32,7 @@ import {
   Trash2,
   AlertTriangle,
 } from 'lucide-react';
-import { getLiveStudents, getLiveSchool, updateRegisteredStudent, deleteLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, updateRegisteredStudent, deleteLiveStudents, syncSchoolDataWithServer, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 
 import { useRouter } from 'next/navigation';
@@ -68,7 +68,9 @@ export function StudentTable({
     };
     handleUpdate();
 
-    // Synchronisation centralisée assurée par le LiveStore et l'écouteur DATA_UPDATED_EVENT
+    // Relire la base dès l'ouverture de la page : la liste et le total s'alignent alors sur elle
+    // (et non sur d'anciennes copies gardées par le navigateur).
+    syncSchoolDataWithServer(activeSlug, true);
 
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);

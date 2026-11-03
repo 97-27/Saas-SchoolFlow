@@ -23,6 +23,7 @@ import {
 import Link from 'next/link';
 import {
   getLiveStudents,
+  rememberDatabaseStudents,
   getLiveInvoices,
   getLiveSchool,
   getDeletedStudentIds,
@@ -144,6 +145,7 @@ export function DashboardView({
       .then(([sbStudents, sbInvoices, sbSchool, sbServices]) => {
         let hasNewData = false;
         if (sbStudents && sbStudents.length > 0) {
+          rememberDatabaseStudents(activeSlug, sbStudents);
           const liveStus = getLiveStudents(sbStudents, activeSlug);
           setStudents(liveStus);
           try {
@@ -202,6 +204,7 @@ export function DashboardView({
       .then((res) => {
         if (res && res.success && res.data) {
           if (res.data.students && Array.isArray(res.data.students) && res.data.students.length > 0) {
+            if (res.data.studentsFromDatabase === true) rememberDatabaseStudents(activeSlug, res.data.students);
             const liveStus = getLiveStudents(res.data.students, activeSlug);
             setStudents(liveStus);
             try {
@@ -347,6 +350,7 @@ export function DashboardView({
           );
           localStorage.setItem(`schoolflow_registered_students_v1_${activeSlug}`, JSON.stringify(liveStus));
           if (isPilotDash) localStorage.setItem('schoolflow_registered_students_v1', JSON.stringify(liveStus));
+          if (result.data.studentsFromDatabase === true) rememberDatabaseStudents(activeSlug, liveStus);
           setStudents(liveStus);
         }
         if (result.data.invoices && Array.isArray(result.data.invoices)) {

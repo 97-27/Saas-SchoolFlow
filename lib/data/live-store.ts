@@ -206,6 +206,75 @@ export function getDeletedStudentIds(): Set<string> {
 }
 
 /**
+ * Photographie de la liste des élèves telle que la BASE la contient, prise à chaque lecture
+ * complète de la base. Toutes les pages s'alignent sur elle : un élève absent de la base n'est
+ * affiché nulle part, sauf une inscription toute récente pas encore confirmée.
+ */
+const DB_SNAPSHOT_PREFIX = 'schoolflow_db_students_snapshot_v1_';
+// Une inscription faite hors connexion est envoyée dès le retour du réseau ; au-delà de 24 h sans
+// jamais avoir été enregistrée, une copie provisoire est un reste (même règle côté serveur).
+const STALE_PROVISIONAL_MS = 24 * 60 * 60 * 1000;
+
+interface DbSnapshot {
+  at: number;
+  ids: Set<string>;
+  numbers: Set<string>;
+}
+
+/** Enregistre la photographie ; renvoie true si la liste des élèves de la base a changé. */
+export function rememberDatabaseStudents(slug: string, dbStudents: Student[]): boolean {
+  if (typeof window === 'undefined' || !Array.isArray(dbStudents) || dbStudents.length === 0) return false;
+  try {
+    const ids = dbStudents.map((s) => s && s.id).filter(Boolean).sort();
+    const previous = readDatabaseSnapshot(slug);
+    const changed = !previous || previous.ids.size !== ids.length || ids.some((id) => !previous.ids.has(id));
+    localStorage.setItem(
+      `${DB_SNAPSHOT_PREFIX}${slug}`,
+      JSON.stringify({
+        at: Date.now(),
+        ids,
+        numbers: dbStudents.map((s) => s && s.studentNumber).filter(Boolean),
+      })
+    );
+    return changed;
+  } catch (e) {
+    return false;
+  }
+}
+
+function readDatabaseSnapshot(slug: string): DbSnapshot | null {
+  try {
+    const raw = localStorage.getItem(`${DB_SNAPSHOT_PREFIX}${slug}`);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (!p || !Array.isArray(p.ids) || p.ids.length === 0) return null;
+    return { at: Number(p.at) || 0, ids: new Set(p.ids), numbers: new Set(p.numbers || []) };
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Un élève s'affiche s'il est dans la base, ou s'il s'agit d'une inscription pas encore
+ * enregistrée (identifiant provisoire, numéro inconnu de la base, moins de 3 jours), ou d'une fiche
+ * arrivée en base depuis la dernière lecture. Tout le reste (copies d'élèves supprimés, fiches
+ * reconstituées depuis de vieilles factures) est écarté : c'était l'écart 216 (Vue d'ensemble) /
+ * 211 (base et tableau de bord).
+ */
+function isInDatabaseOrPending(s: Student, snap: DbSnapshot): boolean {
+  if (s.id && snap.ids.has(s.id)) return true;
+  const t = s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
+  if (!t) return false;
+  const provisional = !(s.id && UUID_PATTERN.test(s.id));
+  if (provisional) {
+    if (s.studentNumber && snap.numbers.has(s.studentNumber)) return false; // copie d'un élève déjà en base
+    return t >= Date.now() - STALE_PROVISIONAL_MS;
+  }
+  // Identifiant définitif absent de la photographie : seulement s'il est apparu APRÈS elle.
+  return t > snap.at;
+}
+
+/**
  * Supprime un ou plusieurs élèves de manière centralisée et définitive de toutes les pages.
  */
 export function deleteLiveStudents(idsToDelete: string[], schoolSlug?: string): Promise<boolean> {
@@ -543,7 +612,10 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           // ajoute à la liste des supprimés pour qu'aucune page (Vue d'ensemble, caisse, factures
           // reconstituées…) ne les réaffiche — c'était l'écart 216 / 211 avec le tableau de bord.
           const vanishedIds = new Set<string>();
+          const previousSnapshot = readDatabaseSnapshot(slug);
+          const currentDbNumbers = new Set<string>(data.students.map((s: any) => s && s.studentNumber).filter(Boolean));
           if (data.studentsFromDatabase === true) {
+            if (rememberDatabaseStudents(slug, data.students)) hasChanges = true;
             const serverIds = new Set<string>(data.students.map((s: any) => s && s.id).filter(Boolean));
             const localKeysToCheck = isPilot ? [STUDENTS_STORAGE_KEY, schoolKey] : [schoolKey];
             const localLists = localKeysToCheck.map((k) => {
@@ -598,6 +670,19 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               if (!isProvisional && data.studentsFromDatabase === true) {
                 vanishedIds.add(localStu.id);
                 return;
+              }
+              // Copie provisoire ANCIENNE (pas une inscription des 10 dernières minutes) que la base
+              // ne connaît pas : c'est le reste d'un élève supprimé. La renvoyer au serveur le
+              // recréait (constaté : GBALÉ Imiran ID-192 recréé le 01/11 après sa suppression).
+              // Une inscription faite hors connexion (jamais vue par la base) est, elle, conservée et
+              // renvoyée : seule une copie dont la base a connu le numéro puis l'a perdu
+              // (suppression), ou un reste de plus de 24 h jamais enregistré, est écartée.
+              if (isProvisional && data.studentsFromDatabase === true) {
+                const num = localStu.studentNumber;
+                const deletedSinceLastRead =
+                  Boolean(num) && Boolean(previousSnapshot?.numbers.has(num)) && !currentDbNumbers.has(num);
+                const t = localStu.updatedAt ? new Date(localStu.updatedAt).getTime() : 0;
+                if (deletedSinceLastRead || (t && t < Date.now() - STALE_PROVISIONAL_MS)) return;
               }
               // Conserver impérativement l'élève créé ou modifié localement
               studentMap.set(key, localStu);
@@ -1322,8 +1407,12 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       }
     }
 
+    // Alignement sur la base (voir isInDatabaseOrPending)
+    const snapshot = readDatabaseSnapshot(slug);
+    const alignedStudents = snapshot ? uniqueStudents.filter((s) => isInDatabaseOrPending(s, snapshot)) : uniqueStudents;
+
     // Trier chronologiquement selon le numéro séquentiel
-    const sortedChronologically = uniqueStudents.sort((a, b) => {
+    const sortedChronologically = alignedStudents.sort((a, b) => {
       const numA = parseInt(a.studentNumber?.replace(/\D/g, '') || '0', 10);
       const numB = parseInt(b.studentNumber?.replace(/\D/g, '') || '0', 10);
       return numA - numB;
