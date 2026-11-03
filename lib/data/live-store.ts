@@ -20,7 +20,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } from '@/lib/utils/formatters';
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
-import { normalizePhone, isStudentTombstoneId } from '@/lib/data/student-match';
+import { normalizePhone, isStudentTombstoneId, normalizePersonName, studentDisplayName } from '@/lib/data/student-match';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -223,7 +223,14 @@ interface DbSnapshot {
   at: number;
   ids: Set<string>;
   numbers: Set<string>;
+  /** « nom normalisé | classe » des élèves de la base. */
+  people: Set<string>;
 }
+
+const personKey = (s: Pick<Student, 'fullName' | 'lastName' | 'firstName' | 'grade'>): string => {
+  const name = normalizePersonName(studentDisplayName(s));
+  return name ? `${name}|${(s.grade || '').trim().toLowerCase()}` : '';
+};
 
 /** Enregistre la photographie ; renvoie true si la liste des élèves de la base a changé. */
 export function rememberDatabaseStudents(slug: string, dbStudents: Student[]): boolean {
@@ -238,6 +245,7 @@ export function rememberDatabaseStudents(slug: string, dbStudents: Student[]): b
         at: Date.now(),
         ids,
         numbers: dbStudents.map((s) => s && s.studentNumber).filter(Boolean),
+        people: dbStudents.map((s) => (s ? personKey(s) : '')).filter(Boolean),
       })
     );
     return changed;
@@ -252,7 +260,7 @@ function readDatabaseSnapshot(slug: string): DbSnapshot | null {
     if (!raw) return null;
     const p = JSON.parse(raw);
     if (!p || !Array.isArray(p.ids) || p.ids.length === 0) return null;
-    return { at: Number(p.at) || 0, ids: new Set(p.ids), numbers: new Set(p.numbers || []) };
+    return { at: Number(p.at) || 0, ids: new Set(p.ids), numbers: new Set(p.numbers || []), people: new Set(p.people || []) };
   } catch (e) {
     return null;
   }
@@ -272,6 +280,11 @@ function isInDatabaseOrPending(s: Student, snap: DbSnapshot): boolean {
   const provisional = !(s.id && UUID_PATTERN.test(s.id));
   if (provisional) {
     if (s.studentNumber && snap.numbers.has(s.studentNumber)) return false; // copie d'un élève déjà en base
+    // Copie provisoire du même enfant (même nom ET même classe) déjà enregistré en base sous son
+    // identifiant définitif : c'est un doublon local (ex : fiche créée depuis l'Internat). Une vraie
+    // nouvelle inscription homonyme réapparaît dès que la base lui a donné son identifiant.
+    const pk = personKey(s);
+    if (pk && snap.people.has(pk)) return false;
     return t >= Date.now() - STALE_PROVISIONAL_MS;
   }
   // Identifiant définitif absent de la photographie : seulement s'il est apparu APRÈS elle.
@@ -409,11 +422,34 @@ function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, next
     prevPay = {};
   }
   const changes = computeServiceChanges(service, prevSubs, nextSubs, prevPay, nextPay);
+
+  // GARDE-FOU : un clic ne retire jamais qu'un élève. Si la liste de l'écran fait disparaître
+  // plusieurs élèves d'un coup, elle est incomplète ou périmée : on n'envoie RIEN, on garde
+  // l'état de référence et on recharge la vraie liste depuis la base.
+  const removedStudents = new Set(
+    changes.filter((c) => c.action === 'unsubscribe' || (c.action === 'setMonth' && !c.paid)).map((c) => c.studentKey)
+  );
+  if (removedStudents.size > 2) {
+    console.error(`${label} bloquée : ${removedStudents.size} élèves auraient été retirés en un seul clic`);
+    try {
+      window.alert(
+        `Par sécurité, ${label} n'a pas été enregistrée : l'écran allait retirer ${removedStudents.size} élèves en une seule fois.\n\nLa liste va être rechargée depuis la base. Recommencez ensuite votre opération.`
+      );
+    } catch (e) {}
+    syncSchoolDataWithServer(slug, true);
+    return;
+  }
+
   rememberServiceBaseline(slug, { [keys.subs]: nextSubs, [keys.pay]: nextPay });
   if (changes.length === 0) return;
   applyServiceChanges(changes, slug)
     .then((res) => {
       if (res.legacy) return;
+      if (res.refused) {
+        syncSchoolDataWithServer(slug, true);
+        notifySaveFailure(label);
+        return;
+      }
       if (!res.ok) notifySaveFailure(label);
       if (res.skipped.length > 0) console.warn(`${label} : élève(s) introuvable(s) dans la base`, res.skipped);
     })

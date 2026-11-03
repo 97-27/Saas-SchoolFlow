@@ -311,7 +311,7 @@ export function ParentScolariteTab({
     if (!activeChild) return emptyBoarding;
     const childId = activeChild.id;
     const customSub = boardingSubs.find(
-      (b) => b.studentId === childId || b.matricule === activeChild.matricule
+      (b) => b.studentId === childId || (!!b.matricule && b.matricule === activeChild.matricule)
     );
     const isSubscribed = Boolean(activeChild.isBoarding || customSub);
 

@@ -126,6 +126,18 @@ export function BoardingView({
       return [];
     }
   };
+  /** Vrai si la fiche d'internat `cs` désigne cet élève. Les valeurs vides ne comptent jamais. */
+  const isSameBoarderRef = (
+    cs: { studentId?: string; matricule?: string },
+    studentId?: string,
+    studentNumber?: string,
+    matricule?: string
+  ): boolean => {
+    const refs = [studentId, studentNumber, matricule].map((v) => (v || '').trim()).filter(Boolean);
+    const csId = (cs.studentId || '').trim();
+    const csMat = (cs.matricule || '').trim();
+    return (!!csId && refs.includes(csId)) || (!!csMat && refs.includes(csMat));
+  };
   const readFreshBoardingPayMap = (): Record<string, Record<string, boolean>> => {
     if (typeof window === 'undefined') return {};
     try {
@@ -848,10 +860,10 @@ export function BoardingView({
       };
       updateRegisteredStudent(updatedStudent, schoolSlug);
 
-      // 2. Nettoyer les customSubscriptions et monthlyPayments de manière atomique
-      const updatedSubs = readFreshBoardingSubList().filter(
-        (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
-      );
+      // 2. Nettoyer les customSubscriptions et monthlyPayments de manière atomique.
+      //    Ne retirer QUE la fiche de cet élève : une valeur vide ne doit jamais servir de
+      //    critère (sinon tous les pensionnaires sans matricule étaient retirés d'un coup).
+      const updatedSubs = readFreshBoardingSubList().filter((cs) => !isSameBoarderRef(cs, studentId, studentNumber, matricule));
       const updatedPayments = { ...readFreshBoardingPayMap() };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];
@@ -891,10 +903,8 @@ export function BoardingView({
       const studentNumber = activeBoarder.student.studentNumber;
       const matricule = activeBoarder.student.matricule;
 
-      // Nettoyer les subscriptions et monthly payments de manière atomique
-      const updatedSubs = readFreshBoardingSubList().filter(
-        (cs) => cs.studentId !== studentId && cs.matricule !== studentNumber && cs.matricule !== matricule
-      );
+      // Nettoyer les subscriptions et monthly payments de manière atomique (cet élève seulement)
+      const updatedSubs = readFreshBoardingSubList().filter((cs) => !isSameBoarderRef(cs, studentId, studentNumber, matricule));
       const updatedPayments = { ...readFreshBoardingPayMap() };
       delete updatedPayments[studentId];
       if (studentNumber) delete updatedPayments[studentNumber];

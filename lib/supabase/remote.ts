@@ -90,6 +90,7 @@ export interface ServiceChangeResult {
   legacy: boolean;
   applied: number;
   skipped: string[];
+  refused?: boolean;
 }
 
 /** Enregistre des changements d'abonnements / de mois payés, ligne par ligne. */

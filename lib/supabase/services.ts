@@ -1738,6 +1738,8 @@ export interface ServiceChangeResult {
   legacy: boolean;
   applied: number;
   skipped: string[];
+  /** true si l'envoi a été refusé par le garde-fou (retraits massifs). */
+  refused?: boolean;
 }
 
 /**
@@ -1755,6 +1757,17 @@ export async function applyServiceChangesToSupabase(schoolSlug: string, changes:
     .filter((c) => c && ['internat', 'cantine', 'transport'].includes(c.service) && typeof c.studentKey === 'string' && c.studentKey)
     .slice(0, 500);
   if (valid.length === 0) return result;
+
+  // GARDE-FOU : une action à l'écran ne retire jamais qu'UN élève d'un service à la fois.
+  // Un envoi qui en retire plusieurs (ou décoche les mois de plusieurs élèves) vient forcément
+  // d'un écran à la liste incomplète ou périmée : on refuse tout, rien n'est effacé.
+  const removedStudents = new Set(
+    valid.filter((c) => c.action === 'unsubscribe' || (c.action === 'setMonth' && !c.paid)).map((c) => `${c.service}:${c.studentKey}`)
+  );
+  if (removedStudents.size > 2) {
+    console.error(`applyServiceChanges refusé : ${removedStudents.size} retraits en un seul envoi`, Array.from(removedStudents).slice(0, 10));
+    return { ...result, ok: false, refused: true };
+  }
 
   // Résolution des élèves (identifiant, numéro de dossier ou matricule) en une requête.
   const keys = Array.from(new Set(valid.map((c) => c.studentKey)));
