@@ -41,6 +41,9 @@ export const dynamic = 'force-dynamic';
 /** Codes réservés aux lignes techniques de staff_users (cachet, données de services...). */
 const RESERVED_CODE = /^(SYS-|STAMP-)/i;
 
+/** Pages et actions réservées au seul Directeur : codes d'accès, profils du personnel, corbeille. */
+const isDirector = (session: { roleId: string }) => session.roleId === 'directeur';
+
 function ok(result: unknown) {
   return NextResponse.json({ success: true, result }, { headers: { 'Cache-Control': 'no-store' } });
 }
@@ -145,15 +148,15 @@ export async function POST(request: NextRequest) {
     case 'getDataVersion':
       return ok(await getSchoolDataVersion(slug));
 
-    // Corbeille & Journal : réservés au Directeur et au Fondateur.
+    // Corbeille & Journal : réservés au Directeur (choix de l'établissement).
     case 'getJournal': {
-      if (!isAdmin(session)) return deny();
+      if (!isDirector(session)) return deny();
       const kind = args[0] === 'changes' || args[0] === 'all' ? args[0] : 'trash';
       return ok(await getJournalFromSupabase(slug, kind, Number(args[1]) || 400));
     }
 
     case 'restoreJournal':
-      if (!isAdmin(session)) return deny();
+      if (!isDirector(session)) return deny();
       return ok(await restoreJournalInSupabase(slug, Number(args[0]), actorLabel(session)));
 
     case 'deleteServiceInvoices':
@@ -173,7 +176,9 @@ export async function POST(request: NextRequest) {
       const rawCode = String(staff.authCode || '').trim();
       if (!rawCode || RESERVED_CODE.test(rawCode)) return deny();
 
-      if (isAdmin(session)) {
+      // Créer / modifier les profils et les codes d'accès : Directeur seulement (« Administration &
+      // Codes »). Les autres, Fondateur compris, ne modifient que leurs propres coordonnées.
+      if (isDirector(session)) {
         if (!STAFF_ROLES.includes(staff.roleId)) return jsonError('Rôle inconnu.', 400);
         return ok(await saveStaffUserToSupabase({ ...staff, authCode: rawCode }, slug));
       }
@@ -193,7 +198,7 @@ export async function POST(request: NextRequest) {
     }
 
     case 'deleteStaffUser': {
-      if (!isAdmin(session)) return deny();
+      if (!isDirector(session)) return deny();
       const rawCode = String(args[0] || '').trim();
       if (!rawCode || RESERVED_CODE.test(rawCode) || rawCode.toUpperCase() === session.code.toUpperCase()) return deny();
       return ok(await deleteStaffUserFromSupabase(rawCode, slug));

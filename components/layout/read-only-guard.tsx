@@ -19,7 +19,9 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
         const stored = localStorage.getItem('schoolflow_active_session_v2');
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed.roleId === 'fondateur' || parsed.isReadOnly === true) {
+          // Le Fondateur peut désormais modifier (choix de l'établissement) : seul un profil
+          // explicitement marqué « lecture seule » est bloqué.
+          if (parsed.isReadOnly === true) {
             setIsReadOnly(true);
             return;
           }

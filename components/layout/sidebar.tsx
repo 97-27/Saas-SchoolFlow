@@ -206,10 +206,10 @@ export function Sidebar({
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'fondateur') {
-    // 👑 FONDATEUR : Administrateur Suprême (Accès total à tous les modules et aux codes)
+    // 👑 FONDATEUR : tout voir et tout modifier, Paramètres compris. Seuls « Administration &
+    //    Codes » et « Corbeille & Journal » restent réservés au Directeur (choix de l'établissement).
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
       {
         key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
         active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
@@ -249,13 +249,22 @@ export function Sidebar({
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
+      { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'secretaire') {
-    // 📝 SECRÉTAIRE : Vue d'ensemble, Documents scolaires, Dépenses de l'école, Rapports & statistiques, Classes & niveaux, Notes diverses, Enseignants & personnel
+    // 📝 SECRÉTAIRE : Inscriptions et Vue d'ensemble des élèves (inscrire, modifier — sans supprimer),
+    //    Documents, Dépenses, Rapports, Classes, Notes diverses, Personnel, Santé
     navItems = [
-      { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'documents', title: 'Documents Scolaires', href: `${baseUrl}/documents`, icon: FileSpreadsheet, active: pathname.includes('/documents') },
+      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      {
+        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
+        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
+        subItems: [
+          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
+          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
+          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
+        ],
+      },
       { key: 'depenses', title: "Dépenses de l'École", href: `${baseUrl}/depenses`, icon: Wallet, active: pathname.includes('/depenses') },
       { key: 'rapports', title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, icon: BarChart3, active: pathname.includes('/rapports') },
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
@@ -320,11 +329,20 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'assistant_direction') {
-    // 📋 ASSISTANTE : Vue d'ensemble, Classes et Niveaux, Documents, Enseignants et Personnel, Notes Diverses
+    // 📋 ASSISTANT(E) : Inscriptions et Vue d'ensemble des élèves (inscrire, modifier — sans
+    //    supprimer), Classes, Documents, Personnel, Santé, Notes Diverses
     navItems = [
-      { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      {
+        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
+        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
+        subItems: [
+          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
+          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
+          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
+        ],
+      },
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
-      { key: 'documents', title: 'Documents Scolaires', href: `${baseUrl}/documents`, icon: FileSpreadsheet, active: pathname.includes('/documents') },
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
@@ -340,10 +358,21 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'educateur') {
-    // 🧑‍🏫 ÉDUCATEUR / VIE SCOLAIRE : Vue d'ensemble, Classes, Santé & Suivi Médical, Notes Diverses
+    // 🧑‍🏫 ÉDUCATEUR / VIE SCOLAIRE : tout ce qui touche au suivi des élèves — liste des élèves,
+    //    Classes, Présences & Absences, Bulletins, Tableaux d'honneur, Santé, Notes Diverses
     navItems = [
-      { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
+      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      { key: 'eleves', title: "Élèves (Vue d'ensemble)", href: `${baseUrl}/eleves`, icon: Users, active: pathname.endsWith('/eleves') },
+      {
+        key: 'pedagogie', title: 'Suivi des élèves', icon: BookOpen, isGroup: true, isOpen: pedagogyOpen, onToggle: () => setPedagogyOpen(!pedagogyOpen),
+        active: pathname.includes('/classes') || pathname.includes('/presences') || pathname.includes('/bulletins') || pathname.includes('/distinctions'),
+        subItems: [
+          { title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
+          { title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
+          { title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.includes('/bulletins') },
+          { title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
+        ],
+      },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];

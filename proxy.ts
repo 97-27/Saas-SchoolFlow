@@ -10,16 +10,19 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
  * ne protégeait rien côté serveur.
  */
 const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
-  secretaire: ['dashboard', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
+  secretaire: ['dashboard', 'eleves', 'inscriptions', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
   comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
   enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
-  assistant_direction: ['dashboard', 'classes', 'documents', 'personnel', 'notes-diverses', 'sante'],
+  assistant_direction: ['dashboard', 'eleves', 'inscriptions', 'documents', 'classes', 'personnel', 'notes-diverses', 'sante'],
   // "communication" est volontairement absent : c'est la boîte de réception interne de la
   // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Les parents ont
   // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
-  educateur: ['dashboard', 'classes', 'notes-diverses', 'sante'],
+  educateur: ['dashboard', 'eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'notes-diverses', 'sante'],
 };
+
+/** Pages réservées au seul Directeur (le Fondateur a accès à tout le reste, Paramètres compris). */
+const DIRECTOR_ONLY_PATHS = ['administration', 'corbeille'];
 
 // Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.
 const ROLE_DEFAULT_PATH: Record<string, string> = {
@@ -77,6 +80,9 @@ export async function proxy(request: NextRequest) {
     // inconnu est refusé au lieu d'hériter, par défaut, de l'accès total.
     if (!allowedPaths && roleId !== 'directeur' && roleId !== 'fondateur') {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
+    }
+    if (roleId === 'fondateur' && DIRECTOR_ONLY_PATHS.includes(subPath)) {
+      return NextResponse.redirect(new URL(`/${ecole}/admin/dashboard`, request.url));
     }
     if (allowedPaths && !allowedPaths.includes(subPath)) {
       const fallback = ROLE_DEFAULT_PATH[roleId] || allowedPaths[0] || 'dashboard';

@@ -909,7 +909,7 @@ export function Topbar({
                       {activeSession.roleId === 'directeur'
                         ? '👑 Admin • Contrôle'
                         : activeSession.roleId === 'fondateur'
-                        ? 'Supervision Globale (Lecture Seule)'
+                        ? '👑 Contrôle Total'
                         : activeSession.roleId === 'comptable'
                         ? 'Gestionnaire Financier & Caisse'
                         : activeSession.roleId === 'enseignant'
