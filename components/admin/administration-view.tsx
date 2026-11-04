@@ -65,6 +65,18 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
   // Modale de confirmation de révocation d'un compte (remplace window.confirm)
   const [staffToDelete, setStaffToDelete] = useState<StaffUser | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingStaff, setIsDeletingStaff] = useState(false);
+
+  // Profil connecté (pour savoir qui il peut supprimer)
+  const [viewer, setViewer] = useState<{ roleId: string; code: string }>({ roleId: '', code: '' });
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}');
+      setViewer({ roleId: String(parsed.roleId || ''), code: String(parsed.authCode || '').toUpperCase() });
+    } catch (e) {}
+  }, []);
 
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
@@ -196,18 +208,50 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     showToast(`Lien et code de ${staff.fullName} prêts sur WhatsApp`);
   };
 
+  // Qui peut supprimer qui (même règle que le serveur) :
+  //  • Fondateur : tout membre, Directeur compris ;
+  //  • Directeur : tout membre SAUF le Fondateur ;
+  //  • personne ne supprime son propre compte, ni une fiche de démonstration.
+  const canDeleteMember = (member: StaffUser): boolean => {
+    if (member.id === 'staff-founder' || member.id === 'staff-001') return false;
+    if (viewer.code && member.authCode && member.authCode.toUpperCase() === viewer.code) return false;
+    if (viewer.roleId === 'fondateur') return true;
+    if (viewer.roleId === 'directeur') return member.roleId !== 'fondateur';
+    return false;
+  };
+  const needsNameConfirmation = (member: StaffUser | null) => member?.roleId === 'directeur' || member?.roleId === 'fondateur';
+  const normalizeName = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(mr|mme|m)\b\.?/g, '').replace(/\s+/g, ' ').trim();
+
   // Supprimer / Révoquer un profil et son code
   const handleDeleteStaff = (staff: StaffUser) => {
-    if (staff.roleId === 'directeur' || staff.roleId === 'fondateur' || staff.id === 'staff-founder' || staff.id === 'staff-001') {
-      showToast("Impossible de supprimer un compte de Direction Principale.");
+    if (!canDeleteMember(staff)) {
+      showToast(
+        staff.roleId === 'fondateur'
+          ? 'Le compte du Fondateur ne peut pas être supprimé par le Directeur.'
+          : "Vous n'avez pas le droit de supprimer ce compte."
+      );
       return;
     }
+    setDeleteConfirmName('');
+    setDeleteError(null);
     setStaffToDelete(staff);
   };
 
-  const confirmDeleteStaff = () => {
-    if (!staffToDelete) return;
-    deleteLiveStaffUser(staffToDelete.id, schoolSlug);
+  const confirmDeleteStaff = async () => {
+    if (!staffToDelete || isDeletingStaff) return;
+    if (needsNameConfirmation(staffToDelete) && normalizeName(deleteConfirmName) !== normalizeName(staffToDelete.fullName)) {
+      setDeleteError('Le nom saisi ne correspond pas. Retapez le nom exact pour confirmer.');
+      return;
+    }
+    setIsDeletingStaff(true);
+    const error = await deleteLiveStaffUser(staffToDelete.id, schoolSlug);
+    setIsDeletingStaff(false);
+    if (error) {
+      setDeleteError(error);
+      return;
+    }
+    setStaffList(getLiveStaffUsers(schoolSlug));
     showToast(`Compte et code de ${staffToDelete.fullName} révoqués avec succès.`);
     setStaffToDelete(null);
   };
@@ -377,6 +421,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       (activeTab === 'administration' && s.roleId !== 'enseignant');
 
     return matchesSearch && matchesRole && matchesTab;
+  }).sort((a, b) => {
+    // Le Fondateur toujours en premier, puis le Directeur, puis les autres membres.
+    const rank = (s: StaffUser) => (s.roleId === 'fondateur' ? 0 : s.roleId === 'directeur' ? 1 : 2);
+    return rank(a) - rank(b);
   });
 
   // Statistiques
@@ -757,7 +805,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* 2. Modifier les coordonnées et informations : Accessible pour le Fondateur, le Directeur et tout le Personnel */}
+                        {/* 2. Modifier : le Directeur ne modifie pas le compte du Fondateur */}
+                        {!(viewer.roleId === 'directeur' && member.roleId === 'fondateur') && (
                         <button
                           type="button"
                           onClick={() => openEditModal(member)}
@@ -766,9 +815,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        )}
 
-                        {/* 3. Révoquer / Supprimer : Réservé au personnel enseignant/technique (interdit pour Fondateur et Directeur) */}
-                        {!(member.roleId === 'directeur' || member.roleId === 'fondateur' || member.id === 'staff-founder' || member.id === 'staff-001') && (
+                        {/* 3. Révoquer / Supprimer : Fondateur → tout le monde ; Directeur → tous sauf le Fondateur */}
+                        {canDeleteMember(member) && (
                           <button
                             type="button"
                             onClick={() => handleDeleteStaff(member)}
@@ -1418,20 +1468,46 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-1">
+            {needsNameConfirmation(staffToDelete) && (
+              <div className="space-y-1.5 rounded-2xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs font-semibold text-rose-800">
+                  Compte de Direction : pour confirmer, retapez le nom <strong>{staffToDelete.fullName}</strong>.
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmName}
+                  onChange={(e) => {
+                    setDeleteConfirmName(e.target.value);
+                    setDeleteError(null);
+                  }}
+                  placeholder="Nom complet"
+                  autoComplete="off"
+                  className="w-full min-h-[44px] rounded-xl border border-rose-200 bg-white px-3 text-sm outline-none focus:border-rose-400"
+                />
+              </div>
+            )}
+
+            {deleteError && (
+              <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setStaffToDelete(null)}
-                className="px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                className="min-h-[44px] px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={confirmDeleteStaff}
-                className="px-4 py-2.5 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+                disabled={isDeletingStaff || (needsNameConfirmation(staffToDelete) && !deleteConfirmName.trim())}
+                className="min-h-[44px] px-4 py-2.5 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Révoquer définitivement
+                {isDeletingStaff ? 'Suppression…' : 'Révoquer définitivement'}
               </button>
             </div>
           </div>

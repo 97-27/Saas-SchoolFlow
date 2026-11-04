@@ -20,6 +20,7 @@ import {
   updateStaffContactInSupabase,
   getServicesDataFromSupabase,
   saveServicesDataToSupabase,
+  getStaffUsersFromSupabase,
 } from '@/lib/supabase/services';
 import {
   requireSession,
@@ -176,10 +177,20 @@ export async function POST(request: NextRequest) {
       const rawCode = String(staff.authCode || '').trim();
       if (!rawCode || RESERVED_CODE.test(rawCode)) return deny();
 
-      // Créer / modifier les profils et les codes d'accès : Directeur seulement (« Administration &
-      // Codes »). Les autres, Fondateur compris, ne modifient que leurs propres coordonnées.
-      if (isDirector(session)) {
+      // Créer / modifier les profils et les codes d'accès (« Administration & Codes ») : Fondateur
+      // et Directeur. Le Directeur ne peut ni créer ni modifier un compte Fondateur. Les autres
+      // membres ne modifient que leurs propres coordonnées.
+      if (isAdmin(session)) {
         if (!STAFF_ROLES.includes(staff.roleId)) return jsonError('Rôle inconnu.', 400);
+        if (/^MASQUE-/i.test(rawCode)) return deny();
+        if (isDirector(session) && rawCode.toUpperCase() !== session.code.toUpperCase()) {
+          const current = (await getStaffUsersFromSupabase(slug)).find(
+            (s: any) => String(s.authCode || '').toUpperCase() === rawCode.toUpperCase() || (staff.id && s.id === staff.id)
+          );
+          if (staff.roleId === 'fondateur' || current?.roleId === 'fondateur') {
+            return jsonError('Le compte du Fondateur ne peut être modifié que par le Fondateur lui-même.', 403);
+          }
+        }
         return ok(await saveStaffUserToSupabase({ ...staff, authCode: rawCode }, slug));
       }
       // Un membre non administrateur ne peut modifier que SES coordonnées, jamais son rôle,
@@ -198,9 +209,17 @@ export async function POST(request: NextRequest) {
     }
 
     case 'deleteStaffUser': {
-      if (!isDirector(session)) return deny();
+      // Fondateur : peut supprimer tout membre, Directeur compris. Directeur : tout membre SAUF
+      // le Fondateur. Personne ne peut supprimer son propre compte.
+      if (!isAdmin(session)) return deny();
       const rawCode = String(args[0] || '').trim();
-      if (!rawCode || RESERVED_CODE.test(rawCode) || rawCode.toUpperCase() === session.code.toUpperCase()) return deny();
+      if (!rawCode || RESERVED_CODE.test(rawCode) || /^MASQUE-/i.test(rawCode) || rawCode.toUpperCase() === session.code.toUpperCase()) return deny();
+      const target = (await getStaffUsersFromSupabase(slug)).find(
+        (s: any) => String(s.authCode || '').toUpperCase() === rawCode.toUpperCase()
+      );
+      if (isDirector(session) && target?.roleId === 'fondateur') {
+        return jsonError('Le Directeur ne peut pas supprimer le compte du Fondateur.', 403);
+      }
       return ok(await deleteStaffUserFromSupabase(rawCode, slug));
     }
 

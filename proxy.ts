@@ -21,8 +21,9 @@ const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
   educateur: ['dashboard', 'eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'notes-diverses', 'sante'],
 };
 
-/** Pages réservées au seul Directeur (le Fondateur a accès à tout le reste, Paramètres compris). */
-const DIRECTOR_ONLY_PATHS = ['administration', 'corbeille'];
+/** Pages réservées au seul Directeur (le Fondateur a accès à tout le reste, Paramètres et
+ *  Administration & Codes compris). */
+const DIRECTOR_ONLY_PATHS = ['corbeille'];
 
 // Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.
 const ROLE_DEFAULT_PATH: Record<string, string> = {

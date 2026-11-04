@@ -2887,14 +2887,37 @@ export function updateStaffLoginContact(
 
 export { checkPhoneMatchesStudent, areNamesMatching };
 
-export function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): void {
+/**
+ * Supprime un membre du personnel : en base d'abord, et seulement si la base confirme, à l'écran.
+ * Renvoie un message d'erreur, ou null si c'est fait. Les droits (le Directeur ne peut pas
+ * supprimer le Fondateur, personne ne se supprime soi-même) sont vérifiés par le serveur.
+ */
+export async function deleteLiveStaffUser(staffId: string, schoolSlug: string = 'epc-manoi'): Promise<string | null> {
   const users = getLiveStaffUsers(schoolSlug);
   const userToDelete = users.find((u) => u.id === staffId);
-  if (userToDelete) {
-    deleteStaffUserFromSupabase(userToDelete.authCode, schoolSlug).catch(() => {});
+  if (!userToDelete) return 'Membre introuvable.';
+  let confirmed = false;
+  try {
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ op: 'deleteStaffUser', args: [userToDelete.authCode, schoolSlug] }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) return (json && json.error) || 'Suppression refusée par le serveur.';
+    confirmed = Boolean(json && json.success && json.result);
+  } catch (e) {
+    return 'Connexion impossible avec le serveur. Réessayez.';
   }
-  const filtered = users.filter((u) => u.id !== staffId);
-  saveLiveStaffUsers(filtered, schoolSlug);
+  if (!confirmed) return "La base n'a pas confirmé la suppression. Réessayez.";
+  try {
+    const filtered = users.filter((u) => u.id !== staffId);
+    const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
+    localStorage.setItem(storageKey, JSON.stringify(filtered));
+    if (schoolSlug === 'epc-manoi') localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(filtered));
+    broadcastLiveUpdate({ action: 'staff_users_updated', staffUsers: filtered, schoolSlug });
+  } catch (e) {}
+  return null;
 }
 
 export function addLiveStaffUser(user: StaffUser, schoolSlug: string = 'epc-manoi'): void {

@@ -134,9 +134,9 @@ function filterForSession(data: Record<string, any>, session: SessionPayload): R
     return out;
   }
 
-  // Les codes d'accès des autres membres ne sont visibles que du Directeur (« Administration &
-  // Codes »). Le Fondateur voit tout le reste, y compris les messages des parents.
-  if (session.roleId !== 'directeur') {
+  // Les codes d'accès des autres membres ne sont visibles que du Fondateur et du Directeur
+  // (« Administration & Codes »).
+  if (!isAdmin(session)) {
     out.staffUsers = (out.staffUsers || []).map((u: any) =>
       upperCode(u?.authCode) === ownCode ? u : { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
     );
@@ -396,7 +396,10 @@ export async function POST(request: NextRequest) {
     const deletedStudentIds = canDelete ? body.deletedStudentIds : undefined;
     const restoreStudentIds = canDelete ? body.restoreStudentIds : undefined;
     const schoolSettings = admin && body.schoolSettings ? { ...body.schoolSettings, slug } : undefined;
-    const staffUsers = session.roleId === 'directeur' ? body.staffUsers : undefined;
+    // Liste complète du personnel envoyée par un navigateur : plus jamais prise en compte. Chaque
+    // création / modification / suppression passe par /api/data, qui vérifie les droits membre
+    // par membre (le Directeur ne peut pas toucher au compte du Fondateur).
+    const staffUsers = undefined as any[] | undefined;
     const transportSubscriptions = canWriteServices ? body.transportSubscriptions : undefined;
     const transportPayments = canWriteServices ? body.transportPayments : undefined;
     const canteenSubscriptions = canWriteServices ? body.canteenSubscriptions : undefined;

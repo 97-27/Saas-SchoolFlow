@@ -206,10 +206,11 @@ export function Sidebar({
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'fondateur') {
-    // 👑 FONDATEUR : tout voir et tout modifier, Paramètres compris. Seuls « Administration &
-    //    Codes » et « Corbeille & Journal » restent réservés au Directeur (choix de l'établissement).
+    // 👑 FONDATEUR : tout voir et tout modifier, Paramètres et Administration & Codes compris (il
+    //    peut supprimer tout membre, Directeur compris). Seule « Corbeille & Journal » reste au Directeur.
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+      { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
       {
         key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
         active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
