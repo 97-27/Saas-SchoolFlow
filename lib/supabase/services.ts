@@ -1026,6 +1026,69 @@ export async function deleteStudentFromSupabase(identifier: string, schoolSlug: 
   }
 }
 
+/**
+ * LISTE DES REÇUS SUPPRIMÉS (table deleted_invoices, migration 005)
+ * Un appareil qui garde une vieille copie d'un reçu supprimé la renvoyait à la synchronisation
+ * suivante, et le reçu « revenait » (cas QUI-INT-003). La base retient désormais chaque reçu
+ * supprimé : les envois automatiques d'arrière-plan ne peuvent plus le recréer. Un NOUVEAU reçu
+ * saisi volontairement à l'écran (saveInvoiceToSupabase) reste toujours possible et efface la
+ * mention. Si la migration n'est pas encore faite, ces fonctions ne font simplement rien.
+ */
+type InvoiceTombstoneRow = { invoice_number: string; student_id: string; fee_type: string };
+
+async function recordDeletedInvoices(schoolId: string, rows: InvoiceTombstoneRow[]): Promise<void> {
+  if (!rows.length) return;
+  try {
+    await supabase.from('deleted_invoices').upsert(
+      rows.map((r) => ({
+        school_id: schoolId,
+        invoice_number: r.invoice_number || '',
+        student_id: r.student_id,
+        fee_type: r.fee_type || '',
+        deleted_at: new Date().toISOString(),
+      })),
+      { onConflict: 'school_id,student_id,fee_type,invoice_number' }
+    );
+  } catch (e) {}
+}
+
+async function loadInvoiceTombstones(schoolId: string): Promise<{ numbers: Set<string>; keys: Set<string> }> {
+  const out = { numbers: new Set<string>(), keys: new Set<string>() };
+  try {
+    const { data, error } = await supabase
+      .from('deleted_invoices')
+      .select('invoice_number, student_id, fee_type')
+      .eq('school_id', schoolId)
+      .limit(20000);
+    if (error || !data) return out;
+    for (const r of data as InvoiceTombstoneRow[]) {
+      if (r.invoice_number) out.numbers.add(r.invoice_number);
+      out.keys.add(`${r.student_id}|${r.fee_type || ''}`);
+    }
+  } catch (e) {}
+  return out;
+}
+
+async function clearInvoiceTombstone(schoolId: string, studentId: string, feeType: string, invoiceNumber: string): Promise<void> {
+  try {
+    await supabase.from('deleted_invoices').delete().eq('school_id', schoolId).eq('student_id', studentId).eq('fee_type', feeType);
+    if (invoiceNumber) await supabase.from('deleted_invoices').delete().eq('school_id', schoolId).eq('invoice_number', invoiceNumber);
+  } catch (e) {}
+}
+
+/** Supprime des factures (par id) en notant chacune dans la liste des reçus supprimés. */
+async function deleteInvoiceRows(schoolId: string, rows: Array<InvoiceTombstoneRow & { id: string }>): Promise<boolean> {
+  if (!rows.length) return true;
+  const { error } = await supabase
+    .from('invoices')
+    .delete()
+    .eq('school_id', schoolId)
+    .in('id', rows.map((r) => r.id));
+  if (error) return false;
+  await recordDeletedInvoices(schoolId, rows);
+  return true;
+}
+
 export type ServiceKind = 'internat' | 'cantine' | 'transport';
 
 const SERVICE_INVOICE_PATTERNS: Record<ServiceKind, { feeType: string; prefixes: string[] }> = {
@@ -1049,7 +1112,7 @@ export async function deleteServiceInvoicesFromSupabase(studentId: string, kind:
     const { feeType, prefixes } = SERVICE_INVOICE_PATTERNS[kind];
     const { data: rows, error } = await supabase
       .from('invoices')
-      .select('id, invoice_number, fee_type')
+      .select('id, invoice_number, fee_type, student_id')
       .eq('school_id', schoolId)
       .eq('student_id', studentId);
     if (error) return -1;
@@ -1059,12 +1122,7 @@ export async function deleteServiceInvoicesFromSupabase(studentId: string, kind:
         prefixes.some((p) => (r.invoice_number || '').toUpperCase().startsWith(p))
     );
     if (targets.length === 0) return 0;
-    const { error: delErr } = await supabase
-      .from('invoices')
-      .delete()
-      .eq('school_id', schoolId)
-      .in('id', targets.map((t: any) => t.id));
-    return delErr ? -1 : targets.length;
+    return (await deleteInvoiceRows(schoolId, targets as any)) ? targets.length : -1;
   } catch (err) {
     console.warn('deleteServiceInvoicesFromSupabase catch:', err);
     return -1;
@@ -1078,11 +1136,16 @@ export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: 
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return false;
 
+    // On relit d'abord les lignes visées pour pouvoir les noter dans la liste des reçus supprimés.
+    const cols = 'id, invoice_number, fee_type, student_id';
+    const targets: any[] = [];
     if (isUUID(identifier)) {
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('id', identifier);
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', identifier);
+      const { data: a } = await supabase.from('invoices').select(cols).eq('school_id', schoolId).eq('id', identifier);
+      const { data: b } = await supabase.from('invoices').select(cols).eq('school_id', schoolId).eq('student_id', identifier);
+      targets.push(...(a || []), ...(b || []));
     } else {
-      await supabase.from('invoices').delete().eq('school_id', schoolId).eq('invoice_number', identifier);
+      const { data: a } = await supabase.from('invoices').select(cols).eq('school_id', schoolId).eq('invoice_number', identifier);
+      targets.push(...(a || []));
       const { data: foundRows } = await supabase
         .from('students')
         .select('id')
@@ -1090,10 +1153,12 @@ export async function deleteInvoiceFromSupabase(identifier: string, schoolSlug: 
         .or(`student_number.eq.${identifier},matricule.eq.${identifier}`)
         .limit(1);
       if (foundRows && foundRows.length > 0) {
-        await supabase.from('invoices').delete().eq('school_id', schoolId).eq('student_id', foundRows[0].id);
+        const { data: b } = await supabase.from('invoices').select(cols).eq('school_id', schoolId).eq('student_id', foundRows[0].id);
+        targets.push(...(b || []));
       }
     }
-    return true;
+    const unique = Array.from(new Map(targets.map((t) => [t.id, t])).values());
+    return await deleteInvoiceRows(schoolId, unique);
   } catch (err) {
     console.warn('deleteInvoiceFromSupabase catch:', err);
     return false;
@@ -1231,6 +1296,8 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
         console.warn('saveInvoiceToSupabase insert warning:', insertErr.message);
         return false;
       }
+      // Nouveau reçu saisi volontairement : il annule une éventuelle suppression précédente.
+      await clearInvoiceTombstone(schoolId, plan.studentId, payload.fee_type, plan.invoiceNumber);
     }
     return true;
   } catch (err) {
@@ -1251,12 +1318,18 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
     const studentRows = await loadStudentRows(schoolId);
     const studentIndex = indexStudentRows(studentRows);
     const invoiceRows = await loadInvoiceRows(schoolId);
+    const tombstones = await loadInvoiceTombstones(schoolId);
 
     const payloads: any[] = [];
     for (const inv of invoices) {
       const plan = planInvoiceWrite(inv, studentRows, studentIndex.byId, studentIndex.byNumber, invoiceRows);
       if (plan) {
         const existingId = plan.existingId;
+        // Envoi automatique d'un reçu SUPPRIMÉ (vieille copie d'un appareil) : refusé.
+        const feeKey = `${plan.studentId}|${inv.feeType || "Frais d'inscription & Scolarité"}`;
+        if (!existingId && (tombstones.keys.has(feeKey) || (inv.invoiceNumber && tombstones.numbers.has(inv.invoiceNumber)))) {
+          continue;
+        }
         // Réserver le numéro dans ce même lot
         if (!existingId) invoiceRows.push({ id: `pending-${payloads.length}`, invoice_number: plan.invoiceNumber, student_id: plan.studentId, fee_type: inv.feeType || "Frais d'inscription & Scolarité" });
         if (existingId && payloads.some((p) => p.id === existingId)) continue; // même facture deux fois dans le lot

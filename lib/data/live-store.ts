@@ -215,6 +215,8 @@ export function getDeletedStudentIds(): Set<string> {
  * affiché nulle part, sauf une inscription toute récente pas encore confirmée.
  */
 const DB_SNAPSHOT_PREFIX = 'schoolflow_db_students_snapshot_v1_';
+/** Numéros de reçus déjà vus dans la base (pour ne jamais recréer un reçu supprimé). */
+const DB_INVOICE_NUMBERS_PREFIX = 'schoolflow_db_invoice_numbers_v1_';
 // Une inscription faite hors connexion est envoyée dès le retour du réseau ; au-delà de 24 h sans
 // jamais avoir été enregistrée, une copie provisoire est un reste (même règle côté serveur).
 const STALE_PROVISIONAL_MS = 24 * 60 * 60 * 1000;
@@ -1090,6 +1092,23 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           let hasLocalNewInvoices = false;
           const newLocalInvoices: Invoice[] = [];
           const fromDb = data.studentsFromDatabase === true;
+
+          // Reçus que la base a déjà connus (par numéro). Une copie locale dont le numéro a été vu
+          // en base mais n'y est plus = reçu SUPPRIMÉ : jamais renvoyé (c'est ainsi que le reçu
+          // d'internat QUI-INT-003 de COULIBALY Doh Tariq Imram revenait après sa suppression).
+          const seenKey = `${DB_INVOICE_NUMBERS_PREFIX}${slug}`;
+          let seenNumbers = new Set<string>();
+          try {
+            seenNumbers = new Set<string>(JSON.parse(localStorage.getItem(seenKey) || '[]'));
+          } catch (e) {}
+          const incomingNumbers = new Set<string>(incomingInvoices.map((inv: Invoice) => inv && inv.invoiceNumber).filter(Boolean));
+          if (fromDb) {
+            incomingNumbers.forEach((n) => seenNumbers.add(n));
+            try {
+              localStorage.setItem(seenKey, JSON.stringify(Array.from(seenNumbers)));
+            } catch (e) {}
+          }
+
           prevInvoices.forEach((localInv: Invoice) => {
             if (
               delSet.has(localInv.id) ||
@@ -1103,6 +1122,10 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               // Facture à identifiant définitif absente de la base : supprimée ailleurs, on ne la
               // garde pas (sinon elle « revient »).
               if (fromDb && localInv.id && UUID_PATTERN.test(localInv.id)) return;
+              // Même reçu que la base connaît déjà sous un autre identifiant : c'est une copie.
+              if (localInv.invoiceNumber && incomingNumbers.has(localInv.invoiceNumber)) return;
+              // Numéro déjà vu en base mais disparu depuis : reçu supprimé, on l'oublie.
+              if (fromDb && localInv.invoiceNumber && seenNumbers.has(localInv.invoiceNumber)) return;
               // Conserver impérativement la facture créée localement
               invoiceMap.set(key, localInv);
               hasLocalNewInvoices = true;
