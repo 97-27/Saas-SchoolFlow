@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School } from '@/lib/data/types';
 import {
   getLiveStudents,
@@ -382,9 +382,38 @@ export function GradesView({
   // État local des notes (Initialisé à vide)
   const [gradesMap, setGradesMap] = useState<Record<string, GradeEntry>>({});
 
+  // Cases réellement modifiées à l'écran depuis le dernier chargement. À l'enregistrement, seules
+  // elles sont appliquées sur la version la plus fraîche (base) : un écran resté ouvert ne peut
+  // plus effacer, avec ses cases vides, les notes saisies entre-temps sur un autre appareil.
+  const editedRef = useRef<Record<string, Partial<GradeEntry>>>({});
+
+  // Notes arrivées d'un autre appareil (base, via cloud-kv) : on les affiche en gardant les
+  // cases en cours de saisie sur cet écran.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleCloud = (e: Event) => {
+      const keys: string[] = (e as CustomEvent)?.detail?.keys || [];
+      if (!keys.includes(storageKey)) return;
+      try {
+        const raw = localStorage.getItem(storageKey);
+        const fresh: Record<string, GradeEntry> = raw ? JSON.parse(raw) : {};
+        setGradesMap((prev) => {
+          const next: Record<string, GradeEntry> = { ...prev, ...fresh };
+          for (const [id, fields] of Object.entries(editedRef.current)) {
+            next[id] = { ...(next[id] || prev[id]), ...fields } as GradeEntry;
+          }
+          return next;
+        });
+      } catch (err) {}
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, handleCloud);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleCloud);
+  }, [storageKey]);
+
   // Charger les notes depuis localStorage ou laisser complètement vide
   useEffect(() => {
     if (activeTab === 'pedagogie') return;
+    editedRef.current = {};
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(storageKey);
@@ -417,6 +446,10 @@ export function GradesView({
 
   // Modification d'une note
   const handleNoteChange = (studentId: string, field: keyof GradeEntry, val: string) => {
+    editedRef.current = {
+      ...editedRef.current,
+      [studentId]: { ...(editedRef.current[studentId] || {}), [field]: val },
+    };
     setGradesMap((prev) => ({
       ...prev,
       [studentId]: {
@@ -454,8 +487,10 @@ export function GradesView({
         };
       });
       setGradesMap(emptyMap);
+      editedRef.current = {};
       if (typeof window !== 'undefined') {
-        localStorage.removeItem(storageKey);
+        // Écrit une feuille vide (et non un effacement) pour que la remise à zéro parte en base.
+        localStorage.setItem(storageKey, JSON.stringify(emptyMap));
       }
       setSavedSuccess(false);
     }
@@ -608,9 +643,16 @@ export function GradesView({
         // élève ou une entrée sur cette même classe/matière/trimestre depuis le dernier
         // chargement de cette page, sa note n'est pas effacée par cette sauvegarde.
         const raw = localStorage.getItem(storageKey);
-        const fresh = raw ? JSON.parse(raw) : {};
-        const merged = { ...fresh, ...gradesMap };
+        const fresh: Record<string, GradeEntry> = raw ? JSON.parse(raw) : {};
+        // Élèves sans fiche dans la version fraîche : on garde la ligne affichée ; pour les
+        // autres, seules les cases modifiées sur cet écran remplacent la version fraîche.
+        const merged: Record<string, GradeEntry> = { ...gradesMap, ...fresh };
+        for (const [id, fields] of Object.entries(editedRef.current)) {
+          merged[id] = { ...(merged[id] || gradesMap[id]), ...fields } as GradeEntry;
+        }
         localStorage.setItem(storageKey, JSON.stringify(merged));
+        editedRef.current = {};
+        setGradesMap(merged);
       } catch (e) {
         // ignore
       }

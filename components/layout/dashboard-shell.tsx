@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { installCloudKv } from '@/lib/data/cloud-kv';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
@@ -18,6 +19,11 @@ export function DashboardShell({
   breadcrumbs,
 }: DashboardShellProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
+  useEffect(() => {
+    installCloudKv(schoolSlug);
+  }, [schoolSlug]);
 
   return (
     <ReadOnlyGuard>

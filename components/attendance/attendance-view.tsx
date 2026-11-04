@@ -116,17 +116,27 @@ export function AttendanceView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
 
-  // Vérifier si la session courante est verrouillée
+  // Vérifier si la session courante est verrouillée (et suivre les appels faits sur un autre
+  // appareil : présences et verrous arrivent de la base via cloud-kv).
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return;
+    const readLock = () => {
       try {
-        const locked = localStorage.getItem(lockKey);
-        setIsSessionLocked(locked === 'true');
+        setIsSessionLocked(localStorage.getItem(lockKey) === 'true');
       } catch (e) {
         setIsSessionLocked(false);
       }
-    }
-  }, [lockKey]);
+    };
+    readLock();
+    const handleCloud = (e: Event) => {
+      const keys: string[] = (e as CustomEvent)?.detail?.keys || [];
+      if (keys.includes(lockKey)) readLock();
+      if (keys.includes(attendanceStorageKey)) setAttendanceMap(readFreshAttendanceMap());
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, handleCloud);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleCloud);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockKey, attendanceStorageKey]);
 
   // Classes du cycle choisi (Maternelle, Primaire ou Collège)
   const displayedClasses = useMemo<readonly string[]>(() => {
@@ -201,7 +211,8 @@ export function AttendanceView({
 
     if (typeof window !== 'undefined') {
       try {
-        localStorage.removeItem(lockKey);
+        // 'false' plutôt qu'un effacement : le déverrouillage part ainsi en base (cloud-kv).
+        localStorage.setItem(lockKey, 'false');
       } catch (e) {
         // ignore
       }
