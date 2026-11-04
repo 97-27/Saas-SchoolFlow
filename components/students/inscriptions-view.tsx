@@ -43,6 +43,7 @@ import {
   deleteLiveStudents,
   getDeletedStudentIds,
   DATA_UPDATED_EVENT,
+  syncSchoolDataWithServer,
 } from '@/lib/data/live-store';
 import { playRegistrationSuccessSound, playCopySound } from '@/lib/utils/audio';
 
@@ -896,19 +897,44 @@ export function InscriptionsView({
         if (n > 0) combinedExistingNums.add(n);
       });
 
-      // Inutile pour la modification d'un élève déjà existant (son numéro ne change pas) —
-      // ne faire l'appel réseau supplémentaire que pour une véritable nouvelle inscription.
-      if (!currentSelectedStudent) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`, { signal: controller.signal });
-        clearTimeout(timeout);
-        const result = await res.json();
-        const serverStudents = Array.isArray(result?.data?.students) ? result.data.students : [];
-        serverStudents.forEach((s: any) => {
-          const n = dossierNumber(s);
-          if (n > 0) combinedExistingNums.add(n);
-        });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`, { signal: controller.signal });
+      clearTimeout(timeout);
+      const result = await res.json();
+      const serverStudents = Array.isArray(result?.data?.students) ? result.data.students : [];
+      serverStudents.forEach((s: any) => {
+        const n = dossierNumber(s);
+        if (n > 0) combinedExistingNums.add(n);
+      });
+
+      // Élève existant : ses versements ont-ils changé sur un AUTRE poste depuis l'ouverture de
+      // sa fiche ? Si oui, on n'enregistre pas — sinon ce versement serait écrasé sans prévenir.
+      if (currentSelectedStudent && initialVersementsSnapshot) {
+        const fresh = serverStudents.find((s: any) => s && s.id === currentSelectedStudent.id);
+        if (fresh) {
+          const inst = fresh.installments || {};
+          const amt = (k: string) => Number(inst?.[k]?.amount) || 0;
+          const serverSnapshot = [amt('versement1'), amt('versement2'), amt('versement3'), amt('versement4'), amt('versement5')];
+          const openedSnapshot = [
+            initialVersementsSnapshot.v1,
+            initialVersementsSnapshot.v2,
+            initialVersementsSnapshot.v3,
+            initialVersementsSnapshot.v4,
+            initialVersementsSnapshot.v5,
+          ];
+          const serverHasAny = serverSnapshot.some((v) => v > 0);
+          if (serverHasAny && serverSnapshot.some((v, i) => v !== openedSnapshot[i])) {
+            syncSchoolDataWithServer(schoolSlug, true);
+            setShowConfirmModal(false);
+            setIsConfirmingSave(false);
+            setSuccessToast(
+              `⚠️ Non enregistré : les versements de ${currentSelectedStudent.fullName} ont été modifiés sur un autre appareil. Rouvrez sa fiche pour voir la version à jour, puis refaites la saisie.`
+            );
+            setTimeout(() => setSuccessToast(null), 9000);
+            return;
+          }
+        }
       }
     } catch (e) {
       // Le serveur n'a pas répondu à temps : on continue avec la meilleure estimation locale
@@ -974,7 +1000,8 @@ export function InscriptionsView({
       address: cleanDisplayAddress(address) || `${schoolState.city || 'Abidjan'}`,
       enrollmentDate: finalPaymentDate,
       attendanceRate: currentSelectedStudent?.attendanceRate || 95,
-      status: 'active',
+      // Un élève existant garde son statut (en congé, transféré…) : seul un nouvel élève est « actif ».
+      status: currentSelectedStudent?.status || 'active',
       enrollmentType: finalEnrollmentType,
 
       registrationFee: registrationFee,
@@ -990,7 +1017,15 @@ export function InscriptionsView({
       isBoarding: currentSelectedStudent?.isBoarding || false,
       isCanteen: currentSelectedStudent?.isCanteen || false,
       isTransport: currentSelectedStudent?.isTransport || false,
-      notes: `Autres frais : Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousu (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
+      // Les autres remarques déjà portées par la fiche (internat, etc.) sont conservées : seule la
+      // ligne « Autres frais » est remplacée.
+      notes: [
+        ...String(currentSelectedStudent?.notes || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !/^Autres frais\s*:/i.test(l)),
+        `Autres frais : Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousu (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
+      ].join('\n'),
       updatedAt: new Date().toISOString(),
     };
 

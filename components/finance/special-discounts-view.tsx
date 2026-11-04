@@ -615,7 +615,8 @@ export function SpecialDiscountsView({
               paymentDate: issueDate || existing.paymentDate,
               tuitionStatus: combinedPaid >= net ? 'paid' : combinedPaid > 0 ? 'partial' : 'unpaid',
             };
-            updateRegisteredStudent(updatedStu, schoolSlug);
+            // Cet écran modifie réellement la scolarité (réduction, montant payé).
+            updateRegisteredStudent(updatedStu, schoolSlug, { amountsChanged: true });
           } else {
             maxSeq += 1;
             const idStr = `ID-${String(maxSeq).padStart(3, '0')}`;

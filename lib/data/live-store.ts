@@ -2346,7 +2346,16 @@ export function saveLivePaymentInvoice(invoice: Invoice, schoolSlug: string = 'e
  * Met à jour un élève existant et synchronise automatiquement sa facture / caisse
  * et notifie le tableau de bord et toutes les vues actives.
  */
-export function updateRegisteredStudent(student: Student, schoolSlug: string = 'epc-manoi'): void {
+/**
+ * Modifie un élève. Par défaut, c'est une modification d'IDENTITÉ (nom, classe, contact,
+ * statut…) : les montants et versements en base ne sont pas touchés. Seul un écran qui modifie
+ * réellement la scolarité (réductions) passe { amountsChanged: true }.
+ */
+export function updateRegisteredStudent(
+  student: Student,
+  schoolSlug: string = 'epc-manoi',
+  opts: { amountsChanged?: boolean } = {}
+): void {
   if (typeof window === 'undefined') return;
 
   try {
@@ -2499,72 +2508,32 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
       }
     }
 
-    // 3. Synchronisation automatique des prestations (Internat, Cantine, Transport)
+    // 3. Prestations (Internat, Cantine, Transport) : la modification d'un élève n'ajoute ni ne
+    //    retire JAMAIS personne d'un service, et ne touche pas aux tarifs ni aux réductions.
+    //    Avant, une simple correction du nom depuis la Vue d'ensemble pouvait retirer l'élève de
+    //    l'internat (case « interne » absente de sa fiche) ou remettre sa cantine / son transport
+    //    au tarif par défaut sans réduction. Les inscriptions et retraits se font uniquement
+    //    depuis les pages Internat, Cantine et Transport, qui les enregistrent elles-mêmes.
+    //    Ici, on met seulement à jour le nom, la classe et le contact affichés à l'internat.
     try {
       const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
       const BOARDING_KEY = isPilot ? 'schoolflow_boarding_subscriptions_v3' : `schoolflow_boarding_subscriptions_v3_${schoolSlug}`;
-      const CANTEEN_KEY = isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${schoolSlug}`;
-      const TRANSPORT_KEY = isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${schoolSlug}`;
-
-      if (typeof student.isBoarding === 'boolean') {
-        const rawBoarding = localStorage.getItem(BOARDING_KEY);
-        const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
-        if (student.isBoarding) {
-          const existingIdx = prevBoarding.findIndex((b) => b.studentId === student.id || b.matricule === student.studentNumber);
-          const existingRecord = existingIdx >= 0 ? prevBoarding[existingIdx] : null;
-          const boardingRecord = {
-            ...existingRecord,
-            studentId: student.id,
-            studentName: student.fullName,
-            matricule: student.matricule || student.studentNumber || existingRecord?.matricule || '',
-            className: student.grade || existingRecord?.className || '6ème',
-            gender: student.gender === 'female' ? 'F' : 'M',
-            parentContact: student.whatsappPhone || student.guardianPhone || existingRecord?.parentContact || '',
-            pavilion: existingRecord?.pavilion || (student.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
-            roomNumber: existingRecord?.roomNumber || 'Chambre 101',
-            monthlyRate: existingRecord?.monthlyRate !== undefined && Number(existingRecord.monthlyRate) > 0 ? Number(existingRecord.monthlyRate) : 25000,
-          };
-          if (existingIdx >= 0) {
-            prevBoarding[existingIdx] = boardingRecord;
-          } else {
-            prevBoarding.push(boardingRecord);
-          }
-          localStorage.setItem(BOARDING_KEY, JSON.stringify(prevBoarding));
-        } else {
-          const filteredBoarding = prevBoarding.filter((b) => b.studentId !== student.id && b.matricule !== student.studentNumber);
-          localStorage.setItem(BOARDING_KEY, JSON.stringify(filteredBoarding));
-        }
-      }
-
-      if (typeof student.isCanteen === 'boolean') {
-        const rawCanteen = localStorage.getItem(CANTEEN_KEY);
-        const prevCanteen: Record<string, any> = rawCanteen ? JSON.parse(rawCanteen) : {};
-        if (student.isCanteen) {
-          prevCanteen[student.id] = {
-            diet: 'Standard (Sans allergie)',
-            rate: 25000,
-            discount: 0,
-          };
-        } else {
-          delete prevCanteen[student.id];
-        }
-        localStorage.setItem(CANTEEN_KEY, JSON.stringify(prevCanteen));
-      }
-
-      if (typeof student.isTransport === 'boolean') {
-        const rawTransport = localStorage.getItem(TRANSPORT_KEY);
-        const prevTransport: Record<string, any> = rawTransport ? JSON.parse(rawTransport) : {};
-        if (student.isTransport) {
-          prevTransport[student.id] = {
-            stop: 'Riviera Bonoumin — Carrefour Jacques Prévert',
-            rate: 35000,
-            discount: 0,
-          };
-        } else {
-          delete prevTransport[student.id];
-        }
-        localStorage.setItem(TRANSPORT_KEY, JSON.stringify(prevTransport));
-      }
+      const rawBoarding = localStorage.getItem(BOARDING_KEY);
+      const prevBoarding: any[] = rawBoarding ? JSON.parse(rawBoarding) : [];
+      let boardingChanged = false;
+      const nextBoarding = prevBoarding.map((b) => {
+        if (!b || b.studentId !== student.id) return b;
+        const refreshed = {
+          ...b,
+          studentName: student.fullName || b.studentName,
+          className: student.grade || b.className,
+          gender: student.gender === 'female' ? 'F' : student.gender === 'male' ? 'M' : b.gender,
+          parentContact: student.whatsappPhone || student.guardianPhone || b.parentContact,
+        };
+        if (JSON.stringify(refreshed) !== JSON.stringify(b)) boardingChanged = true;
+        return refreshed;
+      });
+      if (boardingChanged) localStorage.setItem(BOARDING_KEY, JSON.stringify(nextBoarding));
     } catch (err) {
       console.warn('Erreur update sync prestations annexes:', err);
     }
@@ -2572,8 +2541,14 @@ export function updateRegisteredStudent(student: Student, schoolSlug: string = '
     // 4. Enregistrement en base de CET élève et de SA facture uniquement. Avant, toute la liste
     //    des élèves et des factures de ce navigateur était renvoyée à chaque modification : une
     //    copie ancienne écrasait alors en base les modifications faites depuis un autre poste.
-    saveStudentToSupabase(studentWithSlug, schoolSlug)
-      .then((okStudent) => (okStudent && updatedInvoice ? saveInvoiceToSupabase(updatedInvoice, schoolSlug) : okStudent))
+    //    La facture en base ne contient QUE des montants (aucun nom, aucune classe) : elle n'est
+    //    renvoyée que si cette modification porte de vrais montants de scolarité, ou si elle est
+    //    nouvelle. Avant, corriger un nom renvoyait aussi les montants gardés sur cet appareil, et
+    //    pouvait effacer un paiement enregistré entre-temps sur un autre poste.
+    const amountsChanged = opts.amountsChanged === true;
+    const sendInvoice = !!updatedInvoice && ((amountsChanged && studentHasAmounts) || !existingInv);
+    saveStudentToSupabase(studentWithSlug, schoolSlug, !amountsChanged)
+      .then((okStudent) => (okStudent && sendInvoice && updatedInvoice ? saveInvoiceToSupabase(updatedInvoice, schoolSlug) : okStudent))
       .then((ok) => {
         if (!ok) notifySaveFailure(`la fiche de ${student.fullName}`);
       })

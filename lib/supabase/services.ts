@@ -583,7 +583,11 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
   }
 }
 
-export async function saveStudentToSupabase(student: Student, schoolSlug: string): Promise<boolean> {
+export async function saveStudentToSupabase(
+  student: Student,
+  schoolSlug: string,
+  opts: { identityOnly?: boolean } = {}
+): Promise<boolean> {
   if (!isSupabaseConfigured || !schoolSlug) return false;
   try {
     const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
@@ -656,9 +660,40 @@ export async function saveStudentToSupabase(student: Student, schoolSlug: string
     payload.student_number = plan.studentNumber;
 
     if (plan.action === 'update') {
+      // Modification d'identité (nom, classe, contact, statut) : les montants et l'historique des
+      // versements restent ceux de la BASE. Un appareil pas à jour ne peut donc plus effacer un
+      // versement enregistré entre-temps sur un autre poste en corrigeant simplement un nom.
+      let updatePayload: Record<string, any> = payload;
+      if (opts.identityOnly) {
+        const { data: current } = await supabase
+          .from('students')
+          .select('address')
+          .eq('id', plan.id)
+          .eq('school_id', schoolId)
+          .maybeSingle();
+        let dbMeta: any = {};
+        const m = String(current?.address || '').match(/\[SF_META:([\s\S]*)\]\s*$/);
+        if (m) {
+          try {
+            dbMeta = JSON.parse(m[1]);
+          } catch (e) {}
+        }
+        const mergedMeta = { ...metaObj, installments: dbMeta.installments ?? metaObj.installments };
+        const {
+          registration_fee: _rf,
+          tuition_amount: _ta,
+          discount_amount: _da,
+          net_amount: _na,
+          paid_amount: _pa,
+          balance_remaining: _br,
+          tuition_status: _ts,
+          ...identity
+        } = payload;
+        updatePayload = { ...identity, address: `${cleanAddress} [SF_META:${JSON.stringify(mergedMeta)}]` };
+      }
       const { error: updateErr } = await supabase
         .from('students')
-        .update(payload)
+        .update(updatePayload)
         .eq('id', plan.id)
         .eq('school_id', schoolId);
       if (updateErr) {

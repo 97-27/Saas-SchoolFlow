@@ -2,6 +2,7 @@
 
 import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { kvFamilyForKey, kvIdsOf } from '@/lib/data/cloud-kv-keys';
+import { reportClientError } from '@/lib/client/error-report';
 
 /**
  * SYNCHRONISATION EN BASE DES DONNÉES QUI N'ÉTAIENT QUE DANS LE NAVIGATEUR
@@ -134,7 +135,7 @@ export async function flushCloudKv(keepalive = false): Promise<void> {
   const changes: { key: string; value: string; baseIds: string[] | null }[] = [];
   const dropped: string[] = [];
   for (const key of dirty) {
-    const value = window.localStorage.getItem(key);
+    const value = readLocal(key);
     if (value === null || !canPush(key)) {
       dropped.push(key);
       continue;
@@ -255,6 +256,48 @@ export async function pullCloudKv(full = false): Promise<void> {
   }
 }
 
+/**
+ * MÉMOIRE DU TÉLÉPHONE PLEINE (≈ 5 Mo par site) : avant, l'enregistrement local échouait sans
+ * rien dire et la modification était perdue. Désormais : on libère les copies en double et les
+ * anciennes versions inutiles, on réessaie ; et pour les données enregistrées en base, la valeur
+ * est gardée en mémoire et envoyée au serveur quand même.
+ */
+const memoryOnly = new Map<string, string>();
+
+const isQuotaError = (e: any) =>
+  !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+
+function freeLocalSpace(): void {
+  try {
+    const ls = window.localStorage;
+    const removable = [
+      // Anciennes versions qui ne sont plus lues
+      'schoolflow_documents_status_v2',
+      'schoolflow_documents_status_v3',
+      'schoolflow_attendance_v1',
+      'schoolflow_teachers_v1',
+      'schoolflow_teachers_v2',
+      'schoolflow_teachers_data_v2',
+      'schoolflow_canteen_subscriptions_v2',
+      'schoolflow_canteen_monthly_payments_v2',
+      'schoolflow_notes_diverses_v1',
+      'schoolflow_expenses_v1',
+    ];
+    // Copies en double de l'école pilote (la version « _epc-manoi » est gardée)
+    if (ls.getItem('schoolflow_registered_students_v1_epc-manoi')) removable.push('schoolflow_registered_students_v1');
+    if (ls.getItem('schoolflow_registered_invoices_v1_epc-manoi')) removable.push('schoolflow_registered_invoices_v1');
+    removable.forEach((k) => ls.removeItem(k));
+  } catch (e) {}
+}
+
+function readLocal(key: string): string | null {
+  try {
+    const v = window.localStorage.getItem(key);
+    if (v !== null) return v;
+  } catch (e) {}
+  return memoryOnly.get(key) ?? null;
+}
+
 function patchLocalStorage(): void {
   if (patched || typeof window === 'undefined' || typeof Storage === 'undefined') return;
   patched = true;
@@ -262,11 +305,25 @@ function patchLocalStorage(): void {
   const original = proto.setItem;
   originalSetItem = original;
   proto.setItem = function (this: Storage, key: string, value: string) {
-    original.call(this, key, value);
+    const isLocal = typeof window !== 'undefined' && this === window.localStorage;
+    const synced = isLocal && !!activeSlug && canPush(String(key));
     try {
-      if (!applyingRemote && activeSlug && this === window.localStorage && canPush(String(key))) {
-        markDirty(String(key));
+      original.call(this, key, value);
+      if (synced) memoryOnly.delete(String(key));
+    } catch (err) {
+      if (!isLocal || !isQuotaError(err)) throw err;
+      freeLocalSpace();
+      try {
+        original.call(this, key, value);
+      } catch (err2) {
+        reportClientError(err2, 'Mémoire du téléphone pleine');
+        if (!synced) throw err2;
+        // Donnée enregistrée en base : on la garde en mémoire et on l'envoie quand même.
+        memoryOnly.set(String(key), String(value));
       }
+    }
+    try {
+      if (!applyingRemote && synced) markDirty(String(key));
     } catch (e) {}
   };
 }

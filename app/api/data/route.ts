@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     case 'saveStudent':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
       if (isLegacyDemoStudent(args[0])) return ok(false);
-      return ok(await saveStudentToSupabase(args[0], slug));
+      return ok(await saveStudentToSupabase(args[0], slug, { identityOnly: args[2] === true }));
 
     case 'saveInvoice':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { installCloudKv } from '@/lib/data/cloud-kv';
+import { installGlobalErrorReporting } from '@/lib/client/error-report';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
@@ -23,6 +24,7 @@ export function DashboardShell({
   // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
   useEffect(() => {
     installCloudKv(schoolSlug);
+    installGlobalErrorReporting();
   }, [schoolSlug]);
 
   return (

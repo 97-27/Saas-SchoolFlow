@@ -54,8 +54,9 @@ export function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> 
   return callData('getStudents', [schoolSlug], [] as Student[]);
 }
 
-export function saveStudentToSupabase(student: Student, schoolSlug: string): Promise<boolean> {
-  return callData('saveStudent', [student, schoolSlug], false);
+/** identityOnly : nom, classe, contact… seulement — jamais les montants ni les versements. */
+export function saveStudentToSupabase(student: Student, schoolSlug: string, identityOnly: boolean = false): Promise<boolean> {
+  return callData('saveStudent', [student, schoolSlug, identityOnly], false);
 }
 
 export function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {

@@ -171,6 +171,24 @@ h1, h2, h3, h4, h5, h6, .font-heading {
     transform: none !important;
   }
 }
+/* Téléphones et tablettes : on fait défiler au doigt, la barre est inutile — et le retournement
+   pouvait mal placer un menu ou une fenêtre ouverte depuis une ligne du tableau. */
+@media (hover: none), (max-width: 768px) {
+  .scrollbar-top,
+  .scrollbar-top > * {
+    transform: none !important;
+  }
+}
+
+/* iPhone : un champ dont le texte fait moins de 16 px fait zoomer tout l'écran au toucher (la page
+   se décale et il faut dézoomer à la main). Sur petit écran, les champs passent à 16 px. */
+@media (max-width: 768px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
 
 /* Animations */
 @keyframes pulse-subtle {

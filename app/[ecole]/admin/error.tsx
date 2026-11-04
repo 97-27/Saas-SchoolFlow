@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { RotateCcw, AlertTriangle, ArrowLeft, Home } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { reportClientError } from '@/lib/client/error-report';
 
 export default function AdminError({
   error,
@@ -17,6 +18,7 @@ export default function AdminError({
 
   useEffect(() => {
     console.error('Admin Module Error Boundary:', error);
+    reportClientError(error, 'Page en erreur');
   }, [error]);
 
   return (
