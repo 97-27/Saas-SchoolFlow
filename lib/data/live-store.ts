@@ -704,6 +704,60 @@ let activeSyncInterval: any = null;
 let activeVersionInterval: any = null;
 
 /**
+ * MISE À JOUR AUTOMATIQUE DES ÉCRANS OUVERTS
+ * Un onglet ouvert avant une mise à jour garde l'ancien code en mémoire, avec ses anciens bugs
+ * (c'est ainsi qu'un écran resté ouvert a tenté de retirer tous les pensionnaires après le
+ * correctif). On retient la version en ligne au chargement ; dès qu'elle change, l'écran se
+ * recharge tout seul — ou, si quelqu'un est en train de saisir, un bandeau le demande.
+ */
+let loadedAppVersion: string | null = null;
+let appUpdateBannerShown = false;
+
+function isUserTyping(): boolean {
+  const el = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
+function showAppUpdateBanner(): void {
+  if (appUpdateBannerShown || typeof document === 'undefined') return;
+  appUpdateBannerShown = true;
+  const bar = document.createElement('div');
+  bar.setAttribute('role', 'alert');
+  bar.style.cssText =
+    'position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:560px;margin:0 auto;' +
+    'background:#0f172a;color:#fff;border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;' +
+    'justify-content:space-between;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.35);font:600 14px/1.4 system-ui,sans-serif';
+  const text = document.createElement('span');
+  text.textContent = 'Une nouvelle version de SchoolFlow est en ligne. Terminez votre saisie puis rechargez.';
+  const btn = document.createElement('button');
+  btn.textContent = 'Recharger maintenant';
+  btn.style.cssText = 'background:#10b981;color:#fff;border:0;border-radius:10px;padding:8px 14px;font:700 14px system-ui,sans-serif;cursor:pointer';
+  btn.onclick = () => window.location.reload();
+  bar.append(text, btn);
+  document.body.appendChild(bar);
+}
+
+function checkAppVersion(): void {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return;
+  fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((json) => {
+      const v = json && typeof json.version === 'string' ? json.version : null;
+      if (!v) return;
+      if (loadedAppVersion === null) {
+        loadedAppVersion = v;
+        return;
+      }
+      if (v === loadedAppVersion) return;
+      if (isUserTyping()) showAppUpdateBanner();
+      else window.location.reload();
+    })
+    .catch(() => {});
+}
+
+/**
  * Démarre la synchronisation temps réel multi-appareils (PC, téléphone, tablettes des collaborateurs)
  */
 export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
@@ -721,6 +775,7 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
   // 1. Synchronisation instantanée dès que l'écran devient actif (déverrouillage téléphone, switch d'application, focus onglet)
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      checkAppVersion();
       syncSchoolDataWithServer(slug);
     }
   });
@@ -735,8 +790,11 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
   //    réel s'est perdu (avant, le rattrapage n'avait lieu qu'au bout de 5 minutes).
   if (activeVersionInterval) clearInterval(activeVersionInterval);
   let lastKnownVersion: number | null = null;
+  let tick = 0;
+  checkAppVersion();
   activeVersionInterval = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    if (++tick % 4 === 0) checkAppVersion();
     getDataVersion(slug)
       .then((version) => {
         if (version === null) return;
@@ -2150,20 +2208,14 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     }
 
     // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan (étudiant d'abord puis facture)
+    //    Seuls CET élève et CETTE facture partent : l'ancien envoi de toute la liste réécrivait
+    //    les 211 fiches à chaque inscription (et pouvait écraser une modification faite ailleurs).
     saveStudentToSupabase(studentWithSlug, slug)
-      .then(() => saveInvoiceToSupabase(invoiceWithSlug, slug))
-      .catch(() => {});
-    if (typeof fetch !== 'undefined') {
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug,
-          students: [studentWithSlug, ...filteredSchool],
-          invoices: [invoiceWithSlug, ...filteredInvSchool],
-        }),
-      }).catch(() => {});
-    }
+      .then((okStudent) => (okStudent ? saveInvoiceToSupabase(invoiceWithSlug, slug) : false))
+      .then((ok) => {
+        if (!ok) notifySaveFailure("l'inscription de l'élève");
+      })
+      .catch(() => notifySaveFailure("l'inscription de l'élève"));
 
     // 6. Diffusion temps réel parallèle immédiate à toutes les interfaces
     broadcastLiveUpdate({
@@ -2216,20 +2268,13 @@ export function saveLivePaymentInvoice(invoice: Invoice, schoolSlug: string = 'e
     }
 
     // 3. Synchronisation Supabase Cloud & API Serveur en arrière-plan
-    saveInvoiceToSupabase(invoiceWithSlug, slug).catch(() => {});
-    if (typeof fetch !== 'undefined') {
-      const rawSchoolStu = localStorage.getItem(`${STUDENTS_STORAGE_KEY}_${slug}`);
-      const schoolStudents: Student[] = rawSchoolStu ? JSON.parse(rawSchoolStu) : [];
-      fetch('/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug,
-          students: schoolStudents,
-          invoices: updatedInvSchool,
-        }),
-      }).catch(() => {});
-    }
+    //    Seul ce reçu part (l'ancien envoi renvoyait toute la liste des élèves et des factures
+    //    à chaque reçu : des centaines d'écritures inutiles, et un risque d'écraser d'autres postes).
+    saveInvoiceToSupabase(invoiceWithSlug, slug)
+      .then((ok) => {
+        if (!ok) notifySaveFailure("l'enregistrement du reçu");
+      })
+      .catch(() => notifySaveFailure("l'enregistrement du reçu"));
 
     // 4. Diffusion temps réel parallèle
     broadcastLiveUpdate({
@@ -4121,18 +4166,7 @@ export function saveLiveTransportData(
     localStorage.setItem(isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify(monthlyPayments));
     saveServiceDiff(slug, 'transport', customTransportMap, monthlyPayments, 'la modification du transport');
 
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        slug,
-        transportSubscriptions: customTransportMap,
-        transportPayments: monthlyPayments,
-      }),
-    })
-      .then((r) => (r.ok ? null : notifySaveFailure('la modification du transport')))
-      .catch(() => notifySaveFailure('la modification du transport'));
-
+    // (Plus d'envoi de la liste complète : les tables enregistrent ligne par ligne via saveServiceDiff.)
     broadcastLiveUpdate({
       action: 'transport_updated',
       customTransportMap,
@@ -4164,18 +4198,17 @@ export function saveLiveCanteenData(
       localStorage.setItem(isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${slug}`, JSON.stringify(weeklyMenu));
     }
 
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        slug,
-        canteenSubscriptions: customCanteenMap,
-        canteenPayments: monthlyPayments,
-        ...(weeklyMenu ? { canteenWeeklyMenu: weeklyMenu } : {}),
-      }),
-    })
-      .then((r) => (r.ok ? null : notifySaveFailure('la modification de la cantine')))
-      .catch(() => notifySaveFailure('la modification de la cantine'));
+    // Abonnements et mois : enregistrés ligne par ligne (saveServiceDiff). Seul le menu de la
+    // semaine passe encore par l'ancien canal.
+    if (weeklyMenu) {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, canteenWeeklyMenu: weeklyMenu }),
+      })
+        .then((r) => (r.ok ? null : notifySaveFailure('le menu de la cantine')))
+        .catch(() => notifySaveFailure('le menu de la cantine'));
+    }
 
     broadcastLiveUpdate({
       action: 'canteen_updated',
@@ -4211,18 +4244,15 @@ export function saveLiveBoardingData(
       localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, capacity.toString());
     }
 
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        slug,
-        boardingSubscriptions: customSubscriptions,
-        boardingPayments: monthlyPayments,
-        ...(capacity !== undefined ? { boardingCapacity: capacity } : {}),
-      }),
-    })
-      .then((r) => (r.ok ? null : notifySaveFailure("la modification de l'internat")))
-      .catch(() => notifySaveFailure("la modification de l'internat"));
+    // Abonnements et mois : enregistrés ligne par ligne (saveServiceDiff). Seule la capacité de
+    // l'internat passe encore par l'ancien canal.
+    if (capacity !== undefined) {
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, boardingCapacity: capacity }),
+      }).catch(() => {});
+    }
 
     broadcastLiveUpdate({
       action: 'boarding_updated',
