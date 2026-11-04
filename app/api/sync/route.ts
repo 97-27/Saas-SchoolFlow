@@ -140,6 +140,13 @@ function filterForSession(data: Record<string, any>, session: SessionPayload): R
     out.staffUsers = (out.staffUsers || []).map((u: any) =>
       upperCode(u?.authCode) === ownCode ? u : { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
     );
+  } else if (session.roleId === 'directeur') {
+    // Le code du Fondateur n'est connu que du Fondateur lui-même.
+    out.staffUsers = (out.staffUsers || []).map((u: any) =>
+      u?.roleId === 'fondateur' && upperCode(u?.authCode) !== ownCode
+        ? { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
+        : u
+    );
   }
   if (!isAdmin(session)) {
     out.parentMessages = [];

@@ -660,7 +660,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
 
       {/* 4. Tableau des Dépenses (Data Table) */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-top">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">

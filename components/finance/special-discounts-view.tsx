@@ -1215,7 +1215,7 @@ export function SpecialDiscountsView({
             <span>LISTE DES ENFANTS INSCRITS DE LA FAMILLE ({children.length}) :</span>
             <span className="text-[11px] text-slate-400 font-normal">Maternelle à 3ème</span>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto scrollbar-top rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-100 text-[10px] font-bold uppercase text-slate-600 border-b border-slate-200">

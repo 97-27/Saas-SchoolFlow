@@ -1386,7 +1386,7 @@ export function SalariesView({
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-top">
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10.5px] border-b border-slate-200">
               <tr>

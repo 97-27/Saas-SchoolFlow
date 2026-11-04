@@ -543,7 +543,7 @@ export function ClassesView({
         </div>
 
         {/* Tableau */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-top">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">

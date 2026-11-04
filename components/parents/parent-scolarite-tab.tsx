@@ -683,7 +683,7 @@ export function ParentScolariteTab({
             <span>Détail de l'échéancier des versements (5 tranches) :</span>
           </h4>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <div className="overflow-x-auto scrollbar-top rounded-2xl border border-slate-200">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">

@@ -194,8 +194,20 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     );
   };
 
+  // Le code du Fondateur n'est visible, copiable et modifiable QUE par le Fondateur lui-même.
+  const isCodeHidden = (member: StaffUser) =>
+    (viewer.roleId === 'directeur' && member.roleId === 'fondateur') || /^MASQUE-/i.test(member.authCode || '');
+  const shownCode = (member: StaffUser) =>
+    isCodeHidden(member)
+      ? '••••••'
+      : member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : member.roleId === 'directeur' ? 'DIR-2026' : '—');
+
   // Partager les accès officiels sur WhatsApp
   const handleShareWhatsApp = (staff: StaffUser) => {
+    if (isCodeHidden(staff)) {
+      showToast('Le code du Fondateur ne peut être partagé que par le Fondateur lui-même.');
+      return;
+    }
     const school = getLiveSchool(schoolSlug);
     const cleanPhone = (staff.phone || '').replace(/[^0-9]/g, '');
     const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/${schoolSlug}/login` : `https://saas-school-flow-12xh.vercel.app/${schoolSlug}/login`;
@@ -622,7 +634,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         </div>
 
         {/* TABLE DES MEMBRES ET CODES (Affichage fluide de toutes les colonnes sans défilement horizontal) */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-top">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-100/90 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
@@ -739,8 +751,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <div className="inline-flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs whitespace-nowrap">
                         <KeyRound className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span className="font-mono font-black text-slate-900 tracking-wider text-xs">
-                          {member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : member.roleId === 'directeur' ? 'DIR-2026' : '—')}
+                          {shownCode(member)}
                         </span>
+                        {!isCodeHidden(member) && (
                         <button
                           type="button"
                           onClick={() => handleCopyCode(member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026'), member.id)}
@@ -753,6 +766,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                             <Copy className="w-3.5 h-3.5" />
                           )}
                         </button>
+                        )}
                       </div>
                     </td>
 
@@ -979,9 +993,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     <span>Code d&apos;Authentification Officiel :</span>
                   </span>
                   <span className="font-mono font-black text-sm text-emerald-950 tracking-widest">
-                    {selectedStaffDetail.authCode || (selectedStaffDetail.roleId === 'fondateur' ? 'FND-2026' : 'DIR-2026')}
+                    {shownCode(selectedStaffDetail)}
                   </span>
                 </div>
+                {!isCodeHidden(selectedStaffDetail) && (
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1000,6 +1015,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     <span>WhatsApp</span>
                   </button>
                 </div>
+                )}
               </div>
 
             </div>

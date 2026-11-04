@@ -139,6 +139,39 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   scrollbar-color: #10b981 #e2e8f0 !important;
 }
 
+/*
+ * Barre de défilement horizontal EN HAUT des tableaux (au lieu d'en bas, où il fallait
+ * descendre toute la liste pour la trouver). Le conteneur est retourné verticalement, puis son
+ * contenu est retourné à nouveau : le tableau s'affiche normalement, la barre passe en haut.
+ * À poser sur un conteneur qui défile seulement à l'horizontale (pas sur une liste à hauteur
+ * limitée qui défile aussi verticalement).
+ */
+.scrollbar-top {
+  transform: rotateX(180deg);
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #e2e8f0;
+}
+.scrollbar-top > * {
+  transform: rotateX(180deg);
+}
+.scrollbar-top::-webkit-scrollbar {
+  height: 10px;
+}
+.scrollbar-top::-webkit-scrollbar-track {
+  background: #e2e8f0;
+  border-radius: 9999px;
+}
+.scrollbar-top::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 9999px;
+}
+@media print {
+  .scrollbar-top,
+  .scrollbar-top > * {
+    transform: none !important;
+  }
+}
+
 /* Animations */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; transform: scale(1); }

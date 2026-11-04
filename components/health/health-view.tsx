@@ -344,7 +344,7 @@ export function HealthView({ initialStudents, school, schoolSlug }: HealthViewPr
 
           {/* Table des élèves */}
           <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scrollbar-top">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10.5px] uppercase tracking-wider text-slate-500 font-bold">
