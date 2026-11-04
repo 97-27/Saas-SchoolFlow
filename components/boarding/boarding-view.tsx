@@ -459,6 +459,13 @@ export function BoardingView({
     return 'ID-COMPTA';
   }, [formStudentId, selectedEnrolledStudentId, students, isCreatingNew, activeBoarder]);
 
+  // Référence du reçu = numéro de l'élève (ID-045 → QUI-INT-045), identique au numéro enregistré
+  // en base. Avant, c'était la position dans la liste (QUI-INT-2026-0001), sans rapport avec l'élève.
+  const receiptReference = useMemo(() => {
+    const digits = (displayStudentId || '').replace(/\D/g, '');
+    return digits ? `QUI-INT-${digits.padStart(3, '0')}` : 'QUI-INT-—';
+  }, [displayStudentId]);
+
   // Synchronisation du formulaire avec le pensionnaire actif quand on n'est pas en création
   useEffect(() => {
     if (!isCreatingNew && activeBoarder) {
@@ -478,6 +485,27 @@ export function BoardingView({
       setActiveMonthsChecked(months);
     }
   }, [activeBoarder, isCreatingNew, monthlyPayments]);
+
+  // Recherche d'un élève déjà inscrit (Nouvelle souscription) : nom, prénom, numéro ou classe,
+  // sans tenir compte des accents ni de l'ordre des mots. « 45 » trouve ID-045.
+  const [enrolledSearch, setEnrolledSearch] = useState('');
+  const boarderStudentIds = useMemo(() => new Set(boarders.map((b) => b.student.id)), [boarders]);
+  const enrolledMatches = useMemo(() => {
+    const raw = enrolledSearch.trim();
+    if (!raw) return [];
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const words = norm(raw).split(/\s+/).filter(Boolean);
+    const digits = raw.replace(/\D/g, '');
+    return students
+      .filter((st) => {
+        const num = (st.studentNumber || '').replace(/\D/g, '');
+        if (digits && digits === raw.replace(/^id-?/i, '').trim() && num && parseInt(num, 10) === parseInt(digits, 10)) return true;
+        const hay = norm(`${st.lastName || ''} ${st.firstName || ''} ${st.fullName || ''} ${st.studentNumber || ''} ${st.grade || ''} ${st.matricule || ''}`);
+        return words.every((w) => hay.includes(w));
+      })
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, 'fr'))
+      .slice(0, 30);
+  }, [enrolledSearch, students]);
 
   // Sélection d'un élève déjà inscrit dans l'établissement pour la souscription
   const handleSelectEnrolledStudent = (studentId: string) => {
@@ -750,7 +778,7 @@ export function BoardingView({
     // 4. Enregistrer la Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
     const paidMonthsList = MONTHS_LIST.filter((m) => activeMonthsChecked[m]);
     const cleanId = (matchedExistingStudent?.studentNumber || formStudentId || targetStudentId || '').replace(/\D/g, '').slice(-4);
-    const invoiceNumber = `QUI-INT-${cleanId || Date.now().toString().slice(-4)}`;
+    const invoiceNumber = `QUI-INT-${cleanId ? cleanId.padStart(3, '0') : Date.now().toString().slice(-4)}`;
     const invoiceId = `inv-boarding-${targetStudentId}`;
 
     const parsedPaymentDate = formPaymentDate && formPaymentDate.includes('/')
@@ -1124,7 +1152,7 @@ export function BoardingView({
     ctx.textAlign = 'right';
     ctx.fillStyle = '#6ee7b7';
     ctx.font = 'bold 20px monospace';
-    const refNum = `REC-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
+    const refNum = receiptReference;
     ctx.fillText(`Réf : ${refNum}`, 1130, 341);
 
     // Coordonnées élève agrandies et aérées (hauteur 240px)
@@ -1402,7 +1430,7 @@ export function BoardingView({
     const activeName = (formLastName ? `${formLastName.toUpperCase()} ${formFirstName}` : (stuName || formStudentName)).trim() || 'Élève Pensionnaire';
     const rawPhone = customPhone || formParentContact || '';
     const cleanPhone = formatCleanWhatsApp(rawPhone);
-    const activeReceiptNum = `QUI-INT-2026-${(activeBoarderIndex + 1).toString().padStart(4, '0')}`;
+    const activeReceiptNum = receiptReference;
 
     setToastMessage("📸 Génération du reçu et ouverture de WhatsApp...");
 
@@ -2237,6 +2265,49 @@ export function BoardingView({
                   </span>
                   <span className="text-[10px] text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded font-bold">Liaison sans doublon</span>
                 </label>
+                {/* Recherche rapide : nom, prénom, numéro (ID-045 ou 45) ou classe */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-amber-700 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="search"
+                    value={enrolledSearch}
+                    onChange={(e) => setEnrolledSearch(e.target.value)}
+                    placeholder="Rechercher un élève : nom, prénom, numéro ou classe…"
+                    className="w-full min-h-[44px] pl-9 pr-3 text-sm rounded-xl bg-white border border-amber-300 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  />
+                </div>
+                {enrolledSearch.trim() && (
+                  <ul className="max-h-64 overflow-y-auto rounded-xl border border-amber-200 bg-white divide-y divide-amber-100">
+                    {enrolledMatches.length === 0 ? (
+                      <li className="px-3 py-3 text-sm text-slate-500">Aucun élève trouvé. Vérifiez l&apos;orthographe ou saisissez le numéro.</li>
+                    ) : (
+                      enrolledMatches.map((st) => {
+                        const already = boarderStudentIds.has(st.id);
+                        return (
+                          <li key={st.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectEnrolledStudent(st.id);
+                                setEnrolledSearch('');
+                              }}
+                              className="w-full min-h-[44px] px-3 py-2 text-left flex items-center gap-2 hover:bg-amber-50"
+                            >
+                              <span className="font-mono text-xs font-bold text-emerald-800 shrink-0">{st.studentNumber || 'ID'}</span>
+                              <span className="min-w-0 flex-1 text-sm font-bold text-slate-900 break-words">
+                                {(st.lastName || '').toUpperCase()} {st.firstName}
+                                <span className="font-medium text-slate-500"> · {st.grade}</span>
+                              </span>
+                              {already && (
+                                <span className="shrink-0 text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">Déjà interne</span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                )}
                 <div className="relative">
                   <select
                     value={selectedEnrolledStudentId}
@@ -2731,7 +2802,7 @@ export function BoardingView({
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-slate-300 block font-mono font-bold">
-                  RÉF : QUI-INT-2026-{(activeBoarderIndex + 1).toString().padStart(4, '0')}
+                  RÉF : {receiptReference}
                 </span>
                 <span className="font-extrabold text-amber-400 text-xs sm:text-sm">
                   {formPaymentDate}

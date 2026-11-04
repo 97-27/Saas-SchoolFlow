@@ -2703,8 +2703,13 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           sanitizedEmail = '';
         }
 
-        if (codeMap.has(u.authCode)) {
-          const def = codeMap.get(u.authCode)!;
+        // Le vrai compte Fondateur / Directeur (code renouvelé, différent de FND-2026 / DIR-2026)
+        // reprend la fiche par défaut de son rôle au lieu de s'y ajouter : c'était le doublon de
+        // la page Administration (fiche de démonstration + vrai compte).
+        const roleDefault =
+          u.roleId === 'fondateur' || u.roleId === 'directeur' ? baseDefaults.find((d) => d.roleId === u.roleId) : undefined;
+        if (codeMap.has(u.authCode) || roleDefault) {
+          const def = codeMap.get(u.authCode) || roleDefault!;
           let finalName = (u.fullName || def.fullName).replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
           if (def.roleId === 'fondateur') {
             if (schoolSlug === 'epc-manoi' || finalName.toUpperCase().includes('MOUHAMED')) {
@@ -2755,7 +2760,17 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
         }
       }
 
-      const mergedList = Array.from(codeMap.values());
+      // Fiches de démonstration (anciens codes FND-2026 / DIR-2026, inutilisables depuis le
+      // renouvellement des codes) : retirées dès que le vrai compte de ce rôle existe.
+      for (const d of baseDefaults) {
+        const realExists = Array.from(codeMap.values()).some(
+          (s) => s.roleId === d.roleId && s.authCode && s.authCode.toUpperCase() !== d.authCode.toUpperCase()
+        );
+        if (realExists) codeMap.delete(d.authCode);
+      }
+      // Fondateur puis Directeur en tête de liste, les autres membres ensuite.
+      const rank = (s: StaffUser) => (s.roleId === 'fondateur' ? 0 : s.roleId === 'directeur' ? 1 : 2);
+      const mergedList = Array.from(codeMap.values()).sort((a, b) => rank(a) - rank(b));
       localStorage.setItem(storageKey, JSON.stringify(mergedList));
       if (schoolSlug === 'epc-manoi') {
         localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(mergedList));
