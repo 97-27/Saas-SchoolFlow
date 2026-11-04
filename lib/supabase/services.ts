@@ -556,7 +556,9 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
         guardianPhone: d.guardian_phone,
         whatsappPhone: d.whatsapp_phone || '',
         secondaryPhones: meta.secondaryPhones || [],
-        avatar: d.avatar_url || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+        // Pas de photo : vide (l'écran affiche les initiales). Avant, la photo d'une inconnue
+        // (banque d'images) s'affichait à la place, puis était parfois enregistrée sur la fiche.
+        avatar: d.avatar_url && !d.avatar_url.includes('images.unsplash.com') ? d.avatar_url : '',
         enrollmentType: d.enrollment_type || 'nouveau',
         registrationFee: Number(d.registration_fee) || 0,
         tuitionAmount: Number(d.tuition_amount) || 0,
@@ -1217,7 +1219,7 @@ export async function getInvoicesFromSupabase(schoolSlug: string): Promise<Invoi
       invoiceNumber: d.invoice_number,
       studentId: d.student_id,
       studentName: d.students?.full_name || 'Élève',
-      studentAvatar: d.students?.avatar_url || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+      studentAvatar: d.students?.avatar_url && !d.students.avatar_url.includes('images.unsplash.com') ? d.students.avatar_url : '',
       studentGrade: d.students?.grade || '',
       studentGender: d.students?.gender || 'male',
       guardianName: d.students?.guardian_name || '',

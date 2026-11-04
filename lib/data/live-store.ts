@@ -2723,7 +2723,9 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           // Photo strictement personnelle, clée uniquement sur le code d'authentification
           // unique. Les anciennes clés par nom affiché ou par rôle pouvaient faire fuiter la
           // photo d'une personne vers une autre partageant le même nom ou le même rôle.
+          // Photo de la base d'abord (une ancienne photo du navigateur s'affichait avant la vraie).
           const persistentAvatar =
+            (u.avatarUrl && /^https?:\/\//.test(u.avatarUrl) ? u.avatarUrl : null) ||
             (u.authCode ? localStorage.getItem(`schoolflow_user_avatar_${u.authCode.toUpperCase()}`) : null) ||
             u.avatarUrl ||
             def.avatarUrl;
@@ -2748,6 +2750,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
           const sanitizedName = (u.fullName || '').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
           const userCode = (u.authCode || u.id || '').toUpperCase();
           const persistentUserAvatar =
+            (u.avatarUrl && /^https?:\/\//.test(u.avatarUrl) ? u.avatarUrl : null) ||
             (userCode ? localStorage.getItem(`schoolflow_user_avatar_${userCode}`) : null) ||
             u.avatarUrl;
 

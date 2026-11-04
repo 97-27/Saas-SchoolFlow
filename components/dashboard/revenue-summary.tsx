@@ -221,52 +221,45 @@ export function RevenueSummary({
     };
   }, [students, invoices, serviceVersion, servicesData, schoolSlug]);
 
-  // Sommes de scolarité réellement encaissées CHAQUE MOIS (septembre à décembre), d'après la date
-  // de paiement de chaque versement. Auparavant, le 1er versement était toujours classé en octobre,
-  // le 2e en novembre, etc., quelle que soit sa vraie date : les montants affichés ne
-  // correspondaient pas aux sommes réellement entrées dans le mois.
+  // Sommes de scolarité encaissées PAR VERSEMENT (choix de l'établissement) : 1er versement
+  // (échéance de septembre), 2e (octobre), 3e (novembre), 4e (décembre), puis 5e et suivants.
+  // Chaque ligne indique le montant total et le NOMBRE d'élèves qui ont payé ce versement.
+  // Avant, les sommes étaient classées par date de paiement : un 3e versement payé en
+  // septembre comptait en septembre, et novembre / décembre restaient à 0.
   const monthlyData = useMemo(() => {
     const isEmpty = students.length === 0 && invoices.length === 0;
-    const startYear = parseInt((academicYear || '').slice(0, 4), 10) || new Date().getFullYear();
-    const MONTHS = [
-      { month: 9, name: 'Septembre' },
-      { month: 10, name: 'Octobre' },
-      { month: 11, name: 'Novembre' },
-      { month: 12, name: 'Décembre' },
+    const RANKS = [
+      { rank: 1, name: '1er versement', due: 'Échéance de septembre' },
+      { rank: 2, name: '2e versement', due: "Échéance d'octobre" },
+      { rank: 3, name: '3e versement', due: 'Échéance de novembre' },
+      { rank: 4, name: '4e versement', due: 'Échéance de décembre' },
+      { rank: 5, name: '5e versement et suivants', due: 'Autres mois' },
     ];
     const totals = new Map<number, number>();
-    let otherMonths = 0;
-    let undated = 0;
+    const payers = new Map<number, Set<string>>();
+    let undetailed = 0;
+    const undetailedPayers = new Set<string>();
 
-    // Dates au format JJ/MM/AAAA ou AAAA-MM-JJ
-    const parseMonth = (raw?: string): { month: number; year: number } | null => {
-      const s = (raw || '').trim();
-      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) return { year: Number(m[1]), month: Number(m[2]) };
-      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m) return { year: Number(m[3]), month: Number(m[2]) };
-      return null;
-    };
-
-    const addPayment = (amount: number | undefined, date?: string, fallbackDate?: string) => {
+    const addRank = (rank: number, amount: number | undefined, who: string) => {
       if (!amount || amount <= 0) return;
-      const d = parseMonth(date) || parseMonth(fallbackDate);
-      if (!d) {
-        undated += amount;
-      } else if (d.year === startYear && d.month >= 9 && d.month <= 12) {
-        totals.set(d.month, (totals.get(d.month) || 0) + amount);
-      } else {
-        otherMonths += amount;
-      }
+      totals.set(rank, (totals.get(rank) || 0) + amount);
+      if (!payers.has(rank)) payers.set(rank, new Set());
+      payers.get(rank)!.add(who);
     };
 
     const hasInstallments = (inst?: StudentInstallments) =>
       Boolean(inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5));
 
-    const addInstallments = (inst: StudentInstallments, fallbackDate?: string) => {
-      [inst.versement1, inst.versement2, inst.versement3, inst.versement4, inst.versement5].forEach((v) => {
-        if (v) addPayment(v.amount, v.date, fallbackDate);
+    const addInstallments = (inst: StudentInstallments, who: string) => {
+      [inst.versement1, inst.versement2, inst.versement3, inst.versement4, inst.versement5].forEach((v, i) => {
+        if (v) addRank(i + 1, v.amount, who);
       });
+    };
+    // Compatibilité avec l'ancien appel (montant sans détail des versements).
+    const addPayment = (amount: number | undefined, who: string) => {
+      if (!amount || amount <= 0) return;
+      undetailed += amount;
+      undetailedPayers.add(who);
     };
 
     // Indexer les factures et leurs versements par étudiant
@@ -297,13 +290,11 @@ export function RevenueSummary({
         inst = studentInvs.find((inv) => hasInstallments(inv.installments))?.installments;
       }
 
-      const fallbackDate = stu.paymentDate || stu.enrollmentDate;
       if (inst && hasInstallments(inst)) {
-        addInstallments(inst, fallbackDate);
+        addInstallments(inst, stu.id);
       } else if (stu.paidAmount && stu.paidAmount > 0) {
-        // Aucun détail par versement saisi, mais un montant a bel et bien été encaissé : il est
-        // classé au mois de sa date de paiement (jamais inventé, jamais perdu).
-        addPayment(stu.paidAmount, stu.paymentDate, stu.enrollmentDate);
+        // Montant encaissé sans détail des versements : affiché à part (jamais inventé, jamais perdu).
+        addPayment(stu.paidAmount, stu.id);
       }
     });
 
@@ -311,7 +302,7 @@ export function RevenueSummary({
     invoices.forEach((inv) => {
       const sId = inv.studentId || inv.invoiceNumber;
       if (sId && processedStudentIds.has(sId)) return; // Déjà traité ci-dessus
-      if (inv.installments && hasInstallments(inv.installments)) addInstallments(inv.installments, inv.issueDate);
+      if (inv.installments && hasInstallments(inv.installments)) addInstallments(inv.installments, sId || inv.id);
     });
 
     const getBadgeStyle = (amount: number) => {
@@ -319,26 +310,33 @@ export function RevenueSummary({
         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
         : 'bg-amber-50 text-amber-700 border-amber-200';
     };
+    const countLabel = (n: number) => (n > 0 ? `${n} élève${n > 1 ? 's' : ''}` : 'En attente');
 
-    const rows = MONTHS.map(({ month, name }) => {
-      const collected = isEmpty ? 0 : totals.get(month) || 0;
+    const rows = RANKS.map(({ rank, name, due }) => {
+      const collected = isEmpty ? 0 : totals.get(rank) || 0;
+      const n = isEmpty ? 0 : payers.get(rank)?.size || 0;
       return {
-        month: `${name} ${startYear}`,
-        label: `Sommes encaissées en ${name.toLowerCase()}`,
+        month: name,
+        label: n > 0 ? `${due} · ${n} élève${n > 1 ? 's ont' : ' a'} payé` : due,
         collected,
+        badge: countLabel(n),
         badgeColor: getBadgeStyle(collected),
       };
     });
 
-    // Rien n'est caché : les versements datés hors de ces 4 mois, ou sans date, sont affichés à part.
-    if (!isEmpty && otherMonths > 0) {
-      rows.push({ month: 'Autres mois', label: 'Versements datés hors septembre – décembre', collected: otherMonths, badgeColor: getBadgeStyle(otherMonths) });
-    }
-    if (!isEmpty && undated > 0) {
-      rows.push({ month: 'Date non renseignée', label: 'Versements enregistrés sans date de paiement', collected: undated, badgeColor: getBadgeStyle(undated) });
+    // Rien n'est caché : un montant encaissé sans détail des versements est affiché à part.
+    if (!isEmpty && undetailed > 0) {
+      const n = undetailedPayers.size;
+      rows.push({
+        month: 'Sans détail des versements',
+        label: 'Montants payés dont le rang du versement n’a pas été saisi',
+        collected: undetailed,
+        badge: countLabel(n),
+        badgeColor: getBadgeStyle(undetailed),
+      });
     }
     return rows;
-  }, [students, invoices, academicYear]);
+  }, [students, invoices]);
 
   const totalMonthlyCollected = useMemo(() => {
     return monthlyData.reduce((acc, m) => acc + m.collected, 0);
@@ -359,7 +357,7 @@ export function RevenueSummary({
                   Échéances de Scolarité & Recouvrement
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Sommes de scolarité réellement encaissées chaque mois
+                  Sommes de scolarité encaissées par versement, et nombre d&apos;élèves
                 </p>
               </div>
             </div>
@@ -368,7 +366,7 @@ export function RevenueSummary({
             </span>
           </div>
 
-          {/* Encaissements par mois (septembre à décembre) */}
+          {/* Encaissements par versement (1er à 4e, puis 5e et suivants) */}
           <div className="space-y-2.5">
             {monthlyData.map((item) => (
               <div
@@ -394,7 +392,7 @@ export function RevenueSummary({
                     {formatFCFA(item.collected)}
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block mt-0.5 ${item.badgeColor}`}>
-                    {item.collected > 0 ? 'Encaissé' : 'En attente'}
+                    {item.badge}
                   </span>
                 </div>
               </div>

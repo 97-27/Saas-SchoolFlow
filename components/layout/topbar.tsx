@@ -122,9 +122,19 @@ export function Topbar({
             // qu'une photo importée par une personne s'affichait chez n'importe qui d'autre
             // sur le même navigateur (ex: un parent voyait la photo du Directeur).
             const cleanCode = (parsed.authCode || staffMember?.authCode || '').toUpperCase();
+            // La photo enregistrée en BASE (fiche du personnel) passe en premier : avant, une
+            // ancienne photo gardée dans le navigateur s'affichait d'abord au rafraîchissement,
+            // puis était remplacée par la vraie. Le cache local ne sert plus qu'en secours (hors
+            // connexion), et il est mis à jour avec la photo de la base.
+            const serverAvatar = staffMember?.avatarUrl && /^https?:\/\//.test(staffMember.avatarUrl) ? staffMember.avatarUrl : '';
+            if (serverAvatar && cleanCode) {
+              try {
+                localStorage.setItem(`schoolflow_user_avatar_${cleanCode}`, serverAvatar);
+              } catch (e) {}
+            }
             const persistentAvatar =
+              serverAvatar ||
               (cleanCode ? localStorage.getItem(`schoolflow_user_avatar_${cleanCode}`) : null) ||
-              staffMember?.avatarUrl ||
               parsed.avatarUrl ||
               '';
 
@@ -168,10 +178,9 @@ export function Topbar({
       // Valeur par défaut
       const defaultDir = allStaff.find((s) => s.roleId === 'directeur');
       const defaultName = (defaultDir?.fullName || live.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
-      const persistentDirAvatar =
-        localStorage.getItem('schoolflow_user_avatar_DIR-2026') ||
-        defaultDir?.avatarUrl ||
-        '';
+      // Plus de photo de l'ancien compte de démonstration (DIR-2026) : elle s'affichait un instant
+      // avant la vraie photo.
+      const persistentDirAvatar = defaultDir?.avatarUrl || '';
 
       setActiveSession({
         fullName: defaultName,
