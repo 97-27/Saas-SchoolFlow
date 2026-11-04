@@ -269,7 +269,11 @@ export function Topbar({
           }
           return s;
         });
-        saveLiveStaffUsers(nextStaff, schoolSlug);
+        saveLiveStaffUsers(
+          nextStaff,
+          schoolSlug,
+          nextStaff.filter((s) => s.authCode?.toUpperCase() === sessionAuthCode)
+        );
       }
     } catch (e) {}
 
@@ -368,7 +372,11 @@ export function Topbar({
             }
             return s;
           });
-          saveLiveStaffUsers(nextStaff, schoolSlug);
+          saveLiveStaffUsers(
+            nextStaff,
+            schoolSlug,
+            nextStaff.filter((s) => parsed.authCode && s.authCode?.toUpperCase() === parsed.authCode.toUpperCase())
+          );
 
           broadcastLiveUpdate({
             action: 'session_updated',

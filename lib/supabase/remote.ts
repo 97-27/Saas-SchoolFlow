@@ -150,9 +150,11 @@ export function saveStaffUserToSupabase(
     avatarUrl?: string;
     matricule?: string;
   },
-  schoolSlug: string
+  schoolSlug: string,
+  /** true seulement quand le code a été volontairement modifié (fiche du membre). */
+  allowCodeChange: boolean = false
 ): Promise<boolean> {
-  return callData('saveStaffUser', [staff, schoolSlug], false);
+  return callData('saveStaffUser', [staff, schoolSlug, allowCodeChange], false);
 }
 
 export function deleteStaffUserFromSupabase(authCode: string, schoolSlug: string): Promise<boolean> {

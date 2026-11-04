@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
             return jsonError('Le compte du Fondateur ne peut être modifié que par le Fondateur lui-même.', 403);
           }
         }
-        return ok(await saveStaffUserToSupabase({ ...staff, authCode: rawCode }, slug));
+        return ok(await saveStaffUserToSupabase({ ...staff, authCode: rawCode }, slug, args[2] === true));
       }
       // Un membre non administrateur ne peut modifier que SES coordonnées, jamais son rôle,
       // son code ou son statut (sinon il pourrait se promouvoir Directeur).

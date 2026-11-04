@@ -186,7 +186,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const toggleStatus = (staff: StaffUser) => {
     const nextStatus = staff.status === 'Actif' ? 'Verrouillé' : 'Actif';
     const updated = staffList.map((s) => (s.id === staff.id ? { ...s, status: nextStatus as any } : s));
-    saveLiveStaffUsers(updated, schoolSlug);
+    saveLiveStaffUsers(updated, schoolSlug, updated.filter((s) => s.id === staff.id));
     showToast(
       nextStatus === 'Verrouillé'
         ? `🔒 Compte de ${staff.fullName} verrouillé. L'accès lui est désormais strictement bloqué.`
@@ -313,7 +313,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       status: editStatus,
     };
 
-    updateFullStaffUser(updatedUser, schoolSlug);
+    // Le code ne part en base que s'il a réellement été modifié dans cette fiche.
+    const codeChanged =
+      updatedUser.authCode !== String(editingStaff.authCode || '').trim().toUpperCase() &&
+      !/^MASQUE-/i.test(updatedUser.authCode);
+    updateFullStaffUser(updatedUser, schoolSlug, codeChanged);
 
     // Mettre à jour les paramètres de l'école si le Fondateur ou le Directeur a été modifié
     try {

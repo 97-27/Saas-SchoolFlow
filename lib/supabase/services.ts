@@ -1473,7 +1473,7 @@ export async function saveStaffUserToSupabase(staff: {
   status: string;
   avatarUrl?: string;
   matricule?: string;
-}, schoolSlug: string): Promise<boolean> {
+}, schoolSlug: string, allowCodeChange: boolean = false): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
     // Cache pour éviter la requête school répétée
@@ -1523,9 +1523,13 @@ export async function saveStaffUserToSupabase(staff: {
     }
 
     if (existingStaff && existingStaff.length > 0) {
+      // Le code d'accès d'une fiche existante ne change QUE sur demande explicite (modification
+      // du code dans la fiche du membre). Un appareil qui garde un ancien code en mémoire ne peut
+      // plus le remettre en base en enregistrant un nom, une photo ou un statut.
+      const { auth_code: _code, ...withoutCode } = payload;
       const { error: updateErr } = await supabase
         .from('staff_users')
-        .update(payload)
+        .update(allowCodeChange ? payload : withoutCode)
         .eq('id', existingStaff[0].id);
       if (updateErr) {
         console.warn('saveStaffUserToSupabase update warning:', updateErr.message);

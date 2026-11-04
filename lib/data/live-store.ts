@@ -2828,7 +2828,21 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
   }
 }
 
-export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc-manoi'): void {
+/**
+ * Enregistre la liste du personnel sur cet appareil et envoie en base UNIQUEMENT les fiches
+ * réellement modifiées (`changed`).
+ *
+ * Bug des « codes qui changent tout seuls » : avant, chaque enregistrement (connexion, photo,
+ * statut…) renvoyait TOUTE la liste en base avec les codes que l'appareil avait en mémoire. Un
+ * téléphone qui gardait un ancien code le remettait donc en base par-dessus le nouveau, et le
+ * bon code était ensuite refusé à la connexion.
+ */
+export function saveLiveStaffUsers(
+  users: StaffUser[],
+  schoolSlug: string = 'epc-manoi',
+  changed: StaffUser[] = [],
+  allowCodeChange: boolean = false
+): void {
   if (typeof window === 'undefined') return;
   try {
     const storageKey = `${STAFF_USERS_STORAGE_KEY}_${schoolSlug}`;
@@ -2837,39 +2851,33 @@ export function saveLiveStaffUsers(users: StaffUser[], schoolSlug: string = 'epc
       localStorage.setItem(STAFF_USERS_STORAGE_KEY, JSON.stringify(users));
     }
 
-    // Synchronisation en arrière-plan avec Supabase Cloud et l'API serveur
     const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
-    fetch('/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        slug,
-        staffUsers: users,
-      }),
-    }).catch(() => {});
-
-    for (const u of users) {
-      saveStaffUserToSupabase(u, slug).catch(() => {});
+    for (const u of changed) {
+      if (!u || !u.authCode || /^MASQUE-/i.test(u.authCode)) continue;
+      saveStaffUserToSupabase(u, slug, allowCodeChange)
+        .then((ok) => {
+          if (ok === false) notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`);
+          else setTimeout(() => syncSchoolDataWithServer(slug, true), 500);
+        })
+        .catch(() => notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`));
     }
 
-    broadcastLiveUpdate({
-      action: 'staff_users_updated',
-      staffUsers: users,
-      schoolSlug: slug,
-    });
+    if (changed.length) {
+      broadcastLiveUpdate({ action: 'staff_users_updated', schoolSlug: slug });
+    }
   } catch (e) {}
 }
 
 export function updateStaffAuthCode(staffId: string, newAuthCode: string, schoolSlug: string = 'epc-manoi'): void {
   const users = getLiveStaffUsers(schoolSlug);
   const updated = users.map((u) => (u.id === staffId ? { ...u, authCode: newAuthCode.trim().toUpperCase() } : u));
-  saveLiveStaffUsers(updated, schoolSlug);
+  saveLiveStaffUsers(updated, schoolSlug, updated.filter((u) => u.id === staffId), true);
 }
 
-export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string = 'epc-manoi'): void {
+export function updateFullStaffUser(updatedUser: StaffUser, schoolSlug: string = 'epc-manoi', codeChanged: boolean = false): void {
   const users = getLiveStaffUsers(schoolSlug);
   const updated = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
-  saveLiveStaffUsers(updated, schoolSlug);
+  saveLiveStaffUsers(updated, schoolSlug, [updatedUser], codeChanged);
 }
 
 /**
@@ -2906,7 +2914,12 @@ export function updateStaffLoginContact(
     });
 
     if (found) {
-      saveLiveStaffUsers(updated, schoolSlug);
+      // Seule la fiche de la personne connectée part en base (ses coordonnées, jamais un code).
+      saveLiveStaffUsers(
+        updated,
+        schoolSlug,
+        updated.filter((s) => s.authCode.trim().toUpperCase() === cleanCode)
+      );
     }
   } catch (e) {
     console.error('Erreur updateStaffLoginContact:', e);
@@ -2951,7 +2964,7 @@ export async function deleteLiveStaffUser(staffId: string, schoolSlug: string = 
 export function addLiveStaffUser(user: StaffUser, schoolSlug: string = 'epc-manoi'): void {
   const users = getLiveStaffUsers(schoolSlug);
   const next = [user, ...users.filter((u) => u.id !== user.id)];
-  saveLiveStaffUsers(next, schoolSlug);
+  saveLiveStaffUsers(next, schoolSlug, [user], true);
 }
 
 export function recordStaffLogin(
@@ -2988,6 +3001,8 @@ export function recordStaffLogin(
       return u;
     });
 
+    // Date de dernière connexion : affichage sur cet appareil seulement, rien n'est renvoyé en
+    // base (c'est ce renvoi de toute la liste qui remettait d'anciens codes en place).
     saveLiveStaffUsers(updated, schoolSlug);
   } catch (e) {}
 }
