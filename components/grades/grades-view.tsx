@@ -478,7 +478,17 @@ export function GradesView({
   }, [selectedClass, selectedSubject, selectedTerm, classStudents.length, storageKey, activeTab]);
 
   // Modification d'une note
-  const handleNoteChange = (studentId: string, field: keyof GradeEntry, val: string) => {
+  const handleNoteChange = (studentId: string, field: keyof GradeEntry, rawVal: string) => {
+    // Notes (pas l'appréciation) : virgule acceptée (« 12,5 » → 12.5), chiffres seulement, de 0
+    // à 20. Avant, un téléphone au clavier français pouvait refuser « 12,5 » dans un champ
+    // numérique et la note disparaissait sans message.
+    let val = rawVal;
+    if (field !== 'customAppreciation') {
+      val = rawVal.replace(',', '.').replace(/[^0-9.]/g, '');
+      const firstDot = val.indexOf('.');
+      if (firstDot >= 0) val = val.slice(0, firstDot + 1) + val.slice(firstDot + 1).replace(/\./g, '');
+      if (val !== '' && Number(val) > 20) return;
+    }
     editedRef.current = {
       ...editedRef.current,
       [studentId]: { ...(editedRef.current[studentId] || {}), [field]: val },
@@ -1344,10 +1354,10 @@ export function GradesView({
                           {interroFields.map((f) => (
                             <td key={f} className="py-2 px-1 text-center bg-blue-50/20">
                               <input
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                max="20"
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                maxLength={5}
                                 value={entry[f] ?? ''}
                                 placeholder="—"
                                 disabled={!portalStatus.isOpen}
@@ -1360,10 +1370,10 @@ export function GradesView({
                           {devoirFields.map((f) => (
                             <td key={f} className="py-2 px-1 text-center bg-amber-50/30">
                               <input
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                max="20"
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                maxLength={5}
                                 value={entry[f] ?? ''}
                                 placeholder="—"
                                 disabled={!portalStatus.isOpen}
@@ -1375,10 +1385,10 @@ export function GradesView({
 
                           <td className="py-2 px-1.5 text-center bg-emerald-50/40">
                             <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              maxLength={5}
                               value={entry.comp}
                               placeholder="—"
                               disabled={!portalStatus.isOpen}

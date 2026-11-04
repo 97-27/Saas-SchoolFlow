@@ -180,6 +180,25 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   }
 }
 
+/* Fenêtres (modales) : sur un petit écran, une fenêtre plus haute que l'écran était coupée et ses
+   boutons « Enregistrer / Confirmer » devenaient inaccessibles. Le fond devient défilable ; la
+   fenêtre reste centrée quand elle tient dans l'écran, et commence en haut sinon. */
+.fixed.inset-0.flex.items-center {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-items: flex-start;
+}
+.fixed.inset-0.flex.items-center > * {
+  margin-top: auto;
+  margin-bottom: auto;
+  flex-shrink: 0;
+}
+@media print {
+  .fixed.inset-0.flex.items-center {
+    overflow: visible;
+  }
+}
+
 /* iPhone : un champ dont le texte fait moins de 16 px fait zoomer tout l'écran au toucher (la page
    se décale et il faut dézoomer à la main). Sur petit écran, les champs passent à 16 px. */
 @media (max-width: 768px) {
