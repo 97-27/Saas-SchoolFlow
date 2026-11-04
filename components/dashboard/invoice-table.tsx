@@ -123,8 +123,15 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
 
       let foundVersements = false;
 
-      // 1. Vérification des versements détaillés de l'échéancier
-      if (inst) {
+      // 1. Vérification des versements détaillés de l'échéancier — sur le reçu de SCOLARITÉ
+      //    uniquement (un reçu d'internat / cantine / transport n'a pas de versements de scolarité).
+      const feeLowerInst = (inv.feeType || '').toLowerCase();
+      const isServiceInv =
+        feeLowerInst.includes('internat') ||
+        feeLowerInst.includes('cantine') ||
+        feeLowerInst.includes('transport') ||
+        /^(QUI-|CAN-|TRP-)/i.test(rawInvNumber);
+      if (inst && !isServiceInv) {
         const vList = [
           { key: 'v1', obj: inst.versement1, prestation: '🎓 Scolarité', motif: '1er Versement' },
           { key: 'v2', obj: inst.versement2, prestation: '🎓 Scolarité', motif: '2ème Versement' },
@@ -148,7 +155,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               return; // Ne jamais afficher de faux versement scolarité !
             }
 
-            const txKey = `${inv.invoiceNumber || inv.id}-${key}-${obj.amount}`;
+            // Un versement = un élève + un rang : jamais compté deux fois, même si l'élève a
+            // plusieurs copies de sa facture (copie locale + base).
+            const txKey = `${matchedStudent?.id || inv.studentId || inv.invoiceNumber || inv.id}-${key}`;
             if (seenTxKeys.has(txKey)) return;
             seenTxKeys.add(txKey);
 
@@ -177,8 +186,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       }
 
       // 2. Vérification des Droits d'Inscription distincts
-      if (typeof inv.registrationFee === 'number' && inv.registrationFee > 0) {
-        const regKey = `${inv.invoiceNumber || inv.id}-reg-${inv.registrationFee}`;
+      if (!isServiceInv && typeof inv.registrationFee === 'number' && inv.registrationFee > 0) {
+        const regKey = `${matchedStudent?.id || inv.studentId || inv.invoiceNumber || inv.id}-reg`;
         if (!seenTxKeys.has(regKey)) {
           seenTxKeys.add(regKey);
           list.push({
@@ -202,7 +211,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       }
 
       // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé
-      if (!foundVersements && (!inv.registrationFee || inv.registrationFee === 0)) {
+      if (!foundVersements && (isServiceInv || !inv.registrationFee || inv.registrationFee === 0)) {
         const feeLower = (inv.feeType || '').toLowerCase();
         let prestation = '🎓 Scolarité';
         let motif = '1er Versement';

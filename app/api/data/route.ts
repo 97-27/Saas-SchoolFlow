@@ -40,7 +40,8 @@ import { setRequestActor, actorLabel } from '@/lib/server/actor';
 export const dynamic = 'force-dynamic';
 
 /** Codes réservés aux lignes techniques de staff_users (cachet, données de services...). */
-const RESERVED_CODE = /^(SYS-|STAMP-)/i;
+// Codes système, et anciens codes de démonstration identiques pour toutes les écoles.
+const RESERVED_CODE = /^(SYS-|STAMP-|FND-2026$|DIR-2026$)/i;
 
 /** Pages et actions réservées au seul Directeur : codes d'accès, profils du personnel, corbeille. */
 const isDirector = (session: { roleId: string }) => session.roleId === 'directeur';

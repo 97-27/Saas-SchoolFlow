@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
   if (!school) return jsonError('Établissement introuvable.', 404);
 
   const staff = (await getStaffUsersFromSupabase(slug))
+    // Toute vraie fiche de la base est affichée (même si son code est encore un ancien code de
+    // démonstration : c'est ce qui masquait le nom du Directeur).
     .filter((s: any) => s && STAFF_ROLES.includes(s.roleId) && s.fullName)
-    .filter((s: any) => !/^(FND|DIR)-2026$/i.test(String(s.authCode || '')))
     .map((s: any) => ({ id: String(s.id), fullName: String(s.fullName), roleId: String(s.roleId) }));
 
   return NextResponse.json(

@@ -138,6 +138,13 @@ async function handleLogin(
     return refuse("Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.", 400);
   }
 
+  // Anciens codes de démonstration, identiques pour toutes les écoles : jamais acceptés.
+  if (/^(FND|DIR)-2026$/i.test(inputCode)) {
+    return refuse(
+      "❌ Ce code de démonstration n'est plus valable. Demandez votre code personnel au Fondateur ou au Directeur de l'établissement."
+    );
+  }
+
   const staff = await getStaffUsersFromSupabase(slug);
 
   if (roleId === 'fondateur' || roleId === 'directeur') {

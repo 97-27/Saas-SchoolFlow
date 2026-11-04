@@ -1920,7 +1920,22 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
 
         // Si l'élève a été modifié, mettre à jour les coordonnées dans la facture
         const matchingStu = studentMap.get(inv.studentId) || studentMap.get(inv.invoiceNumber);
-        if (matchingStu) {
+        if (matchingStu && isServiceInvoice) {
+          // Reçu d'internat / cantine / transport : on met à jour le nom et la classe SEULEMENT.
+          // Avant, il recevait aussi les montants et les VERSEMENTS DE SCOLARITÉ de l'élève : le
+          // journal des encaissements comptait alors ces versements une fois par reçu (doublés pour
+          // un interne, triplés avec la cantine) et le reçu affichait les montants de scolarité.
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _source: _s0, ...svcClean } = inv as any;
+          uniqueInvoices.push({
+            ...svcClean,
+            studentName: matchingStu.fullName || `${matchingStu.firstName} ${matchingStu.lastName}`.trim(),
+            studentGrade: matchingStu.grade || inv.studentGrade,
+            studentGender: matchingStu.gender || inv.studentGender,
+            guardianName: matchingStu.guardianName || inv.guardianName,
+            guardianPhone: matchingStu.whatsappPhone || matchingStu.guardianPhone || inv.guardianPhone,
+          });
+        } else if (matchingStu) {
           if (matchingStu.id) {
             seenStudentIds.add(matchingStu.id);
             seenIds.add(matchingStu.id);
@@ -4306,6 +4321,26 @@ export function saveLiveCanteenData(
   } catch (e) {
     console.error('Erreur saveLiveCanteenData:', e);
   }
+}
+
+/** Place limite de l'internat : enregistrée en base, avec alerte si la base ne confirme pas. */
+export function saveBoardingCapacity(capacity: number, schoolSlug: string = 'epc-manoi'): void {
+  if (typeof window === 'undefined') return;
+  const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
+  try {
+    localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, String(capacity));
+    if (schoolSlug !== slug) localStorage.setItem(`schoolflow_boarding_capacity_${schoolSlug}`, String(capacity));
+  } catch (e) {}
+  fetch('/api/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, boardingCapacity: capacity }),
+  })
+    .then((res) => {
+      if (!res.ok) notifySaveFailure("la place limite de l'internat");
+    })
+    .catch(() => notifySaveFailure("la place limite de l'internat"));
+  broadcastLiveUpdate({ action: 'boarding_updated', schoolSlug: slug });
 }
 
 /**

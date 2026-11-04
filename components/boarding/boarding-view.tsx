@@ -5,7 +5,7 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts, saveBoardingCapacity } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
@@ -242,15 +242,15 @@ export function BoardingView({
   const [isEditingCapacity, setIsEditingCapacity] = useState(false);
   const [capacityInput, setCapacityInput] = useState(boardingCapacity.toString());
 
+  // Place limite : enregistrée EN BASE (avant, seulement sur cet appareil, et la synchronisation la
+  // remettait à 0 une ou deux minutes plus tard).
   const handleSaveCapacity = (newVal: number) => {
-    setBoardingCapacity(newVal);
+    const clean = Math.max(0, Math.round(newVal) || 0);
+    setBoardingCapacity(clean);
+    setCapacityInput(clean.toString());
     setIsEditingCapacity(false);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(`schoolflow_boarding_capacity_${schoolSlug}`, newVal.toString());
-      } catch (e) {}
-    }
-    setToastMessage(`✓ Capacité de l’internat fixée à ${newVal} places.`);
+    saveBoardingCapacity(clean, schoolSlug);
+    setToastMessage(`✓ Capacité de l’internat fixée à ${clean} places.`);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
@@ -269,6 +269,13 @@ export function BoardingView({
 
       if (typeof window !== 'undefined') {
         try {
+          // Place limite reçue de la base (modifiée sur un autre poste).
+          const savedCap = localStorage.getItem(`schoolflow_boarding_capacity_${schoolSlug}`);
+          if (savedCap !== null) {
+            const cap = parseInt(savedCap, 10) || 0;
+            setBoardingCapacity(cap);
+            setCapacityInput((prev) => (document.activeElement?.tagName === 'INPUT' ? prev : cap.toString()));
+          }
           const savedPayments = localStorage.getItem(scopedBoardingPayKey);
           if (savedPayments) setMonthlyPayments(JSON.parse(savedPayments));
           const savedSubs = localStorage.getItem(scopedBoardingSubKey);
@@ -306,7 +313,9 @@ export function BoardingView({
   ) => {
     setCustomSubscriptions(updatedSubs);
     setMonthlyPayments(updatedPayments);
-    saveLiveBoardingData(updatedSubs, updatedPayments, boardingCapacity, schoolSlug);
+    // La place limite n'est PAS renvoyée ici : un écran resté sur une ancienne valeur (souvent 0)
+    // l'écrasait en base à chaque paiement ou mois coché.
+    saveLiveBoardingData(updatedSubs, updatedPayments, undefined, schoolSlug);
   };
 
   // Sauvegarde persistante des paiements
@@ -389,15 +398,20 @@ export function BoardingView({
 
   // Filtrage pour la recherche et la navigation
   const filteredBoarders = useMemo(() => {
+    // Recherche sans accents, mots dans n'importe quel ordre ; « 45 » trouve ID-045.
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const raw = searchQuery.trim();
+    const words = norm(raw).split(/\s+/).filter(Boolean);
+    const onlyDigits = /^(id-?)?\d+$/i.test(raw) ? parseInt(raw.replace(/\D/g, ''), 10) : null;
     return boarders.filter((b) => {
-      const stuFullName = `${(b.student.lastName || '').toUpperCase()} ${b.student.firstName || ''}`.trim();
+      const num = parseInt((b.student.studentNumber || '').replace(/\D/g, ''), 10);
+      const hay = norm(
+        `${b.student.lastName || ''} ${b.student.firstName || ''} ${b.student.fullName || ''} ${b.student.studentNumber || ''} ${b.student.matricule || ''} ${b.roomNumber || ''} ${b.student.grade || (b.student as any).className || ''}`
+      );
       const matchSearch =
-        searchQuery === '' ||
-        stuFullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        b.student.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.student.matricule && b.student.matricule.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        b.roomNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.student.grade || (b.student as any).className || '').toLowerCase().includes(searchQuery.toLowerCase());
+        raw === '' ||
+        (onlyDigits !== null && num === onlyDigits) ||
+        words.every((w) => hay.includes(w));
 
       const matchPavilion =
         selectedPavilionFilter === 'all' ||
@@ -2124,19 +2138,55 @@ export function BoardingView({
       <div className="bg-white rounded-2xl border border-slate-200/70 p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 print:hidden">
         {/* Recherche et Filtres */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Rechercher un pensionnaire (Nom, Matricule, Chambre)..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setIsCreatingNew(false);
-                setActiveBoarderIndex(0);
-              }}
-              className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
-            />
+          <div className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="search"
+                placeholder="Rechercher un interne déjà inscrit : nom, prénom, numéro, chambre…"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsCreatingNew(false);
+                  setActiveBoarderIndex(0);
+                }}
+                className="w-full min-h-[44px] pl-9 pr-3.5 py-2 text-sm rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
+              />
+            </div>
+            {/* Résultats affichés EN DESSOUS de la recherche : un clic ouvre la fiche de l'interne. */}
+            {searchQuery.trim() && (
+              <ul className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-emerald-200 bg-white divide-y divide-slate-100 shadow-sm">
+                <li className="px-3 py-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50/70">
+                  {filteredBoarders.length} interne{filteredBoarders.length > 1 ? 's' : ''} trouvé{filteredBoarders.length > 1 ? 's' : ''}
+                </li>
+                {filteredBoarders.length === 0 ? (
+                  <li className="px-3 py-3 text-sm text-slate-500">Aucun interne trouvé. Vérifiez l&apos;orthographe ou saisissez le numéro.</li>
+                ) : (
+                  filteredBoarders.map((b, idx) => {
+                    const isActive = !isCreatingNew && activeBoarder?.student.id === b.student.id;
+                    return (
+                      <li key={b.student.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingNew(false);
+                            setActiveBoarderIndex(idx);
+                          }}
+                          className={`w-full min-h-[44px] px-3 py-2 text-left flex items-center gap-2 ${isActive ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                        >
+                          <span className="font-mono text-xs font-bold text-emerald-800 shrink-0">{b.student.studentNumber || 'ID'}</span>
+                          <span className="min-w-0 flex-1 text-sm font-bold text-slate-900 break-words">
+                            {(b.student.lastName || '').toUpperCase()} {b.student.firstName}
+                            <span className="font-medium text-slate-500"> · {b.student.grade} · {b.roomNumber}</span>
+                          </span>
+                          {isActive && <span className="shrink-0 text-[10px] font-bold text-emerald-700">Affiché</span>}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            )}
           </div>
 
           <div className="relative shrink-0">

@@ -12,6 +12,7 @@ import {
   getLiveSchool,
   saveLiveSchool,
   DATA_UPDATED_EVENT,
+  syncSchoolDataWithServer,
 } from '@/lib/data/live-store';
 import {
   KeyRound,
@@ -105,6 +106,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Recharger la liste en temps réel
   useEffect(() => {
     setStaffList(getLiveStaffUsers(schoolSlug));
+    // Les codes affichés doivent être ceux de la BASE : relecture immédiate à l'ouverture.
+    syncSchoolDataWithServer(schoolSlug, true);
     const handleUpdate = () => {
       setStaffList(getLiveStaffUsers(schoolSlug));
     };
