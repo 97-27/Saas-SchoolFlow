@@ -854,10 +854,12 @@ function planStudentWrite(
 
   // 1. Fiche déjà en base sous son identifiant définitif : on la met à jour (sans voler le
   //    numéro d'un autre élève si le numéro envoyé est déjà pris).
+  //    Le numéro de dossier n'est JAMAIS modifié par un navigateur : c'est la base qui numérote
+  //    (renumber_students, migration 006). Un écran resté sur d'anciens numéros ne peut donc pas
+  //    remettre un ancien numéro après un décalage.
   if (student.id && isUUID(student.id) && byId.has(student.id)) {
     const row = byId.get(student.id)!;
-    const owner = number ? byNumber.get(number) : undefined;
-    return { action: 'update', id: row.id, studentNumber: owner && owner.id !== row.id ? row.student_number : number || row.student_number };
+    return { action: 'update', id: row.id, studentNumber: row.student_number || number || '' };
   }
 
   // 1 bis. Identifiant définitif (UUID) inconnu de la base : seule la base attribue ces
@@ -948,18 +950,16 @@ function planInvoiceWrite(
   const byNumber = inv.invoiceNumber ? invoices.find((r) => r.invoice_number === inv.invoiceNumber) : undefined;
   const existing = byId || sameType || (byNumber && byNumber.student_id === stu.id ? byNumber : undefined);
 
+  // Reçu déjà en base : il garde son numéro (la base le renumérote avec l'élève, migration 006).
+  if (existing) return { studentId: stu.id, existingId: existing.id, invoiceNumber: existing.invoice_number };
+
   let invoiceNumber = inv.invoiceNumber;
-  const numberTakenByOther = byNumber && byNumber.id !== existing?.id;
-  if (numberTakenByOther) {
+  if (byNumber) {
     // Numéro de reçu déjà utilisé par la facture d'un AUTRE élève : ne jamais l'écraser.
-    if (existing) {
-      invoiceNumber = existing.invoice_number;
-    } else {
-      const alt = stu.student_number;
-      invoiceNumber = alt && !invoices.some((r) => r.invoice_number === alt) ? alt : `${inv.invoiceNumber}-${stu.id.slice(0, 4).toUpperCase()}`;
-    }
+    const alt = stu.student_number;
+    invoiceNumber = alt && !invoices.some((r) => r.invoice_number === alt) ? alt : `${inv.invoiceNumber}-${stu.id.slice(0, 4).toUpperCase()}`;
   }
-  return { studentId: stu.id, existingId: existing?.id, invoiceNumber };
+  return { studentId: stu.id, invoiceNumber };
 }
 
 async function loadInvoiceRows(schoolId: string): Promise<InvoiceRowLite[]> {
@@ -1019,7 +1019,10 @@ export async function deleteStudentFromSupabase(identifier: string, schoolSlug: 
     // Vérification : la fiche ne doit plus exister. On ne déclare la suppression réussie que si
     // la base le confirme (fini les suppressions « réussies » qu'il fallait refaire).
     const { data: still } = await supabase.from('students').select('id').eq('school_id', schoolId).eq('id', identifier).limit(1);
-    return !still || still.length === 0;
+    const gone = !still || still.length === 0;
+    // Les élèves suivants reculent d'un numéro (choix de l'établissement : pas de trou).
+    if (gone) await renumberSchoolStudents(schoolId);
+    return gone;
   } catch (err) {
     console.warn('deleteStudentFromSupabase catch:', err);
     return false;
@@ -1069,10 +1072,21 @@ async function loadInvoiceTombstones(schoolId: string): Promise<{ numbers: Set<s
   return out;
 }
 
-async function clearInvoiceTombstone(schoolId: string, studentId: string, feeType: string, invoiceNumber: string): Promise<void> {
+async function clearInvoiceTombstone(schoolId: string, studentId: string, feeType: string): Promise<void> {
   try {
     await supabase.from('deleted_invoices').delete().eq('school_id', schoolId).eq('student_id', studentId).eq('fee_type', feeType);
-    if (invoiceNumber) await supabase.from('deleted_invoices').delete().eq('school_id', schoolId).eq('invoice_number', invoiceNumber);
+  } catch (e) {}
+}
+
+/**
+ * Renumérote les élèves de l'école sans trou (ID-001, ID-002…) et leurs reçus avec eux, dans
+ * la base, en une seule opération (fonction renumber_students, migration 006). Appelée après
+ * chaque suppression d'élève. Sans la migration, ne fait rien.
+ */
+async function renumberSchoolStudents(schoolId: string): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('renumber_students', { p_school: schoolId });
+    if (error) console.warn('renumber_students:', error.message);
   } catch (e) {}
 }
 
@@ -1297,7 +1311,7 @@ export async function saveInvoiceToSupabase(invoice: Invoice, schoolSlug: string
         return false;
       }
       // Nouveau reçu saisi volontairement : il annule une éventuelle suppression précédente.
-      await clearInvoiceTombstone(schoolId, plan.studentId, payload.fee_type, plan.invoiceNumber);
+      await clearInvoiceTombstone(schoolId, plan.studentId, payload.fee_type);
     }
     return true;
   } catch (err) {
@@ -1327,7 +1341,7 @@ export async function batchUpsertInvoices(invoices: Invoice[], schoolSlug: strin
         const existingId = plan.existingId;
         // Envoi automatique d'un reçu SUPPRIMÉ (vieille copie d'un appareil) : refusé.
         const feeKey = `${plan.studentId}|${inv.feeType || "Frais d'inscription & Scolarité"}`;
-        if (!existingId && (tombstones.keys.has(feeKey) || (inv.invoiceNumber && tombstones.numbers.has(inv.invoiceNumber)))) {
+        if (!existingId && tombstones.keys.has(feeKey)) {
           continue;
         }
         // Réserver le numéro dans ce même lot
