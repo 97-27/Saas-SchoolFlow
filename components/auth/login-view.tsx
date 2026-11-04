@@ -211,6 +211,35 @@ export function LoginView({
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [loginAvatar, setLoginAvatar] = useState('');
 
+  // Annuaire de l'école lu en base (/api/auth/directory) : un téléphone qui ouvre le lien pour la
+  // première fois n'a rien en mémoire et doit quand même reconnaître l'école et ses membres.
+  const [directoryStaff, setDirectoryStaff] = useState<{ id: string; fullName: string; roleId: string }[] | null>(null);
+  useEffect(() => {
+    if (!activeSlug) return;
+    let cancelled = false;
+    setDirectoryStaff(null);
+    fetch(`/api/auth/directory?slug=${encodeURIComponent(activeSlug)}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled || !json?.success) return;
+        setDirectoryStaff(Array.isArray(json.staff) ? json.staff : []);
+        if (json.school?.slug) {
+          setCurrentSchool((prev) => ({
+            ...prev,
+            slug: json.school.slug,
+            name: json.school.name || prev?.name,
+            shortName: json.school.shortName || prev?.shortName,
+            logoUrl: json.school.logoUrl || prev?.logoUrl,
+          }));
+          if (json.school.shortName) setSchoolSigle(String(json.school.shortName).toUpperCase());
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSlug]);
+
   // Liste globale de tous les établissements enregistrés (abonnés et par défaut)
   const allSchoolsList = React.useMemo(() => {
     if (!mounted) return [];
@@ -1119,9 +1148,17 @@ export function LoginView({
                       {(() => {
                         // Seulement les VRAIS comptes créés par la Direction (jamais les fiches de
                         // démonstration intégrées à l'application), et uniquement pour ce poste.
-                        const allStaff = getLiveStaffUsers(activeSlug).filter(
+                        // Source : l'annuaire de la base (tous appareils) ; à défaut, la mémoire locale.
+                        const localStaff = getLiveStaffUsers(activeSlug).filter(
                           (s) => s.id !== 'staff-founder' && s.id !== 'staff-001' && !/^(FND|DIR)-2026$/i.test(s.authCode || '')
                         );
+                        const allStaff: { id: string; fullName: string; roleId: string; avatarUrl?: string }[] =
+                          directoryStaff !== null
+                            ? directoryStaff.map((d) => ({
+                                ...d,
+                                avatarUrl: localStaff.find((l) => l.id === d.id)?.avatarUrl,
+                              }))
+                            : localStaff;
                         const matchedRoleStaff = allStaff.filter((s) => s.roleId === selectedRole);
 
                         if (matchedRoleStaff.length === 0) {

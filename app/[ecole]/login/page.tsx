@@ -1,5 +1,7 @@
 import { LoginView } from '@/components/auth/login-view';
-import { mockSchools } from '@/lib/data/mock-data';
+import { loadLoginSchool } from '@/lib/server/login-school';
+
+export const dynamic = 'force-dynamic';
 
 interface LoginPageProps {
   params: Promise<{ ecole: string }>;
@@ -7,7 +9,7 @@ interface LoginPageProps {
 
 export default async function DirectLoginPage({ params }: LoginPageProps) {
   const resolvedParams = await params;
-  const school = mockSchools[resolvedParams.ecole] || mockSchools['epc-manoi'];
+  const school = await loadLoginSchool(resolvedParams.ecole);
 
-  return <LoginView schoolSlug={resolvedParams.ecole} initialSchool={school} />;
+  return <LoginView schoolSlug={school.slug} initialSchool={school} />;
 }
