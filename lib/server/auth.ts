@@ -9,8 +9,14 @@ import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
 
 export const ADMIN_ROLES = ['fondateur', 'directeur'];
 export const STAFF_ROLES = ['fondateur', 'directeur', 'assistant_direction', 'secretaire', 'comptable', 'enseignant', 'educateur'];
-/** Rôles autorisés à créer / modifier des fiches élèves et des encaissements. */
-export const STUDENT_WRITE_ROLES = ['fondateur', 'directeur', 'comptable', 'secretaire', 'assistant_direction'];
+/**
+ * Rôles autorisés à créer / modifier des fiches élèves et des encaissements : Fondateur,
+ * Directeur et Comptable SEULEMENT (choix de l'établissement). Secrétaire, Assistant(e) et
+ * Éducateur consultent leurs pages sans rien modifier ; l'Enseignant saisit notes et appel.
+ */
+export const STUDENT_WRITE_ROLES = ['fondateur', 'directeur', 'comptable'];
+/** Rôles en consultation seule (aucune écriture, sauf l'appel pour l'Éducateur). */
+export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur'];
 /** Rôles autorisés à supprimer des élèves ou des encaissements. */
 export const DELETE_ROLES = ['fondateur', 'directeur', 'comptable'];
 /** Rôles autorisés à modifier l'internat, la cantine, le transport et les échéanciers. */

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { ShieldAlert, Lock, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 
 interface ReadOnlyGuardProps {
   children: React.ReactNode;
@@ -13,15 +14,23 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockedActionName, setBlockedActionName] = useState('Saisie ou Modification');
 
+  const pathname = usePathname() || '';
+
   useEffect(() => {
     const checkSession = () => {
       try {
         const stored = localStorage.getItem('schoolflow_active_session_v2');
         if (stored) {
           const parsed = JSON.parse(stored);
-          // Le Fondateur peut désormais modifier (choix de l'établissement) : seul un profil
-          // explicitement marqué « lecture seule » est bloqué.
-          if (parsed.isReadOnly === true) {
+          // Seuls Fondateur, Directeur et Comptable modifient (choix de l'établissement).
+          // Secrétaire et Assistant(e) : consultation seule. Éducateur : consultation, sauf
+          // l'appel de présence. Enseignant : ses pages (notes, appel) restent modifiables.
+          const role = String(parsed.roleId || '');
+          const readOnlyRole =
+            role === 'secretaire' ||
+            role === 'assistant_direction' ||
+            (role === 'educateur' && !pathname.includes('/presences'));
+          if (parsed.isReadOnly === true || readOnlyRole) {
             setIsReadOnly(true);
             return;
           }
@@ -35,7 +44,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
     checkSession();
     window.addEventListener(DATA_UPDATED_EVENT, checkSession);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, checkSession);
-  }, []);
+  }, [pathname]);
 
   // Intercepteur non bloquant : n'interfère JAMAIS avec la navigation, les liens, les onglets ou les tables
   useEffect(() => {
@@ -85,7 +94,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                     Action Non Autorisée
                   </h3>
                   <p className="text-xs text-amber-800 font-medium">
-                    Profil Contrôle Total (Supervision)
+                    Profil en consultation
                   </p>
                 </div>
               </div>
@@ -105,7 +114,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                 <span>Mode Consultation & Supervision Uniquement</span>
               </div>
               <p className="leading-relaxed">
-                Le profil <strong>Contrôle Total</strong> est en <strong>Supervision Globale</strong>. Vous pouvez observer l&apos;intégralité des tableaux de bord, effectifs, finances et bulletins, mais aucune modification ne peut être effectuée sans les droits d&apos;administration.
+                Votre profil permet de <strong>consulter</strong> vos pages. Les inscriptions, modifications et suppressions sont réservées au <strong>Fondateur</strong>, au <strong>Directeur</strong> et au <strong>Comptable</strong>.
               </p>
             </div>
 

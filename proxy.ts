@@ -10,10 +10,10 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
  * ne protégeait rien côté serveur.
  */
 const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
-  secretaire: ['dashboard', 'eleves', 'inscriptions', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
+  secretaire: ['dashboard', 'eleves', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
   comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
   enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
-  assistant_direction: ['dashboard', 'eleves', 'inscriptions', 'documents', 'classes', 'personnel', 'notes-diverses', 'sante'],
+  assistant_direction: ['dashboard', 'eleves', 'documents', 'classes', 'personnel', 'notes-diverses', 'sante'],
   // "communication" est volontairement absent : c'est la boîte de réception interne de la
   // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Les parents ont
   // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.

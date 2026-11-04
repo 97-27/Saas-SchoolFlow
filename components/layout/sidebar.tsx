@@ -253,15 +253,14 @@ export function Sidebar({
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'secretaire') {
-    // 📝 SECRÉTAIRE : Inscriptions et Vue d'ensemble des élèves (inscrire, modifier — sans supprimer),
-    //    Documents, Dépenses, Rapports, Classes, Notes diverses, Personnel, Santé
+    // 📝 SECRÉTAIRE (consultation seule) : Vue d'ensemble des élèves, Documents, Dépenses,
+    //    Rapports, Classes, Notes diverses, Personnel, Santé
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
       {
         key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
+        active: pathname.includes('/eleves') || pathname.includes('/documents'),
         subItems: [
-          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
           { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
           { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
         ],
@@ -330,15 +329,14 @@ export function Sidebar({
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
   } else if (roleId === 'assistant_direction') {
-    // 📋 ASSISTANT(E) : Inscriptions et Vue d'ensemble des élèves (inscrire, modifier — sans
-    //    supprimer), Classes, Documents, Personnel, Santé, Notes Diverses
+    // 📋 ASSISTANT(E) (consultation seule) : Vue d'ensemble des élèves, Classes, Documents,
+    //    Personnel, Santé, Notes Diverses
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
       {
         key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
+        active: pathname.includes('/eleves') || pathname.includes('/documents'),
         subItems: [
-          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
           { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
           { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
         ],
