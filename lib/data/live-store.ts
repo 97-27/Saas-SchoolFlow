@@ -227,6 +227,8 @@ interface DbSnapshot {
   numbers: Set<string>;
   /** « nom normalisé | classe » des élèves de la base. */
   people: Set<string>;
+  /** Numéro actuel de chaque élève dans la base (après renumérotation). */
+  numberById: Map<string, string>;
 }
 
 const personKey = (s: Pick<Student, 'fullName' | 'lastName' | 'firstName' | 'grade'>): string => {
@@ -248,6 +250,9 @@ export function rememberDatabaseStudents(slug: string, dbStudents: Student[]): b
         ids,
         numbers: dbStudents.map((s) => s && s.studentNumber).filter(Boolean),
         people: dbStudents.map((s) => (s ? personKey(s) : '')).filter(Boolean),
+        numberById: Object.fromEntries(
+          dbStudents.filter((s) => s && s.id && s.studentNumber).map((s) => [s.id, s.studentNumber])
+        ),
       })
     );
     return changed;
@@ -262,7 +267,13 @@ function readDatabaseSnapshot(slug: string): DbSnapshot | null {
     if (!raw) return null;
     const p = JSON.parse(raw);
     if (!p || !Array.isArray(p.ids) || p.ids.length === 0) return null;
-    return { at: Number(p.at) || 0, ids: new Set(p.ids), numbers: new Set(p.numbers || []), people: new Set(p.people || []) };
+    return {
+      at: Number(p.at) || 0,
+      ids: new Set(p.ids),
+      numbers: new Set(p.numbers || []),
+      people: new Set(p.people || []),
+      numberById: new Map(Object.entries(p.numberById && typeof p.numberById === 'object' ? p.numberById : {}) as [string, string][]),
+    };
   } catch (e) {
     return null;
   }
@@ -1597,10 +1608,23 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
     const seenNames = new Set<string>();
     const seenMatricules = new Set<string>();
     const uniqueStudents: Student[] = [];
+    // Photographie de la base, appliquée AVANT l'anti-doublon (voir plus bas).
+    const dbSnapshot = readDatabaseSnapshot(slug);
 
     // Priorité absolue aux élèves enregistrés
-    for (const stu of allCandidates) {
+    for (const candidate of allCandidates) {
+      let stu = candidate;
       if (!isValidStudent(stu)) continue;
+      // Écart 199 / 198 : une vieille copie d'un élève SUPPRIMÉ portait un numéro (« ID-185 »)
+      // que la renumérotation avait donné à un autre enfant. Elle passait l'anti-doublon la
+      // première et faisait écarter le vrai élève, puis était elle-même retirée : un élève de moins
+      // à l'écran. Désormais, une fiche de la base absente de la base est écartée tout de suite,
+      // et chaque fiche reprend le numéro que la base lui donne aujourd'hui.
+      if (dbSnapshot && isPersisted(stu)) {
+        if (!isInDatabaseOrPending(stu, dbSnapshot)) continue;
+        const currentNumber = dbSnapshot.numberById.get(stu.id);
+        if (currentNumber && currentNumber !== stu.studentNumber) stu = { ...stu, studentNumber: currentNumber };
+      }
       if (isLegacyDemoStudent(stu)) continue;
       if (
         deletedIds.has(stu.id) ||
@@ -1632,11 +1656,15 @@ export function getLiveStudents(initialStudents: Student[] = [], schoolSlug?: st
       // Le nom ne sert à écarter qu'une copie locale provisoire d'un élève déjà présent : deux fiches
       // enregistrées en base portant le même nom sont deux enfants différents (ex : deux « BAMBA Awa »
       // en CE2 et en 6ème), qui étaient jusqu'ici fusionnés et faisaient baisser l'effectif affiché.
+      // Deux fiches de la base (identifiants définitifs différents) sont toujours deux enfants
+      // différents : la base garantit déjà l'unicité des numéros. L'anti-doublon par numéro, nom ou
+      // matricule ne sert qu'à écarter les copies locales provisoires.
+      const persisted = isPersisted(stu);
       if (
         seenIds.has(idKey) ||
-        seenNumbers.has(numKey) ||
-        (!isPersisted(stu) && nameKey && seenNames.has(nameKey)) ||
-        (matKey && matKey !== '' && seenMatricules.has(matKey))
+        (!persisted && seenNumbers.has(numKey)) ||
+        (!persisted && nameKey && seenNames.has(nameKey)) ||
+        (!persisted && matKey && matKey !== '' && seenMatricules.has(matKey))
       ) {
         continue;
       }
