@@ -12,6 +12,19 @@ import {
 } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
 import {
+  getGradesConfig,
+  saveGradesConfig,
+  gradesConfigKey,
+  noteValues,
+  highestFilledIndex,
+  GradesConfig,
+  MAX_INTERROS,
+  MAX_DEVOIRS,
+} from '@/lib/data/grades-config';
+import {
+  Settings2,
+  Plus,
+  Minus,
   BookOpen,
   Layers,
   Building2,
@@ -35,16 +48,12 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
+// int1…intN (interrogations) et dev1…devN (devoirs) : leur nombre est fixé par l'école dans
+// « Paramètres des notes » (lib/data/grades-config.ts).
 interface GradeEntry {
-  int1: string;
-  int2: string;
-  int3: string;
-  int4: string;
-  int5: string;
-  dev1: string;
-  dev2: string;
   comp: string;
   customAppreciation?: string;
+  [field: string]: string | undefined;
 }
 
 // Matières et coefficients normalisés pour chaque classe du Secondaire (Collège & Lycée)
@@ -387,6 +396,30 @@ export function GradesView({
   // plus effacer, avec ses cases vides, les notes saisies entre-temps sur un autre appareil.
   const editedRef = useRef<Record<string, Partial<GradeEntry>>>({});
 
+  // Paramètres des notes : nombre d'interrogations et de devoirs fixé par l'école.
+  const [gradesConfig, setGradesConfig] = useState<GradesConfig>(() => getGradesConfig(schoolSlug));
+  const [showGradesSettings, setShowGradesSettings] = useState(false);
+  const [canEditGradesConfig, setCanEditGradesConfig] = useState(false);
+  useEffect(() => {
+    setGradesConfig(getGradesConfig(schoolSlug));
+    try {
+      const session = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
+      setCanEditGradesConfig(session?.roleId === 'fondateur' || session?.roleId === 'directeur');
+    } catch (e) {
+      setCanEditGradesConfig(false);
+    }
+    const handleCfg = (e: Event) => {
+      const keys: string[] = (e as CustomEvent)?.detail?.keys || [];
+      if (keys.includes(gradesConfigKey(schoolSlug))) setGradesConfig(getGradesConfig(schoolSlug));
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, handleCfg);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleCfg);
+  }, [schoolSlug]);
+
+  const updateGradesConfig = (patch: Partial<GradesConfig>) => {
+    setGradesConfig((prev) => saveGradesConfig(schoolSlug, { ...prev, ...patch }));
+  };
+
   // Notes arrivées d'un autre appareil (base, via cloud-kv) : on les affiche en gardant les
   // cases en cours de saisie sur cet écran.
   useEffect(() => {
@@ -496,6 +529,13 @@ export function GradesView({
     }
   };
 
+  // Colonnes affichées : le nombre fixé par l'école, jamais moins que la dernière colonne déjà
+  // remplie (une note saisie ne disparaît jamais de l'écran).
+  const interroCols = Math.max(gradesConfig.interros, highestFilledIndex(Object.values(gradesMap), 'int'));
+  const devoirCols = Math.max(gradesConfig.devoirs, highestFilledIndex(Object.values(gradesMap), 'dev'));
+  const interroFields = Array.from({ length: interroCols }, (_, i) => `int${i + 1}`);
+  const devoirFields = Array.from({ length: devoirCols }, (_, i) => `dev${i + 1}`);
+
   // Traitement et calcul des moyennes
   const processedGrades = useMemo(() => {
     const list = classStudents.map((stu) => {
@@ -511,15 +551,11 @@ export function GradesView({
         customAppreciation: '',
       };
 
-      const interros = [g.int1, g.int2, g.int3, g.int4, g.int5]
-        .map((val) => (val !== '' && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-        .filter((val): val is number => val !== null);
+      // Toutes les interrogations et tous les devoirs saisis, quel que soit leur nombre.
+      const interros = noteValues(g, 'int');
+      const devoirs = noteValues(g, 'dev');
 
-      const devoirs = [g.dev1, g.dev2]
-        .map((val) => (val !== '' && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-        .filter((val): val is number => val !== null);
-
-      const compVal = g.comp !== '' && !isNaN(parseFloat(g.comp)) ? parseFloat(g.comp) : null;
+      const compVal = g.comp && g.comp !== '' && !isNaN(parseFloat(g.comp)) ? parseFloat(g.comp) : null;
 
       const hasAnyNote = interros.length > 0 || devoirs.length > 0 || compVal !== null;
 
@@ -1181,17 +1217,66 @@ export function GradesView({
                 </p>
               </div>
 
-              <div className="relative w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher un élève..."
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
-                />
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowGradesSettings((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 cursor-pointer"
+                >
+                  <Settings2 className="w-4 h-4" />
+                  Paramètres des notes
+                </button>
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Rechercher un élève..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium"
+                  />
+                </div>
               </div>
             </div>
+
+            {showGradesSettings && (
+              <div className="p-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center gap-4">
+                {([
+                  { field: 'interros' as const, label: "Nombre d'interrogations", max: MAX_INTERROS, color: 'text-blue-900 bg-blue-50 border-blue-200' },
+                  { field: 'devoirs' as const, label: 'Nombre de devoirs', max: MAX_DEVOIRS, color: 'text-amber-900 bg-amber-50 border-amber-200' },
+                ]).map((item) => (
+                  <div key={item.field} className={`flex items-center justify-between gap-3 px-3 py-2 rounded-2xl border ${item.color}`}>
+                    <span className="text-xs font-bold">{item.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!canEditGradesConfig || gradesConfig[item.field] <= 1}
+                        onClick={() => updateGradesConfig({ [item.field]: gradesConfig[item.field] - 1 })}
+                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                        aria-label="Retirer une colonne"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-6 text-center font-mono font-black text-sm">{gradesConfig[item.field]}</span>
+                      <button
+                        type="button"
+                        disabled={!canEditGradesConfig || gradesConfig[item.field] >= item.max}
+                        onClick={() => updateGradesConfig({ [item.field]: gradesConfig[item.field] + 1 })}
+                        className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                        aria-label="Ajouter une colonne"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] text-slate-500 leading-relaxed sm:max-w-sm">
+                  {canEditGradesConfig
+                    ? "Fixé pour toute l'école (toutes classes et matières). Les moyennes comptent toutes les notes saisies."
+                    : "Fixé par la Direction pour toute l'école. Seuls le Fondateur et le Directeur peuvent le changer."}
+                </p>
+              </div>
+            )}
 
             {/* Tableau */}
             <div className="overflow-x-auto scrollbar-top">
@@ -1201,13 +1286,12 @@ export function GradesView({
                     <th className="py-3 pl-4 pr-2 text-center w-12">Rang</th>
                     <th className="py-3 px-3 min-w-[180px]">Matricule & Élève</th>
                     <th className="py-3 px-2 text-center w-12">Genre</th>
-                    <th className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. 1</th>
-                    <th className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. 2</th>
-                    <th className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. 3</th>
-                    <th className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. 4</th>
-                    <th className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. 5</th>
-                    <th className="py-3 px-2 text-center bg-amber-50/50 text-amber-900 whitespace-nowrap min-w-[75px]">Devoir 1</th>
-                    <th className="py-3 px-2 text-center bg-amber-50/50 text-amber-900 whitespace-nowrap min-w-[75px]">Devoir 2</th>
+                    {interroFields.map((f, i) => (
+                      <th key={f} className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. {i + 1}</th>
+                    ))}
+                    {devoirFields.map((f, i) => (
+                      <th key={f} className="py-3 px-2 text-center bg-amber-50/50 text-amber-900 whitespace-nowrap min-w-[75px]">Devoir {i + 1}</th>
+                    ))}
                     <th className="py-3 px-1.5 text-center bg-emerald-50/60 text-emerald-950 w-20">Composition</th>
                     <th className="py-3 px-2 text-center bg-emerald-100/80 text-emerald-950 font-black w-24">Moyenne Finale</th>
                     <th className="py-3 pr-4 px-3 min-w-[220px]">Appréciation du Professeur</th>
@@ -1216,7 +1300,7 @@ export function GradesView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredGrades.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="py-12 text-center text-slate-400">
+                      <td colSpan={6 + interroCols + devoirCols} className="py-12 text-center text-slate-400">
                         Aucun élève trouvé dans la classe {selectedClass}.
                       </td>
                     </tr>
@@ -1257,103 +1341,37 @@ export function GradesView({
                             <GenderBadge gender={g.gender} />
                           </td>
 
-                          <td className="py-2 px-1 text-center bg-blue-50/20">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.int1}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'int1', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
+                          {interroFields.map((f) => (
+                            <td key={f} className="py-2 px-1 text-center bg-blue-50/20">
+                              <input
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                max="20"
+                                value={entry[f] ?? ''}
+                                placeholder="—"
+                                disabled={!portalStatus.isOpen}
+                                onChange={(e) => handleNoteChange(g.studentId, f, e.target.value)}
+                                className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border rounded-lg disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                              />
+                            </td>
+                          ))}
 
-                          <td className="py-2 px-1 text-center bg-blue-50/20">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.int2}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'int2', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
-
-                          <td className="py-2 px-1 text-center bg-blue-50/20">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.int3}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'int3', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
-
-                          <td className="py-2 px-1 text-center bg-blue-50/20">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.int4}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'int4', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
-
-                          <td className="py-2 px-1 text-center bg-blue-50/20">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.int5}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'int5', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
-
-                          <td className="py-2 px-1 text-center bg-amber-50/30">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.dev1}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'dev1', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
-
-                          <td className="py-2 px-1 text-center bg-amber-50/30">
-                            <input
-                              type="number"
-                              step="0.25"
-                              min="0"
-                              max="20"
-                              value={entry.dev2}
-                              placeholder="—"
-                              disabled={!portalStatus.isOpen}
-                              onChange={(e) => handleNoteChange(g.studentId, 'dev2', e.target.value)}
-                              className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                            />
-                          </td>
+                          {devoirFields.map((f) => (
+                            <td key={f} className="py-2 px-1 text-center bg-amber-50/30">
+                              <input
+                                type="number"
+                                step="0.25"
+                                min="0"
+                                max="20"
+                                value={entry[f] ?? ''}
+                                placeholder="—"
+                                disabled={!portalStatus.isOpen}
+                                onChange={(e) => handleNoteChange(g.studentId, f, e.target.value)}
+                                className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border rounded-lg disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed border-amber-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                              />
+                            </td>
+                          ))}
 
                           <td className="py-2 px-1.5 text-center bg-emerald-50/40">
                             <input

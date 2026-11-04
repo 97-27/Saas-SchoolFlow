@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
+import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool, mockStudents } from '@/lib/data/mock-data';
 import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, broadcastLiveUpdate } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
@@ -424,12 +425,8 @@ export function ParentBulletinsView({
       subjectsList.forEach((sub) => {
         const e = savedSubjectGrades[sub.name]?.[studentId];
         if (!e) return;
-        const interros = [e.int1, e.int2, e.int3, e.int4, e.int5]
-          .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
-          .filter((v: any): v is number => v !== null);
-        const devoirs = [e.dev1, e.dev2]
-          .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
-          .filter((v: any): v is number => v !== null);
+        const interros = noteValues(e, 'int');
+        const devoirs = noteValues(e, 'dev');
         const compVal = e.comp !== '' && e.comp !== null && !isNaN(parseFloat(e.comp)) ? parseFloat(e.comp) : null;
         if (interros.length === 0 && devoirs.length === 0 && compVal === null) return;
         const avgInt = interros.length > 0 ? interros.reduce((a: number, b: number) => a + b, 0) / interros.length : null;
@@ -463,13 +460,9 @@ export function ParentBulletinsView({
       let compStr = '—';
 
       if (entry) {
-        const interros = [entry.int1, entry.int2, entry.int3, entry.int4, entry.int5]
-          .map((val: any) => (val !== '' && val !== null && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-          .filter((val: any): val is number => val !== null);
+        const interros = noteValues(entry, 'int');
 
-        const devoirs = [entry.dev1, entry.dev2]
-          .map((val: any) => (val !== '' && val !== null && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-          .filter((val: any): val is number => val !== null);
+        const devoirs = noteValues(entry, 'dev');
 
         const compVal = entry.comp !== '' && entry.comp !== null && !isNaN(parseFloat(entry.comp)) ? parseFloat(entry.comp) : null;
 
@@ -520,12 +513,8 @@ export function ParentBulletinsView({
           .map((cm) => {
             const cmEntry = savedSubjectGrades[sub.name]?.[cm.id];
             if (!cmEntry) return null;
-            const cInt = [cmEntry.int1, cmEntry.int2, cmEntry.int3, cmEntry.int4, cmEntry.int5]
-              .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
-              .filter((v: any): v is number => v !== null);
-            const cDev = [cmEntry.dev1, cmEntry.dev2]
-              .map((v: any) => (v !== '' && v !== null && !isNaN(parseFloat(v)) ? parseFloat(v) : null))
-              .filter((v: any): v is number => v !== null);
+            const cInt = noteValues(cmEntry, 'int');
+            const cDev = noteValues(cmEntry, 'dev');
             const cComp = cmEntry.comp !== '' && cmEntry.comp !== null && !isNaN(parseFloat(cmEntry.comp)) ? parseFloat(cmEntry.comp) : null;
             if (cInt.length === 0 && cDev.length === 0 && cComp === null) return null;
             const cAvgInt = cInt.length > 0 ? cInt.reduce((a: number, b: number) => a + b, 0) / cInt.length : null;

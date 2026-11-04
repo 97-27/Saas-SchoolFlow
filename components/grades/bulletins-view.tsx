@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
+import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool } from '@/lib/data/mock-data';
 import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
@@ -444,13 +445,9 @@ export function BulletinsView({
         let appreciation = '';
 
         if (entry) {
-          const interros = [entry.int1, entry.int2, entry.int3, entry.int4, entry.int5]
-            .map((val) => (val !== '' && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-            .filter((val): val is number => val !== null);
+          const interros = noteValues(entry, 'int');
 
-          const devoirs = [entry.dev1, entry.dev2]
-            .map((val) => (val !== '' && !isNaN(parseFloat(val)) ? parseFloat(val) : null))
-            .filter((val): val is number => val !== null);
+          const devoirs = noteValues(entry, 'dev');
 
           const compVal = entry.comp !== '' && !isNaN(parseFloat(entry.comp)) ? parseFloat(entry.comp) : null;
 

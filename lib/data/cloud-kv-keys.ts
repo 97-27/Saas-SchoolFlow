@@ -25,6 +25,7 @@ const PEDAGOGIE = ['fondateur', 'directeur', 'enseignant'];
 
 export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_grades', label: 'Notes', read: [...ALL_STAFF, 'parent'], write: PEDAGOGIE },
+  { base: 'schoolflow_grades_config_v1', label: 'Paramètres des notes', read: [...ALL_STAFF, 'parent'], write: DIRECTION },
   { base: 'schoolflow_grades_portal_status_v1', label: 'Portail des notes', read: [...ALL_STAFF, 'parent'], write: DIRECTION },
   { base: 'schoolflow_validated_class_bulletins_v1', label: 'Bulletins validés', read: [...ALL_STAFF, 'parent'], write: PEDAGOGIE },
   { base: 'schoolflow_attendance_records_v1', label: 'Appel de présence', read: ALL_STAFF, write: [...PEDAGOGIE, 'educateur'] },
