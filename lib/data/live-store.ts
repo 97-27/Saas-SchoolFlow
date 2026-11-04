@@ -847,7 +847,11 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           const rawDeleted = localStorage.getItem(DELETED_STUDENTS_STORAGE_KEY);
           const prevDeleted: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
           const serverIds: string[] = Array.isArray(data.deletedStudentIds) ? data.deletedStudentIds : [];
-          const merged = Array.from(new Set<string>([...prevDeleted, ...serverIds].filter(isStudentTombstoneId)));
+          // Élèves restaurés depuis la Corbeille : ils quittent la liste noire de cet appareil.
+          const restored = new Set<string>(Array.isArray(data.restoredStudentIds) ? data.restoredStudentIds : []);
+          const merged = Array.from(
+            new Set<string>([...prevDeleted, ...serverIds].filter((id) => isStudentTombstoneId(id) && !restored.has(id)))
+          );
           if (merged.length !== prevDeleted.length || merged.some((id) => !prevDeleted.includes(id))) {
             localStorage.setItem(DELETED_STUDENTS_STORAGE_KEY, JSON.stringify(merged));
             hasChanges = true;

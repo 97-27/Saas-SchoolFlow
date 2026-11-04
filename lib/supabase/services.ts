@@ -1917,6 +1917,175 @@ export async function applyServiceChangesToSupabase(schoolSlug: string, changes:
   return result;
 }
 
+// ─── CORBEILLE ET JOURNAL (migration 007) ─────────────────────────────────
+
+export interface JournalEntry {
+  id: number;
+  at: string;
+  op: 'INSERT' | 'UPDATE' | 'DELETE';
+  table: 'students' | 'invoices' | 'service_subscriptions' | 'service_month_payments';
+  rowId: string | null;
+  studentId: string | null;
+  /** Nom et numéro actuels de l'élève (ou ceux de la fiche supprimée). */
+  studentName: string;
+  studentNumber: string;
+  oldRow: Record<string, any> | null;
+  newRow: Record<string, any> | null;
+  /** Nom du membre du personnel (ou son rôle), jamais son code d'accès. */
+  actor: string;
+  restoredAt: string | null;
+  restoredBy: string | null;
+}
+
+export interface JournalPage {
+  available: boolean;
+  entries: JournalEntry[];
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  fondateur: 'Fondateur',
+  directeur: 'Directeur',
+  comptable: 'Comptable',
+  secretaire: 'Secrétaire',
+  assistant_direction: 'Assistant(e) de direction',
+  enseignant: 'Enseignant(e)',
+  educateur: 'Éducateur',
+  parent: 'Parent',
+  base: 'Base de données (script)',
+};
+
+/**
+ * Lit le journal de l'école. `kind` = 'trash' (suppressions), 'changes' (modifications) ou
+ * 'all'. Les lignes techniques sont regroupées côté écran.
+ */
+export async function getJournalFromSupabase(schoolSlug: string, kind: 'trash' | 'changes' | 'all' = 'trash', limit = 400): Promise<JournalPage> {
+  const empty: JournalPage = { available: false, entries: [] };
+  if (!isSupabaseConfigured) return empty;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return empty;
+    let q = supabase
+      .from('data_journal')
+      .select('id, at, op, table_name, row_id, student_id, old_row, new_row, actor, restored_at, restored_by')
+      .eq('school_id', schoolId)
+      .order('at', { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 1000));
+    if (kind === 'trash') q = q.eq('op', 'DELETE');
+    else if (kind === 'changes') q = q.in('op', ['UPDATE', 'INSERT']);
+    const { data, error } = await q;
+    if (error) return empty;
+    const rows = (data || []) as any[];
+
+    // Noms des élèves actuels, et noms des membres du personnel (pour « qui »).
+    const studentIds = Array.from(new Set(rows.map((r) => r.student_id).filter(Boolean)));
+    const names = new Map<string, { name: string; number: string }>();
+    if (studentIds.length) {
+      const { data: st } = await supabase.from('students').select('id, full_name, student_number').in('id', studentIds.slice(0, 1000));
+      (st || []).forEach((s: any) => names.set(s.id, { name: s.full_name || '', number: s.student_number || '' }));
+    }
+    // Élèves supprimés : leur nom vient de la fiche gardée dans le journal.
+    rows.forEach((r) => {
+      if (r.table_name === 'students' && r.student_id && !names.has(r.student_id)) {
+        const row = r.old_row || r.new_row || {};
+        names.set(r.student_id, { name: row.full_name || '', number: row.student_number || '' });
+      }
+    });
+    const missing = studentIds.filter((id) => !names.has(id));
+    if (missing.length) {
+      const { data: gone } = await supabase
+        .from('data_journal')
+        .select('student_id, old_row')
+        .eq('school_id', schoolId)
+        .eq('table_name', 'students')
+        .eq('op', 'DELETE')
+        .in('student_id', missing.slice(0, 500));
+      (gone || []).forEach((g: any) => {
+        if (!names.has(g.student_id)) names.set(g.student_id, { name: g.old_row?.full_name || '', number: g.old_row?.student_number || '' });
+      });
+    }
+
+    const staffIds = Array.from(
+      new Set(rows.map((r) => String(r.actor || '').split('|')[1]).filter(Boolean))
+    );
+    const staffNames = new Map<string, string>();
+    if (staffIds.length) {
+      const { data: staff } = await supabase.from('staff_users').select('id, full_name').in('id', staffIds.slice(0, 200));
+      (staff || []).forEach((s: any) => staffNames.set(String(s.id), s.full_name || ''));
+    }
+    const actorName = (raw: string | null): string => {
+      const [role, staffId] = String(raw || 'base').split('|');
+      const person = staffId ? staffNames.get(staffId) : '';
+      const roleName = ROLE_LABELS[role] || role || 'Inconnu';
+      return person ? `${person} (${roleName})` : roleName;
+    };
+
+    return {
+      available: true,
+      entries: rows.map((r) => {
+        const who = r.student_id ? names.get(r.student_id) : undefined;
+        return {
+          id: Number(r.id),
+          at: r.at,
+          op: r.op,
+          table: r.table_name,
+          rowId: r.row_id,
+          studentId: r.student_id,
+          studentName: who?.name || '',
+          studentNumber: who?.number || '',
+          oldRow: r.old_row,
+          newRow: r.new_row,
+          actor: actorName(r.actor),
+          restoredAt: r.restored_at,
+          restoredBy: r.restored_by ? actorName(r.restored_by) : null,
+        } as JournalEntry;
+      }),
+    };
+  } catch (e) {
+    return empty;
+  }
+}
+
+/** Restaure une suppression (avec ce qui a été supprimé en même temps) ou annule une modification. */
+export async function restoreJournalInSupabase(
+  schoolSlug: string,
+  entryId: number,
+  actor: string
+): Promise<{ ok: boolean; restored?: number; message: string }> {
+  if (!isSupabaseConfigured || !Number.isFinite(entryId)) return { ok: false, message: 'Requête invalide.' };
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return { ok: false, message: 'Établissement introuvable.' };
+    const { data, error } = await supabase.rpc('restore_journal', { p_school: schoolId, p_id: entryId, p_actor: actor });
+    if (error) return { ok: false, message: `La base a refusé la restauration : ${error.message}` };
+    const res = (data || {}) as any;
+    return { ok: Boolean(res.ok), restored: Number(res.restored) || 0, message: String(res.message || '') };
+  } catch (e: any) {
+    return { ok: false, message: 'Erreur de connexion avec la base.' };
+  }
+}
+
+/** Élèves restaurés depuis la corbeille ces 30 derniers jours (pour les retirer des listes noires locales). */
+export async function getRestoredStudentIds(schoolSlug: string): Promise<string[]> {
+  if (!isSupabaseConfigured) return [];
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return [];
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('data_journal')
+      .select('student_id')
+      .eq('school_id', schoolId)
+      .eq('table_name', 'students')
+      .eq('op', 'DELETE')
+      .gte('restored_at', since)
+      .limit(1000);
+    if (error) return [];
+    return Array.from(new Set((data || []).map((r: any) => r.student_id).filter(Boolean)));
+  } catch (e) {
+    return [];
+  }
+}
+
 /** Compteur de version de l'école (augmente à chaque modification, migration 004). */
 export async function getSchoolDataVersion(schoolSlug: string): Promise<number | null> {
   if (!isSupabaseConfigured) return null;

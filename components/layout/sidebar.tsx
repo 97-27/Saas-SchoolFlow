@@ -27,6 +27,7 @@ import {
   Receipt,
   Mail,
   HeartPulse,
+  Trash2,
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
@@ -201,6 +202,7 @@ export function Sidebar({
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'fondateur') {
@@ -247,6 +249,7 @@ export function Sidebar({
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
     ];
   } else if (roleId === 'secretaire') {
     // 📝 SECRÉTAIRE : Vue d'ensemble, Documents scolaires, Dépenses de l'école, Rapports & statistiques, Classes & niveaux, Notes diverses, Enseignants & personnel

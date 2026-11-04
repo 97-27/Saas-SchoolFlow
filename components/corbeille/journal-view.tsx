@@ -1,0 +1,479 @@
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Trash2,
+  History,
+  RotateCcw,
+  Search,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  User,
+  Receipt,
+  BedDouble,
+  CalendarCheck,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react';
+import { getJournal, restoreJournalEntry, JournalEntry } from '@/lib/supabase/remote';
+import { syncSchoolDataWithServer } from '@/lib/data/live-store';
+
+/**
+ * CORBEILLE & JOURNAL (Directeur / Fondateur)
+ * Tout ce qui est supprimé ou modifié (élèves, reçus, internat / cantine / transport, mois payés)
+ * est gardé par la base (migration 007). Ici, on le voit — qui, quand, quoi — et on le remet en
+ * place en un clic.
+ */
+
+type Tab = 'trash' | 'changes';
+
+interface Group {
+  main: JournalEntry;
+  related: JournalEntry[];
+}
+
+const WINDOW_MS = 15 * 60 * 1000;
+const SERVICE_NAMES: Record<string, string> = { internat: 'Internat', cantine: 'Cantine', transport: 'Transport' };
+
+const FIELD_LABELS: Record<string, string> = {
+  full_name: 'Nom complet',
+  first_name: 'Prénom(s)',
+  last_name: 'Nom',
+  grade: 'Classe',
+  gender: 'Sexe',
+  matricule: 'Matricule',
+  date_of_birth: 'Date de naissance',
+  address: 'Adresse',
+  guardian_name: 'Parent / tuteur',
+  guardian_phone: 'Téléphone du parent',
+  whatsapp_phone: 'WhatsApp',
+  enrollment_type: "Type d'inscription",
+  registration_fee: "Frais d'inscription",
+  tuition_amount: 'Scolarité',
+  discount_amount: 'Réduction',
+  net_amount: 'Net à payer',
+  paid_amount: 'Montant payé',
+  balance_remaining: 'Reste à payer',
+  tuition_status: 'Statut du paiement',
+  status: 'Statut',
+  fee_type: 'Nature du reçu',
+  amount: 'Montant',
+  payment_method: 'Mode de paiement',
+  issue_date: 'Date du reçu',
+  due_date: 'Échéance',
+  monthly_rate: 'Tarif mensuel',
+  discount: 'Remise',
+  details: 'Détails',
+  month: 'Mois',
+  service: 'Service',
+  avatar_url: 'Photo',
+  attendance_rate: 'Assiduité',
+};
+const MONEY_FIELDS = new Set([
+  'registration_fee',
+  'tuition_amount',
+  'discount_amount',
+  'net_amount',
+  'paid_amount',
+  'balance_remaining',
+  'amount',
+  'monthly_rate',
+  'discount',
+]);
+const IGNORED_FIELDS = new Set(['id', 'school_id', 'student_id', 'created_at', 'updated_at', 'student_number', 'invoice_number', 'paid_at']);
+
+const money = (v: unknown) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(v) || 0))} F`;
+
+function formatValue(field: string, v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (MONEY_FIELDS.has(field)) return money(v);
+  if (typeof v === 'object') {
+    const d = v as Record<string, unknown>;
+    const parts = [d.pavilion, d.roomNumber, d.parentContact].filter(Boolean);
+    return parts.length ? parts.join(' · ') : JSON.stringify(v);
+  }
+  return String(v);
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function rowOf(e: JournalEntry): Record<string, any> {
+  return (e.op === 'DELETE' ? e.oldRow : e.newRow || e.oldRow) || {};
+}
+
+function studentLabel(e: JournalEntry): string {
+  const row = rowOf(e);
+  const name = e.studentName || (e.table === 'students' ? row.full_name : '') || 'Élève inconnu';
+  const num = e.studentNumber || (e.table === 'students' ? row.student_number : '');
+  return num ? `${name} (${num})` : name;
+}
+
+/** Regroupe une suppression d'élève (ou un retrait de service) avec ce qui est parti avec. */
+function groupTrash(entries: JournalEntry[]): Group[] {
+  const used = new Set<number>();
+  const groups: Group[] = [];
+  const near = (a: JournalEntry, b: JournalEntry) => Math.abs(new Date(a.at).getTime() - new Date(b.at).getTime()) <= WINDOW_MS;
+  const priority = (t: JournalEntry['table']) => (t === 'students' ? 0 : t === 'service_subscriptions' ? 1 : 2);
+  const ordered = [...entries].sort((a, b) => priority(a.table) - priority(b.table));
+
+  for (const e of ordered) {
+    if (used.has(e.id)) continue;
+    used.add(e.id);
+    const related: JournalEntry[] = [];
+    if (e.table === 'students' && e.studentId) {
+      for (const o of entries) {
+        if (!used.has(o.id) && o.studentId === e.studentId && near(o, e)) {
+          used.add(o.id);
+          related.push(o);
+        }
+      }
+    } else if (e.table === 'service_subscriptions' && e.studentId) {
+      const svc = String(e.oldRow?.service || '');
+      for (const o of entries) {
+        if (used.has(o.id) || o.studentId !== e.studentId || !near(o, e)) continue;
+        const sameService =
+          (o.table === 'service_month_payments' && o.oldRow?.service === svc) ||
+          (o.table === 'invoices' && String(o.oldRow?.fee_type || '').toLowerCase().includes(svc));
+        if (sameService) {
+          used.add(o.id);
+          related.push(o);
+        }
+      }
+    }
+    groups.push({ main: e, related });
+  }
+  return groups.sort((a, b) => new Date(b.main.at).getTime() - new Date(a.main.at).getTime());
+}
+
+function describeTrash(g: Group): { icon: React.ElementType; title: string; detail: string } {
+  const e = g.main;
+  const row = e.oldRow || {};
+  const count = (t: JournalEntry['table']) => g.related.filter((r) => r.table === t).length;
+  const extras = [
+    count('invoices') ? `${count('invoices')} reçu(s)` : '',
+    count('service_subscriptions') ? `${count('service_subscriptions')} abonnement(s)` : '',
+    count('service_month_payments') ? `${count('service_month_payments')} mois payé(s)` : '',
+  ].filter(Boolean);
+  switch (e.table) {
+    case 'students':
+      return {
+        icon: User,
+        title: `Élève supprimé : ${row.full_name || 'sans nom'} (${row.student_number || '—'})`,
+        detail: [row.grade, extras.length ? `avec ${extras.join(', ')}` : ''].filter(Boolean).join(' · '),
+      };
+    case 'service_subscriptions':
+      return {
+        icon: BedDouble,
+        title: `Retiré du service ${SERVICE_NAMES[row.service] || row.service} : ${studentLabel(e)}`,
+        detail: [`Tarif ${money(row.monthly_rate)} / mois`, extras.length ? `avec ${extras.join(', ')}` : ''].filter(Boolean).join(' · '),
+      };
+    case 'invoices':
+      return {
+        icon: Receipt,
+        title: `Reçu supprimé ${row.invoice_number || ''} : ${studentLabel(e)}`,
+        detail: `${row.fee_type || 'Reçu'} · payé ${money(row.paid_amount)}`,
+      };
+    default:
+      return {
+        icon: CalendarCheck,
+        title: `Mois décoché (${SERVICE_NAMES[row.service] || row.service}) : ${studentLabel(e)}`,
+        detail: String(row.month || ''),
+      };
+  }
+}
+
+function describeChange(e: JournalEntry): { title: string; changes: Array<{ field: string; before: string; after: string }> } {
+  const what =
+    e.table === 'students'
+      ? 'Fiche élève'
+      : e.table === 'invoices'
+        ? `Reçu ${rowOf(e).invoice_number || ''}`
+        : e.table === 'service_subscriptions'
+          ? `Abonnement ${SERVICE_NAMES[rowOf(e).service] || ''}`
+          : `Mois payé ${SERVICE_NAMES[rowOf(e).service] || ''}`;
+  if (e.op === 'INSERT') {
+    const row = e.newRow || {};
+    const detail =
+      e.table === 'invoices'
+        ? `${row.fee_type || ''} · payé ${money(row.paid_amount)}`
+        : e.table === 'service_month_payments'
+          ? String(row.month || '')
+          : e.table === 'service_subscriptions'
+            ? `Tarif ${money(row.monthly_rate)} / mois`
+            : String(row.grade || '');
+    return { title: `${what} créé(e) : ${studentLabel(e)}`, changes: detail ? [{ field: '', before: '', after: detail }] : [] };
+  }
+  const o = e.oldRow || {};
+  const n = e.newRow || {};
+  const changes = Object.keys({ ...o, ...n })
+    .filter((k) => !IGNORED_FIELDS.has(k) && JSON.stringify(o[k]) !== JSON.stringify(n[k]))
+    .map((k) => ({ field: FIELD_LABELS[k] || k, before: formatValue(k, o[k]), after: formatValue(k, n[k]) }));
+  return { title: `${what} modifié(e) : ${studentLabel(e)}`, changes };
+}
+
+export function JournalView({ schoolSlug }: { schoolSlug: string }) {
+  const [tab, setTab] = useState<Tab>('trash');
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [available, setAvailable] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const res = await getJournal(tab, schoolSlug);
+    if (!res) {
+      setError("Impossible de lire le journal. Vérifiez la connexion, ou que vous êtes connecté en tant que Directeur ou Fondateur.");
+      setEntries([]);
+    } else {
+      setAvailable(res.available);
+      setEntries(res.entries || []);
+    }
+    setLoading(false);
+  }, [tab, schoolSlug]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const showToast = (ok: boolean, text: string) => {
+    setToast({ ok, text });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  const restore = async (id: number) => {
+    setConfirmId(null);
+    setBusyId(id);
+    const res = await restoreJournalEntry(id, schoolSlug);
+    setBusyId(null);
+    showToast(res.ok, res.message || (res.ok ? 'Restauré.' : 'La restauration a échoué.'));
+    if (res.ok) {
+      syncSchoolDataWithServer(schoolSlug, true);
+      load();
+    }
+  };
+
+  const q = query.trim().toLowerCase();
+  const matches = (e: JournalEntry) =>
+    !q ||
+    [e.studentName, e.studentNumber, e.actor, rowOf(e).full_name, rowOf(e).invoice_number, rowOf(e).fee_type]
+      .filter(Boolean)
+      .some((v) => String(v).toLowerCase().includes(q));
+
+  const trashGroups = useMemo(() => (tab === 'trash' ? groupTrash(entries) : []), [tab, entries]);
+  const visibleGroups = trashGroups.filter((g) => matches(g.main) || g.related.some(matches));
+  const visibleChanges = tab === 'changes' ? entries.filter(matches) : [];
+
+  const RestoreButton = ({ entry, label }: { entry: JournalEntry; label: string }) => {
+    if (entry.restoredAt) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Restauré le {formatWhen(entry.restoredAt)}
+          {entry.restoredBy ? ` par ${entry.restoredBy}` : ''}
+        </span>
+      );
+    }
+    if (confirmId === entry.id) {
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-slate-700">Confirmer ?</span>
+          <button
+            onClick={() => restore(entry.id)}
+            className="min-h-[40px] rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700"
+          >
+            Oui, {label.toLowerCase()}
+          </button>
+          <button
+            onClick={() => setConfirmId(null)}
+            className="min-h-[40px] rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Annuler
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={() => setConfirmId(entry.id)}
+        disabled={busyId !== null}
+        className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+      >
+        {busyId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+        {label}
+      </button>
+    );
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-5xl pb-12">
+      <div className="mb-6">
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Corbeille &amp; Journal</h1>
+        <p className="mt-1 text-sm leading-relaxed text-slate-500 sm:text-base">
+          Tout ce qui est supprimé ou modifié est gardé ici : qui, quand et quoi. Un clic suffit pour le remettre en place.
+        </p>
+      </div>
+
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1 sm:inline-flex">
+          {(
+            [
+              ['trash', 'Corbeille', Trash2],
+              ['changes', 'Modifications', History],
+            ] as Array<[Tab, string, React.ElementType]>
+          ).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              onClick={() => {
+                setTab(key);
+                setConfirmId(null);
+              }}
+              className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition ${
+                tab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <label className="relative flex-1 sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Nom, numéro, reçu…"
+              className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-emerald-400"
+            />
+          </label>
+          <button
+            onClick={load}
+            aria-label="Actualiser"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {toast && (
+        <div
+          role="status"
+          className={`mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${
+            toast.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {toast.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
+          <span>{toast.text}</span>
+        </div>
+      )}
+
+      {!available && !loading && !error && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          La corbeille n&apos;est pas encore activée dans la base : lancez le script 007 dans Supabase &gt; SQL Editor.
+        </div>
+      )}
+      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin" /> Chargement…
+        </div>
+      ) : tab === 'trash' ? (
+        visibleGroups.length === 0 ? (
+          available && !error && <EmptyState text={q ? 'Aucun résultat pour cette recherche.' : 'La corbeille est vide.'} />
+        ) : (
+          <ul className="space-y-3">
+            {visibleGroups.map((g) => {
+              const d = describeTrash(g);
+              const Icon = d.icon;
+              return (
+                <li key={g.main.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-bold leading-snug text-slate-900 sm:text-base">{d.title}</p>
+                      {d.detail && <p className="mt-0.5 break-words text-sm text-slate-500">{d.detail}</p>}
+                      <p className="mt-1 text-xs text-slate-400">
+                        {formatWhen(g.main.at)} · par {g.main.actor}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <RestoreButton entry={g.main} label="Restaurer" />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      ) : visibleChanges.length === 0 ? (
+        available && !error && <EmptyState text={q ? 'Aucun résultat pour cette recherche.' : 'Aucune modification enregistrée pour le moment.'} />
+      ) : (
+        <ul className="space-y-3">
+          {visibleChanges.map((e) => {
+            const d = describeChange(e);
+            return (
+              <li key={e.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="break-words text-sm font-bold leading-snug text-slate-900 sm:text-base">{d.title}</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {formatWhen(e.at)} · par {e.actor}
+                </p>
+                {d.changes.length > 0 && (
+                  <dl className="mt-3 space-y-1.5 rounded-xl bg-slate-50 p-3 text-sm">
+                    {d.changes.map((c, i) => (
+                      <div key={i} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
+                        {c.field && <dt className="shrink-0 font-semibold text-slate-600 sm:w-44">{c.field}</dt>}
+                        <dd className="min-w-0 break-words text-slate-800">
+                          {c.before ? (
+                            <>
+                              <span className="text-slate-400 line-through">{c.before}</span>
+                              <span className="mx-1.5 text-slate-400">→</span>
+                            </>
+                          ) : null}
+                          <span className="font-semibold">{c.after}</span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {e.op === 'UPDATE' && (
+                  <div className="mt-3 flex justify-end">
+                    <RestoreButton entry={e} label="Annuler la modification" />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="mt-8 flex items-start gap-2 text-xs leading-relaxed text-slate-400">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+        Ce journal est tenu par la base elle-même : aucune suppression ni modification ne peut lui échapper, quel que soit
+        l&apos;appareil utilisé.
+      </p>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 text-center text-slate-500">
+      <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-400" />
+      <p className="text-sm font-medium">{text}</p>
+    </div>
+  );
+}

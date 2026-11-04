@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getRequestActor } from '@/lib/server/actor';
 
 /**
  * Client Supabase SERVEUR (clé service_role). C'est le seul client autorisé à lire et écrire les
@@ -33,7 +34,11 @@ export const supabaseAdmin = createClient(
       fetch: (url, options = {}) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
-        return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
+        // Auteur de l'action, recopié par la base dans le journal (voir lib/server/actor.ts).
+        const actor = getRequestActor();
+        const headers = new Headers(options.headers || {});
+        if (actor) headers.set('x-sf-actor', actor);
+        return fetch(url, { ...options, headers, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
       },
     },
   }

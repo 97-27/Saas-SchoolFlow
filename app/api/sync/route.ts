@@ -4,6 +4,7 @@ import path from 'path';
 import {
   getSchoolFromSupabase,
   getStudentsFromSupabase,
+  getRestoredStudentIds,
   getInvoicesFromSupabase,
   getStaffUsersFromSupabase,
   saveSchoolToSupabase,
@@ -30,6 +31,7 @@ import {
   SERVICES_WRITE_ROLES,
 } from '@/lib/server/auth';
 import { SessionPayload } from '@/lib/server/session';
+import { setRequestActor } from '@/lib/server/actor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -238,7 +240,14 @@ export async function GET(request: NextRequest) {
 
     // Filtrer les élèves et factures contre les identifiants supprimés — identifiants uniques
     // seulement (jamais un numéro de dossier, qui peut appartenir aujourd'hui à un autre enfant).
-    const rawDeletedIds: string[] = (schoolData.deletedStudentIds || []).filter(isStudentTombstoneId);
+    // Élèves restaurés depuis la Corbeille : ils sortent de toutes les listes noires (serveur et
+    // navigateurs), sinon ils resteraient cachés partout alors qu'ils sont de retour en base.
+    const restoredIds = await getRestoredStudentIds(slug);
+    const restoredSet = new Set(restoredIds);
+    schoolData.restoredStudentIds = restoredIds;
+    const rawDeletedIds: string[] = (schoolData.deletedStudentIds || []).filter(
+      (id: unknown) => isStudentTombstoneId(id) && !restoredSet.has(id as string)
+    );
     schoolData.deletedStudentIds = rawDeletedIds;
     const delSet = new Set(rawDeletedIds);
     if (delSet.size > 0) {
@@ -361,6 +370,7 @@ export async function POST(request: NextRequest) {
     const auth = await requireSession(request, body?.slug || null);
     if ('error' in auth) return auth.error;
     const { session, slug } = auth;
+    setRequestActor(session); // auteur des écritures (journal, migration 007)
 
     const admin = isAdmin(session);
     const canWriteStudents = hasRole(session, STUDENT_WRITE_ROLES);

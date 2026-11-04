@@ -13,6 +13,8 @@ import {
   deleteServiceInvoicesFromSupabase,
   applyServiceChangesToSupabase,
   getSchoolDataVersion,
+  getJournalFromSupabase,
+  restoreJournalInSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
   updateStaffContactInSupabase,
@@ -32,6 +34,7 @@ import {
   SERVICES_WRITE_ROLES,
 } from '@/lib/server/auth';
 import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
+import { setRequestActor, actorLabel } from '@/lib/server/actor';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +95,8 @@ export async function POST(request: NextRequest) {
   if (!slugArg || canonicalSlug(slugArg) !== slug) {
     return jsonError('Établissement manquant ou invalide.', 400);
   }
+  // Auteur de toutes les écritures de cette requête (journal, migration 007).
+  setRequestActor(session);
 
   const deny = () => jsonError('Action non autorisée pour votre profil.', 403);
 
@@ -139,6 +144,17 @@ export async function POST(request: NextRequest) {
 
     case 'getDataVersion':
       return ok(await getSchoolDataVersion(slug));
+
+    // Corbeille & Journal : réservés au Directeur et au Fondateur.
+    case 'getJournal': {
+      if (!isAdmin(session)) return deny();
+      const kind = args[0] === 'changes' || args[0] === 'all' ? args[0] : 'trash';
+      return ok(await getJournalFromSupabase(slug, kind, Number(args[1]) || 400));
+    }
+
+    case 'restoreJournal':
+      if (!isAdmin(session)) return deny();
+      return ok(await restoreJournalInSupabase(slug, Number(args[0]), actorLabel(session)));
 
     case 'deleteServiceInvoices':
       if (!hasRole(session, DELETE_ROLES) && !hasRole(session, SERVICES_WRITE_ROLES)) return deny();

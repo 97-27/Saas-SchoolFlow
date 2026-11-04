@@ -103,6 +103,32 @@ export function getDataVersion(schoolSlug: string): Promise<number | null> {
   return callData('getDataVersion', [schoolSlug], null);
 }
 
+export interface JournalEntry {
+  id: number;
+  at: string;
+  op: 'INSERT' | 'UPDATE' | 'DELETE';
+  table: 'students' | 'invoices' | 'service_subscriptions' | 'service_month_payments';
+  rowId: string | null;
+  studentId: string | null;
+  studentName: string;
+  studentNumber: string;
+  oldRow: Record<string, any> | null;
+  newRow: Record<string, any> | null;
+  actor: string;
+  restoredAt: string | null;
+  restoredBy: string | null;
+}
+
+/** Corbeille ('trash') ou historique des modifications ('changes'). Directeur / Fondateur. */
+export function getJournal(kind: 'trash' | 'changes', schoolSlug: string): Promise<{ available: boolean; entries: JournalEntry[] } | null> {
+  return callData('getJournal', [kind, 400, schoolSlug], null);
+}
+
+/** Restaure une suppression ou annule une modification. */
+export function restoreJournalEntry(entryId: number, schoolSlug: string): Promise<{ ok: boolean; restored?: number; message: string }> {
+  return callData('restoreJournal', [entryId, schoolSlug], { ok: false, message: 'Connexion impossible avec le serveur.' });
+}
+
 /** Supprime les reçus d'un service (internat / cantine / transport) d'un élève. -1 = échec. */
 export function deleteServiceInvoicesFromSupabase(
   studentId: string,
