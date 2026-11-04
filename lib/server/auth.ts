@@ -90,6 +90,37 @@ export function isRateLimited(key: string, maxAttempts = 10, windowMs = 10 * 60 
   return entry.count > maxAttempts;
 }
 
+/**
+ * Connexion : seuls les ÉCHECS comptent, et par personne (adresse + école + poste + nom).
+ * Avant, chaque tentative — même réussie — comptait pour toute l'adresse Internet ; or chez les
+ * opérateurs mobiles beaucoup de téléphones partagent la même adresse : quelques connexions du
+ * personnel suffisaient à bloquer tout le monde 10 minutes (« Trop de tentatives »).
+ */
+const loginFailures = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_MAX_FAILURES = 8;
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+
+export function isLoginBlocked(key: string): boolean {
+  const entry = loginFailures.get(key);
+  if (!entry) return false;
+  if (Date.now() > entry.resetAt) {
+    loginFailures.delete(key);
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_FAILURES;
+}
+
+export function recordLoginFailure(key: string): void {
+  const now = Date.now();
+  const entry = loginFailures.get(key);
+  if (!entry || now > entry.resetAt) loginFailures.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  else entry.count += 1;
+}
+
+export function clearLoginFailures(key: string): void {
+  loginFailures.delete(key);
+}
+
 export function clientIp(request: NextRequest): string {
   return (
     request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||

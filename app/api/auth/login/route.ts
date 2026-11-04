@@ -6,7 +6,15 @@ import {
   getStudentsFromSupabase,
 } from '@/lib/supabase/services';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
-import { canonicalSlug, clientIp, isRateLimited, jsonError, STAFF_ROLES } from '@/lib/server/auth';
+import {
+  canonicalSlug,
+  clientIp,
+  clearLoginFailures,
+  isLoginBlocked,
+  jsonError,
+  recordLoginFailure,
+  STAFF_ROLES,
+} from '@/lib/server/auth';
 import {
   areNamesMatching,
   checkPhoneMatchesStudent,
@@ -56,9 +64,26 @@ export async function POST(request: NextRequest) {
   if (!slug || !roleId) return jsonError('Établissement ou profil manquant.', 400);
   if (roleId !== 'parent' && !STAFF_ROLES.includes(roleId)) return jsonError('Profil inconnu.', 400);
 
-  if (isRateLimited(`login:${clientIp(request)}:${slug}`, 15)) {
-    return jsonError('Trop de tentatives de connexion. Veuillez patienter 10 minutes avant de réessayer.', 429);
+  // Échecs comptés par personne (adresse + école + poste + nom), jamais les connexions réussies.
+  const personKey = `login:${clientIp(request)}:${slug}:${roleId}:${fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80)}`;
+  if (isLoginBlocked(personKey)) {
+    return jsonError('Trop de tentatives incorrectes pour ce profil. Veuillez patienter 10 minutes avant de réessayer.', 429);
   }
+  const response = await handleLogin(request, body, slug, roleId, fullName, inputCode, phone);
+  if (response.status === 403 || response.status === 404) recordLoginFailure(personKey);
+  else if (response.status === 200) clearLoginFailures(personKey);
+  return response;
+}
+
+async function handleLogin(
+  request: NextRequest,
+  body: any,
+  slug: string,
+  roleId: string,
+  fullName: string,
+  inputCode: string,
+  phone: string
+): Promise<NextResponse> {
 
   const school = await getSchoolFromSupabase(slug);
   if (!school) return refuse('❌ Établissement introuvable. Vérifiez le lien de connexion de votre école.', 404);
