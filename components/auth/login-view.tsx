@@ -254,22 +254,10 @@ export function LoginView({
       if (match) {
         setCurrentSchool(match);
         setIsDeletedSchool(isSchoolDeleted(match.slug));
-        const staffForNewRole = getLiveStaffUsers(match.slug).filter((s) => {
-          if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
-          if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
-          return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
-        });
-        // Seuls le nom et la photo sont pré-remplis pour la reconnaissance visuelle du compte
-        // déjà créé par la direction. Email, téléphone et code restent à saisir manuellement :
-        // les pré-remplir permettrait de se connecter au compte d'un collègue sans connaître
-        // son code secret, simplement en tapant le sigle de l'école.
-        if (staffForNewRole.length > 0) {
-          setUserName(staffForNewRole[0].fullName);
-          if (staffForNewRole[0].avatarUrl) setLoginAvatar(staffForNewRole[0].avatarUrl);
-        } else {
-          setUserName('');
-          setLoginAvatar('');
-        }
+        // Rien n'est pré-rempli avec les informations de quelqu'un d'autre : la personne tape
+        // son nom, ou clique elle-même sur son nom dans « Personnel identifié ».
+        setUserName('');
+        setLoginAvatar('');
       }
     } catch (e) {
       console.error('Erreur recherche établissement par sigle:', e);
@@ -1037,20 +1025,11 @@ export function LoginView({
                         const newRole = e.target.value as UserRole;
                         setSelectedRole(newRole);
                         setErrorMessage('');
-                        const staffForNewRole = getLiveStaffUsers(activeSlug).filter((s) => {
-                          if (newRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
-                          if (newRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
-                          return s.roleId === newRole || s.role === ROLE_CONFIGS[newRole]?.title;
-                        });
-                        // Seuls le nom et la photo sont pré-remplis (reconnaissance visuelle du
-                        // compte) — email, téléphone et code restent à saisir manuellement.
-                        if (staffForNewRole.length > 0) {
-                          setUserName(staffForNewRole[0].fullName);
-                          if (staffForNewRole[0].avatarUrl) setLoginAvatar(staffForNewRole[0].avatarUrl);
-                        } else {
-                          setUserName('');
-                          setLoginAvatar('');
-                        }
+                        // Changer de poste efface ce qui était saisi : jamais de nom ni de photo
+                        // d'un autre membre affichés automatiquement.
+                        setUserName('');
+                        setLoginAvatar('');
+                        setAuthCodeInput('');
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
@@ -1138,12 +1117,12 @@ export function LoginView({
                     <div className="pt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10.5px] font-semibold text-slate-500">Personnel identifié :</span>
                       {(() => {
-                        const allStaff = getLiveStaffUsers(activeSlug);
-                        const matchedRoleStaff = allStaff.filter((s) => {
-                          if (selectedRole === 'fondateur') return s.roleId === 'fondateur' || s.role?.toLowerCase().includes('fondat');
-                          if (selectedRole === 'directeur') return s.roleId === 'directeur' || s.role?.toLowerCase().includes('direct');
-                          return s.roleId === selectedRole || s.role === ROLE_CONFIGS[selectedRole]?.title;
-                        });
+                        // Seulement les VRAIS comptes créés par la Direction (jamais les fiches de
+                        // démonstration intégrées à l'application), et uniquement pour ce poste.
+                        const allStaff = getLiveStaffUsers(activeSlug).filter(
+                          (s) => s.id !== 'staff-founder' && s.id !== 'staff-001' && !/^(FND|DIR)-2026$/i.test(s.authCode || '')
+                        );
+                        const matchedRoleStaff = allStaff.filter((s) => s.roleId === selectedRole);
 
                         if (matchedRoleStaff.length === 0) {
                           return (

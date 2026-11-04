@@ -32,12 +32,14 @@ interface AttendanceViewProps {
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
 
-const secondaryClasses = [
-  '6ème',
-  '5ème',
-  '4ème',
-  '3ème',
-];
+// Toutes les classes font l'appel avant le cours : Maternelle, Primaire et Collège.
+// (Mêmes intitulés que les fiches élèves.)
+const CYCLES = [
+  { id: 'maternelle', label: 'Maternelle', classes: ['Maternelle (P.S.)', 'Maternelle (M.S.)', 'Maternelle (G.S.)'] },
+  { id: 'primaire', label: 'Primaire (CP1 à CM2)', classes: ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'] },
+  { id: 'college', label: 'Collège (6ème à 3ème)', classes: ['6ème', '5ème', '4ème', '3ème'] },
+] as const;
+type CycleId = (typeof CYCLES)[number]['id'];
 
 const timeSlots = [
   { id: 'slot-1', label: 'De 08h à 10h', period: 'Matin Session 1', time: '08h00 - 10h00' },
@@ -55,8 +57,8 @@ export function AttendanceView({
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [selectedSlot, setSelectedSlot] = useState<string>('slot-1');
-  const [selectedCycleTab, setSelectedCycleTab] = useState<'all' | 'college' | 'lycee'>('college');
-  const [selectedClass, setSelectedClass] = useState<string>('6ème');
+  const [selectedCycleTab, setSelectedCycleTab] = useState<CycleId>('maternelle');
+  const [selectedClass, setSelectedClass] = useState<string>('Maternelle (P.S.)');
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
@@ -126,10 +128,10 @@ export function AttendanceView({
     }
   }, [lockKey]);
 
-  // Classes du Collège (6ème à 3ème)
-  const displayedClasses = useMemo(() => {
-    return secondaryClasses;
-  }, []);
+  // Classes du cycle choisi (Maternelle, Primaire ou Collège)
+  const displayedClasses = useMemo<readonly string[]>(() => {
+    return CYCLES.find((c) => c.id === selectedCycleTab)?.classes || [];
+  }, [selectedCycleTab]);
 
   // Élèves de la classe choisie
   const classStudents = useMemo(() => {
@@ -418,19 +420,28 @@ export function AttendanceView({
       {/* 3. Sélection du Cycle & de la Classe */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-4">
         {/* Cycle Header */}
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-          {[
-            { id: 'college', label: 'Cycle Secondaire / Collège (6ème à 3ème)', icon: Building2 },
-          ].map((tab) => {
-            const Icon = tab.icon;
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-b border-slate-100 pb-3">
+          {CYCLES.map((tab) => {
+            const isActive = selectedCycleTab === tab.id;
+            const count = students.filter((s) => (tab.classes as readonly string[]).includes(s.grade)).length;
             return (
-              <div
+              <button
                 key={tab.id}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-emerald-600 text-white shadow-2xs"
+                type="button"
+                onClick={() => {
+                  setSelectedCycleTab(tab.id);
+                  setSelectedClass(tab.classes[0]);
+                }}
+                className={`min-h-[44px] px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  isActive ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
                 <span>{tab.label}</span>
-              </div>
+                <span className={`px-1.5 rounded-md text-[10px] font-mono ${isActive ? 'bg-white/20' : 'bg-white border border-slate-200'}`}>
+                  {count}
+                </span>
+              </button>
             );
           })}
         </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo } from '@/lib/supabase/services';
+import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo, getAllSchoolsFromSupabase } from '@/lib/supabase/services';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
 import { clientIp, isRateLimited, jsonError } from '@/lib/server/auth';
 import { School } from '@/lib/data/types';
@@ -58,6 +58,19 @@ export async function POST(request: NextRequest) {
   }
   if (phone.replace(/\D/g, '').length < 8) {
     return jsonError('Veuillez renseigner un numéro de téléphone / WhatsApp valide.', 400);
+  }
+
+  // Le sigle sert à retrouver l'établissement à la connexion : il doit être UNIQUE.
+  if (shortName.length < 2) {
+    return jsonError('Le sigle de l’établissement doit contenir au moins 2 caractères (ex : EPC MANOI).', 400);
+  }
+  {
+    const normalizeSigle = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const existing = await getAllSchoolsFromSupabase();
+    const taken = existing.some((s) => s.shortName && normalizeSigle(s.shortName) === normalizeSigle(shortName));
+    if (taken) {
+      return jsonError(`❌ Le sigle « ${shortName} » est déjà utilisé par un autre établissement. Choisissez un sigle différent (ex : ajoutez la ville).`, 409);
+    }
   }
 
   const baseSlug =
