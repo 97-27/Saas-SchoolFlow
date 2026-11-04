@@ -80,7 +80,7 @@ export function Sidebar({
     role?: string;
   }>({
     roleId: 'directeur',
-    roleBadge: '👑 Admin Administratif',
+    roleBadge: '👑 Admin • Contrôle',
     fullName: 'LAWANI MOUHAMED',
   });
 

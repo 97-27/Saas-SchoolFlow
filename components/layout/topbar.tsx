@@ -907,7 +907,7 @@ export function Topbar({
                     </p>
                     <p className="text-[11px] text-amber-300 font-extrabold uppercase tracking-wide mt-1">
                       {activeSession.roleId === 'directeur'
-                        ? '👑 Admin • Contrôle Total'
+                        ? '👑 Admin • Contrôle'
                         : activeSession.roleId === 'fondateur'
                         ? 'Supervision Globale (Lecture Seule)'
                         : activeSession.roleId === 'comptable'
