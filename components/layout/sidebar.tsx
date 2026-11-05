@@ -59,7 +59,7 @@ export function Sidebar({
     pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat')
   );
   const [financeOpen, setFinanceOpen] = useState(
-    pathname.includes('/depenses') || pathname.includes('/rapports')
+    pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements')
   );
   const [communicationOpen, setCommunicationOpen] = useState(
     pathname.includes('/communication') || pathname.includes('/bulletins-parents')
@@ -179,8 +179,9 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
         subItems: [
+          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],
@@ -227,8 +228,9 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
         subItems: [
+          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],
@@ -265,6 +267,7 @@ export function Sidebar({
           { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
         ],
       },
+      { key: 'versements', title: 'Suivi des versements', href: `${baseUrl}/versements`, icon: Receipt, active: pathname.includes('/versements') },
       { key: 'depenses', title: "Dépenses de l'École", href: `${baseUrl}/depenses`, icon: Wallet, active: pathname.includes('/depenses') },
       { key: 'rapports', title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, icon: BarChart3, active: pathname.includes('/rapports') },
       { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
@@ -292,8 +295,9 @@ export function Sidebar({
       }] : []),
       {
         key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports'),
+        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
         subItems: [
+          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
           { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
           { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
         ],

@@ -10,8 +10,8 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
  * ne protégeait rien côté serveur.
  */
 const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
-  secretaire: ['dashboard', 'eleves', 'documents', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
-  comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
+  secretaire: ['dashboard', 'eleves', 'documents', 'versements', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
+  comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'versements', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
   enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
   assistant_direction: ['dashboard', 'eleves', 'documents', 'classes', 'personnel', 'notes-diverses', 'sante'],
   // "communication" est volontairement absent : c'est la boîte de réception interne de la
