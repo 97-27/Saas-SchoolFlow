@@ -1686,63 +1686,17 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return false;
 
-    const payload = {
-      school_id: schoolId,
-      role_id: 'system_services_data',
-      role_title: 'Services Data Sync',
-      full_name: 'SYSTEM SERVICES SYNC',
-      auth_code: 'SYS-SRV-DATA',
-      department: JSON.stringify(servicesData),
-      is_active: true,
-    };
-
-    const { data: existing } = await supabase
-      .from('staff_users')
-      .select('id, department')
-      .eq('school_id', schoolId)
-      .eq('role_id', 'system_services_data')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // Les deux appelants de cette fonction (dashboard-view.tsx et /api/sync) reconstruisent et
-    // envoient systématiquement les 6 collections au complet à chaque appel — il n'existe pas de
-    // "mise à jour partielle" où un champ manquant signifierait "ne pas y toucher". Fusionner en
-    // gardant l'ancienne valeur dès qu'une collection arrive vide écrasait donc silencieusement
-    // toute suppression légitime du DERNIER élève d'un service (internat/cantine/transport) : la
-    // liste vide envoyée était rejetée et l'ancien abonné revenait au prochain rafraîchissement.
-    // Fusion par PRESENCE DE CLE (et non par "valeur non vide") : un appelant peut desormais
-    // n'envoyer qu'une partie des 6 collections (ex: seulement boardingSubscriptions) quand il
-    // n'a pas d'information fiable sur les autres - ces cles absentes conservent alors la vraie
-    // valeur actuellement stockee dans Supabase (existing.department), au lieu d'etre ecrasees
-    // par une valeur par defaut devinee. Une cle PRESENTE dans servicesData, meme avec une valeur
-    // vide ([] ou {}), est en revanche toujours acceptee telle quelle - c'est la seule facon de
-    // retirer legitimement le dernier abonne d'un service.
-    let mergedData = servicesData;
-    if (existing?.department) {
-      try {
-        const prev = JSON.parse(existing.department);
-        mergedData = { ...prev, ...servicesData };
-      } catch (e) {}
-    }
-
-    if (existing?.id) {
-      await supabase
-        .from('staff_users')
-        .update({ department: JSON.stringify(mergedData) })
-        .eq('id', existing.id);
-    } else {
-      await supabase
-        .from('staff_users')
-        .insert({
-          school_id: schoolId,
-          role_id: 'system_services_data',
-          role_title: 'Services Data Sync',
-          full_name: 'SYSTEM SERVICES SYNC',
-          auth_code: 'SYS-SRV-DATA',
-          department: JSON.stringify(mergedData),
-          is_active: true,
-        });
+    // Ecriture atomique (migration 009, fonction upsert_services_data) : lecture + fusion +
+    // ecriture se font en une seule operation indivisible cote base de donnees, au lieu de deux
+    // allers-retours separes depuis l'application (qui laissaient une fenetre ou deux appareils
+    // ecrivant presque en meme temps pouvaient se marcher dessus).
+    const { error } = await supabase.rpc('upsert_services_data', {
+      p_school_id: schoolId,
+      p_patch: servicesData,
+    });
+    if (error) {
+      console.warn('saveServicesDataToSupabase rpc error:', error.message);
+      return false;
     }
     return true;
   } catch (err) {
