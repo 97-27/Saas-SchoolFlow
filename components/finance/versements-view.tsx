@@ -24,20 +24,26 @@ interface VersementsViewProps {
   schoolSlug: string;
 }
 
-/** Une ligne = un élève dont la case d'UN versement est encore vide. */
-type Row = {
-  key: string;
+type StudentInfo = {
   id: string;
-  versement: number;
   number: string;
   name: string;
   grade: string;
   guardian: string;
   phone: string;
   paid: number;
+  /** Versements dont la case est encore vide dans la fiche. */
+  empty: number[];
 };
 
-type StudentInfo = Omit<Row, 'key' | 'versement'> & { empty: number[] };
+/** Une ligne = un élève, avec TOUS les versements cochés qu'il n'a pas encore payés. */
+type Row = Omit<StudentInfo, 'empty'> & { missing: number[] };
+
+/** « 1er », « 1er et 2e », « 1er, 2e et 3e »… */
+const joinOrdinals = (vs: number[]) => {
+  const w = vs.map((v) => ORDINAL[v]);
+  return w.length <= 1 ? w.join('') : `${w.slice(0, -1).join(', ')} et ${w[w.length - 1]}`;
+};
 
 const ORDINAL = ['', '1er', '2e', '3e', '4e', '5e'];
 const VERSEMENTS = [1, 2, 3, 4, 5];
@@ -143,25 +149,21 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
   const list: Row[] = useMemo(() => {
     const out: Row[] = [];
     infos.filter(matches).forEach((r) => {
-      r.empty
-        .filter((v) => selected.includes(v))
-        .forEach((v) => {
-          const { empty, ...rest } = r;
-          out.push({ ...rest, versement: v, key: reminderId(v, r.id) });
-        });
+      const { empty, ...rest } = r;
+      const missing = empty.filter((v) => selected.includes(v));
+      if (missing.length > 0) out.push({ ...rest, missing });
     });
     return out.sort(
-      (a, b) =>
-        a.versement - b.versement ||
-        grades.indexOf(a.grade) - grades.indexOf(b.grade) ||
-        a.name.localeCompare(b.name, 'fr')
+      (a, b) => grades.indexOf(a.grade) - grades.indexOf(b.grade) || a.name.localeCompare(b.name, 'fr')
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [infos, selected, grade, q, grades]);
 
   const amountOf = (key: string) => amounts[key] || 0;
-  const total = list.reduce((s, r) => s + amountOf(r.key), 0);
-  const withoutAmount = list.filter((r) => !amountOf(r.key)).length;
+  const rowTotal = (r: Row) => r.missing.reduce((s, v) => s + amountOf(reminderId(v, r.id)), 0);
+  const rowComplete = (r: Row) => r.missing.every((v) => amountOf(reminderId(v, r.id)) > 0);
+  const total = list.reduce((s, r) => s + rowTotal(r), 0);
+  const withoutAmount = list.filter((r) => !rowComplete(r)).length;
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -191,10 +193,10 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
 
   const applyBulk = (v: number) => {
     const n = parseAmount(bulk[v] || '');
-    const rows = list.filter((r) => r.versement === v);
+    const rows = list.filter((r) => r.missing.includes(v));
     if (!n || rows.length === 0) return;
     const changes: ReminderAmounts = {};
-    rows.forEach((r) => (changes[r.key] = n));
+    rows.forEach((r) => (changes[reminderId(v, r.id)] = n));
     if (save(changes)) {
       setBulk((b) => ({ ...b, [v]: '' }));
       showToast(`✓ ${formatFCFA(n)} enregistré pour ${rows.length} élève(s) — ${ORDINAL[v]} versement.`);
@@ -205,12 +207,21 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
     setSelected((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort()));
 
   const selectionLabel =
-    selected.length === 0 ? 'Aucun choix' : selected.map((n) => `${ORDINAL[n]} versement non payé`).join(', ');
+    selected.length === 0
+      ? 'Aucun choix'
+      : `${joinOrdinals(selected)} versement${selected.length > 1 ? 's' : ''} non payé${selected.length > 1 ? 's' : ''}`;
 
   const exportCsv = () => {
-    const head = ['N°', 'Élève', 'Classe', 'Parent', 'Téléphone', 'Versement non payé', 'Somme', 'Déjà versé'];
+    const head = [
+      'N°', 'Élève', 'Classe', 'Parent', 'Téléphone', 'Versements non payés',
+      ...selected.map((v) => `Somme ${ORDINAL[v]}`), 'Total', 'Déjà versé',
+    ];
     const lines = list.map((r) =>
-      [r.number, r.name, r.grade, r.guardian, r.phone, `${ORDINAL[r.versement]} versement`, amountOf(r.key) || '', r.paid]
+      [
+        r.number, r.name, r.grade, r.guardian, r.phone, joinOrdinals(r.missing),
+        ...selected.map((v) => (r.missing.includes(v) ? amountOf(reminderId(v, r.id)) || '' : '')),
+        rowTotal(r) || '', r.paid,
+      ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(';')
     );
@@ -354,7 +365,7 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
             </p>
             <div className="flex flex-col gap-2">
               {selected.map((v) => {
-                const n = list.filter((r) => r.versement === v).length;
+                const n = list.filter((r) => r.missing.includes(v)).length;
                 return (
                   <div key={v} className="flex flex-wrap items-center gap-2">
                     <span className="w-28 text-xs font-bold text-slate-700">{ORDINAL[v]} versement</span>
@@ -412,22 +423,25 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
                   <th className="text-left px-3 py-2">Élève</th>
                   <th className="text-left px-3 py-2">Classe</th>
                   <th className="text-left px-3 py-2">Parent / Téléphone</th>
-                  <th className="text-left px-3 py-2">Non payé</th>
+                  <th className="text-left px-3 py-2">Versements non payés</th>
                   <th className="text-right px-3 py-2">Somme</th>
                   <th className="no-print px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {list.map((r) => {
-                  const amount = amountOf(r.key);
-                  const link = amount
-                    ? waLink(
-                        r.phone,
-                        `Bonjour ${r.guardian || ''}, ${schoolState.name} vous rappelle que le ${ORDINAL[r.versement]} versement de la scolarité de ${r.name} (${r.grade}) n'est pas encore payé : ${formatFCFA(amount)}. Merci.`
-                      )
-                    : null;
+                  const amount = rowTotal(r);
+                  const complete = rowComplete(r);
+                  const several = r.missing.length > 1;
+                  const detail = several
+                    ? ` (${r.missing.map((v) => `${ORDINAL[v]} : ${formatFCFA(amountOf(reminderId(v, r.id)))}`).join(', ')})`
+                    : '';
+                  const message = several
+                    ? `Bonjour ${r.guardian || ''}, ${schoolState.name} vous rappelle que les ${joinOrdinals(r.missing)} versements de la scolarité de ${r.name} (${r.grade}) ne sont pas encore payés : ${formatFCFA(amount)} au total${detail}. Merci.`
+                    : `Bonjour ${r.guardian || ''}, ${schoolState.name} vous rappelle que le ${ORDINAL[r.missing[0]]} versement de la scolarité de ${r.name} (${r.grade}) n'est pas encore payé : ${formatFCFA(amount)}. Merci.`;
+                  const link = complete ? waLink(r.phone, message) : null;
                   return (
-                    <tr key={r.key} className="align-top">
+                    <tr key={r.id} className="align-top">
                       <td className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{r.number}</td>
                       <td className="px-3 py-2 font-semibold text-slate-900">{r.name}</td>
                       <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{r.grade}</td>
@@ -435,23 +449,57 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
                         <div>{r.guardian}</div>
                         <div className="text-xs text-slate-400">{r.phone}</div>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs font-bold text-emerald-700">
-                        {ORDINAL[r.versement]} versement
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {r.missing.map((v) => (
+                            <span
+                              key={v}
+                              className="inline-block rounded-md bg-rose-50 px-1.5 py-0.5 text-xs font-bold text-rose-700"
+                            >
+                              {ORDINAL[v]}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={drafts[r.key] !== undefined ? drafts[r.key] : amount ? String(amount) : ''}
-                          placeholder="Somme"
-                          onChange={(e) => setDrafts((d) => ({ ...d, [r.key]: e.target.value }))}
-                          onBlur={() => commitRow(r.key)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                          className="no-print w-28 px-2 py-1.5 rounded-lg border border-slate-200 text-sm text-right font-bold text-rose-600"
-                        />
-                        <span className="print-only font-bold">{amount ? formatFCFA(amount) : ''}</span>
+                        <div className="no-print flex flex-col items-end gap-1">
+                          {r.missing.map((v) => {
+                            const key = reminderId(v, r.id);
+                            const value = amountOf(key);
+                            return (
+                              <label key={v} className="flex items-center gap-1.5">
+                                {several && <span className="w-7 text-right text-[11px] font-bold text-slate-500">{ORDINAL[v]}</span>}
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={drafts[key] !== undefined ? drafts[key] : value ? String(value) : ''}
+                                  placeholder="Somme"
+                                  onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                                  onBlur={() => commitRow(key)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                  }}
+                                  className="w-28 px-2 py-1.5 rounded-lg border border-slate-200 text-sm text-right font-bold text-rose-600"
+                                />
+                              </label>
+                            );
+                          })}
+                          {several && amount > 0 && (
+                            <span className="text-xs font-extrabold text-rose-700">Total : {formatFCFA(amount)}</span>
+                          )}
+                        </div>
+                        <span className="print-only font-bold">
+                          {several
+                            ? r.missing
+                                .map((v) => {
+                                  const a = amountOf(reminderId(v, r.id));
+                                  return `${ORDINAL[v]} : ${a ? formatFCFA(a) : '—'}`;
+                                })
+                                .join(' • ') + (amount ? ` = ${formatFCFA(amount)}` : '')
+                            : amount
+                              ? formatFCFA(amount)
+                              : ''}
+                        </span>
                       </td>
                       <td className="no-print px-3 py-2 text-right">
                         {link ? (
@@ -468,7 +516,13 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
                           <button
                             type="button"
                             onClick={() =>
-                              showToast(amount ? 'Numéro du parent manquant ou incorrect dans la fiche.' : 'Entrez d’abord la somme du versement.')
+                              showToast(
+                                complete
+                                  ? 'Numéro du parent manquant ou incorrect dans la fiche.'
+                                  : several
+                                    ? 'Entrez d’abord la somme de chaque versement non payé.'
+                                    : 'Entrez d’abord la somme du versement.'
+                              )
                             }
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold text-slate-400 bg-slate-50"
                           >
