@@ -435,7 +435,12 @@ export function LoginView({
     // (renouvellement effectué depuis). La vérification réelle et à jour est faite par le
     // serveur, contre la base Cloud (voir /api/auth/login ci-dessous).
 
-    const trimmedName = userName.trim();
+    // La civilité (Mr/Mme/Mlle) est déjà choisie séparément via son propre menu et sera
+    // préfixée plus bas (ex: `${civility} ${trimmedName}`) : si la personne a aussi tapé "Mr"
+    // ou "M." au début de son nom par habitude, on obtenait "Mr Mr LAWANI..." sur le profil,
+    // partout où ce nom était ensuite affiché. On retire ce préfixe déjà tapé avant de laisser
+    // la civilité du menu s'appliquer seule.
+    const trimmedName = userName.trim().replace(/^(mr|mme|mlle|m\.?|monsieur|madame|mademoiselle)\.?\s+/i, '').trim();
     if (!trimmedName) {
       setErrorMessage('Veuillez saisir votre Nom et Prénoms.');
       return;

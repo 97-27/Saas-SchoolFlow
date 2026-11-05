@@ -386,6 +386,11 @@ export function BoardingView({
           pavilion: cs?.pavilion || (foundStudent.gender === 'female' ? 'Pavillon B (Filles)' : 'Pavillon A (Garçons)'),
           roomNumber: cs?.roomNumber || 'Chambre 101',
           monthlyRate: rb.monthlyRate,
+          // La date du 1er versement vivait uniquement sur l'abonnement brut (cs.paymentDate) et
+          // n'était jamais réexposée ici : le formulaire d'édition ne pouvait donc jamais savoir
+          // quelle était la VRAIE date enregistrée, et modifier seulement ce champ ne débloquait
+          // jamais "Enregistrer" (aucune valeur de référence à laquelle se comparer).
+          paymentDate: cs?.paymentDate || (foundStudent as any).paymentDate || '',
           paidMonthsCount: rb.paidMonthsCount,
           totalPaid: rb.totalPaid,
           totalDue: rb.totalDue,
@@ -494,6 +499,7 @@ export function BoardingView({
       setFormParentContact(activeBoarder.student.whatsappPhone || activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '');
       setFormSecondaryPhones(activeBoarder.student.secondaryPhones || []);
       setFormMonthlyRate(activeBoarder.monthlyRate || 0);
+      setFormPaymentDate(activeBoarder.paymentDate || getTodayFrenchDateStr());
 
       const months = activeBoarder.months || {};
       setActiveMonthsChecked(months);
@@ -634,6 +640,7 @@ export function BoardingView({
     const initialContact = activeBoarder.student.guardianPhone || (activeBoarder.student as any).guardianContact || '';
     const initialRate = activeBoarder.monthlyRate || 0;
     const initialMethod = activeBoarder.student.paymentMethod || 'Espèces';
+    const initialDate = activeBoarder.paymentDate || getTodayFrenchDateStr();
 
     const initialMonths = activeBoarder.months || {};
 
@@ -647,10 +654,11 @@ export function BoardingView({
     const contactChanged = formParentContact.trim() !== initialContact;
     const rateChanged = Number(formMonthlyRate) !== initialRate;
     const methodChanged = formPaymentMethod !== initialMethod;
+    const dateChanged = (formPaymentDate || getTodayFrenchDateStr()) !== initialDate;
 
     const monthsChanged = MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
 
-    return lastNameChanged || firstNameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || monthsChanged;
+    return lastNameChanged || firstNameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || dateChanged || monthsChanged;
   }, [
     isCreatingNew,
     activeBoarder,
@@ -664,6 +672,7 @@ export function BoardingView({
     formParentContact,
     formMonthlyRate,
     formPaymentMethod,
+    formPaymentDate,
     activeMonthsChecked,
     monthlyPayments,
   ]);

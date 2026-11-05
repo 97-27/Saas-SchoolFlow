@@ -21,9 +21,9 @@ const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
   educateur: ['dashboard', 'eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'notes-diverses', 'sante'],
 };
 
-/** Pages réservées au seul Directeur (le Fondateur a accès à tout le reste, Paramètres et
+/** Pages réservées au seul Fondateur (le Directeur a accès à tout le reste, Paramètres et
  *  Administration & Codes compris). */
-const DIRECTOR_ONLY_PATHS = ['corbeille'];
+const FOUNDER_ONLY_PATHS = ['corbeille'];
 
 // Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.
 const ROLE_DEFAULT_PATH: Record<string, string> = {
@@ -82,7 +82,7 @@ export async function proxy(request: NextRequest) {
     if (!allowedPaths && roleId !== 'directeur' && roleId !== 'fondateur') {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
     }
-    if (roleId === 'fondateur' && DIRECTOR_ONLY_PATHS.includes(subPath)) {
+    if (roleId === 'directeur' && FOUNDER_ONLY_PATHS.includes(subPath)) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/dashboard`, request.url));
     }
     if (allowedPaths && !allowedPaths.includes(subPath)) {

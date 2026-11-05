@@ -44,8 +44,10 @@ export const dynamic = 'force-dynamic';
 // Codes système, et anciens codes de démonstration identiques pour toutes les écoles.
 const RESERVED_CODE = /^(SYS-|STAMP-|FND-2026$|DIR-2026$)/i;
 
-/** Pages et actions réservées au seul Directeur : codes d'accès, profils du personnel, corbeille. */
+/** Codes d'accès et profils du personnel : réservés au seul Directeur (sauf le compte du
+ *  Fondateur lui-même, protégé plus bas). Corbeille & Journal : réservés au seul Fondateur. */
 const isDirector = (session: { roleId: string }) => session.roleId === 'directeur';
+const isFounder = (session: { roleId: string }) => session.roleId === 'fondateur';
 
 function ok(result: unknown) {
   return NextResponse.json({ success: true, result }, { headers: { 'Cache-Control': 'no-store' } });
@@ -166,19 +168,19 @@ export async function POST(request: NextRequest) {
     case 'getDataVersion':
       return ok(await getSchoolDataVersion(slug));
 
-    // Corbeille & Journal : réservés au Directeur (choix de l'établissement).
+    // Corbeille & Journal : réservés au Fondateur (choix de l'établissement).
     case 'getJournal': {
-      if (!isDirector(session)) return deny();
+      if (!isFounder(session)) return deny();
       const kind = args[0] === 'changes' || args[0] === 'all' ? args[0] : 'trash';
       return ok(await getJournalFromSupabase(slug, kind, Number(args[1]) || 400));
     }
 
     case 'restoreJournal':
-      if (!isDirector(session)) return deny();
+      if (!isFounder(session)) return deny();
       return ok(await restoreJournalInSupabase(slug, Number(args[0]), actorLabel(session)));
 
     case 'purgeJournal':
-      if (!isDirector(session)) return deny();
+      if (!isFounder(session)) return deny();
       return ok(await purgeJournalInSupabase(slug, args[0] === 'all' ? 'all' : Number(args[0])));
 
     case 'deleteServiceInvoices':

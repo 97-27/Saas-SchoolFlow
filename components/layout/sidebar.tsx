@@ -203,12 +203,11 @@ export function Sidebar({
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'fondateur') {
     // 👑 FONDATEUR : tout voir et tout modifier, Paramètres et Administration & Codes compris (il
-    //    peut supprimer tout membre, Directeur compris). Seule « Corbeille & Journal » reste au Directeur.
+    //    peut supprimer tout membre, Directeur compris). « Corbeille & Journal » lui est réservée.
     navItems = [
       { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
       { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
@@ -252,6 +251,7 @@ export function Sidebar({
       { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
       { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
       { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
     ];
   } else if (roleId === 'secretaire') {
