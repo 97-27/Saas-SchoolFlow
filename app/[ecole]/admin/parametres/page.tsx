@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools } from '@/lib/data/mock-data';
+import { schoolForSlug } from '@/lib/data/mock-data';
 import { SettingsForm } from '@/components/settings/settings-form';
 import { Sliders, Sparkles } from 'lucide-react';
 
@@ -10,7 +10,7 @@ interface ParametresPageProps {
 export default async function ParametresPage({ params }: ParametresPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <div className="space-y-6 pb-12">

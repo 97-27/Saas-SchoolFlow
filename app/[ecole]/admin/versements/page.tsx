@@ -1,5 +1,5 @@
-﻿import React from 'react';
-import { mockSchools } from '@/lib/data/mock-data';
+import React from 'react';
+import { schoolForSlug } from '@/lib/data/mock-data';
 import { VersementsView } from '@/components/finance/versements-view';
 
 export default async function VersementsPage({
@@ -9,7 +9,7 @@ export default async function VersementsPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return <VersementsView school={school} schoolSlug={ecoleSlug} />;
 }

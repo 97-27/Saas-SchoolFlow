@@ -55,7 +55,7 @@ export function StudentTable({
   const router = useRouter();
   const [students, setStudents] = useState<Student[]>(() => getLiveStudents(initialStudents, schoolSlug));
   const [currentSchool, setCurrentSchool] = useState<School>(() =>
-    getLiveSchool(schoolSlug, school || mockSchools[schoolSlug] || mockSchools['epc-manoi'])
+    getLiveSchool(schoolSlug, school)
   );
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function StudentTable({
     const handleUpdate = () => {
       setStudents(getLiveStudents(initialStudents, activeSlug));
       setCurrentSchool(
-        getLiveSchool(activeSlug, school || mockSchools[activeSlug] || mockSchools['epc-manoi'])
+        getLiveSchool(activeSlug, school)
       );
     };
     handleUpdate();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSpecialDiscounts, mockSchools } from '@/lib/data/mock-data';
+import { mockSpecialDiscounts, schoolForSlug } from '@/lib/data/mock-data';
 import { SpecialDiscountsView } from '@/components/finance/special-discounts-view';
 
 export default async function ReductionsPage({
@@ -9,7 +9,7 @@ export default async function ReductionsPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <SpecialDiscountsView

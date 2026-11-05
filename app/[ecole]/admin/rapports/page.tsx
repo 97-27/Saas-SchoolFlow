@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockStudents, mockInvoices, mockSchools } from '@/lib/data/mock-data';
+import { mockStudents, mockInvoices, schoolForSlug } from '@/lib/data/mock-data';
 import { ReportsView } from '@/components/reports/reports-view';
 
 export default async function Page({
@@ -9,7 +9,7 @@ export default async function Page({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <ReportsView

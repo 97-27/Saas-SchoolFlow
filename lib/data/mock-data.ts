@@ -137,6 +137,47 @@ export const mockSchools: Record<string, School> = {
 
 export const defaultSchool = mockSchools['epc-manoi'];
 
+/**
+ * Identité neutre d'une école dont les réglages ne sont pas encore connus.
+ * Jamais le nom, le logo, le cachet ni les dirigeants d'une AUTRE école.
+ */
+export function neutralSchool(slug: string): School {
+  return {
+    id: slug,
+    slug: slug,
+    name: slug.toUpperCase().replace(/-/g, ' '),
+    shortName: slug.slice(0, 10).toUpperCase(),
+    logoColor: '#059669',
+    logoUrl: '',
+    countryEmblemUrl: '',
+    stampUrl: '',
+    academicYear: '2026-2027',
+    currentTerm: 'Trimestre 1',
+    termType: 'trimestriel',
+    phone: '',
+    whatsappPhone: '',
+    email: '',
+    motto: '',
+    slogan: '',
+    city: '',
+    country: 'Côte d’Ivoire',
+    district: '',
+    ministryCode: '',
+    founderName: 'DIRECTION GÉNÉRALE',
+    directorName: 'DIRECTION GÉNÉRALE',
+    studiesDirectorName: 'Direction des Études',
+    status: 'active',
+    subscriptionPlan: 'annuel',
+    createdAt: '2026-09-01',
+  } as School;
+}
+
+/** École de départ d'une page : la sienne si connue, sinon une identité neutre (jamais le pilote). */
+export function schoolForSlug(slug: string): School {
+  const norm = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  return mockSchools[norm] || neutralSchool(slug);
+}
+
 export const mockKPIs: DashboardKPIs = {
   totalStudents: 0,
   totalStudentsTrend: 0,

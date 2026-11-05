@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockCanteenSubscriptions, mockSchools } from '@/lib/data/mock-data';
+import { mockCanteenSubscriptions, schoolForSlug } from '@/lib/data/mock-data';
 import { CanteenView } from '@/components/canteen/canteen-view';
 
 export default async function CantinePage({
@@ -9,7 +9,7 @@ export default async function CantinePage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <CanteenView

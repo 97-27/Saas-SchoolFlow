@@ -2129,6 +2129,79 @@ export async function restoreJournalInSupabase(
   }
 }
 
+/**
+ * SUPPRESSION DÉFINITIVE depuis la corbeille : efface du journal une suppression (avec ce qui a été
+ * supprimé en même temps, selon les mêmes règles que restore_journal), ou toute la corbeille
+ * (entryId = 'all'). Ensuite, plus aucune restauration n'est possible.
+ */
+export async function purgeJournalInSupabase(
+  schoolSlug: string,
+  entryId: number | 'all'
+): Promise<{ ok: boolean; removed: number; message: string }> {
+  if (!isSupabaseConfigured) return { ok: false, removed: 0, message: 'Base non configurée.' };
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return { ok: false, removed: 0, message: 'Établissement introuvable.' };
+
+    let ids: number[] = [];
+    if (entryId === 'all') {
+      const { data, error } = await supabase
+        .from('data_journal')
+        .select('id')
+        .eq('school_id', schoolId)
+        .eq('op', 'DELETE')
+        .is('restored_at', null)
+        .limit(5000);
+      if (error) return { ok: false, removed: 0, message: 'Lecture de la corbeille impossible.' };
+      ids = (data || []).map((r: any) => Number(r.id));
+    } else {
+      if (!Number.isFinite(entryId)) return { ok: false, removed: 0, message: 'Requête invalide.' };
+      const { data: e, error } = await supabase
+        .from('data_journal')
+        .select('id, at, op, table_name, student_id, old_row, restored_at')
+        .eq('school_id', schoolId)
+        .eq('id', entryId)
+        .maybeSingle();
+      if (error || !e) return { ok: false, removed: 0, message: 'Élément introuvable.' };
+      if (e.op !== 'DELETE') return { ok: false, removed: 0, message: 'Seuls les éléments de la corbeille peuvent être supprimés définitivement.' };
+      if (e.restored_at) return { ok: false, removed: 0, message: 'Cet élément a déjà été restauré.' };
+      ids = [Number(e.id)];
+      if (e.student_id && (e.table_name === 'students' || e.table_name === 'service_subscriptions')) {
+        const t = new Date(e.at).getTime();
+        const { data: near } = await supabase
+          .from('data_journal')
+          .select('id, table_name, old_row')
+          .eq('school_id', schoolId)
+          .eq('op', 'DELETE')
+          .is('restored_at', null)
+          .eq('student_id', e.student_id)
+          .gte('at', new Date(t - 15 * 60 * 1000).toISOString())
+          .lte('at', new Date(t + 15 * 60 * 1000).toISOString());
+        const svc = String(e.old_row?.service || '');
+        (near || []).forEach((o: any) => {
+          const same =
+            e.table_name === 'students' ||
+            ((o.table_name === 'service_subscriptions' || o.table_name === 'service_month_payments') && o.old_row?.service === svc) ||
+            (o.table_name === 'invoices' && svc && String(o.old_row?.fee_type || '').toLowerCase().includes(svc.toLowerCase()));
+          if (same && !ids.includes(Number(o.id))) ids.push(Number(o.id));
+        });
+      }
+    }
+    if (ids.length === 0) return { ok: true, removed: 0, message: 'La corbeille est déjà vide.' };
+
+    let removed = 0;
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const { error } = await supabase.from('data_journal').delete().eq('school_id', schoolId).in('id', chunk);
+      if (error) return { ok: false, removed, message: `La base a refusé la suppression : ${error.message}` };
+      removed += chunk.length;
+    }
+    return { ok: true, removed, message: `${removed} élément(s) supprimé(s) définitivement.` };
+  } catch (e) {
+    return { ok: false, removed: 0, message: 'Erreur de connexion avec la base.' };
+  }
+}
+
 /** Élèves restaurés depuis la corbeille ces 30 derniers jours (pour les retirer des listes noires locales). */
 export async function getRestoredStudentIds(schoolSlug: string): Promise<string[]> {
   if (!isSupabaseConfigured) return [];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools, mockStudents } from '@/lib/data/mock-data';
+import { schoolForSlug, mockStudents } from '@/lib/data/mock-data';
 import { InscriptionsView } from '@/components/students/inscriptions-view';
 
 interface InscriptionsPageProps {
@@ -9,7 +9,7 @@ interface InscriptionsPageProps {
 export default async function InscriptionsPage({ params }: InscriptionsPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <InscriptionsView

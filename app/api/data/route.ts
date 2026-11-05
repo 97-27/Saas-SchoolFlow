@@ -15,6 +15,7 @@ import {
   getSchoolDataVersion,
   getJournalFromSupabase,
   restoreJournalInSupabase,
+  purgeJournalInSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
   updateStaffContactInSupabase,
@@ -175,6 +176,10 @@ export async function POST(request: NextRequest) {
     case 'restoreJournal':
       if (!isDirector(session)) return deny();
       return ok(await restoreJournalInSupabase(slug, Number(args[0]), actorLabel(session)));
+
+    case 'purgeJournal':
+      if (!isDirector(session)) return deny();
+      return ok(await purgeJournalInSupabase(slug, args[0] === 'all' ? 'all' : Number(args[0])));
 
     case 'deleteServiceInvoices':
       if (!hasRole(session, DELETE_ROLES) && !hasRole(session, SERVICES_WRITE_ROLES)) return deny();

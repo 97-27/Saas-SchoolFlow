@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockTransportSubscriptions, mockSchools } from '@/lib/data/mock-data';
+import { mockTransportSubscriptions, schoolForSlug } from '@/lib/data/mock-data';
 import { TransportView } from '@/components/transport/transport-view';
 
 export default async function TransportPage({
@@ -9,7 +9,7 @@ export default async function TransportPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <TransportView

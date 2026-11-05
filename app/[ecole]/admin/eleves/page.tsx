@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools, mockStudents } from '@/lib/data/mock-data';
+import { schoolForSlug, mockStudents } from '@/lib/data/mock-data';
 import { StudentTable } from '@/components/students/student-table';
 
 interface ElevesPageProps {
@@ -9,7 +9,7 @@ interface ElevesPageProps {
 export default async function ElevesPage({ params }: ElevesPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <div className="pb-12">

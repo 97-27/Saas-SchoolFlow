@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools, mockStudents } from '@/lib/data/mock-data';
+import { schoolForSlug, mockStudents } from '@/lib/data/mock-data';
 import { DistinctionsView } from '@/components/grades/distinctions-view';
 
 export default async function DistinctionsPage({
@@ -9,7 +9,7 @@ export default async function DistinctionsPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <DistinctionsView

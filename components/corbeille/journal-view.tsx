@@ -16,7 +16,7 @@ import {
   Loader2,
   ShieldCheck,
 } from 'lucide-react';
-import { getJournal, restoreJournalEntry, JournalEntry } from '@/lib/supabase/remote';
+import { getJournal, restoreJournalEntry, purgeJournalEntry, JournalEntry } from '@/lib/supabase/remote';
 import { syncSchoolDataWithServer } from '@/lib/data/live-store';
 
 /**
@@ -187,7 +187,130 @@ function describeTrash(g: Group): { icon: React.ElementType; title: string; deta
   }
 }
 
-function describeChange(e: JournalEntry): { title: string; changes: Array<{ field: string; before: string; after: string }> } {
+// ── Lecture claire des modifications ──────────────────────────────────────
+// Le champ « address » d'une fiche élève contient, en fin de texte, un bloc technique
+// [SF_META:{...}] (versements, dates, notes…). On le sépare pour expliquer chaque changement
+// en français au lieu d'afficher ce bloc tel quel.
+
+type Change = { field: string; before: string; after: string; note?: string; tone?: 'up' | 'down' };
+
+function splitAddress(raw: unknown): { address: string; meta: Record<string, any> } {
+  const s = String(raw || '');
+  const m = s.match(/\[SF_META:([\s\S]*)\]\s*$/);
+  let meta: Record<string, any> = {};
+  if (m) {
+    try {
+      meta = JSON.parse(m[1]) || {};
+    } catch {
+      meta = {};
+    }
+  }
+  return { address: (m ? s.slice(0, m.index) : s).trim(), meta };
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Actif',
+  inactive: 'Inactif',
+  paid: 'Soldé',
+  partial: 'Partiel',
+  pending: 'En attente',
+  unpaid: 'Non payé',
+  overdue: 'En retard',
+};
+
+const frDay = (v: unknown) => {
+  const s = String(v || '');
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).split('-').reverse().join('/') : s;
+};
+
+function moneyChange(field: string, before: number, after: number): Change {
+  const diff = after - before;
+  return {
+    field,
+    before: before ? money(before) : '—',
+    after: after ? money(after) : '—',
+    note: diff > 0 ? `+${money(diff)} ajoutés` : diff < 0 ? `${money(-diff)} retirés` : undefined,
+    tone: diff > 0 ? 'up' : diff < 0 ? 'down' : undefined,
+  };
+}
+
+const ORD = ['1er', '2e', '3e', '4e', '5e'];
+
+function metaChanges(o: Record<string, any>, n: Record<string, any>): Change[] {
+  const out: Change[] = [];
+  const oi = o.installments || {};
+  const ni = n.installments || {};
+  for (let i = 1; i <= 5; i++) {
+    const a = oi[`versement${i}`] || {};
+    const b = ni[`versement${i}`] || {};
+    const label = `${ORD[i - 1]} versement`;
+    const before = Number(a.amount) || 0;
+    const after = Number(b.amount) || 0;
+    if (before !== after) {
+      const c = moneyChange(label, before, after);
+      if (!before) c.note = `versement ajouté : ${money(after)}`;
+      else if (!after) c.note = `versement effacé (il était de ${money(before)})`;
+      out.push(c);
+    }
+    const ma = a.paymentMethod || a.method || '';
+    const mb = b.paymentMethod || b.method || '';
+    if (after && ma !== mb && (ma || mb)) out.push({ field: `${label} — mode de paiement`, before: ma || '—', after: mb || '—' });
+    if (after && (a.date || '') !== (b.date || '') && (a.date || b.date))
+      out.push({ field: `${label} — date`, before: frDay(a.date) || '—', after: frDay(b.date) || '—' });
+  }
+  if ((o.enrollmentDate || '') !== (n.enrollmentDate || ''))
+    out.push({ field: "Date d'inscription", before: frDay(o.enrollmentDate) || '—', after: frDay(n.enrollmentDate) || '—' });
+  if ((o.paymentDate || '') !== (n.paymentDate || ''))
+    out.push({ field: 'Date de paiement', before: frDay(o.paymentDate) || '—', after: frDay(n.paymentDate) || '—' });
+  if ((o.notes || '') !== (n.notes || '')) out.push({ field: 'Notes', before: o.notes || '—', after: n.notes || '—' });
+  const op = (o.secondaryPhones || []).join(', ');
+  const np = (n.secondaryPhones || []).join(', ');
+  if (op !== np) out.push({ field: 'Autres téléphones', before: op || '—', after: np || '—' });
+  if (Boolean(o.isBoarding) !== Boolean(n.isBoarding))
+    out.push({ field: 'Internat', before: o.isBoarding ? 'Oui' : 'Non', after: n.isBoarding ? 'Oui' : 'Non' });
+  return out;
+}
+
+function fieldChange(k: string, ov: unknown, nv: unknown): Change {
+  const field = FIELD_LABELS[k] || k;
+  if (MONEY_FIELDS.has(k)) return moneyChange(field, Number(ov) || 0, Number(nv) || 0);
+  if (k === 'status' || k === 'tuition_status')
+    return { field, before: STATUS_LABELS[String(ov)] || formatValue(k, ov), after: STATUS_LABELS[String(nv)] || formatValue(k, nv) };
+  if (k === 'date_of_birth' || k === 'issue_date' || k === 'due_date')
+    return { field, before: frDay(ov) || '—', after: frDay(nv) || '—' };
+  if (k === 'gender') {
+    const g = (v: unknown) => (v === 'M' ? 'Garçon' : v === 'F' ? 'Fille' : formatValue(k, v));
+    return { field, before: g(ov), after: g(nv) };
+  }
+  return { field, before: formatValue(k, ov), after: formatValue(k, nv) };
+}
+
+function rowChanges(o: Record<string, any>, n: Record<string, any>): Change[] {
+  const keys = Object.keys({ ...o, ...n }).filter((k) => !IGNORED_FIELDS.has(k) && JSON.stringify(o[k]) !== JSON.stringify(n[k]));
+  // Le nom complet suffit : on n'affiche pas en plus Nom et Prénom(s) quand il a changé.
+  const skip = new Set(keys.includes('full_name') ? ['first_name', 'last_name'] : []);
+  const out: Change[] = [];
+  for (const k of keys) {
+    if (skip.has(k)) continue;
+    if (k === 'address') {
+      const a = splitAddress(o[k]);
+      const b = splitAddress(n[k]);
+      if (a.address !== b.address) out.push({ field: 'Adresse', before: a.address || '—', after: b.address || '—' });
+      out.push(...metaChanges(a.meta, b.meta));
+      continue;
+    }
+    if (k === 'details' && typeof (o[k] ?? n[k]) === 'object') {
+      const before = formatValue(k, o[k]);
+      const after = formatValue(k, n[k]);
+      if (before !== after) out.push({ field: 'Détails', before, after });
+      continue;
+    }
+    out.push(fieldChange(k, o[k], n[k]));
+  }
+  return out;
+}
+
+function describeChange(e: JournalEntry): { title: string; changes: Change[] } {
   const what =
     e.table === 'students'
       ? 'Fiche élève'
@@ -208,11 +331,7 @@ function describeChange(e: JournalEntry): { title: string; changes: Array<{ fiel
             : String(row.grade || '');
     return { title: `${what} créé(e) : ${studentLabel(e)}`, changes: detail ? [{ field: '', before: '', after: detail }] : [] };
   }
-  const o = e.oldRow || {};
-  const n = e.newRow || {};
-  const changes = Object.keys({ ...o, ...n })
-    .filter((k) => !IGNORED_FIELDS.has(k) && JSON.stringify(o[k]) !== JSON.stringify(n[k]))
-    .map((k) => ({ field: FIELD_LABELS[k] || k, before: formatValue(k, o[k]), after: formatValue(k, n[k]) }));
+  const changes = rowChanges(e.oldRow || {}, e.newRow || {});
   return { title: `${what} modifié(e) : ${studentLabel(e)}`, changes };
 }
 
@@ -250,6 +369,19 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
     setTimeout(() => setToast(null), 5000);
   };
 
+  const [purgeId, setPurgeId] = useState<number | 'all' | null>(null);
+  const [purgeText, setPurgeText] = useState('');
+
+  const purge = async (id: number | 'all') => {
+    setPurgeId(null);
+    setPurgeText('');
+    setBusyId(id === 'all' ? -1 : id);
+    const res = await purgeJournalEntry(id, schoolSlug);
+    setBusyId(null);
+    showToast(res.ok, res.message || (res.ok ? 'Supprimé définitivement.' : 'La suppression a échoué.'));
+    if (res.ok) load();
+  };
+
   const restore = async (id: number) => {
     setConfirmId(null);
     setBusyId(id);
@@ -271,7 +403,9 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
 
   const trashGroups = useMemo(() => (tab === 'trash' ? groupTrash(entries) : []), [tab, entries]);
   const visibleGroups = trashGroups.filter((g) => matches(g.main) || g.related.some(matches));
-  const visibleChanges = tab === 'changes' ? entries.filter(matches) : [];
+  // Les réenregistrements sans aucun changement visible (seule l'heure technique a bougé) sont masqués.
+  const visibleChanges =
+    tab === 'changes' ? entries.filter((e) => matches(e) && (e.op !== 'UPDATE' || describeChange(e).changes.length > 0)) : [];
 
   const RestoreButton = ({ entry, label }: { entry: JournalEntry; label: string }) => {
     if (entry.restoredAt) {
@@ -393,6 +527,53 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
         visibleGroups.length === 0 ? (
           available && !error && <EmptyState text={q ? 'Aucun résultat pour cette recherche.' : 'La corbeille est vide.'} />
         ) : (
+          <>
+          {!q && visibleGroups.some((g) => !g.main.restoredAt) && (
+            <div className="mb-3 rounded-2xl border border-red-100 bg-white p-3">
+              {purgeId === 'all' ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <span className="text-sm font-semibold text-red-700">
+                    Tout effacer pour toujours ? Tapez <b>SUPPRIMER</b> pour confirmer :
+                  </span>
+                  <input
+                    value={purgeText}
+                    onChange={(e) => setPurgeText(e.target.value)}
+                    className="min-h-[40px] rounded-xl border border-red-200 px-3 text-sm"
+                  />
+                  <button
+                    onClick={() => purge('all')}
+                    disabled={purgeText.trim().toUpperCase() !== 'SUPPRIMER'}
+                    className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-40"
+                  >
+                    Vider la corbeille
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPurgeId(null);
+                      setPurgeText('');
+                    }}
+                    className="min-h-[40px] rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-slate-500">
+                    « Supprimer définitivement » efface l’élément de la corbeille : il ne pourra plus jamais être restauré.
+                  </span>
+                  <button
+                    onClick={() => setPurgeId('all')}
+                    disabled={busyId !== null}
+                    className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {busyId === -1 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    Vider toute la corbeille
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <ul className="space-y-3">
             {visibleGroups.map((g) => {
               const d = describeTrash(g);
@@ -411,13 +592,44 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex justify-end">
-                    <RestoreButton entry={g.main} label="Restaurer" />
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    {!g.main.restoredAt &&
+                      (purgeId === g.main.id ? (
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-red-50 p-2">
+                          <span className="text-sm font-semibold text-red-700">Supprimer pour toujours ? Plus aucune restauration possible.</span>
+                          <button
+                            onClick={() => purge(g.main.id)}
+                            className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700"
+                          >
+                            Oui, supprimer
+                          </button>
+                          <button
+                            onClick={() => setPurgeId(null)}
+                            className="min-h-[40px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600"
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setConfirmId(null);
+                            setPurgeId(g.main.id);
+                          }}
+                          disabled={busyId !== null}
+                          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {busyId === g.main.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          Supprimer définitivement
+                        </button>
+                      ))}
+                    {purgeId !== g.main.id && <RestoreButton entry={g.main} label="Restaurer" />}
                   </div>
                 </li>
               );
             })}
           </ul>
+          </>
         )
       ) : visibleChanges.length === 0 ? (
         available && !error && <EmptyState text={q ? 'Aucun résultat pour cette recherche.' : 'Aucune modification enregistrée pour le moment.'} />
@@ -432,18 +644,28 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                   {formatWhen(e.at)} · par {e.actor}
                 </p>
                 {d.changes.length > 0 && (
-                  <dl className="mt-3 space-y-1.5 rounded-xl bg-slate-50 p-3 text-sm">
+                  <dl className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
                     {d.changes.map((c, i) => (
                       <div key={i} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        {c.field && <dt className="shrink-0 font-semibold text-slate-600 sm:w-44">{c.field}</dt>}
+                        {c.field && <dt className="shrink-0 font-semibold text-slate-600 sm:w-52">{c.field}</dt>}
                         <dd className="min-w-0 break-words text-slate-800">
                           {c.before ? (
                             <>
-                              <span className="text-slate-400 line-through">{c.before}</span>
-                              <span className="mx-1.5 text-slate-400">→</span>
+                              au lieu de <span className="font-semibold text-slate-500">« {c.before} »</span>, remplacé par{' '}
+                              <span className="font-semibold text-slate-900">« {c.after} »</span>
                             </>
-                          ) : null}
-                          <span className="font-semibold">{c.after}</span>
+                          ) : (
+                            <span className="font-semibold">{c.after}</span>
+                          )}
+                          {c.note && (
+                            <span
+                              className={`ml-2 inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                                c.tone === 'down' ? 'bg-red-50 text-red-700' : c.tone === 'up' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {c.note}
+                            </span>
+                          )}
                         </dd>
                       </div>
                     ))}

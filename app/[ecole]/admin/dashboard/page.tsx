@@ -1,6 +1,6 @@
 import React from 'react';
 import { DashboardView } from '@/components/dashboard/dashboard-view';
-import { mockKPIs, mockInvoices, mockStudents, mockSchools } from '@/lib/data/mock-data';
+import { mockKPIs, mockInvoices, mockStudents, schoolForSlug } from '@/lib/data/mock-data';
 import { getSchoolFromSupabase, getStudentsFromSupabase, getInvoicesFromSupabase, getServicesDataFromSupabase } from '@/lib/supabase/services';
 
 interface DashboardPageProps {
@@ -34,7 +34,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     console.warn('DashboardPage Supabase fetch warning:', err);
   }
 
-  const school = dbSchool || mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = dbSchool || schoolForSlug(ecoleSlug);
   const students = dbStudents && dbStudents.length > 0 ? dbStudents : mockStudents;
   const invoices = dbInvoices && dbInvoices.length > 0 ? dbInvoices : mockInvoices;
 

@@ -7,6 +7,7 @@ import { formatFCFA, formatDate } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveInvoices, getLiveSchool, saveLivePaymentInvoice, DATA_UPDATED_EVENT, updateRegisteredStudent, deleteLiveStudents, broadcastLiveUpdate, saveLiveTransportData, deleteServiceReceipts } from '@/lib/data/live-store';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { ServicePrintListButton } from '@/components/services/service-print-list';
 import {
   Bus,
   MapPin,
@@ -785,6 +786,21 @@ export function TransportView({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <ServicePrintListButton
+            serviceName="Transport"
+            detailLabel="Arrêt / ligne"
+            signatureLabel="Présence"
+            schoolName={currentSchool.name}
+            grades={availableClasses.filter((c) => c !== 'Toutes les classes')}
+            subscribers={subscribers.map((s) => ({
+              id: s.id,
+              fullName: s.fullName,
+              studentNumber: s.studentNumber,
+              grade: s.grade,
+              detail: s.pickupStop,
+              monthsState: s.monthsState,
+            }))}
+          />
           <button
             type="button"
             onClick={() => setIsItinerairesModalOpen(true)}

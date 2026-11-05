@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockBoardingStudents, mockSchools } from '@/lib/data/mock-data';
+import { mockBoardingStudents, schoolForSlug } from '@/lib/data/mock-data';
 import { BoardingView } from '@/components/boarding/boarding-view';
 
 export default async function InternatPage({
@@ -9,7 +9,7 @@ export default async function InternatPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <BoardingView

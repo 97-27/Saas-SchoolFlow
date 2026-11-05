@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools } from '@/lib/data/mock-data';
+import { schoolForSlug } from '@/lib/data/mock-data';
 import { StaffView } from '@/components/staff/staff-view';
 
 export default async function Page({
@@ -9,7 +9,7 @@ export default async function Page({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <StaffView

@@ -147,6 +147,11 @@ export function restoreJournalEntry(entryId: number, schoolSlug: string): Promis
   return callData('restoreJournal', [entryId, schoolSlug], { ok: false, message: 'Connexion impossible avec le serveur.' });
 }
 
+/** Supprime définitivement un élément de la corbeille (ou toute la corbeille avec 'all'). */
+export function purgeJournalEntry(entryId: number | 'all', schoolSlug: string): Promise<{ ok: boolean; removed: number; message: string }> {
+  return callData('purgeJournal', [entryId, schoolSlug], { ok: false, removed: 0, message: 'Connexion impossible avec le serveur.' });
+}
+
 /** Supprime les reçus d'un service (internat / cantine / transport) d'un élève. -1 = échec. */
 export function deleteServiceInvoicesFromSupabase(
   studentId: string,

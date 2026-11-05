@@ -1,7 +1,7 @@
 'use client';
 
 import { Student, Invoice, School } from '@/lib/data/types';
-import { mockSchools, mockStudents, mockInvoices } from '@/lib/data/mock-data';
+import { mockSchools, mockStudents, mockInvoices, schoolForSlug } from '@/lib/data/mock-data';
 
 // Liste des identifiants protégés (vide pour autoriser la suppression effective de tout élève par l'administrateur)
 export const PROTECTED_STUDENT_NUMBERS = new Set<string>();
@@ -1538,36 +1538,24 @@ function applyServerData(slug: string, result: any): void {
 }
 
 /**
+ * Valeurs de départ de l'école `slug` : celles fournies par la page SEULEMENT si elles sont bien
+ * celles de cette école (les pages passent l'établissement pilote par défaut), sinon les données
+ * de démonstration de cette école, sinon une identité neutre.
+ */
+function schoolBase(slug: string, defaultSchool?: School): School {
+  const norm = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  const sameSchool = (s?: School) => !!s && (s.slug === slug || s.slug === norm);
+  if (sameSchool(defaultSchool)) return defaultSchool as School;
+  return schoolForSlug(slug);
+}
+
+/**
  * Récupère la configuration personnalisée de l'école (nom, slogan, devise, logos, ville, fondateur, etc.)
  */
 export function getLiveSchool(slug: string, defaultSchool?: School): School {
-  if (typeof window === 'undefined') {
-    return defaultSchool || mockSchools['epc-manoi'] || {
-      id: slug,
-      slug: slug,
-      name: slug.toUpperCase().replace(/-/g, ' '),
-      shortName: slug.slice(0, 10).toUpperCase(),
-      logoColor: '#059669',
-      academicYear: '2026-2027',
-      currentTerm: 'Trimestre 1',
-      termType: 'trimestriel',
-      phone: '+225 01 02 03 04 05',
-      whatsappPhone: '+225 01 02 03 04 05',
-      email: `direction@${slug}.ci`,
-      motto: 'Discipline • Rigueur • Réussite',
-      slogan: 'L’Excellence au service de l’Éducation',
-      city: 'Abidjan',
-      country: 'Côte d’Ivoire',
-      district: 'Abidjan',
-      ministryCode: '321119',
-      founderName: slug === 'epc-manoi' ? 'LAWANI MOUSSA' : 'Fondateur / Promoteur',
-      directorName: 'LAWANI MOUHAMED',
-      studiesDirectorName: 'Direction des Études',
-      status: 'active',
-      subscriptionPlan: 'annuel',
-      createdAt: '2026-09-01',
-    };
-  }
+  const base = schoolBase(slug, defaultSchool);
+  const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
+  if (typeof window === 'undefined') return base;
 
   // Lancer la réconciliation serveur et la boucle temps réel multi-appareils
   try {
@@ -1588,67 +1576,35 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
     }
 
     // 3. Si c'est l'école officielle par défaut (epc-manoi)
-    if (!raw && (slug === 'epc-manoi')) {
+    if (!raw && isPilot) {
       raw =
         localStorage.getItem(`${SCHOOL_SETTINGS_PREFIX}epc-manoi`) ||
-        
         localStorage.getItem('schoolflow_active_school_settings_v1');
     }
 
     if (raw) {
       const local = JSON.parse(raw);
-      const fallback = defaultSchool || mockSchools['epc-manoi'] ;
       return {
-        ...fallback,
+        ...base,
         ...local,
-        logoUrl: local.logoUrl || fallback?.logoUrl || '',
-        countryEmblemUrl: local.countryEmblemUrl || fallback?.countryEmblemUrl || '',
-        stampUrl: local.stampUrl || fallback?.stampUrl || '',
-        name: local.name || fallback?.name || slug.toUpperCase().replace(/-/g, ' '),
-        shortName: local.shortName || fallback?.shortName || slug.slice(0, 10).toUpperCase(),
-        founderName:
-          (slug === 'epc-manoi')
-            ? 'LAWANI MOUSSA'
-            : (local.founderName && !local.founderName.toUpperCase().includes('MOUHAMED')
-                ? local.founderName
-                : (fallback?.founderName || 'LAWANI MOUSSA')),
-        directorName: local.directorName || fallback?.directorName || 'LAWANI MOUHAMED',
-        studiesDirectorName: local.studiesDirectorName || fallback?.studiesDirectorName || 'Direction des Études',
+        logoUrl: local.logoUrl || base.logoUrl || '',
+        countryEmblemUrl: local.countryEmblemUrl || base.countryEmblemUrl || '',
+        stampUrl: local.stampUrl || base.stampUrl || '',
+        name: local.name || base.name || slug.toUpperCase().replace(/-/g, ' '),
+        shortName: local.shortName || base.shortName || slug.slice(0, 10).toUpperCase(),
+        founderName: isPilot
+          ? 'LAWANI MOUSSA'
+          : local.founderName || base.founderName || 'DIRECTION GÉNÉRALE',
+        directorName: local.directorName || base.directorName || 'DIRECTION GÉNÉRALE',
+        studiesDirectorName: local.studiesDirectorName || base.studiesDirectorName || 'Direction des Études',
         slug: slug,
       };
     }
 
-    if (defaultSchool) return defaultSchool;
-
-    // Nouvelle école non encore enregistrée
-    return {
-      id: slug,
-      slug: slug,
-      name: slug.toUpperCase().replace(/-/g, ' '),
-      shortName: slug.slice(0, 10).toUpperCase(),
-      logoColor: '#059669',
-      academicYear: '2026-2027',
-      currentTerm: 'Trimestre 1',
-      termType: 'trimestriel',
-      phone: '+225 01 02 03 04 05',
-      whatsappPhone: '+225 01 02 03 04 05',
-      email: `direction@${slug}.ci`,
-      motto: 'Discipline • Rigueur • Réussite',
-      slogan: 'L’Excellence au service de l’Éducation',
-      city: 'Abidjan',
-      country: 'Côte d’Ivoire',
-      district: 'Abidjan',
-      ministryCode: '321119',
-      founderName: 'DIRECTION GÉNÉRALE',
-      directorName: 'DIRECTION GÉNÉRALE',
-      studiesDirectorName: 'Direction des Études',
-      status: 'active',
-      subscriptionPlan: 'annuel',
-      createdAt: '2026-09-01',
-    };
+    return base;
   } catch (error) {
     console.error('Erreur lecture localStorage school settings:', error);
-    return defaultSchool || mockSchools['epc-manoi'];
+    return base;
   }
 }
 

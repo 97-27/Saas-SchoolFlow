@@ -1,5 +1,5 @@
 import React from 'react';
-import { mockSchools } from '@/lib/data/mock-data';
+import { schoolForSlug } from '@/lib/data/mock-data';
 import { DiverseNotesView } from '@/components/notes/diverse-notes-view';
 
 export default async function NotesDiversesPage({
@@ -9,7 +9,7 @@ export default async function NotesDiversesPage({
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
-  const school = mockSchools[ecoleSlug] || mockSchools['epc-manoi'];
+  const school = schoolForSlug(ecoleSlug);
 
   return (
     <DiverseNotesView
