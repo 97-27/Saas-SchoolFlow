@@ -510,11 +510,16 @@ export function CaisseView({
                   const balanceRemaining = inv.balanceRemaining !== undefined ? inv.balanceRemaining : Math.max(0, netAmount - paidAmount);
                   const paymentMethod = inv.paymentMethod || 'Espèces en caisse';
                   const inst = inv.installments;
-                  const v1 = inst?.versement1 || (paidAmount > 0 ? { amount: Math.min(paidAmount, 100000), paymentMethod: paymentMethod, date: inst?.versement1?.date || inv.issueDate } : null);
-                  const v2 = inst?.versement2 || (paidAmount > 100000 ? { amount: Math.min(paidAmount - 100000, 50000), paymentMethod: 'Wave', date: inst?.versement2?.date || inv.issueDate } : null);
-                  const v3 = inst?.versement3 || (paidAmount > 150000 ? { amount: Math.min(paidAmount - 150000, 50000), paymentMethod: 'Virement', date: inst?.versement3?.date || inv.issueDate } : null);
-                  const v4 = inst?.versement4 || (paidAmount > 200000 ? { amount: Math.min(paidAmount - 200000, 50000), paymentMethod: 'Espèces', date: inst?.versement4?.date || inv.issueDate } : null);
-                  const v5 = inst?.versement5 || (paidAmount > 250000 ? { amount: paidAmount - 250000, paymentMethod: 'Orange', date: inst?.versement5?.date || inv.issueDate } : null);
+                  // Uniquement les versements RÉELLEMENT saisis dans la fiche. Avant, quand le détail
+                  // manquait, la caisse inventait des versements en découpant le total payé
+                  // (100 000 F, puis 50 000 F…), ce qui faussait les comptes. Sans aucun détail, le
+                  // total payé est affiché dans le 1er versement, tel quel.
+                  const hasDetail = !!(inst && (inst.versement1 || inst.versement2 || inst.versement3 || inst.versement4 || inst.versement5));
+                  const v1 = inst?.versement1 || (!hasDetail && paidAmount > 0 ? { amount: paidAmount, paymentMethod: paymentMethod, date: inv.issueDate } : null);
+                  const v2 = inst?.versement2 || null;
+                  const v3 = inst?.versement3 || null;
+                  const v4 = inst?.versement4 || null;
+                  const v5 = inst?.versement5 || null;
 
                   return (
                     <tr key={inv.id} className={`hover:bg-emerald-50/30 ${isSelected ? 'bg-emerald-50/40' : ''}`}>

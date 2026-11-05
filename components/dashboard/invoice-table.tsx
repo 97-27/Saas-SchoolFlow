@@ -131,29 +131,25 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         feeLowerInst.includes('cantine') ||
         feeLowerInst.includes('transport') ||
         /^(QUI-|CAN-|TRP-)/i.test(rawInvNumber);
-      if (inst && !isServiceInv) {
+      // La fiche de l'élève est la référence : ses versements sont ceux saisis (et imprimés sur
+      // le reçu). On les lit là en priorité, la copie de la facture ne sert qu'à défaut.
+      const realInst: any = matchedStudent?.installments || inst;
+      if (realInst && !isServiceInv) {
         const vList = [
-          { key: 'v1', obj: inst.versement1, prestation: '🎓 Scolarité', motif: '1er Versement' },
-          { key: 'v2', obj: inst.versement2, prestation: '🎓 Scolarité', motif: '2ème Versement' },
-          { key: 'v3', obj: inst.versement3, prestation: '🎓 Scolarité', motif: '3ème Versement' },
-          { key: 'v4', obj: inst.versement4, prestation: '🎓 Scolarité', motif: '4ème Versement' },
-          { key: 'v5', obj: inst.versement5, prestation: '🎓 Scolarité', motif: '5ème Versement' },
+          { key: 'v1', prestation: '🎓 Scolarité', motif: '1er Versement' },
+          { key: 'v2', prestation: '🎓 Scolarité', motif: '2ème Versement' },
+          { key: 'v3', prestation: '🎓 Scolarité', motif: '3ème Versement' },
+          { key: 'v4', prestation: '🎓 Scolarité', motif: '4ème Versement' },
+          { key: 'v5', prestation: '🎓 Scolarité', motif: '5ème Versement' },
         ];
 
-        vList.forEach(({ key, obj, prestation, motif }) => {
-          if (obj && typeof obj.amount === 'number' && obj.amount > 0) {
-            // Sécurité anti-doublon et anti-versement fictif :
-            // Si la scolarité n'a pas encore été payée ou si le montant correspond uniquement aux droits d'inscription
-            const isFictiveOrUnpaid =
-              (matchedStudent?.tuitionStatus === 'unpaid') ||
-              (matchedStudent?.tuitionAmount && matchedStudent?.balanceRemaining !== undefined && matchedStudent.balanceRemaining >= matchedStudent.tuitionAmount) ||
-              (typeof matchedStudent?.paidAmount === 'number' && typeof inv.registrationFee === 'number' && matchedStudent.paidAmount <= inv.registrationFee) ||
-              (typeof inv.paidAmount === 'number' && typeof inv.registrationFee === 'number' && inv.paidAmount <= inv.registrationFee) ||
-              (inv.balanceRemaining !== undefined && inv.amount !== undefined && inv.balanceRemaining >= inv.amount);
-
-            if (isFictiveOrUnpaid) {
-              return; // Ne jamais afficher de faux versement scolarité !
-            }
+        vList.forEach(({ key, prestation, motif }) => {
+          const obj: any = realInst[`versement${key.slice(1)}`];
+          const amount = Number(obj?.amount) || 0;
+          // Tout versement saisi dans la fiche est un encaissement réel : il apparaît toujours.
+          // (Avant, des règles « anti-versement fictif » basées sur les droits d'inscription ou
+          // un statut ancien pouvaient cacher un vrai versement du journal.)
+          if (obj && amount > 0) {
 
             // Un versement = un élève + un rang : jamais compté deux fois, même si l'élève a
             // plusieurs copies de sa facture (copie locale + base).
@@ -173,10 +169,11 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
               enrollmentType,
               prestation,
               motif,
-              paymentDate: (key === 'v1' && (matchedStudent?.paymentDate || matchedStudent?.enrollmentDate))
-                ? (matchedStudent.paymentDate || matchedStudent.enrollmentDate || obj.date || inv.issueDate)
-                : (obj.date || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate),
-              amount: obj.amount,
+              // La VRAIE date du versement, pour chaque versement y compris le 1er. Avant, le 1er
+              // était toujours rangé à la date d'inscription : un élève inscrit le 15/09 qui payait
+              // ses 1er et 2e versements le 20/10 n'avait qu'UN versement dans le journal du 20/10.
+              paymentDate: obj.date || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
+              amount,
               paymentMethod: obj.paymentMethod || obj.method || inv.paymentMethod || 'Espèces',
               status: inv.status,
               rawInvoice: inv,

@@ -2143,13 +2143,10 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
             seenNumbers.add(matchingStu.studentNumber);
           }
 
-          // Nettoyage strict des versements fictifs si la scolarité n'a pas encore été perçue
-          const isTuitionUnpaid =
-            matchingStu.tuitionStatus === 'unpaid' ||
-            (typeof matchingStu.paidAmount === 'number' && matchingStu.paidAmount <= (inv.registrationFee || 0)) ||
-            (matchingStu.tuitionAmount && matchingStu.balanceRemaining !== undefined && matchingStu.balanceRemaining >= matchingStu.tuitionAmount);
-
-          const sanitizedInstallments = isTuitionUnpaid ? {} : (matchingStu.installments || inv.installments || {});
+          // Les versements de la fiche sont la référence et ne sont JAMAIS masqués : avant, une
+          // règle (« total payé ≤ droits d'inscription », ancien statut « non payé »…) pouvait
+          // vider les versements d'un élève qui avait réellement payé, et les retirer du journal.
+          const sanitizedInstallments = matchingStu.installments || inv.installments || {};
 
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { _source: _s1, ...invClean } = inv as any;
@@ -2202,11 +2199,6 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
         continue;
       }
 
-      const isTuitionUnpaid =
-        stu.tuitionStatus === 'unpaid' ||
-        (typeof stu.paidAmount === 'number' && stu.paidAmount <= (stu.registrationFee || 0)) ||
-        (stu.tuitionAmount && stu.balanceRemaining !== undefined && stu.balanceRemaining >= stu.tuitionAmount);
-
       const reconstructedInvoice: Invoice = {
         id: `inv-${numVal.toString().padStart(3, '0')}`,
         invoiceNumber: recFormat,
@@ -2226,7 +2218,7 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
         balanceRemaining: stu.balanceRemaining !== undefined ? stu.balanceRemaining : Math.max(0, (stu.tuitionAmount || 0) - (stu.paidAmount || 0)),
         paymentMethod: stu.paymentMethod || 'Espèces en caisse',
         enrollmentType: stu.enrollmentType || 'nouveau',
-        installments: isTuitionUnpaid ? {} : (stu.installments || {}),
+        installments: stu.installments || {},
         issueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
         dueDate: stu.enrollmentDate || stu.paymentDate || '2026-08-27',
         status: (stu.balanceRemaining === 0 || stu.tuitionStatus === 'paid') ? 'paid' : (stu.paidAmount && stu.paidAmount > 0) ? 'partial' : 'sent',

@@ -162,16 +162,9 @@ export function StudentTable({
 
     const formattedDate = normalizeDateToIso(editPaymentDate);
 
-    // Synchroniser la date du premier versement uniquement s'il existe déjà (sans inventer de versement fictif)
-    const updatedInstallments = editingStudent.installments ? {
-      ...editingStudent.installments,
-      ...(editingStudent.installments.versement1 ? {
-        versement1: {
-          ...editingStudent.installments.versement1,
-          date: formattedDate,
-        },
-      } : {}),
-    } : undefined;
+    // Les versements ne sont JAMAIS modifiés ici (modifier un téléphone ou une classe ne doit pas
+    // changer la date réelle du 1er versement, sinon il disparaît du journal du jour où il a été payé).
+    const updatedInstallments = editingStudent.installments;
 
     const updated: Student = {
       ...editingStudent,

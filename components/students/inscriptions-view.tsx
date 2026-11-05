@@ -309,7 +309,9 @@ export function InscriptionsView({
   // Synchronisation stricte de la date : quand la date d'inscription est modifiée, le 1er versement s'aligne immédiatement
   const handlePaymentDateChange = (newDate: string) => {
     setPaymentDate(newDate);
-    setVersement1Date(newDate);
+    // Seulement si le 1er versement n'était pas déjà enregistré : sa date réelle ne doit jamais
+    // être déplacée en corrigeant la date d'inscription d'un élève déjà inscrit.
+    if (!initialVersementsSnapshot || !initialVersementsSnapshot.v1) setVersement1Date(newDate);
   };
   const [paymentMethod, setPaymentMethod] = useState<'especes' | 'virement' | 'en_ligne'>('especes');
   const [onlineOperator, setOnlineOperator] = useState<'mtn' | 'moov' | 'orange' | 'wave'>('orange');
@@ -732,31 +734,36 @@ export function InscriptionsView({
 
       // Charger les 5 versements réels de l'élève (sans inventer de versements fictifs)
       const inst = stu.installments;
-      const v1 = inst?.versement1 || { amount: 0, paymentMethod: 'Espèces', date: defaultDate };
-      const v2 = inst?.versement2 || { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: defaultDate };
-      const v3 = inst?.versement3 || { amount: 0, paymentMethod: 'Virement bancaire', date: defaultDate };
-      const v4 = inst?.versement4 || { amount: 0, paymentMethod: 'Espèces', date: defaultDate };
-      const v5 = inst?.versement5 || { amount: 0, paymentMethod: 'Orange Money', date: defaultDate };
+      // Une case de versement encore VIDE prend la date du JOUR (jour où l'argent sera reçu), pas
+      // la date d'inscription : sinon un versement saisi aujourd'hui était enregistré à l'ancienne
+      // date et n'apparaissait pas dans le journal des encaissements du jour.
+      const today = getTodayDateStr();
+      const v1 = inst?.versement1 || { amount: 0, paymentMethod: 'Espèces', date: today };
+      const v2 = inst?.versement2 || { amount: 0, paymentMethod: 'Paiement en ligne (Wave)', date: today };
+      const v3 = inst?.versement3 || { amount: 0, paymentMethod: 'Virement bancaire', date: today };
+      const v4 = inst?.versement4 || { amount: 0, paymentMethod: 'Espèces', date: today };
+      const v5 = inst?.versement5 || { amount: 0, paymentMethod: 'Orange Money', date: today };
+      const dateOf = (v: any) => (Number(v?.amount) > 0 ? v?.date || defaultDate : today);
 
       setVersement1Amount(Number(v1?.amount) || 0);
       setVersement1Method(v1?.paymentMethod || 'Espèces');
-      setVersement1Date(v1?.date || defaultDate);
+      setVersement1Date(dateOf(v1));
 
       setVersement2Amount(Number(v2?.amount) || 0);
       setVersement2Method(v2?.paymentMethod || 'Paiement en ligne (Wave)');
-      setVersement2Date(v2?.date || defaultDate);
+      setVersement2Date(dateOf(v2));
 
       setVersement3Amount(Number(v3?.amount) || 0);
       setVersement3Method(v3?.paymentMethod || 'Virement bancaire');
-      setVersement3Date(v3?.date || defaultDate);
+      setVersement3Date(dateOf(v3));
 
       setVersement4Amount(Number(v4?.amount) || 0);
       setVersement4Method(v4?.paymentMethod || 'Espèces');
-      setVersement4Date(v4?.date || defaultDate);
+      setVersement4Date(dateOf(v4));
 
       setVersement5Amount(Number(v5?.amount) || 0);
       setVersement5Method(v5?.paymentMethod || 'Orange Money');
-      setVersement5Date(v5?.date || defaultDate);
+      setVersement5Date(dateOf(v5));
 
       setPaymentMethod(stu.paymentMethod === 'Virement bancaire' ? 'virement' : (stu.paymentMethod?.includes('Paiement en ligne') ? 'en_ligne' : 'especes'));
       setIsBoarding(!!stu.isBoarding);
