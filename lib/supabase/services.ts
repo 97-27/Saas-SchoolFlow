@@ -586,8 +586,8 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
 export async function saveStudentToSupabase(
   student: Student,
   schoolSlug: string,
-  opts: { identityOnly?: boolean } = {}
-): Promise<boolean> {
+  opts: { identityOnly?: boolean; expectedVersements?: number[] | null } = {}
+): Promise<boolean | 'conflict'> {
   if (!isSupabaseConfigured || !schoolSlug) return false;
   try {
     const cleanSlug = schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug;
@@ -664,20 +664,44 @@ export async function saveStudentToSupabase(
       // versements restent ceux de la BASE. Un appareil pas à jour ne peut donc plus effacer un
       // versement enregistré entre-temps sur un autre poste en corrigeant simplement un nom.
       let updatePayload: Record<string, any> = payload;
-      if (opts.identityOnly) {
-        const { data: current } = await supabase
+      const needsDbMeta = opts.identityOnly || Array.isArray(opts.expectedVersements);
+      let dbMeta: any = {};
+      if (needsDbMeta) {
+        const { data: current, error: readErr } = await supabase
           .from('students')
           .select('address')
           .eq('id', plan.id)
           .eq('school_id', schoolId)
           .maybeSingle();
-        let dbMeta: any = {};
+        // Base illisible : on n'écrit rien plutôt que de risquer d'effacer des versements.
+        if (readErr) return false;
         const m = String(current?.address || '').match(/\[SF_META:([\s\S]*)\]\s*$/);
         if (m) {
           try {
             dbMeta = JSON.parse(m[1]);
           } catch (e) {}
         }
+      }
+
+      // CONTRÔLE DES VERSEMENTS : l'écran indique les versements qu'il avait affichés à l'ouverture
+      // de la fiche. Si la base en contient d'autres (versement saisi sur un autre appareil, ou fiche
+      // ouverte depuis une copie ancienne sans ses versements), l'enregistrement est REFUSÉ : avant,
+      // il effaçait ces versements (constaté le 04/11 : 25 000 F de SORY Khadija, 40 000 F de SAYI
+      // Hamza, 60 000 F de SORY Aboubacar…). Un renvoi identique (nouvel essai) reste accepté.
+      if (!opts.identityOnly && Array.isArray(opts.expectedVersements)) {
+        const amounts = (inst: any) =>
+          [1, 2, 3, 4, 5].map((i) => Number(inst?.[`versement${i}`]?.amount) || 0);
+        const dbAmounts = amounts(dbMeta.installments);
+        const expected = [0, 1, 2, 3, 4].map((i) => Number(opts.expectedVersements![i]) || 0);
+        const incoming = amounts(student.installments);
+        const same = (a: number[], b: number[]) => a.every((v, i) => v === b[i]);
+        if (!same(dbAmounts, expected) && !same(dbAmounts, incoming)) {
+          console.warn(`saveStudentToSupabase: conflit de versements pour ${student.studentNumber}, enregistrement refusé.`);
+          return 'conflict';
+        }
+      }
+
+      if (opts.identityOnly) {
         const mergedMeta = { ...metaObj, installments: dbMeta.installments ?? metaObj.installments };
         const {
           registration_fee: _rf,

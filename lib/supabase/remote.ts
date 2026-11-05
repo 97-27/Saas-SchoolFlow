@@ -1,6 +1,7 @@
 'use client';
 
 import { School, Student, Invoice } from '@/lib/data/types';
+import { reportClientError } from '@/lib/client/error-report';
 
 /**
  * ══════════════════════════════════════════════════════════════════
@@ -25,7 +26,18 @@ async function callData<T>(op: string, args: any[], fallback: T): Promise<T> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ op, args }),
     });
-    if (!res.ok) return fallback;
+    if (!res.ok) {
+      // Refus du serveur : signalé dans les journaux Vercel (« [SchoolFlow][écran] ») pour qu'une
+      // panne d'enregistrement ne passe plus jamais inaperçue.
+      if (!op.startsWith('get')) {
+        let detail = '';
+        try {
+          detail = (await res.clone().json())?.error || '';
+        } catch (e) {}
+        reportClientError(new Error(`Enregistrement refusé (${op}) : HTTP ${res.status} ${detail}`), 'Données');
+      }
+      return fallback;
+    }
     const json = await res.json();
     return json && json.success ? (json.result as T) : fallback;
   } catch (e) {
@@ -55,8 +67,13 @@ export function getStudentsFromSupabase(schoolSlug: string): Promise<Student[]> 
 }
 
 /** identityOnly : nom, classe, contact… seulement — jamais les montants ni les versements. */
-export function saveStudentToSupabase(student: Student, schoolSlug: string, identityOnly: boolean = false): Promise<boolean> {
-  return callData('saveStudent', [student, schoolSlug, identityOnly], false);
+export function saveStudentToSupabase(
+  student: Student,
+  schoolSlug: string,
+  identityOnly: boolean = false,
+  expectedVersements: number[] | null = null
+): Promise<boolean | 'conflict'> {
+  return callData<boolean | 'conflict'>('saveStudent', [student, schoolSlug, identityOnly, expectedVersements], false);
 }
 
 export function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {

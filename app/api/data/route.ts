@@ -92,8 +92,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Toutes les opérations suivantes portent sur UN établissement : son slug est en argument.
+  // Position du slug dans les arguments. saveStudent et saveStaffUser portent des réglages APRÈS
+  // le slug (identityOnly, versements attendus, changement de code) : prendre « le dernier
+  // argument » renvoyait ce réglage au lieu du slug, et le serveur REFUSAIT alors tous les
+  // enregistrements d'élèves et de personnel (versements perdus le 05/11).
   const slugArg: string | undefined =
-    op === 'saveSchool' ? args[0]?.slug : op === 'saveServicesData' || op === 'getServicesData' ? args[0] : args[args.length - 1];
+    op === 'saveSchool'
+      ? args[0]?.slug
+      : op === 'saveServicesData' || op === 'getServicesData'
+        ? args[0]
+        : op === 'saveStudent' || op === 'saveStaffUser'
+          ? args[1]
+          : args[args.length - 1];
   const auth = await requireSession(request, typeof slugArg === 'string' ? slugArg : null);
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
@@ -128,7 +138,12 @@ export async function POST(request: NextRequest) {
     case 'saveStudent':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
       if (isLegacyDemoStudent(args[0])) return ok(false);
-      return ok(await saveStudentToSupabase(args[0], slug, { identityOnly: args[2] === true }));
+      return ok(
+        await saveStudentToSupabase(args[0], slug, {
+          identityOnly: args[2] === true,
+          expectedVersements: Array.isArray(args[3]) ? args[3].slice(0, 5).map((v: any) => Number(v) || 0) : null,
+        })
+      );
 
     case 'saveInvoice':
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();

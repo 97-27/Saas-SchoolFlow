@@ -21,6 +21,7 @@ import { splitFullNameNomFirst, formatFullNameNomFirst, cleanDisplayAddress } fr
 import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-matching';
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
 import { normalizePhone, isStudentTombstoneId, normalizePersonName, studentDisplayName } from '@/lib/data/student-match';
+import { reportClientError } from '@/lib/client/error-report';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -329,6 +330,185 @@ export function notifySaveFailure(what: string): void {
     `Attention : ${what} n'a pas pu être enregistrée sur le serveur (connexion ou droits insuffisants). ` +
       'La modification risque de ne pas être visible sur les autres postes : vérifiez la connexion puis recommencez.'
   );
+}
+
+/* --------------------------------------------------------------------------
+   PANIER D'ATTENTE DES FICHES ÉLÈVES (versements, scolarité, identité)
+   --------------------------------------------------------------------------
+   Toute modification d'un élève déjà en base est d'abord placée ici, puis envoyée. Elle n'en sort
+   que lorsque la base l'a CONFIRMÉE. Tant qu'elle y est, cet appareil l'affiche ; sinon c'est
+   TOUJOURS la version de la base qui s'affiche, sur tous les appareils (avant, une copie locale
+   « plus récente » restait affichée sur un téléphone alors que la base ne l'avait jamais reçue,
+   et les autres écrans ne la voyaient jamais). Une saisie faite sans réseau est renvoyée
+   automatiquement à chaque synchronisation. */
+
+const PENDING_STUDENT_PREFIX = 'schoolflow_pending_student_saves_v1_';
+/** Début de la panne d'enregistrement du 04/11 (soir) : les saisies faites depuis sont récupérées. */
+const SAVE_OUTAGE_START = Date.parse('2026-11-04T20:00:00Z');
+const MAX_PENDING_TRIES = 40;
+
+interface PendingStudentSave {
+  student: Student;
+  invoice?: Invoice | null;
+  identityOnly: boolean;
+  /** Versements (montants v1..v5) affichés quand la fiche a été ouverte : contrôlés par la base. */
+  expected: number[] | null;
+  at: number;
+  tries: number;
+}
+
+export type StudentSaveResult = 'ok' | 'conflict' | 'pending';
+
+const versementAmounts = (inst: any): number[] =>
+  [1, 2, 3, 4, 5].map((i) => Number(inst?.[`versement${i}`]?.amount) || 0);
+const sumOf = (a: number[]) => a.reduce((s, v) => s + v, 0);
+
+function readPendingSaves(slug: string): Record<string, PendingStudentSave> {
+  try {
+    const raw = localStorage.getItem(`${PENDING_STUDENT_PREFIX}${slug}`);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writePendingSaves(slug: string, map: Record<string, PendingStudentSave>): void {
+  try {
+    const key = `${PENDING_STUDENT_PREFIX}${slug}`;
+    if (Object.keys(map).length === 0) localStorage.removeItem(key);
+    else localStorage.setItem(key, JSON.stringify(map));
+  } catch (e) {}
+}
+
+function setPendingSave(slug: string, id: string, entry: PendingStudentSave | null): void {
+  const map = readPendingSaves(slug);
+  if (entry) map[id] = entry;
+  else delete map[id];
+  writePendingSaves(slug, map);
+}
+
+/** Reçu de scolarité d'un élève dans la copie de cet appareil (jamais un reçu de service). */
+function findLocalTuitionInvoice(slug: string, studentId: string): Invoice | null {
+  try {
+    const list: Invoice[] = JSON.parse(localStorage.getItem(`${INVOICES_STORAGE_KEY}_${slug}`) || '[]');
+    return list.find((inv) => inv && inv.studentId === studentId && !isServiceInvoice(inv)) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Cet appareil a-t-il une modification de cet élève pas encore confirmée par la base ? */
+export function hasPendingStudentSave(slug: string, id: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(readPendingSaves(slug)[id]);
+}
+
+/** Nombre de fiches de cet appareil pas encore confirmées par la base. */
+export function countPendingStudentSaves(slug: string): number {
+  if (typeof window === 'undefined') return 0;
+  return Object.keys(readPendingSaves(slug)).length;
+}
+
+let lastConflictAlertAt = 0;
+function notifyVersementConflict(name: string): void {
+  if (typeof window === 'undefined') return;
+  const now = Date.now();
+  if (now - lastConflictAlertAt < 5000) return;
+  lastConflictAlertAt = now;
+  window.alert(
+    `Attention : la fiche de ${name} n'a PAS été enregistrée, car ses versements en base sont différents de ceux ` +
+      `affichés sur cet écran (versement saisi sur un autre appareil). L'écran va se mettre à jour : rouvrez la fiche ` +
+      `pour voir les vrais versements, puis refaites la saisie si nécessaire.`
+  );
+}
+
+/** Envoie une fiche du panier. Ne la retire du panier que si la base a répondu (oui ou conflit). */
+async function sendPendingStudentSave(slug: string, id: string, entry: PendingStudentSave): Promise<StudentSaveResult> {
+  let res: boolean | 'conflict' = false;
+  try {
+    res = await saveStudentToSupabase(entry.student, slug, entry.identityOnly, entry.identityOnly ? null : entry.expected);
+  } catch (e) {
+    res = false;
+  }
+  // La fiche a pu être modifiée de nouveau pendant l'envoi : ne retirer que CETTE version.
+  const stillSame = () => readPendingSaves(slug)[id]?.at === entry.at;
+  if (res === 'conflict') {
+    if (stillSame()) setPendingSave(slug, id, null);
+    notifyVersementConflict(entry.student.fullName || 'cet élève');
+    syncSchoolDataWithServer(slug, true);
+    return 'conflict';
+  }
+  if (res === true) {
+    if (entry.invoice) {
+      try {
+        await saveInvoiceToSupabase(entry.invoice, slug);
+      } catch (e) {}
+    }
+    if (stillSame()) setPendingSave(slug, id, null);
+    return 'ok';
+  }
+  if (stillSame()) {
+    const tries = (entry.tries || 0) + 1;
+    if (tries >= MAX_PENDING_TRIES) {
+      setPendingSave(slug, id, null);
+      notifySaveFailure(`la fiche de ${entry.student.fullName}`);
+    } else {
+      setPendingSave(slug, id, { ...entry, tries });
+    }
+  }
+  return 'pending';
+}
+
+/** Place la modification d'un élève dans le panier et l'envoie aussitôt. */
+function queueStudentSave(
+  slug: string,
+  student: Student,
+  invoice: Invoice | null | undefined,
+  identityOnly: boolean,
+  expected: number[] | null
+): Promise<StudentSaveResult> {
+  const prev = readPendingSaves(slug)[student.id];
+  const entry: PendingStudentSave = {
+    student,
+    invoice: invoice || null,
+    // Une modification d'identité qui suit une saisie de versements encore en attente garde le
+    // contrôle complet de cette saisie (sinon les versements en attente seraient perdus).
+    identityOnly: identityOnly && (!prev || prev.identityOnly),
+    // Fiche déjà en attente : la base n'a pas encore reçu la saisie précédente, la référence à
+    // contrôler reste donc celle de la base au moment de cette première saisie.
+    expected: prev && !prev.identityOnly ? prev.expected : expected,
+    at: Date.now(),
+    tries: 0,
+  };
+  if (identityOnly && prev && !prev.identityOnly) {
+    entry.student = { ...student, installments: student.installments || prev.student.installments };
+  }
+  setPendingSave(slug, student.id, entry);
+  return sendPendingStudentSave(slug, student.id, entry);
+}
+
+let retryingPending = false;
+/** Renvoie les fiches en attente (appelé à chaque synchronisation). */
+export async function retryPendingStudentSaves(slug: string): Promise<void> {
+  if (typeof window === 'undefined' || retryingPending) return;
+  const map = readPendingSaves(slug);
+  const ids = Object.keys(map);
+  if (ids.length === 0) return;
+  retryingPending = true;
+  let sentAny = false;
+  try {
+    for (const id of ids) {
+      const entry = readPendingSaves(slug)[id];
+      if (!entry) continue;
+      const r = await sendPendingStudentSave(slug, id, entry);
+      if (r === 'ok') sentAny = true;
+      if (r === 'pending') break; // toujours pas de réseau : on réessaiera plus tard
+    }
+  } finally {
+    retryingPending = false;
+  }
+  if (sentAny) broadcastLiveUpdate({ action: 'server_hydrated', slug });
 }
 
 /* --------------------------------------------------------------------------
@@ -844,6 +1024,21 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
     .then((res) => res.json())
     .then((result) => {
       isSyncingServer = false;
+      // Une erreur au milieu (mémoire du téléphone pleine…) ne doit plus bloquer la mise à jour de
+      // l'écran sans bruit : elle est signalée, et les saisies en attente sont renvoyées quand même.
+      try {
+        applyServerData(slug, result);
+      } catch (e) {
+        reportClientError(e, 'Synchronisation');
+      }
+      retryPendingStudentSaves(slug).catch(() => {});
+    })
+    .catch(() => {
+      isSyncingServer = false;
+    });
+}
+
+function applyServerData(slug: string, result: any): void {
       if (result && result.success && result.data) {
         const data = result.data;
         let hasChanges = false;
@@ -958,6 +1153,8 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           }
 
           // B. Fusionner avec le stockage local (Sauvegarde des nouveaux inscrits et des modifications de date récentes)
+          const pendingSaves = readPendingSaves(slug);
+          const recoveredSaves: PendingStudentSave[] = [];
           let hasLocalNewStudents = false;
           const newLocalStudents: Student[] = [];
           prevStudents.forEach((localStu: Student) => {
@@ -1015,17 +1212,66 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
               hasLocalNewStudents = true;
               newLocalStudents.push(localStu);
             } else {
-              // Élève déjà connu du serveur (même id réel) : ne conserver la version locale que
-              // si elle est STRICTEMENT plus récente — à égalité ou en cas de doute, le serveur
-              // gagne, pour que toute correction faite côté serveur reste acquise.
+              // Élève déjà connu de la base (même id réel).
               const incomingStu = studentMap.get(key)!;
               const localTime = localStu.updatedAt ? new Date(localStu.updatedAt).getTime() : 0;
               const incomingTime = incomingStu.updatedAt ? new Date(incomingStu.updatedAt).getTime() : 0;
-              if (localTime > incomingTime) {
-                studentMap.set(key, { ...incomingStu, ...localStu });
+              // 1. Modification de cet appareil pas encore confirmée par la base : elle reste
+              //    affichée ici (et sera renvoyée juste après).
+              const pendingEntry = localStu.id ? pendingSaves[localStu.id] : undefined;
+              if (pendingEntry) {
+                studentMap.set(key, { ...incomingStu, ...pendingEntry.student });
+                return;
+              }
+              // 2. Réponse de secours (la base n'a pas répondu à temps) : ancienne règle prudente.
+              if (data.studentsFromDatabase !== true) {
+                if (localTime > incomingTime) studentMap.set(key, { ...incomingStu, ...localStu });
+                return;
+              }
+              // 3. Sinon la BASE fait foi, sur tous les appareils. Avant, une copie locale « plus
+              //    récente » restait affichée pour toujours sur un téléphone, même quand la base ne
+              //    l'avait jamais reçue : chaque appareil montrait des versements différents.
+              //    Exception : les saisies faites pendant la panne d'enregistrement du 04-05/11
+              //    sont récupérées et renvoyées — seulement si elles n'enlèvent aucun versement.
+              if (!isProvisional && localTime > incomingTime && localTime >= SAVE_OUTAGE_START) {
+                const la = versementAmounts(localStu.installments);
+                const sa = versementAmounts(incomingStu.installments);
+                const sameVersements = la.every((v, i) => v === sa[i]);
+                const num = (v: any) => Number(v) || 0;
+                const amountsDiffer =
+                  num(localStu.tuitionAmount) !== num(incomingStu.tuitionAmount) ||
+                  num(localStu.discountAmount) !== num(incomingStu.discountAmount) ||
+                  num(localStu.registrationFee) !== num(incomingStu.registrationFee);
+                const txt = (v: any) => String(v || '').trim();
+                const identityDiffers =
+                  txt(localStu.fullName) !== txt(incomingStu.fullName) ||
+                  txt(localStu.grade) !== txt(incomingStu.grade) ||
+                  txt(localStu.guardianName) !== txt(incomingStu.guardianName) ||
+                  txt(localStu.guardianPhone) !== txt(incomingStu.guardianPhone) ||
+                  txt(localStu.whatsappPhone) !== txt(incomingStu.whatsappPhone);
+                if ((!sameVersements || amountsDiffer || identityDiffers) && sumOf(la) >= sumOf(sa)) {
+                  const identityOnly = sameVersements && !amountsDiffer;
+                  recoveredSaves.push({
+                    student: localStu,
+                    invoice: identityOnly ? null : findLocalTuitionInvoice(slug, localStu.id),
+                    identityOnly,
+                    expected: sa,
+                    at: Date.now(),
+                    tries: 0,
+                  });
+                  studentMap.set(key, { ...incomingStu, ...localStu });
+                }
               }
             }
           });
+
+          if (recoveredSaves.length > 0) {
+            const map = readPendingSaves(slug);
+            recoveredSaves.forEach((entry) => {
+              if (!map[entry.student.id]) map[entry.student.id] = entry;
+            });
+            writePendingSaves(slug, map);
+          }
 
           if (vanishedIds.size > 0) {
             try {
@@ -1289,10 +1535,6 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
           broadcastLiveUpdate({ action: 'server_hydrated', slug });
         }
       }
-    })
-    .catch(() => {
-      isSyncingServer = false;
-    });
 }
 
 /**
@@ -2181,9 +2423,15 @@ export function getLiveInvoices(initialInvoices: Invoice[] = [], schoolSlug?: st
  * Enregistre un nouvel élève et son encaissement associé dans le stockage persistant,
  * et propage un événement custom pour mettre à jour instantanément les autres composants.
  */
-export function saveRegisteredStudent(student: Student, invoice: Invoice, schoolSlug: string = 'epc-manoi'): void {
-  if (typeof window === 'undefined') return;
+export function saveRegisteredStudent(
+  student: Student,
+  invoice: Invoice,
+  schoolSlug: string = 'epc-manoi',
+  opts: { expectedVersements?: number[] | null } = {}
+): Promise<StudentSaveResult> {
+  if (typeof window === 'undefined') return Promise.resolve('pending');
 
+  let result: Promise<StudentSaveResult> = Promise.resolve('pending');
   try {
     const slug = schoolSlug || 'epc-manoi';
 
@@ -2280,12 +2528,17 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
     // 5. Synchronisation Supabase Cloud & API Serveur SchoolFlow en arrière-plan (étudiant d'abord puis facture)
     //    Seuls CET élève et CETTE facture partent : l'ancien envoi de toute la liste réécrivait
     //    les 211 fiches à chaque inscription (et pouvait écraser une modification faite ailleurs).
-    saveStudentToSupabase(studentWithSlug, slug)
-      .then((okStudent) => (okStudent ? saveInvoiceToSupabase(invoiceWithSlug, slug) : false))
-      .then((ok) => {
-        if (!ok) notifySaveFailure("l'inscription de l'élève");
-      })
-      .catch(() => notifySaveFailure("l'inscription de l'élève"));
+    //    Élève déjà en base : passage par le panier d'attente, avec contrôle des versements par la
+    //    base (jamais d'écrasement d'un versement saisi ailleurs), et renvoi automatique sans réseau.
+    if (UUID_PATTERN.test(student.id)) {
+      result = queueStudentSave(slug, studentWithSlug, invoiceWithSlug, false, opts.expectedVersements ?? null);
+    } else {
+      // Nouvel élève : s'il n'est pas confirmé ici, la synchronisation le renverra (copie provisoire).
+      result = saveStudentToSupabase(studentWithSlug, slug)
+        .then((okStudent) => (okStudent === true ? saveInvoiceToSupabase(invoiceWithSlug, slug) : false))
+        .then((ok): StudentSaveResult => (ok === true ? 'ok' : 'pending'))
+        .catch((): StudentSaveResult => 'pending');
+    }
 
     // 6. Diffusion temps réel parallèle immédiate à toutes les interfaces
     broadcastLiveUpdate({
@@ -2297,6 +2550,7 @@ export function saveRegisteredStudent(student: Student, invoice: Invoice, school
   } catch (error) {
     console.error('Erreur sauvegarde live-store:', error);
   }
+  return result;
 }
 
 /**
@@ -2562,12 +2816,26 @@ export function updateRegisteredStudent(
     //    pouvait effacer un paiement enregistré entre-temps sur un autre poste.
     const amountsChanged = opts.amountsChanged === true;
     const sendInvoice = !!updatedInvoice && ((amountsChanged && studentHasAmounts) || !existingInv);
-    saveStudentToSupabase(studentWithSlug, schoolSlug, !amountsChanged)
-      .then((okStudent) => (okStudent && sendInvoice && updatedInvoice ? saveInvoiceToSupabase(updatedInvoice, schoolSlug) : okStudent))
-      .then((ok) => {
-        if (!ok) notifySaveFailure(`la fiche de ${student.fullName}`);
-      })
-      .catch(() => notifySaveFailure(`la fiche de ${student.fullName}`));
+    if (UUID_PATTERN.test(student.id)) {
+      // Panier d'attente : renvoyé automatiquement sans réseau. Une modification des montants
+      // (réductions) est contrôlée par la base : refusée si un versement a été saisi entre-temps.
+      queueStudentSave(
+        schoolSlug,
+        studentWithSlug,
+        sendInvoice ? updatedInvoice : null,
+        !amountsChanged,
+        amountsChanged ? versementAmounts(student.installments) : null
+      ).catch(() => {});
+    } else {
+      saveStudentToSupabase(studentWithSlug, schoolSlug, !amountsChanged)
+        .then((okStudent) =>
+          okStudent === true && sendInvoice && updatedInvoice ? saveInvoiceToSupabase(updatedInvoice, schoolSlug) : okStudent === true
+        )
+        .then((ok) => {
+          if (!ok) notifySaveFailure(`la fiche de ${student.fullName}`);
+        })
+        .catch(() => notifySaveFailure(`la fiche de ${student.fullName}`));
+    }
 
     // 5. Propagation globale de l'événement
     broadcastLiveUpdate({

@@ -44,6 +44,7 @@ import {
   getDeletedStudentIds,
   DATA_UPDATED_EVENT,
   syncSchoolDataWithServer,
+  hasPendingStudentSave,
 } from '@/lib/data/live-store';
 import { playRegistrationSuccessSound, playCopySound } from '@/lib/utils/audio';
 
@@ -267,6 +268,11 @@ export function InscriptionsView({
     v5: number;
     total: number;
   } | null>(null);
+
+  // Versements actuellement affichés (lus par la relecture de la base après ouverture d'une fiche).
+  const shownVersementsRef = useRef<number[]>([]);
+  shownVersementsRef.current = [versement1Amount, versement2Amount, versement3Amount, versement4Amount, versement5Amount];
+  const selectSeqRef = useRef(0);
 
   // Détection si un nouveau versement a été saisi pour un reçu existant
   const currentVersementsTotal =
@@ -698,8 +704,9 @@ export function InscriptionsView({
   };
 
   // Charger les coordonnées et les frais d'un élève sélectionné
-  const handleSelectStudent = (stu: Student) => {
+  const handleSelectStudent = (stu: Student, fromDatabase = false) => {
     if (!stu) return;
+    const seq = ++selectSeqRef.current;
     try {
       setSelectedStudentId(stu.id);
       setLastName(stu.lastName || '');
@@ -773,6 +780,29 @@ export function InscriptionsView({
       });
 
       setIsIdPickerOpen(false);
+
+      // Relecture de la fiche DANS LA BASE : la liste de cet appareil peut être en retard (versement
+      // saisi ailleurs). Si la base a d'autres versements et que rien n'a encore été saisi ici, la
+      // fiche est rechargée avec les vrais versements.
+      const opened = [v1, v2, v3, v4, v5].map((v) => Number(v?.amount) || 0);
+      if (!fromDatabase && stu.id && /^[0-9a-f-]{36}$/i.test(stu.id) && !hasPendingStudentSave(schoolSlug, stu.id)) {
+        fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((json) => {
+            if (seq !== selectSeqRef.current || !json?.data?.studentsFromDatabase) return;
+            const fresh = (json.data.students || []).find((s: any) => s && s.id === stu.id);
+            if (!fresh) return;
+            const freshAmounts = [1, 2, 3, 4, 5].map((i) => Number(fresh.installments?.[`versement${i}`]?.amount) || 0);
+            const untouched = shownVersementsRef.current.every((v, i) => v === opened[i]);
+            const differs = freshAmounts.some((v, i) => v !== opened[i]);
+            if (differs && untouched) {
+              handleSelectStudent({ ...stu, ...fresh }, true);
+              setSuccessToast(`🔄 Fiche de ${fresh.fullName || stu.fullName} mise à jour avec les versements enregistrés en base.`);
+              setTimeout(() => setSuccessToast(null), 5000);
+            }
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       console.error('Erreur sélection élève:', err);
     }
@@ -910,7 +940,7 @@ export function InscriptionsView({
 
       // Élève existant : ses versements ont-ils changé sur un AUTRE poste depuis l'ouverture de
       // sa fiche ? Si oui, on n'enregistre pas — sinon ce versement serait écrasé sans prévenir.
-      if (currentSelectedStudent && initialVersementsSnapshot) {
+      if (currentSelectedStudent && initialVersementsSnapshot && !hasPendingStudentSave(schoolSlug, currentSelectedStudent.id)) {
         const fresh = serverStudents.find((s: any) => s && s.id === currentSelectedStudent.id);
         if (fresh) {
           const inst = fresh.installments || {};
@@ -1062,7 +1092,19 @@ export function InscriptionsView({
 
     // Save to persistent storage and broadcast event
     lastLocalSaveIdRef.current = newStudent.id;
-    saveRegisteredStudent(newStudent, newInvoice, schoolSlug);
+    // Versements affichés à l'ouverture de la fiche : la base refuse l'enregistrement s'ils ne
+    // correspondent plus à ce qu'elle contient (jamais d'effacement d'un versement saisi ailleurs).
+    const expectedVersements =
+      currentSelectedStudent && initialVersementsSnapshot
+        ? [
+            initialVersementsSnapshot.v1,
+            initialVersementsSnapshot.v2,
+            initialVersementsSnapshot.v3,
+            initialVersementsSnapshot.v4,
+            initialVersementsSnapshot.v5,
+          ]
+        : null;
+    const savePromise = saveRegisteredStudent(newStudent, newInvoice, schoolSlug, { expectedVersements });
     clearDraft();
 
     // Mettre à jour immédiatement la liste locale des élèves pour recalculer le prochain ID/Reçu
@@ -1077,9 +1119,29 @@ export function InscriptionsView({
     // s'afficher au milieu de l'écran à ce moment précis. Le reçu (avec son bouton WhatsApp Parent)
     // reste consultable à tout moment via le bouton "Action" de la page Élèves.
     setShowConfirmModal(false);
-    setSuccessToast(`✓ Reçu enregistré pour ${newStudent.fullName} (${newStudent.studentNumber})`);
-    setTimeout(() => setSuccessToast(null), 2500);
     setIsConfirmingSave(false);
+    // « Enregistré » n'est annoncé qu'une fois la BASE confirmée (avant, le message s'affichait
+    // même quand le serveur refusait l'enregistrement).
+    setSuccessToast(`⏳ Enregistrement en cours pour ${newStudent.fullName}…`);
+    savePromise
+      .then((res) => {
+        if (res === 'ok') {
+          setSuccessToast(`✓ Reçu enregistré en base pour ${newStudent.fullName} (${newStudent.studentNumber}) : visible sur tous les appareils.`);
+          setTimeout(() => setSuccessToast(null), 3500);
+        } else if (res === 'conflict') {
+          setStudents(getLiveStudents(initialStudents, schoolSlug));
+          setSuccessToast(
+            `⚠️ Non enregistré : les versements de ${newStudent.fullName} ont été modifiés sur un autre appareil. Rouvrez sa fiche pour voir les vrais versements.`
+          );
+          setTimeout(() => setSuccessToast(null), 9000);
+        } else {
+          setSuccessToast(
+            `⏳ Pas de réponse du serveur : le reçu de ${newStudent.fullName} est gardé sur cet appareil et sera envoyé automatiquement dès le retour de la connexion.`
+          );
+          setTimeout(() => setSuccessToast(null), 9000);
+        }
+      })
+      .catch(() => {});
   };
 
   // Suppression définitive du reçu et de l'élève sélectionné
