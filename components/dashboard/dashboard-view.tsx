@@ -607,7 +607,7 @@ export function DashboardView({
       />
 
       {/* Tableau des factures & encaissements avec colonne Statut Nouveau / Ancien */}
-      <InvoiceTable initialInvoices={invoices} schoolSlug={schoolSlug} />
+      <InvoiceTable initialInvoices={invoices} schoolSlug={schoolSlug} serviceMonthPaymentLog={servicesData?.serviceMonthPaymentLog} />
     </div>
   );
 }

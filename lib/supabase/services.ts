@@ -1779,17 +1779,27 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
       .select('student_id, service, monthly_rate, discount, details, student:students(full_name, grade, gender, matricule, guardian_phone, whatsapp_phone)')
       .eq('school_id', schoolId)
       .limit(20000),
-    supabase.from('service_month_payments').select('student_id, service, month').eq('school_id', schoolId).limit(100000),
+    supabase.from('service_month_payments').select('student_id, service, month, paid_at').eq('school_id', schoolId).limit(100000),
   ]);
   if (subsRes.error || payRes.error) return null;
 
   const boardingSubscriptions: any[] = [];
   const canteenSubscriptions: Record<string, any> = {};
   const transportSubscriptions: Record<string, any> = {};
+  // Tarif + nom par (eleve, service), pour calculer le montant de chaque reglement du journal
+  // des paiements sans avoir a rejoindre a nouveau la table des eleves.
+  const rateMap = new Map<string, { rate: number; studentName: string; grade: string; gender: string; matricule: string }>();
   for (const s of (subsRes.data || []) as any[]) {
     const st = Array.isArray(s.student) ? s.student[0] : s.student;
     const d = (s.details && typeof s.details === 'object' ? s.details : {}) as Record<string, any>;
     const female = st?.gender === 'female';
+    rateMap.set(`${s.student_id}__${s.service}`, {
+      rate: s.monthly_rate || 0,
+      studentName: st?.full_name || '',
+      grade: st?.grade || '',
+      gender: female ? 'F' : 'M',
+      matricule: st?.matricule || '',
+    });
     if (s.service === 'internat') {
       boardingSubscriptions.push({
         studentId: s.student_id,
@@ -1810,10 +1820,30 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
   }
 
   const payments: Record<string, Record<string, Record<string, boolean>>> = { internat: {}, cantine: {}, transport: {} };
+  // Journal des paiements : UNE ligne par reglement reel (eleve + service + mois), avec sa vraie
+  // date (paid_at) et son vrai montant (tarif du mois concerne) — pour que le "Journal des
+  // Paiements & Encaissements" puisse afficher "Novembre payé, 25 000 F, le 05/11/2026" au lieu
+  // du cumul de tous les mois jamais réglés par cet élève pour ce service.
+  const serviceMonthPaymentLog: Array<{
+    studentId: string; service: string; month: string; paidAt: string; amount: number;
+    studentName: string; grade: string; gender: string; matricule: string;
+  }> = [];
   for (const p of (payRes.data || []) as any[]) {
     const bucket = payments[p.service];
     if (!bucket) continue;
     (bucket[p.student_id] ||= {})[p.month] = true;
+    const info = rateMap.get(`${p.student_id}__${p.service}`);
+    serviceMonthPaymentLog.push({
+      studentId: p.student_id,
+      service: p.service,
+      month: p.month,
+      paidAt: p.paid_at,
+      amount: info?.rate || 0,
+      studentName: info?.studentName || '',
+      grade: info?.grade || '',
+      gender: info?.gender || 'M',
+      matricule: info?.matricule || '',
+    });
   }
 
   return {
@@ -1823,6 +1853,7 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
     canteenPayments: payments.cantine,
     transportSubscriptions,
     transportPayments: payments.transport,
+    serviceMonthPaymentLog,
   };
 }
 

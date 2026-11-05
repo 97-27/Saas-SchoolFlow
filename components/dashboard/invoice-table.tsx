@@ -28,9 +28,23 @@ import { getLiveInvoices, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data
 interface InvoiceTableProps {
   initialInvoices: Invoice[];
   schoolSlug?: string;
+  /** Un reglement reel par entree (eleve + service + mois), avec sa vraie date et son vrai
+   *  montant — remplace le cumul par eleve pour l'internat/la cantine/le transport dans le
+   *  journal. `undefined` (ecole sans la migration 004) garde l'ancien comportement par cumul. */
+  serviceMonthPaymentLog?: Array<{
+    studentId: string;
+    service: string;
+    month: string;
+    paidAt: string;
+    amount: number;
+    studentName: string;
+    grade: string;
+    gender: string;
+    matricule: string;
+  }>;
 }
 
-export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps) {
+export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentLog }: InvoiceTableProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [students, setStudents] = useState<Student[]>([]);
 
@@ -207,8 +221,12 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
         }
       }
 
-      // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé
-      if (!foundVersements && (isServiceInv || !inv.registrationFee || inv.registrationFee === 0)) {
+      // 3. Cas de repli : encaissement global ou prestation spécifique sans échéancier détaillé.
+      // Pour l'internat/la cantine/le transport, ce repli ne sert plus que de filet de sécurité
+      // pour une école qui n'a pas encore la migration 004 (serviceMonthPaymentLog undefined) :
+      // sinon ses vrais règlements mois par mois (ci-dessous) remplacent entièrement ce cumul.
+      const isServiceFeeType = /internat|cantine|transport/.test((inv.feeType || '').toLowerCase());
+      if (!foundVersements && (isServiceInv || !inv.registrationFee || inv.registrationFee === 0) && !(serviceMonthPaymentLog !== undefined && isServiceFeeType)) {
         const feeLower = (inv.feeType || '').toLowerCase();
         let prestation = '🎓 Scolarité';
         let motif = '1er Versement';
@@ -260,8 +278,42 @@ export function InvoiceTable({ initialInvoices, schoolSlug }: InvoiceTableProps)
       }
     });
 
+    // 4. Internat / Cantine / Transport : une ligne par règlement RÉEL (élève + service + mois),
+    // avec sa vraie date et son vrai montant du mois — jamais le cumul de tous les mois déjà
+    // réglés par cet élève pour ce service.
+    const serviceLabels: Record<string, { prestation: string; label: string }> = {
+      internat: { prestation: '🏠 Internat & Pensionnat', label: 'Internat' },
+      cantine: { prestation: '🍽️ Cantine', label: 'Cantine' },
+      transport: { prestation: '🚌 Transport', label: 'Transport' },
+    };
+    (serviceMonthPaymentLog || []).forEach((p) => {
+      const cfg = serviceLabels[p.service];
+      if (!cfg || !p.month) return;
+      const txKey = `${p.studentId}-${p.service}-${p.month}`;
+      if (seenTxKeys.has(txKey)) return;
+      seenTxKeys.add(txKey);
+      const matchedStudent = findStudentByRef(students, { id: p.studentId, name: p.studentName });
+      list.push({
+        id: `svc-${txKey}`,
+        invoiceId: txKey,
+        invoiceNumber: matchedStudent?.studentNumber || p.matricule || '',
+        matriculeCode: matchedStudent?.matricule || p.matricule || '',
+        studentName: matchedStudent?.fullName || p.studentName,
+        studentGrade: matchedStudent?.grade || p.grade,
+        studentGender: (matchedStudent?.gender === 'female' || p.gender === 'F') ? 'female' : 'male',
+        enrollmentType: matchedStudent?.enrollmentType === 'ancien' ? 'ancien' : 'nouveau',
+        prestation: cfg.prestation,
+        motif: `Mois de ${p.month} réglé`,
+        paymentDate: p.paidAt,
+        amount: p.amount,
+        paymentMethod: 'Espèces',
+        status: 'paid',
+        rawInvoice: { id: txKey, invoiceNumber: txKey } as Invoice,
+      });
+    });
+
     return list;
-  }, [invoices, students]);
+  }, [invoices, students, serviceMonthPaymentLog]);
 
   // Transactions du jour actif sélectionné
   const dayTransactions = useMemo(() => {
