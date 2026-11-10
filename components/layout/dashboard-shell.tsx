@@ -88,7 +88,9 @@ export function DashboardShell({
               breadcrumbs={breadcrumbs}
             />
           </div>
-          <main className="flex-1 p-3.5 sm:p-6 lg:p-8 w-full max-w-[1600px] mx-auto print:p-0 print:m-0 print:max-w-full">
+          {/* PC portable (1024–1279 px, souvent agrandi à 125 % par Windows) : marges réduites pour
+              laisser la place au contenu à côté du menu ; grandes marges seulement sur grand écran. */}
+          <main className="flex-1 min-w-0 p-3.5 sm:p-5 lg:p-5 xl:p-8 w-full max-w-[1600px] mx-auto print:p-0 print:m-0 print:max-w-full">
             <DataReadyGate>{children}</DataReadyGate>
           </main>
         </div>

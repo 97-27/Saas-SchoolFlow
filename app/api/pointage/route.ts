@@ -42,6 +42,67 @@ const recordKey = (date: string, staffId: string) => `${dayPrefix(date)}${staffI
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
+/** Coordonnées écrites dans un texte : lien Google Maps complet, ou « 5.3600, -4.0083 ». */
+function parseCoordinates(text: string): { lat: number; lng: number } | null {
+  const ok = (lat: number, lng: number) =>
+    Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0)
+      ? { lat, lng }
+      : null;
+  let t = text;
+  try {
+    t = decodeURIComponent(text);
+  } catch {}
+  // Ordre : épingle exacte du lieu (!3d…!4d…), puis paramètres q=/ll=/query=, puis centre « @lat,lng ».
+  const patterns = [
+    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
+    /[?&](?:q|ll|query|destination|center)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/,
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
+    /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,;]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/,
+  ];
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m) {
+      const r = ok(Number(m[1]), Number(m[2]));
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
+/**
+ * Lien Google Maps → coordonnées. Les liens courts (maps.app.goo.gl, goo.gl/maps) sont suivis
+ * côté serveur (3 redirections au plus, Google uniquement) pour lire l'adresse complète.
+ */
+async function coordinatesFromMapLink(link: string): Promise<{ lat: number; lng: number } | null> {
+  const direct = parseCoordinates(link);
+  if (direct) return direct;
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return null;
+  }
+  const allowed = (u: URL) =>
+    u.protocol === 'https:' && /(^|\.)(google\.[a-z.]+|goo\.gl|app\.goo\.gl)$/i.test(u.hostname);
+  for (let i = 0; i < 3 && allowed(url); i++) {
+    try {
+      const res = await fetch(url.toString(), { redirect: 'manual', headers: { 'User-Agent': 'SchoolFlow' } });
+      const loc = res.headers.get('location');
+      if (!loc) {
+        // Dernière page : les coordonnées sont parfois dans le contenu.
+        const body = (await res.text()).slice(0, 200000);
+        return parseCoordinates(body);
+      }
+      const found = parseCoordinates(loc);
+      if (found) return found;
+      url = new URL(loc, url);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 async function readConfig(schoolId: string): Promise<PointageConfig | null> {
   const row = await kvGet(schoolId, CONFIG_KEY);
   if (row === undefined) return null;
@@ -177,7 +238,17 @@ export async function POST(request: NextRequest) {
       if (!(r >= 30 && r <= 2000)) return jsonError('Rayon autorisé : entre 30 et 2000 mètres.', 400);
       next.radiusMeters = r;
     }
-    if (c.location === null) next.location = null;
+    // Lien Google Maps de l'école (bouton « Partager » de Maps) : coordonnées extraites ici.
+    if (typeof c.mapLink === 'string' && c.mapLink.trim()) {
+      const pos = await coordinatesFromMapLink(c.mapLink.trim());
+      if (!pos) {
+        return jsonError(
+          "Impossible de lire la position dans ce lien. Dans Google Maps, appuyez longuement sur l'école, puis « Partager » et copiez le lien (ou collez directement les coordonnées, ex : 5.3600, -4.0083).",
+          400
+        );
+      }
+      next.location = { lat: pos.lat, lng: pos.lng, setAt: new Date().toISOString() };
+    } else if (c.location === null) next.location = null;
     else if (c.location && typeof c.location === 'object') {
       const lat = Number(c.location.lat);
       const lng = Number(c.location.lng);
@@ -246,6 +317,13 @@ export async function POST(request: NextRequest) {
     let distance: number | undefined;
     if (config.location) {
       if (!hasPos) return jsonError('Activez la localisation de votre téléphone pour pointer.', 400);
+      // Position trop imprécise (GPS coupé, seulement le réseau) : on ne peut rien vérifier.
+      if (accuracy > 300) {
+        return jsonError(
+          `Position trop imprécise (± ${Math.round(accuracy)} m). Activez le GPS / « position précise » du téléphone, sortez dans la cour, puis réessayez.`,
+          400
+        );
+      }
       distance = Math.round(distanceMeters(lat, lng, config.location.lat, config.location.lng));
       const tolerance = config.radiusMeters + Math.min(accuracy, 100);
       if (distance > tolerance) {

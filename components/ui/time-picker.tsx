@@ -72,7 +72,7 @@ export function TimePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 mt-1.5 z-50 w-[180px] p-2.5 bg-white rounded-2xl border border-slate-200 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute left-1/2 -translate-x-1/2 mt-1.5 z-50 w-[180px] max-w-[calc(100vw-32px)] p-2.5 bg-white rounded-2xl border border-slate-200 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
           <div className="grid grid-cols-2 gap-2 text-center mb-1">
             <span className="text-[10px] font-bold text-slate-400">Heure</span>
             <span className="text-[10px] font-bold text-slate-400">Minutes</span>

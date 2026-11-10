@@ -15,6 +15,7 @@ import {
 } from '@/lib/data/live-store';
 import { getSchoolSubscriptionInfo, SchoolSubscriptionInfo } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { SchoolLocationCard } from '@/components/staff/school-location-card';
 import { formatDate } from '@/lib/utils/formatters';
 import {
   Building2,
@@ -997,6 +998,11 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-emerald-700"
                   />
                 </div>
+              </div>
+
+              {/* Position exacte (Google Maps) utilisée par le pointage du personnel */}
+              <div className="pt-5 border-t border-slate-100">
+                <SchoolLocationCard embedded />
               </div>
             </div>
           )}

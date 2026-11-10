@@ -27,6 +27,7 @@ import {
 } from '@/lib/data/pointage';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import { TimePicker } from '@/components/ui/time-picker';
+import { SchoolLocationCard } from '@/components/staff/school-location-card';
 
 type Member = { id: string; fullName: string; roleId: string; roleLabel: string };
 type Payload = {
@@ -237,14 +238,14 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   return (
     <div className="space-y-6">
       {/* ================= EN-TÊTE ================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-xs shrink-0">
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">Pointage du personnel</h1>
-            <p className="text-xs text-slate-500">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">Pointage du personnel</h1>
+            <p className="text-xs text-slate-500 first-letter:uppercase">
               {frDate(today)} • Heure de l’établissement : <span className="font-bold text-slate-900">{now}</span>
             </p>
           </div>
@@ -282,7 +283,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
 
       {/* ================= MON POINTAGE ================= */}
       {!data.exempt && (
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-extrabold text-slate-900 font-heading">Mon pointage d’aujourd’hui</h2>
             <StatusBadge status={data.myStatus} />
@@ -413,33 +414,16 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
           saved={data.config}
           busy={busy}
           onSave={(c) => run('config', () => post({ action: 'config', config: c }).then((j) => setDraft(j.config)), 'Réglages du pointage enregistrés.')}
-          onSetLocation={() =>
-            run(
-              'location',
-              async () => {
-                const pos = await getPosition();
-                const j = await post({ action: 'config', config: { location: { lat: pos.lat, lng: pos.lng } } });
-                setDraft(j.config);
-              },
-              'Position de l’école enregistrée (votre position actuelle).'
-            )
-          }
-          onClearLocation={() =>
-            run(
-              'location',
-              async () => {
-                const j = await post({ action: 'config', config: { location: null } });
-                setDraft(j.config);
-              },
-              'Contrôle de position désactivé.'
-            )
-          }
+          onLocationSaved={(c) => {
+            setDraft((d) => (d ? { ...d, location: c.location, radiusMeters: c.radiusMeters } : c));
+            load(date || undefined);
+          }}
         />
       )}
 
       {/* ================= TABLEAU DU PERSONNEL ================= */}
       {data.canViewAll && (
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-emerald-600" />
@@ -474,8 +458,62 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
             ))}
           </div>
 
-          <div className="overflow-x-auto -mx-1">
-            <table className="w-full text-xs min-w-[640px]">
+          {/* Téléphone : une carte par membre (le tableau ne tient pas en largeur) */}
+          <div className="md:hidden space-y-2.5">
+            {rows.length === 0 && (
+              <p className="py-6 text-center text-xs text-slate-500">Aucun membre du personnel enregistré (Administration & Codes).</p>
+            )}
+            {rows.map(({ member, rec, status }) => {
+              const dep = departureLabel(rec, data.config, data.date, { date: data.today, time: data.now });
+              return (
+                <div key={member.id} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 leading-tight break-words">{member.fullName}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{member.roleLabel}</p>
+                    </div>
+                    <StatusBadge status={status} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="px-3 py-2 rounded-xl bg-white border border-slate-200">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Arrivée</p>
+                      <p className={rec?.arrival ? 'text-sm font-extrabold text-slate-900' : 'text-[11px] font-semibold text-slate-500'}>
+                        {rec?.arrival
+                          ? `${rec.arrival.time}${rec.arrival.distance !== undefined ? ` • ${rec.arrival.distance} m` : ''}`
+                          : status === 'en_attente'
+                          ? 'Pas encore pointé'
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl bg-white border border-slate-200">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Départ</p>
+                      <p className={/^\d/.test(dep) ? 'text-sm font-extrabold text-slate-900' : 'text-[11px] font-semibold text-slate-500'}>{dep}</p>
+                    </div>
+                  </div>
+                  {rec?.absence?.reason && (
+                    <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span className="font-bold">Motif :</span> {rec.absence.reason}
+                    </p>
+                  )}
+                  {data.canManage && !rec?.arrival && status !== 'non_travaille' && status !== 'inactif' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setJustifyFor(member);
+                        setJustifyReason(rec?.absence?.reason || '');
+                      }}
+                      className="w-full py-2 rounded-xl text-xs font-bold text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50 cursor-pointer"
+                    >
+                      {rec?.absence ? 'Modifier le motif' : 'Saisir un motif d’absence'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto -mx-1">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
                   <th className="py-2 px-2 font-bold">Membre</th>
@@ -524,7 +562,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
                     </td>
                     <td className="py-2.5 px-2 text-slate-700 max-w-[260px]">
                       {rec?.absence?.reason || ''}
-                      {data.canManage && !rec?.arrival && status !== 'non_travaille' && (
+                      {data.canManage && !rec?.arrival && status !== 'non_travaille' && status !== 'inactif' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -595,16 +633,14 @@ function ConfigCard({
   saved,
   busy,
   onSave,
-  onSetLocation,
-  onClearLocation,
+  onLocationSaved,
 }: {
   draft: PointageConfig;
   setDraft: (c: PointageConfig) => void;
   saved: PointageConfig;
   busy: string;
   onSave: (c: Partial<PointageConfig>) => void;
-  onSetLocation: () => void;
-  onClearLocation: () => void;
+  onLocationSaved: (c: PointageConfig) => void;
 }) {
   const time = (field: 'arrivalStart' | 'arrivalEnd' | 'departureStart' | 'departureEnd', label: string) => (
     <div className="space-y-1">
@@ -614,7 +650,7 @@ function ConfigCard({
   );
 
   return (
-    <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+    <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Settings2 className="w-5 h-5 text-emerald-600" />
@@ -628,7 +664,7 @@ function ConfigCard({
             onSave({ enabled: next.enabled });
           }}
           disabled={!!busy}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 ${
+          className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 ${
             saved.enabled ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
           }`}
         >
@@ -637,7 +673,7 @@ function ConfigCard({
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {time('arrivalStart', 'Arrivée : début')}
         {time('arrivalEnd', 'Arrivée : fin')}
         {time('departureStart', 'Départ : début')}
@@ -670,56 +706,8 @@ function ConfigCard({
         </div>
       </div>
 
-      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-        <div className="flex items-start gap-2">
-          <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-700">
-            <p className="font-bold text-slate-900">Position de l’école</p>
-            {saved.location ? (
-              <p>
-                Enregistrée ({saved.location.lat.toFixed(5)}, {saved.location.lng.toFixed(5)}). Pointage accepté à moins de{' '}
-                {saved.radiusMeters} m.
-              </p>
-            ) : (
-              <p className="text-amber-800">
-                Pas encore enregistrée : la position n’est pas vérifiée. Placez-vous dans la cour de l’école et cliquez sur le bouton.
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <button
-            type="button"
-            onClick={onSetLocation}
-            disabled={!!busy}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
-          >
-            <MapPin className="w-3.5 h-3.5" />
-            {busy === 'location' ? 'Localisation…' : 'Je suis à l’école : enregistrer cette position'}
-          </button>
-          {saved.location && (
-            <button
-              type="button"
-              onClick={onClearLocation}
-              disabled={!!busy}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
-            >
-              Retirer le contrôle de position
-            </button>
-          )}
-          <label className="space-y-1">
-            <span className="font-bold text-slate-700 block text-[11px]">Rayon (mètres)</span>
-            <input
-              type="number"
-              min={30}
-              max={2000}
-              step={10}
-              value={draft.radiusMeters}
-              onChange={(e) => setDraft({ ...draft, radiusMeters: Number(e.target.value) })}
-              className="w-28 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
-            />
-          </label>
-        </div>
+      <div className="pt-4 border-t border-slate-100">
+        <SchoolLocationCard embedded config={saved} onSaved={onLocationSaved} />
       </div>
 
       <button
@@ -732,10 +720,9 @@ function ConfigCard({
             departureStart: draft.departureStart,
             departureEnd: draft.departureEnd,
             workDays: draft.workDays,
-            radiusMeters: draft.radiusMeters,
           })
         }
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 disabled:opacity-50 cursor-pointer"
+        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 disabled:opacity-50 cursor-pointer"
       >
         <Save className="w-4 h-4" />
         {busy === 'config' ? 'Enregistrement…' : 'Enregistrer les horaires'}
