@@ -40,6 +40,7 @@ import {
   Smartphone,
   Trash2,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 interface CanteenViewProps {
   initialSubscriptions?: any[];
@@ -920,7 +921,7 @@ export function CanteenView({
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-teal-900">
-                {formatFCFA(stats.totalCollected)}
+                <Figure>{formatFCFA(stats.totalCollected)}</Figure>
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
@@ -930,7 +931,7 @@ export function CanteenView({
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-teal-700 font-medium flex items-center justify-between">
             <span>Taux de recouvrement</span>
             <span className="font-bold bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-              {stats.recoveryRate}% perçu
+              <Figure>{stats.recoveryRate}</Figure>% perçu
             </span>
           </div>
         </div>

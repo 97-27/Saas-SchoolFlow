@@ -33,6 +33,7 @@ import {
   Loader2,
   Lock,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 export interface ChildItem {
   id: string;
@@ -1455,14 +1456,14 @@ export function SpecialDiscountsView({
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-xl sm:text-2xl xl:text-[26px] font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(globalKpis.totalDiscountVolume)}
+                <Figure>{formatFCFA(globalKpis.totalDiscountVolume)}</Figure>
               </span>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                 Budget social
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Remise moyenne accordée : <strong>{formatFCFA(Math.round(globalKpis.totalDiscountVolume / (globalKpis.totalBeneficiaries || 1)))}</strong> / élève
+              Remise moyenne accordée : <strong><Figure>{formatFCFA(Math.round(globalKpis.totalDiscountVolume / (globalKpis.totalBeneficiaries || 1)))}</Figure></strong> / élève
             </p>
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-emerald-700 font-medium flex items-center justify-between">

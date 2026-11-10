@@ -46,6 +46,7 @@ import {
   Lock,
   Trash2,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 interface BoardingViewProps {
   initialBoarders?: any;
@@ -2053,13 +2054,13 @@ export function BoardingView({
           </div>
           <div className="flex items-baseline gap-2">
             <span suppressHydrationWarning className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
-              {formatFCFA(totalCollected)}
+              <Figure>{formatFCFA(totalCollected)}</Figure>
             </span>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
             <span>Taux de recouvrement :</span>
             <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/70">
-              {recoveryRate}%
+              <Figure>{recoveryRate}</Figure>%
             </span>
           </div>
         </div>

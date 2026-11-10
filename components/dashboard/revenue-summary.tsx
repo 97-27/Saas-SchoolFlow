@@ -6,6 +6,8 @@ import { Invoice, Student, StudentInstallments } from '@/lib/data/types';
 import { TrendingUp, PieChart, CheckCircle2, Calendar } from 'lucide-react';
 import { DATA_UPDATED_EVENT, getDeletedStudentIds } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
+import { Figure } from '@/components/ui/masked-figure';
+import { useFiguresState } from '@/lib/client/figures-privacy';
 
 interface RevenueSummaryProps {
   academicYear?: string;
@@ -23,6 +25,7 @@ export function RevenueSummary({
   schoolSlug = 'epc-manoi',
 }: RevenueSummaryProps) {
   const [serviceVersion, setServiceVersion] = useState(0);
+  const { visible: figuresVisible } = useFiguresState();
 
   // École pilote : clés historiques non suffixées. Toute autre école : clé dédiée — ce
   // composant lisait auparavant des clés globales (dont une contenant littéralement
@@ -389,7 +392,7 @@ export function RevenueSummary({
 
                 <div className="text-right shrink-0">
                   <span className="text-xs sm:text-sm font-extrabold font-heading text-slate-900 block">
-                    {formatFCFA(item.collected)}
+                    <Figure>{formatFCFA(item.collected)}</Figure>
                   </span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border inline-block mt-0.5 ${item.badgeColor}`}>
                     {item.badge}
@@ -404,7 +407,7 @@ export function RevenueSummary({
         <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
           <span className="text-slate-500 font-medium">Cumul des encaissements :</span>
           <span className="font-extrabold font-heading text-emerald-700 text-sm sm:text-base">
-            {formatFCFA(totalMonthlyCollected)}
+            <Figure>{formatFCFA(totalMonthlyCollected)}</Figure>
           </span>
         </div>
       </div>
@@ -421,14 +424,14 @@ export function RevenueSummary({
                 Structure des encaissements
               </h3>
               <p className="text-xs text-slate-400">
-                Répartition des {formatFCFA(breakdownData.totalCollected)} perçus
+                Répartition des <Figure>{formatFCFA(breakdownData.totalCollected)}</Figure> perçus
               </p>
             </div>
           </div>
 
           {/* Barre proportionnelle segmentée des encaissements */}
           <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden flex mb-3.5 border border-slate-200/60 shadow-2xs">
-            {breakdownData.items.map((fee) => {
+            {figuresVisible && breakdownData.items.map((fee) => {
               const pctNum = parseFloat(fee.percentage) || 0;
               if (pctNum <= 0) return null;
               return (
@@ -465,12 +468,12 @@ export function RevenueSummary({
                       )}
                     </div>
                     <p className="text-[11px] text-slate-500 font-medium">
-                      {formatFCFA(fee.amount)}
+                      <Figure>{formatFCFA(fee.amount)}</Figure>
                     </p>
                   </div>
                 </div>
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border shrink-0 font-mono ${fee.bgColor}`}>
-                  {fee.percentage}%
+                  <Figure>{fee.percentage}%</Figure>
                 </span>
               </div>
             ))}
@@ -480,7 +483,7 @@ export function RevenueSummary({
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
           <span className="text-slate-500 font-medium">Total des encaissements perçus :</span>
           <span className="font-extrabold font-heading text-emerald-700 text-sm sm:text-base">
-            {formatFCFA(breakdownData.totalCollected)}
+            <Figure>{formatFCFA(breakdownData.totalCollected)}</Figure>
           </span>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
 import { RealtimeNotifier } from './realtime-notifier';
+import { FiguresPrivacyHost } from '@/components/ui/masked-figure';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -56,6 +57,9 @@ export function DashboardShell({
 
         {/* Notificateur Universel Temps Réel Multi-Appareils */}
         <RealtimeNotifier schoolSlug={schoolSlug} />
+
+        {/* Chiffres globaux masqués sauf pour le Fondateur (code demandé au Directeur) */}
+        <FiguresPrivacyHost />
       </div>
     </ReadOnlyGuard>
   );

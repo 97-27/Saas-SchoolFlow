@@ -18,6 +18,7 @@ import {
   MAX_VERSEMENTS,
 } from '@/lib/data/versement-reminders';
 import { Printer, Download, Search, Wallet, MessageCircle, RefreshCw } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 interface VersementsViewProps {
   school: School;
@@ -407,7 +408,7 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-rose-600">Total des sommes saisies : {formatFCFA(total)}</p>
+            <p className="text-sm font-bold text-rose-600">Total des sommes saisies : <Figure>{formatFCFA(total)}</Figure></p>
             {withoutAmount > 0 && <p className="no-print text-xs text-slate-500">{withoutAmount} élève(s) sans somme saisie</p>}
           </div>
         </div>

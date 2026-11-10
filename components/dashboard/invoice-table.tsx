@@ -24,6 +24,7 @@ import {
   Coins,
 } from 'lucide-react';
 import { getLiveInvoices, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { Figure } from '@/components/ui/masked-figure';
 
 interface InvoiceTableProps {
   initialInvoices: Invoice[];
@@ -480,7 +481,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
                 Recettes du Jour ({formatDateFrenchLong(selectedJournalDate)})
               </span>
               <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
-                {formatFCFA(dayMetrics.totalAmount)}
+                <Figure>{formatFCFA(dayMetrics.totalAmount)}</Figure>
               </span>
             </div>
             <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
@@ -495,7 +496,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
                 Élèves Encaissés Aujourd&apos;hui
               </span>
               <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
-                {dayMetrics.totalCount} règlements
+                <Figure>{dayMetrics.totalCount}</Figure> règlements
               </span>
             </div>
             <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
@@ -830,7 +831,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
 
                     {/* Montant Versé exact de cette opération (Parfaitement centré) */}
                     <td className="py-3.5 px-3 text-center font-extrabold text-slate-900 whitespace-nowrap font-mono font-heading">
-                      {formatFCFA(tx.amount)}
+                      <Figure>{formatFCFA(tx.amount)}</Figure>
                     </td>
                   </tr>
                 );

@@ -27,6 +27,7 @@ import {
   Copy,
   Search,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 export interface SalaryPayment {
   id: string;
@@ -934,7 +935,7 @@ export function SalariesView({
                 Masse Salariale Versée
               </h3>
               <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
-                {formatFCFA(totalMasseSalariale)}
+                <Figure>{formatFCFA(totalMasseSalariale)}</Figure>
               </div>
             </div>
           </div>
@@ -972,7 +973,7 @@ export function SalariesView({
                 Primes & Heures Sup.
               </h3>
               <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
-                {formatFCFA(totalPrimes)}
+                <Figure>{formatFCFA(totalPrimes)}</Figure>
               </div>
             </div>
           </div>
@@ -991,7 +992,7 @@ export function SalariesView({
                 Retenues & Avances
               </h3>
               <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
-                {formatFCFA(totalDeductions)}
+                <Figure>{formatFCFA(totalDeductions)}</Figure>
               </div>
             </div>
           </div>

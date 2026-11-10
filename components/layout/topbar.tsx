@@ -1112,6 +1112,7 @@ export function Topbar({
                       setIsProfileOpen(false);
                       try {
                         localStorage.removeItem('schoolflow_active_session_v2');
+                        sessionStorage.removeItem('schoolflow_figures_unlocked_until_v1');
                       } catch (e) {}
                       // Efface le cookie lu par proxy.ts : sans ça, le lien admin resterait
                       // accessible sans reconnexion malgré le bouton "Verrouiller". Ce cookie est

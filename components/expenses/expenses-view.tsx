@@ -37,6 +37,7 @@ import {
   FileSpreadsheet,
   Zap,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 
 export interface ExpenseItem {
   id: string;
@@ -481,7 +482,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
             </div>
             <div className="flex items-baseline justify-between gap-1 flex-wrap">
               <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(stats.totalExpenses)}
+                <Figure>{formatFCFA(stats.totalExpenses)}</Figure>
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                 {stats.expensesCount} décaissements
@@ -507,7 +508,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
             </div>
             <div className="flex items-baseline justify-between gap-1 flex-wrap">
               <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(stats.salaryExpenses)}
+                <Figure>{formatFCFA(stats.salaryExpenses)}</Figure>
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                 {stats.totalExpenses > 0 ? Math.round((stats.salaryExpenses / stats.totalExpenses) * 100) : 0}% du total
@@ -535,7 +536,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
             </div>
             <div className="flex items-baseline justify-between gap-1 flex-wrap">
               <span className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(stats.operatingExpenses)}
+                <Figure>{formatFCFA(stats.operatingExpenses)}</Figure>
               </span>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                 {stats.operatingExpenses > 0 ? 'Fonctionnement' : '0 charge'}
@@ -565,7 +566,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
               <span className={`text-xl sm:text-2xl font-extrabold ${
                 stats.netBalance > 0 ? 'text-emerald-700' : stats.netBalance < 0 ? 'text-rose-700' : 'text-slate-900'
               } tracking-tight font-heading whitespace-nowrap`}>
-                {stats.netBalance < 0 ? `-${formatFCFA(Math.abs(stats.netBalance))}` : formatFCFA(stats.netBalance)}
+                <Figure>{stats.netBalance < 0 ? `-${formatFCFA(Math.abs(stats.netBalance))}` : formatFCFA(stats.netBalance)}</Figure>
               </span>
               <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                 stats.netBalance > 0
@@ -651,7 +652,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
           <span>
             Affichage de <strong>{filteredExpenses.length}</strong> dépense(s) — Total :{' '}
             <strong className="text-rose-700 font-mono font-bold">
-              {formatFCFA(filteredExpenses.reduce((a, b) => a + (Number(b.amount) || 0), 0))}
+              <Figure>{formatFCFA(filteredExpenses.reduce((a, b) => a + (Number(b.amount) || 0), 0))}</Figure>
             </strong>
           </span>
           <span className="text-slate-400">Classé par date d&apos;engagement</span>

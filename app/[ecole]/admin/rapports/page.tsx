@@ -1,6 +1,7 @@
 import React from 'react';
 import { mockStudents, mockInvoices, schoolForSlug } from '@/lib/data/mock-data';
 import { ReportsView } from '@/components/reports/reports-view';
+import { FiguresGate } from '@/components/ui/masked-figure';
 
 export default async function Page({
   params,
@@ -12,11 +13,13 @@ export default async function Page({
   const school = schoolForSlug(ecoleSlug);
 
   return (
-    <ReportsView
-      initialStudents={mockStudents}
-      initialInvoices={mockInvoices}
-      school={school}
-      schoolSlug={ecoleSlug}
-    />
+    <FiguresGate title="Rapport financier">
+      <ReportsView
+        initialStudents={mockStudents}
+        initialInvoices={mockInvoices}
+        school={school}
+        schoolSlug={ecoleSlug}
+      />
+    </FiguresGate>
   );
 }

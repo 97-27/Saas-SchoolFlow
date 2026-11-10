@@ -25,6 +25,7 @@ import {
   X,
   Building2,
 } from 'lucide-react';
+import { Figure } from '@/components/ui/masked-figure';
 import Link from 'next/link';
 import { getLiveInvoices, getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 
@@ -311,7 +312,7 @@ export function CaisseView({
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
-                {formatFCFA(totalEspeces)}
+                <Figure>{formatFCFA(totalEspeces)}</Figure>
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
@@ -337,7 +338,7 @@ export function CaisseView({
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
               <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
-                {formatFCFA(totalEnLigneEtVirement)}
+                <Figure>{formatFCFA(totalEnLigneEtVirement)}</Figure>
               </span>
             </div>
             <p className="mt-2 text-xs text-slate-500">
