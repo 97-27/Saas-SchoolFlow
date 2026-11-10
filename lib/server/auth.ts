@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
+import {
+  FOUNDER_ROLES,
+  ALL_STAFF_ROLES,
+  STUDENT_WRITE_ROLES,
+  READ_ONLY_ROLES,
+  DELETE_ROLES,
+  SERVICES_WRITE_ROLES,
+} from '@/lib/auth/roles';
 
 /**
  * Règles d'accès communes aux routes API. Toute route qui lit ou écrit des données d'école
@@ -7,20 +15,11 @@ import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
  * de l'établissement de l'appelant (jamais le slug ou le rôle envoyés par le navigateur).
  */
 
-export const ADMIN_ROLES = ['fondateur', 'directeur'];
-export const STAFF_ROLES = ['fondateur', 'directeur', 'assistant_direction', 'secretaire', 'comptable', 'enseignant', 'educateur'];
-/**
- * Rôles autorisés à créer / modifier des fiches élèves et des encaissements : Fondateur,
- * Directeur et Comptable SEULEMENT (choix de l'établissement). Secrétaire, Assistant(e) et
- * Éducateur consultent leurs pages sans rien modifier ; l'Enseignant saisit notes et appel.
- */
-export const STUDENT_WRITE_ROLES = ['fondateur', 'directeur', 'comptable'];
-/** Rôles en consultation seule (aucune écriture, sauf l'appel pour l'Éducateur). */
-export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur'];
-/** Rôles autorisés à supprimer des élèves ou des encaissements. */
-export const DELETE_ROLES = ['fondateur', 'directeur', 'comptable'];
-/** Rôles autorisés à modifier l'internat, la cantine, le transport et les échéanciers. */
-export const SERVICES_WRITE_ROLES = ['fondateur', 'directeur', 'comptable'];
+/** Administration & Codes, Paramètres de l'école : Fondateur et Fondateur adjoint SEULEMENT.
+ *  Les listes de droits sont dans lib/auth/roles.ts (source unique, aussi lue par le menu). */
+export const ADMIN_ROLES = FOUNDER_ROLES;
+export const STAFF_ROLES = ALL_STAFF_ROLES;
+export { STUDENT_WRITE_ROLES, READ_ONLY_ROLES, DELETE_ROLES, SERVICES_WRITE_ROLES };
 
 export function canonicalSlug(slug: string | null | undefined): string {
   if (!slug) return '';

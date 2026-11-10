@@ -280,9 +280,9 @@ export function Topbar({
     try {
       if (activeSession.roleId === 'fondateur' && cleanName) {
         saveLiveSchool({ ...currentSchool, founderName: cleanName });
-      } else if (activeSession.roleId === 'directeur' && cleanName) {
-        saveLiveSchool({ ...currentSchool, directorName: cleanName, studiesDirectorName: cleanName });
       }
+      // Le Directeur n'a plus accès aux Paramètres de l'école : son nom est enregistré sur sa
+      // fiche du personnel (ci-dessus), pas dans la fiche de l'établissement.
     } catch (e) {}
 
     broadcastLiveUpdate({
@@ -909,13 +909,21 @@ export function Topbar({
                         ? 'Enseignant / Professeur'
                         : activeSession.roleId === 'fondateur'
                         ? 'Contrôle Total'
+                        : activeSession.roleId === 'fondateur_adjoint'
+                        ? 'Fondateur adjoint (DGA)'
+                        : activeSession.roleId === 'informaticien'
+                        ? 'Informaticien'
                         : activeSession.roleId === 'parent'
                         ? "Parent d'Élève"
                         : activeSession.role}
                     </p>
                     <p className="text-[11px] text-amber-300 font-extrabold uppercase tracking-wide mt-1">
                       {activeSession.roleId === 'directeur'
-                        ? '👑 Admin • Contrôle'
+                        ? '👑 Direction des Études'
+                        : activeSession.roleId === 'fondateur_adjoint'
+                        ? '🏛️ Fondateur adjoint • Contrôle Total'
+                        : activeSession.roleId === 'informaticien'
+                        ? '💻 Informatique • Consultation'
                         : activeSession.roleId === 'fondateur'
                         ? '👑 Contrôle Total'
                         : activeSession.roleId === 'comptable'
@@ -923,7 +931,7 @@ export function Topbar({
                         : activeSession.roleId === 'enseignant'
                         ? 'Corps Enseignant & Notes'
                         : activeSession.roleId === 'secretaire'
-                        ? 'Secrétariat & Inscriptions'
+                        ? 'Secrétariat & Documents'
                         : activeSession.roleId === 'assistant_direction'
                         ? 'Direction Adjointe & Pédagogie'
                         : activeSession.roleId === 'parent'
@@ -1095,7 +1103,7 @@ export function Topbar({
 
                 {/* Boutons d'Action : Landing Page (Fondateur/Directeur uniquement) & Déconnexion */}
                 <div className="p-3 bg-white space-y-2">
-                  {(activeSession.roleId === 'fondateur' || activeSession.roleId === 'directeur') && (
+                  {(activeSession.roleId === 'fondateur' || activeSession.roleId === 'fondateur_adjoint') && (
                     <Link
                       href="/landing"
                       onClick={() => setIsProfileOpen(false)}

@@ -51,7 +51,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'ajout — Postes nécessitant un code d'authentification uniquement
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
-  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
+  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'fondateur_adjoint' | 'informaticien'>('enseignant');
   const [newMatricule, setNewMatricule] = useState('');
   const [newSubject, setNewSubject] = useState('Toutes les matières (Enseignant Titulaire / Polyvalent)');
   const [newClasses, setNewClasses] = useState('Toutes les classes');
@@ -82,7 +82,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
+  const [editRole, setEditRole] = useState<'fondateur' | 'fondateur_adjoint' | 'directeur' | 'informaticien' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -138,6 +138,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         ? 'CPT'
         : role === 'secretaire'
         ? 'SEC'
+        : role === 'fondateur_adjoint'
+        ? 'DGA'
+        : role === 'informaticien'
+        ? 'INF'
         : 'STF';
     const existingCodes = new Set(staffList.map((s) => s.authCode));
     let candidate = '';
@@ -152,8 +156,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const openEditModal = (staff: StaffUser) => {
     setEditingStaff(staff);
     setEditFullName(staff.fullName);
-    const validRoles: ('fondateur' | 'directeur' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur')[] = [
-      'fondateur', 'directeur', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
+    const validRoles: string[] = [
+      'fondateur', 'fondateur_adjoint', 'directeur', 'informaticien', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
     setEditMatricule(
@@ -197,12 +201,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     );
   };
 
-  // Le code du Fondateur n'est visible, copiable et modifiable QUE par le Fondateur lui-même.
-  const isCodeHidden = (member: StaffUser) =>
-    (viewer.roleId === 'directeur' && member.roleId === 'fondateur') || /^MASQUE-/i.test(member.authCode || '');
+  // Le code et les coordonnées du Fondateur ne sont visibles, copiables et modifiables QUE par
+  // le Fondateur lui-même (le Fondateur adjoint gère tous les autres comptes).
+  const isFounderAccountLocked = (member: StaffUser) => member.roleId === 'fondateur' && viewer.roleId !== 'fondateur';
+  const isCodeHidden = (member: StaffUser) => isFounderAccountLocked(member) || /^MASQUE-/i.test(member.authCode || '');
   const shownCode = (member: StaffUser) =>
     isCodeHidden(member)
-      ? '••••••'
+      ? 'Confidentiel'
       : member.authCode || (member.roleId === 'fondateur' ? 'FND-2026' : member.roleId === 'directeur' ? 'DIR-2026' : '—');
 
   // Partager les accès officiels sur WhatsApp
@@ -224,17 +229,18 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   };
 
   // Qui peut supprimer qui (même règle que le serveur) :
-  //  • Fondateur : tout membre, Directeur compris ;
-  //  • Directeur : tout membre SAUF le Fondateur ;
+  //  • Fondateur : tout membre ;
+  //  • Fondateur adjoint : tout membre SAUF le Fondateur ;
   //  • personne ne supprime son propre compte, ni une fiche de démonstration.
   const canDeleteMember = (member: StaffUser): boolean => {
     if (member.id === 'staff-founder' || member.id === 'staff-001') return false;
     if (viewer.code && member.authCode && member.authCode.toUpperCase() === viewer.code) return false;
     if (viewer.roleId === 'fondateur') return true;
-    if (viewer.roleId === 'directeur') return member.roleId !== 'fondateur';
+    if (viewer.roleId === 'fondateur_adjoint') return member.roleId !== 'fondateur';
     return false;
   };
-  const needsNameConfirmation = (member: StaffUser | null) => member?.roleId === 'directeur' || member?.roleId === 'fondateur';
+  const needsNameConfirmation = (member: StaffUser | null) =>
+    member?.roleId === 'directeur' || member?.roleId === 'fondateur' || member?.roleId === 'fondateur_adjoint';
   const normalizeName = (s: string) =>
     s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(mr|mme|m)\b\.?/g, '').replace(/\s+/g, ' ').trim();
 
@@ -243,7 +249,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     if (!canDeleteMember(staff)) {
       showToast(
         staff.roleId === 'fondateur'
-          ? 'Le compte du Fondateur ne peut pas être supprimé par le Directeur.'
+          ? 'Seul le Fondateur peut gérer son propre compte.'
           : "Vous n'avez pas le droit de supprimer ce compte."
       );
       return;
@@ -275,10 +281,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const handleSaveFullEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStaff || !editFullName.trim()) return;
+    if (isFounderAccountLocked(editingStaff)) {
+      showToast('Le compte du Fondateur ne peut être modifié que par le Fondateur lui-même.');
+      return;
+    }
 
     const roleTitleMap: Record<string, string> = {
       fondateur: 'Contrôle Total',
+      fondateur_adjoint: 'Fondateur adjoint (DGA)',
       directeur: 'Contrôle',
+      informaticien: 'Informaticien',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       comptable: 'Comptable / Gestionnaire',
@@ -379,6 +391,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     }
     const generatedCode = manualCode || generateRandomCode(newRole);
     const roleTitleMap: Record<string, string> = {
+      fondateur_adjoint: 'Fondateur adjoint (DGA)',
+      informaticien: 'Informaticien',
       assistant_direction: 'Assistant(e) de Direction',
       educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
       comptable: 'Comptable / Gestionnaire',
@@ -636,6 +650,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <option value="comptable">Comptables</option>
               <option value="assistant_direction">Assistant(e) Direction</option>
               <option value="educateur">Éducateurs (Vie Scolaire)</option>
+              <option value="fondateur_adjoint">Fondateurs adjoints (DGA)</option>
+              <option value="informaticien">Informaticiens</option>
             </select>
           </div>
         </div>
@@ -700,6 +716,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                             ? 'bg-teal-50 text-teal-800 border-teal-200'
                             : member.roleId === 'educateur'
                             ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                            : member.roleId === 'fondateur_adjoint'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200 font-extrabold'
+                            : member.roleId === 'informaticien'
+                            ? 'bg-cyan-50 text-cyan-800 border-cyan-200'
                             : 'bg-slate-100 text-slate-800 border-slate-200'
                         }`}>
                           <span>
@@ -717,6 +737,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                               ? '📋 Assistante'
                               : member.roleId === 'educateur'
                               ? '🛡️ Éducateur'
+                              : member.roleId === 'fondateur_adjoint'
+                              ? '🏛️ Fondateur adjoint'
+                              : member.roleId === 'informaticien'
+                              ? '💻 Informaticien'
                               : member.role}
                           </span>
                           <span className="font-mono text-[10px] opacity-75 border-l border-current/30 pl-1.5">
@@ -826,8 +850,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {/* 2. Modifier : le Directeur ne modifie pas le compte du Fondateur */}
-                        {!(viewer.roleId === 'directeur' && member.roleId === 'fondateur') && (
+                        {/* 2. Modifier : le compte du Fondateur n'est modifiable que par lui-même */}
+                        {!isFounderAccountLocked(member) && (
                         <button
                           type="button"
                           onClick={() => openEditModal(member)}
@@ -838,7 +862,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         </button>
                         )}
 
-                        {/* 3. Révoquer / Supprimer : Fondateur → tout le monde ; Directeur → tous sauf le Fondateur */}
+                        {/* 3. Révoquer / Supprimer : Fondateur → tout le monde ; Fondateur adjoint → tous sauf le Fondateur */}
                         {canDeleteMember(member) && (
                           <button
                             type="button"
@@ -1121,6 +1145,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
+                    <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
+                    <option value="informaticien">💻 Informaticien</option>
                     <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
                     <option value="secretaire">📝 Secrétaire de Direction</option>
                     <option value="comptable">💼 Comptable / Gestionnaire</option>
@@ -1309,7 +1335,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       onChange={(e) => setEditRole(e.target.value as any)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
                     >
-                      <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
+                      <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
+                    <option value="informaticien">💻 Informaticien</option>
+                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="comptable">💼 Comptable / Gestionnaire</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>

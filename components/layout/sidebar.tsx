@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
+import { canAccessPage, homePage } from '@/lib/auth/roles';
 
 interface SidebarProps {
   schoolSlug?: string;
@@ -115,6 +116,7 @@ export function Sidebar({
     ...(currentSchool.hasCanteen !== false
       ? [
           {
+            page: 'cantine',
             title: 'Cantine scolaire',
             href: `${baseUrl}/cantine`,
             active: pathname.includes('/cantine'),
@@ -124,6 +126,7 @@ export function Sidebar({
     ...(currentSchool.hasTransport !== false
       ? [
           {
+            page: 'transport',
             title: 'Transport scolaire',
             href: `${baseUrl}/transport`,
             active: pathname.includes('/transport'),
@@ -133,6 +136,7 @@ export function Sidebar({
     ...(currentSchool.hasBoarding !== false
       ? [
           {
+            page: 'internat',
             title: 'Internat & Hébergement',
             href: `${baseUrl}/internat`,
             active: pathname.includes('/internat'),
@@ -141,9 +145,10 @@ export function Sidebar({
       : []),
   ];
 
-  // Construction stricte des éléments de navigation selon le rôle exact
+  // Menu construit à partir des pages autorisées du poste (lib/auth/roles.ts) : le menu et la
+  // protection des pages (proxy.ts) lisent la même liste et ne peuvent plus se contredire.
+  const can = (page: string) => canAccessPage(roleId, page);
   let navItems: any[] = [];
-
   const communicationGroupItem = {
     key: 'communication',
     title: 'Communication Parents',
@@ -152,240 +157,71 @@ export function Sidebar({
     isOpen: communicationOpen,
     onToggle: () => setCommunicationOpen(!communicationOpen),
     active: pathname.includes('/communication') || pathname.includes('/bulletins-parents'),
-    subItems: [
-      { title: 'Messagerie & Diffusions', href: `${baseUrl}/communication`, active: pathname.endsWith('/communication') },
-      { title: 'Notes & Bulletins Parents', href: `${baseUrl}/bulletins-parents`, active: pathname.includes('/bulletins-parents') },
-    ],
   };
+  const keepSubs = (subs: any[]) => subs.filter((s) => can(s.page));
 
-  if (roleId === 'directeur') {
-    // 👑 DIRECTEUR (ADMIN) : Contrôle total et accès à toutes les pages
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
-      {
-        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
-        subItems: [
-          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
-          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
-          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
-        ],
-      },
-      ...(availableServices.length > 0 ? [{
-        key: 'services', title: 'Services & Prestations', icon: UtensilsCrossed, isGroup: true, isOpen: servicesOpen, onToggle: () => setServicesOpen(!servicesOpen),
-        active: pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat'),
-        subItems: availableServices,
-      }] : []),
-      {
-        key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
-        subItems: [
-          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
-          { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
-          { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
-        ],
-      },
-      { key: 'reductions', title: 'Réductions spéciales', href: `${baseUrl}/reductions`, icon: BadgePercent, active: pathname.includes('/reductions') },
-      { key: 'salaires', title: 'Salaires du personnel', href: `${baseUrl}/salaires`, icon: Receipt, active: pathname.includes('/salaires') },
-      {
-        key: 'pedagogie', title: 'Gestion Pédagogique', icon: BookOpen, isGroup: true, isOpen: pedagogyOpen, onToggle: () => setPedagogyOpen(!pedagogyOpen),
-        active: pathname.includes('/classes') || pathname.includes('/presences') || pathname.includes('/notes') || pathname.includes('/bulletins') || pathname.includes('/distinctions'),
-        subItems: [
-          { title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
-          { title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
-          { title: 'Pédagogie & Notes', href: `${baseUrl}/notes`, active: pathname.includes('/notes') },
-          { title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.includes('/bulletins') },
-          { title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
-        ],
-      },
-      communicationGroupItem,
-      { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
-      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
-    ];
-  } else if (roleId === 'fondateur') {
-    // 👑 FONDATEUR : tout voir et tout modifier, Paramètres et Administration & Codes compris (il
-    //    peut supprimer tout membre, Directeur compris). « Corbeille & Journal » lui est réservée.
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
-      {
-        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
-        subItems: [
-          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
-          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
-          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
-        ],
-      },
-      ...(availableServices.length > 0 ? [{
-        key: 'services', title: 'Services & Prestations', icon: UtensilsCrossed, isGroup: true, isOpen: servicesOpen, onToggle: () => setServicesOpen(!servicesOpen),
-        active: pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat'),
-        subItems: availableServices,
-      }] : []),
-      {
-        key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
-        subItems: [
-          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
-          { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
-          { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
-        ],
-      },
-      { key: 'reductions', title: 'Réductions spéciales', href: `${baseUrl}/reductions`, icon: BadgePercent, active: pathname.includes('/reductions') },
-      { key: 'salaires', title: 'Salaires du personnel', href: `${baseUrl}/salaires`, icon: Receipt, active: pathname.includes('/salaires') },
-      {
-        key: 'pedagogie', title: 'Gestion Pédagogique', icon: BookOpen, isGroup: true, isOpen: pedagogyOpen, onToggle: () => setPedagogyOpen(!pedagogyOpen),
-        active: pathname.includes('/classes') || pathname.includes('/presences') || pathname.includes('/notes') || pathname.includes('/bulletins') || pathname.includes('/distinctions'),
-        subItems: [
-          { title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
-          { title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
-          { title: 'Pédagogie & Notes', href: `${baseUrl}/notes`, active: pathname.includes('/notes') },
-          { title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.includes('/bulletins') },
-          { title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
-        ],
-      },
-      communicationGroupItem,
-      { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
-      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
-      { key: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
-    ];
-  } else if (roleId === 'secretaire') {
-    // 📝 SECRÉTAIRE (consultation seule) : Vue d'ensemble des élèves, Documents, Dépenses,
-    //    Rapports, Classes, Notes diverses, Personnel, Santé
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      {
-        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/documents'),
-        subItems: [
-          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
-          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
-        ],
-      },
-      { key: 'versements', title: 'Suivi des versements', href: `${baseUrl}/versements`, icon: Receipt, active: pathname.includes('/versements') },
-      { key: 'depenses', title: "Dépenses de l'École", href: `${baseUrl}/depenses`, icon: Wallet, active: pathname.includes('/depenses') },
-      { key: 'rapports', title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, icon: BarChart3, active: pathname.includes('/rapports') },
-      { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-      { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
-      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
-    ];
-  } else if (roleId === 'comptable') {
-    // 💼 COMPTABLE : Élèves (3 pages), Tableau de bord avec Services (3 pages), Comptabilité & Finances (2 pages), Réductions, Salaires, Notes Diverses
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      {
-        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
-        subItems: [
-          { title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
-          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
-          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
-        ],
-      },
-      ...(availableServices.length > 0 ? [{
-        key: 'services', title: 'Services & Prestations', icon: UtensilsCrossed, isGroup: true, isOpen: servicesOpen, onToggle: () => setServicesOpen(!servicesOpen),
-        active: pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat'),
-        subItems: availableServices,
-      }] : []),
-      {
-        key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
-        active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
-        subItems: [
-          { title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
-          { title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
-          { title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
-        ],
-      },
-      { key: 'reductions', title: 'Réductions spéciales', href: `${baseUrl}/reductions`, icon: BadgePercent, active: pathname.includes('/reductions') },
-      { key: 'salaires', title: 'Salaires du personnel', href: `${baseUrl}/salaires`, icon: Receipt, active: pathname.includes('/salaires') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-    ];
-  } else if (roleId === 'enseignant') {
-    // 👨‍🏫 ENSEIGNANT : Strictement la Gestion Pédagogique (les 5 pages) + Notes Diverses
-    navItems = [
-      {
-        key: 'pedagogie',
-        title: 'Gestion Pédagogique',
-        icon: BookOpen,
-        isGroup: true,
-        isOpen: pedagogyOpen,
-        onToggle: () => setPedagogyOpen(!pedagogyOpen),
-        active:
-          pathname.includes('/classes') ||
-          pathname.includes('/presences') ||
-          pathname.includes('/notes') ||
-          pathname.includes('/bulletins') ||
-          pathname.includes('/distinctions'),
-        subItems: [
-          { title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
-          { title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
-          { title: 'Pédagogie & Notes', href: `${baseUrl}/notes`, active: pathname.includes('/notes') },
-          { title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.includes('/bulletins') },
-          { title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
-        ],
-      },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-    ];
-  } else if (roleId === 'assistant_direction') {
-    // 📋 ASSISTANT(E) (consultation seule) : Vue d'ensemble des élèves, Classes, Documents,
-    //    Personnel, Santé, Notes Diverses
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      {
-        key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
-        active: pathname.includes('/eleves') || pathname.includes('/documents'),
-        subItems: [
-          { title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
-          { title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
-        ],
-      },
-      { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
-      { key: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
-      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-    ];
-  } else if (roleId === 'parent') {
-    // 👨‍👩‍👧 PARENT : trois espaces dédiés et distincts — Notes & Bulletins, Écrire à la
-    // Direction (page propre, plus une modale noyée dans la page Bulletins), et Notes
-    // Diverses. La boîte de réception interne "Communication Parents" reste réservée au
-    // personnel de direction (communication-view.tsx n'a pas de vue parent).
+  const catalog: any[] = [
+    { key: 'dashboard', page: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
+    { key: 'administration', page: 'administration', title: 'Administration & Codes', href: `${baseUrl}/administration`, icon: KeyRound, active: pathname.includes('/administration') },
+    {
+      key: 'eleves', title: 'Élèves', icon: Users, isGroup: true, isOpen: studentsOpen, onToggle: () => setStudentsOpen(!studentsOpen),
+      active: pathname.includes('/eleves') || pathname.includes('/inscriptions') || pathname.includes('/documents'),
+      subItems: keepSubs([
+        { page: 'inscriptions', title: 'Inscriptions', href: `${baseUrl}/inscriptions`, active: pathname.includes('/inscriptions') },
+        { page: 'eleves', title: "Vue d'ensemble", href: `${baseUrl}/eleves`, active: pathname.endsWith('/eleves') },
+        { page: 'documents', title: 'Documents scolaires', href: `${baseUrl}/documents`, active: pathname.includes('/documents') },
+      ]),
+    },
+    {
+      key: 'services', title: 'Services & Prestations', icon: UtensilsCrossed, isGroup: true, isOpen: servicesOpen, onToggle: () => setServicesOpen(!servicesOpen),
+      active: pathname.includes('/cantine') || pathname.includes('/transport') || pathname.includes('/internat'),
+      subItems: keepSubs(availableServices),
+    },
+    {
+      key: 'finances', title: 'Comptabilité & Finances', icon: Wallet, isGroup: true, isOpen: financeOpen, onToggle: () => setFinanceOpen(!financeOpen),
+      active: pathname.includes('/depenses') || pathname.includes('/rapports') || pathname.includes('/versements'),
+      subItems: keepSubs([
+        { page: 'versements', title: 'Suivi des versements', href: `${baseUrl}/versements`, active: pathname.includes('/versements') },
+        { page: 'depenses', title: "Dépenses de l'École", href: `${baseUrl}/depenses`, active: pathname.includes('/depenses') },
+        { page: 'rapports', title: 'Rapports & Statistiques', href: `${baseUrl}/rapports`, active: pathname.includes('/rapports') },
+      ]),
+    },
+    { key: 'reductions', page: 'reductions', title: 'Réductions spéciales', href: `${baseUrl}/reductions`, icon: BadgePercent, active: pathname.includes('/reductions') },
+    { key: 'salaires', page: 'salaires', title: 'Salaires du personnel', href: `${baseUrl}/salaires`, icon: Receipt, active: pathname.includes('/salaires') },
+    {
+      key: 'pedagogie', title: 'Gestion Pédagogique', icon: BookOpen, isGroup: true, isOpen: pedagogyOpen, onToggle: () => setPedagogyOpen(!pedagogyOpen),
+      active: pathname.includes('/classes') || pathname.includes('/presences') || pathname.includes('/notes') || pathname.includes('/bulletins') || pathname.includes('/distinctions'),
+      subItems: keepSubs([
+        { page: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
+        { page: 'presences', title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
+        { page: 'notes', title: 'Pédagogie & Notes', href: `${baseUrl}/notes`, active: pathname.endsWith('/notes') },
+        { page: 'bulletins', title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.endsWith('/bulletins') },
+        { page: 'distinctions', title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
+      ]),
+    },
+    {
+      ...communicationGroupItem,
+      subItems: keepSubs([
+        { page: 'communication', title: 'Messagerie & Diffusions', href: `${baseUrl}/communication`, active: pathname.endsWith('/communication') },
+        { page: 'bulletins-parents', title: 'Notes & Bulletins Parents', href: `${baseUrl}/bulletins-parents`, active: pathname.includes('/bulletins-parents') },
+      ]),
+    },
+    { key: 'personnel', page: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
+    { key: 'sante', page: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
+    { key: 'notes_diverses', page: 'notes-diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+    { key: 'corbeille', page: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
+    { key: 'parametres', page: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
+  ];
+
+  if (roleId === 'parent') {
+    // 👨‍👩‍👧 PARENT : trois espaces dédiés — Notes & Bulletins, Écrire à la Direction, Notes Diverses.
     navItems = [
       { key: 'bulletins-parents', title: 'Notes & Bulletins Scolaires', href: `${baseUrl}/bulletins-parents`, icon: MessageSquare, active: pathname.includes('/bulletins-parents') },
       { key: 'messagerie-parent', title: 'Écrire à la Direction', href: `${baseUrl}/messagerie-parent`, icon: Mail, active: pathname.includes('/messagerie-parent') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
-  } else if (roleId === 'educateur') {
-    // 🧑‍🏫 ÉDUCATEUR / VIE SCOLAIRE : tout ce qui touche au suivi des élèves — liste des élèves,
-    //    Classes, Présences & Absences, Bulletins, Tableaux d'honneur, Santé, Notes Diverses
-    navItems = [
-      { key: 'dashboard', title: 'Tableau de bord', href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'eleves', title: "Élèves (Vue d'ensemble)", href: `${baseUrl}/eleves`, icon: Users, active: pathname.endsWith('/eleves') },
-      {
-        key: 'pedagogie', title: 'Suivi des élèves', icon: BookOpen, isGroup: true, isOpen: pedagogyOpen, onToggle: () => setPedagogyOpen(!pedagogyOpen),
-        active: pathname.includes('/classes') || pathname.includes('/presences') || pathname.includes('/bulletins') || pathname.includes('/distinctions'),
-        subItems: [
-          { title: 'Classes & Niveaux', href: `${baseUrl}/classes`, active: pathname.includes('/classes') },
-          { title: 'Présences & Absences', href: `${baseUrl}/presences`, active: pathname.includes('/presences') },
-          { title: 'Bulletins Scolaires', href: `${baseUrl}/bulletins`, active: pathname.includes('/bulletins') },
-          { title: "Tableaux d'Honneur", href: `${baseUrl}/distinctions`, active: pathname.includes('/distinctions') },
-        ],
-      },
-      { key: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-    ];
   } else {
-    // Fallback standard
-    navItems = [
-      { key: 'dashboard', title: "Vue d'ensemble", href: `${baseUrl}/dashboard`, icon: LayoutDashboard, active: pathname.includes('/dashboard') },
-      { key: 'classes', title: 'Classes & Niveaux', href: `${baseUrl}/classes`, icon: SchoolIcon, active: pathname.includes('/classes') },
-      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
-    ];
+    navItems = catalog.filter((item) => (item.isGroup ? item.subItems.length > 0 : can(item.page)));
   }
 
   return (
@@ -408,7 +244,7 @@ export function Sidebar({
         <div className="shrink-0">
           <div className="h-16 px-5 border-b border-slate-100 flex items-center justify-between">
             <Link
-              href={`/${schoolSlug}/admin/dashboard`}
+              href={`${baseUrl}/${homePage(roleId)}`}
               className="flex items-center gap-2.5 group hover:opacity-90 transition-opacity"
             >
               <SchoolFlowLogo size="sm" showTagline={false} />
@@ -426,7 +262,7 @@ export function Sidebar({
               {/* Active School Badge */}
           <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
             <Link
-              href={`/${schoolSlug}/admin/parametres`}
+              href={can('parametres') ? `${baseUrl}/parametres` : `${baseUrl}/${homePage(roleId)}`}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white border border-slate-200/70 shadow-2xs hover:border-emerald-300 transition-colors group cursor-pointer"
               title="Configurer l'établissement dans les Paramètres"
             >
@@ -537,7 +373,7 @@ export function Sidebar({
         {/* Bottom Profile: School Logo + Role Poster */}
         <div className="p-3 border-t border-slate-100 shrink-0 bg-white">
           <Link
-            href={`/${schoolSlug}/admin/parametres`}
+            href={can('parametres') ? `${baseUrl}/parametres` : `${baseUrl}/${homePage(roleId)}`}
             className="p-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 flex items-center gap-3 shadow-2xs transition-all group block"
             title="Modifier le profil et le logo dans les Paramètres"
           >

@@ -404,7 +404,7 @@ export function GradesView({
     setGradesConfig(getGradesConfig(schoolSlug));
     try {
       const session = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
-      setCanEditGradesConfig(session?.roleId === 'fondateur' || session?.roleId === 'directeur');
+      setCanEditGradesConfig(session?.roleId === 'fondateur' || session?.roleId === 'fondateur_adjoint' || session?.roleId === 'directeur');
     } catch (e) {
       setCanEditGradesConfig(false);
     }

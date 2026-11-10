@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { ShieldAlert, Lock, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { READ_ONLY_ROLES } from '@/lib/auth/roles';
 
 interface ReadOnlyGuardProps {
   children: React.ReactNode;
@@ -22,14 +23,11 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
         const stored = localStorage.getItem('schoolflow_active_session_v2');
         if (stored) {
           const parsed = JSON.parse(stored);
-          // Seuls Fondateur, Directeur et Comptable modifient (choix de l'établissement).
-          // Secrétaire et Assistant(e) : consultation seule. Éducateur : consultation, sauf
-          // l'appel de présence. Enseignant : ses pages (notes, appel) restent modifiables.
+          // Consultation seule : Secrétaire, Assistant(e), Informaticien ; Éducateur sauf l'appel
+          // de présence (lib/auth/roles.ts). Enseignant : notes et appel restent modifiables.
           const role = String(parsed.roleId || '');
           const readOnlyRole =
-            role === 'secretaire' ||
-            role === 'assistant_direction' ||
-            (role === 'educateur' && !pathname.includes('/presences'));
+            READ_ONLY_ROLES.includes(role) && !(role === 'educateur' && pathname.includes('/presences'));
           if (parsed.isReadOnly === true || readOnlyRole) {
             setIsReadOnly(true);
             return;
@@ -114,7 +112,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                 <span>Mode Consultation & Supervision Uniquement</span>
               </div>
               <p className="leading-relaxed">
-                Votre profil permet de <strong>consulter</strong> vos pages. Les inscriptions, modifications et suppressions sont réservées au <strong>Fondateur</strong>, au <strong>Directeur</strong> et au <strong>Comptable</strong>.
+                Votre profil permet de <strong>consulter</strong> vos pages. Les inscriptions, versements, modifications et suppressions sont réservés au <strong>Fondateur</strong>, au <strong>Fondateur adjoint</strong> et au <strong>Comptable</strong>.
               </p>
             </div>
 

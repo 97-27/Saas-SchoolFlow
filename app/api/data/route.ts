@@ -37,6 +37,7 @@ import {
 } from '@/lib/server/auth';
 import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
 import { setRequestActor, actorLabel } from '@/lib/server/actor';
+import { isFounderRole } from '@/lib/auth/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,10 +45,10 @@ export const dynamic = 'force-dynamic';
 // Codes système, et anciens codes de démonstration identiques pour toutes les écoles.
 const RESERVED_CODE = /^(SYS-|STAMP-|FND-2026$|DIR-2026$)/i;
 
-/** Codes d'accès et profils du personnel : réservés au seul Directeur (sauf le compte du
- *  Fondateur lui-même, protégé plus bas). Corbeille & Journal : réservés au seul Fondateur. */
-const isDirector = (session: { roleId: string }) => session.roleId === 'directeur';
+/** Le Fondateur lui-même (son compte n'est modifiable que par lui). */
 const isFounder = (session: { roleId: string }) => session.roleId === 'fondateur';
+/** Corbeille & Journal : Fondateur et Fondateur adjoint. */
+const canUseTrash = (session: { roleId: string }) => isFounderRole(session.roleId);
 
 function ok(result: unknown) {
   return NextResponse.json({ success: true, result }, { headers: { 'Cache-Control': 'no-store' } });
@@ -168,19 +169,19 @@ export async function POST(request: NextRequest) {
     case 'getDataVersion':
       return ok(await getSchoolDataVersion(slug));
 
-    // Corbeille & Journal : réservés au Fondateur (choix de l'établissement).
+    // Corbeille & Journal : Fondateur et Fondateur adjoint.
     case 'getJournal': {
-      if (!isFounder(session)) return deny();
+      if (!canUseTrash(session)) return deny();
       const kind = args[0] === 'changes' || args[0] === 'all' ? args[0] : 'trash';
       return ok(await getJournalFromSupabase(slug, kind, Number(args[1]) || 400));
     }
 
     case 'restoreJournal':
-      if (!isFounder(session)) return deny();
+      if (!canUseTrash(session)) return deny();
       return ok(await restoreJournalInSupabase(slug, Number(args[0]), actorLabel(session)));
 
     case 'purgeJournal':
-      if (!isFounder(session)) return deny();
+      if (!canUseTrash(session)) return deny();
       return ok(await purgeJournalInSupabase(slug, args[0] === 'all' ? 'all' : Number(args[0])));
 
     case 'deleteServiceInvoices':
@@ -201,12 +202,12 @@ export async function POST(request: NextRequest) {
       if (!rawCode || RESERVED_CODE.test(rawCode)) return deny();
 
       // Créer / modifier les profils et les codes d'accès (« Administration & Codes ») : Fondateur
-      // et Directeur. Le Directeur ne peut ni créer ni modifier un compte Fondateur. Les autres
-      // membres ne modifient que leurs propres coordonnées.
+      // et Fondateur adjoint. Le compte du Fondateur (coordonnées, code) n'est modifiable que par
+      // le Fondateur lui-même. Les autres membres ne modifient que leurs propres coordonnées.
       if (isAdmin(session)) {
         if (!STAFF_ROLES.includes(staff.roleId)) return jsonError('Rôle inconnu.', 400);
         if (/^MASQUE-/i.test(rawCode)) return deny();
-        if (isDirector(session) && rawCode.toUpperCase() !== session.code.toUpperCase()) {
+        if (!isFounder(session)) {
           const current = (await getStaffUsersFromSupabase(slug)).find(
             (s: any) => String(s.authCode || '').toUpperCase() === rawCode.toUpperCase() || (staff.id && s.id === staff.id)
           );
@@ -232,16 +233,16 @@ export async function POST(request: NextRequest) {
     }
 
     case 'deleteStaffUser': {
-      // Fondateur : peut supprimer tout membre, Directeur compris. Directeur : tout membre SAUF
-      // le Fondateur. Personne ne peut supprimer son propre compte.
+      // Fondateur : peut supprimer tout membre. Fondateur adjoint : tout membre SAUF le
+      // Fondateur. Personne ne peut supprimer son propre compte.
       if (!isAdmin(session)) return deny();
       const rawCode = String(args[0] || '').trim();
       if (!rawCode || RESERVED_CODE.test(rawCode) || /^MASQUE-/i.test(rawCode) || rawCode.toUpperCase() === session.code.toUpperCase()) return deny();
       const target = (await getStaffUsersFromSupabase(slug)).find(
         (s: any) => String(s.authCode || '').toUpperCase() === rawCode.toUpperCase()
       );
-      if (isDirector(session) && target?.roleId === 'fondateur') {
-        return jsonError('Le Directeur ne peut pas supprimer le compte du Fondateur.', 403);
+      if (!isFounder(session) && target?.roleId === 'fondateur') {
+        return jsonError('Seul le Fondateur peut supprimer le compte du Fondateur.', 403);
       }
       return ok(await deleteStaffUserFromSupabase(rawCode, slug));
     }

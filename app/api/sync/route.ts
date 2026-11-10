@@ -32,6 +32,7 @@ import {
 } from '@/lib/server/auth';
 import { SessionPayload } from '@/lib/server/session';
 import { setRequestActor } from '@/lib/server/actor';
+import { canAccessPage } from '@/lib/auth/roles';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -134,21 +135,15 @@ function filterForSession(data: Record<string, any>, session: SessionPayload): R
     return out;
   }
 
-  // Les codes d'accès des autres membres ne sont visibles que du Fondateur et du Directeur
-  // (« Administration & Codes »).
-  if (!isAdmin(session)) {
-    out.staffUsers = (out.staffUsers || []).map((u: any) =>
-      upperCode(u?.authCode) === ownCode ? u : { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
-    );
-  } else if (session.roleId === 'directeur') {
-    // Le code du Fondateur n'est connu que du Fondateur lui-même.
-    out.staffUsers = (out.staffUsers || []).map((u: any) =>
-      u?.roleId === 'fondateur' && upperCode(u?.authCode) !== ownCode
-        ? { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` }
-        : u
-    );
-  }
-  if (!isAdmin(session)) {
+  // Codes d'accès : visibles seulement en « Administration & Codes » (Fondateur et Fondateur
+  // adjoint). Le code du Fondateur n'est connu que du Fondateur lui-même. Chacun garde le sien.
+  out.staffUsers = (out.staffUsers || []).map((u: any) => {
+    if (upperCode(u?.authCode) === ownCode) return u;
+    const visible = session.roleId === 'fondateur' || (isAdmin(session) && u?.roleId !== 'fondateur');
+    return visible ? u : { ...u, authCode: `MASQUE-${String(u?.id || '').slice(0, 8)}` };
+  });
+  // Messages des parents : postes qui ont la page « Communication Parents ».
+  if (!canAccessPage(session.roleId, 'communication')) {
     out.parentMessages = [];
   }
   return out;
@@ -424,7 +419,8 @@ export async function POST(request: NextRequest) {
 
     let parentMessages: any[] | undefined;
     if (Array.isArray(body.parentMessages)) {
-      if (admin) parentMessages = body.parentMessages;
+      // Réponses aux parents : Fondateurs et Directeur (page Communication Parents).
+      if (admin || session.roleId === 'directeur') parentMessages = body.parentMessages;
       else if (session.roleId === 'parent') {
         parentMessages = (await mergeParentNewMessages(slug, session, body.parentMessages)) ?? undefined;
       }

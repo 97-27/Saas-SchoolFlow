@@ -1,15 +1,16 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import { FIGURES_UNLOCK_ROLES, FIGURES_VISIBLE_ROLES } from '@/lib/auth/roles';
 
 /**
  * Masquage des chiffres globaux (totaux encaissés, recettes du jour, structure des
  * encaissements, masse salariale…).
- *  - Fondateur : tout est visible.
- *  - Directeur : chiffres masqués « •••••• » ; un clic demande le code du Fondateur (vérifié
- *    par le serveur, /api/auth/figures) et affiche les chiffres pendant 30 minutes dans cet
- *    onglet.
- *  - Tous les autres postes (Comptable, Secrétaire…) : toujours masqués.
+ *  - Fondateur et Fondateur adjoint : tout est visible.
+ *  - Comptable : chiffres masqués « •••••• » ; un clic demande le code du Fondateur (vérifié
+ *    par le serveur, /api/auth/figures ; 3 essais puis 30 min de blocage) et affiche les
+ *    chiffres pendant 30 minutes dans cet onglet.
+ *  - Tous les autres postes : toujours masqués.
  *
  * C'est un masquage d'AFFICHAGE : les montants détaillés restent nécessaires au travail du
  * Comptable (reçus, caisse), ils ne sont donc pas retirés des données de la page.
@@ -19,9 +20,9 @@ const UNLOCK_KEY = 'schoolflow_figures_unlocked_until_v1';
 const UNLOCK_MS = 30 * 60 * 1000;
 export const MASK = '••••••';
 
-type State = { roleId: string; unlockedUntil: number; dialogOpen: boolean; notice: string };
+type State = { roleId: string; unlockedUntil: number; dialogOpen: boolean; notice: string; lockedUntil: number };
 
-let state: State = { roleId: '', unlockedUntil: 0, dialogOpen: false, notice: '' };
+let state: State = { roleId: '', unlockedUntil: 0, dialogOpen: false, notice: '', lockedUntil: 0 };
 const listeners = new Set<() => void>();
 let initialized = false;
 let expiryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -70,7 +71,7 @@ export function refreshFiguresSession() {
   fetch('/api/auth/figures', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((j) => {
-      if (j?.success && typeof j.roleId === 'string' && j.roleId !== state.roleId) setState({ roleId: j.roleId });
+      if (j?.success && typeof j.roleId === 'string') setState({ roleId: j.roleId, lockedUntil: Number(j.lockedUntil) || 0 });
     })
     .catch(() => {});
 }
@@ -81,12 +82,12 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-const serverSnapshot: State = { roleId: '', unlockedUntil: 0, dialogOpen: false, notice: '' };
+const serverSnapshot: State = { roleId: '', unlockedUntil: 0, dialogOpen: false, notice: '', lockedUntil: 0 };
 
 export function useFiguresState() {
   const s = useSyncExternalStore(subscribe, () => state, () => serverSnapshot);
-  const isFounder = s.roleId === 'fondateur';
-  const canUnlock = s.roleId === 'directeur';
+  const isFounder = FIGURES_VISIBLE_ROLES.includes(s.roleId);
+  const canUnlock = FIGURES_UNLOCK_ROLES.includes(s.roleId);
   const visible = isFounder || (canUnlock && s.unlockedUntil > Date.now());
   return { ...s, visible, isFounder, canUnlock };
 }
@@ -94,7 +95,7 @@ export function useFiguresState() {
 /** Clic sur un chiffre masqué. */
 export function requestFiguresUnlock() {
   init();
-  if (state.roleId === 'directeur') setState({ dialogOpen: true });
+  if (FIGURES_UNLOCK_ROLES.includes(state.roleId)) setState({ dialogOpen: true });
   else setState({ notice: 'Chiffres réservés au Fondateur.' });
 }
 
@@ -122,6 +123,7 @@ export async function submitFiguresCode(code: string): Promise<string | null> {
       body: JSON.stringify({ code }),
     });
     const j = await res.json().catch(() => null);
+    if (j?.lockedUntil) setState({ lockedUntil: Number(j.lockedUntil) || 0 });
     if (!res.ok || !j?.success) return j?.error || 'Code incorrect.';
     const until = Date.now() + UNLOCK_MS;
     try {

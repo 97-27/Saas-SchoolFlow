@@ -53,11 +53,14 @@ import {
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { getAllSchoolsFromSupabase, saveStaffUserToSupabase } from '@/lib/supabase/remote';
+import { homePage } from '@/lib/auth/roles';
 
 export type UserRole =
   | 'directeur'
   | 'assistant_direction'
   | 'fondateur'
+  | 'fondateur_adjoint'
+  | 'informaticien'
   | 'educateur'
   | 'comptable'
   | 'secretaire'
@@ -95,12 +98,31 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     department: 'Direction des Études',
     defaultAuthCode: 'DIR-2026',
     defaultUserName: '',
-    description: 'Directeur des Études : Gestion pédagogique, administrative et financière globale de l’établissement.',
-    allowedModules: 'Tableau de bord, Administration, Scolarités, Caisse, Salaires, Pédagogie, Bulletins, Paramètres',
+    description: 'Directeur des Études : élèves, documents, pédagogie, communication parents, personnel et santé.',
+    allowedModules: 'Vue d’ensemble, Documents, Gestion pédagogique, Communication Parents, Personnel, Santé, Notes diverses',
+  },
+  fondateur_adjoint: {
+    id: 'fondateur_adjoint',
+    title: 'Fondateur adjoint (DGA)',
+    badge: '🏛️ Fondateur adjoint',
+    department: 'Présidence & Conseil d’Administration',
+    defaultAuthCode: 'DGA-2026',
+    defaultUserName: '',
+    description: 'Adjoint du Fondateur : mêmes accès que le Fondateur, crée les postes et les codes du personnel.',
+    allowedModules: 'Toutes les pages, Administration & Codes, Paramètres',
     isAdmin: true,
   },
-  assistant_direction: {
-    id: 'assistant_direction',
+  informaticien: {
+    id: 'informaticien',
+    title: 'Informaticien',
+    badge: '💻 Informaticien',
+    department: 'Informatique',
+    defaultAuthCode: 'INF-2026',
+    defaultUserName: '',
+    description: 'Suivi technique de la plateforme : consultation de toutes les pages sauf Administration & Codes et Paramètres.',
+    allowedModules: 'Toutes les pages (consultation), sauf Administration & Codes et Paramètres',
+  },
+  assistant_direction: {    id: 'assistant_direction',
     title: 'Assistant(e) de Direction',
     badge: '📋 Assistant(e) Direction',
     department: 'Direction Adjointe',
@@ -127,7 +149,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     defaultAuthCode: 'CPT-2026',
     defaultUserName: '',
     description: 'Gestion des paiements de scolarité, effectifs, prestations, réductions, salaires et finances.',
-    allowedModules: 'Tableau de bord, Élèves, Comptabilité & Finances, Scolarité, Salaires, Personnel',
+    allowedModules: 'Tableau de bord, Inscriptions, Vue d’ensemble, Services, Comptabilité & Finances, Réductions, Salaires, Personnel, Santé',
   },
   secretaire: {
     id: 'secretaire',
@@ -136,8 +158,8 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     department: 'Secrétariat & Accueil',
     defaultAuthCode: 'SEC-2026',
     defaultUserName: '',
-    description: 'Accueil, documents scolaires officiels, suivi du personnel, communication et inscriptions.',
-    allowedModules: 'Vue d’ensemble, Documents Scolaires, Enseignants & Personnel, Inscriptions',
+    description: 'Accueil et documents scolaires officiels (consultation).',
+    allowedModules: 'Vue d’ensemble, Documents Scolaires, Services & Prestations (consultation)',
   },
   enseignant: {
     id: 'enseignant',
@@ -533,7 +555,7 @@ export function LoginView({
         : authCodeInput.trim().toUpperCase();
 
     setTimeout(() => {
-      const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'directeur';
+      const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'fondateur_adjoint';
       const isParent = selectedRole === 'parent';
       const firstChild = matchedParentStudents[0];
 
@@ -661,12 +683,8 @@ export function LoginView({
       });
       setIsLoading(false);
 
-      let destinationUrl = `/${activeSlug}/admin/dashboard`;
-      if (selectedRole === 'enseignant') {
-        destinationUrl = `/${activeSlug}/admin/notes`;
-      } else if (selectedRole === 'parent') {
-        destinationUrl = `/${activeSlug}/admin/bulletins-parents`;
-      }
+      // Page d'arrivée du poste (lib/auth/roles.ts) : le Directeur n'a plus le Tableau de bord.
+      const destinationUrl = `/${activeSlug}/admin/${homePage(selectedRole)}`;
 
       setTimeout(() => {
         router.push(destinationUrl);
@@ -1068,11 +1086,13 @@ export function LoginView({
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
                       <option value="fondateur">👑 Contrôle Total (Fondateur / Promoteur)</option>
+                      <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
                       <option value="directeur">👑 Contrôle (Directeur / Directrice des Études)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
                       <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
+                      <option value="informaticien">💻 Informaticien</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
                       <option value="parent">👨‍👩‍👧 Parent d'Élève (Espace Famille)</option>
                     </select>

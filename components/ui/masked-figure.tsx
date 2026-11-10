@@ -80,11 +80,22 @@ export function useFigureText() {
 }
 
 /**
- * Fenêtre de saisie du code (Directeur), message « réservé au Fondateur » (autres postes) et
+ * Fenêtre de saisie du code (Comptable), message « réservé au Fondateur » (autres postes) et
  * bouton « Masquer les chiffres ». Montée UNE seule fois, dans DashboardShell.
  */
 export function FiguresPrivacyHost() {
-  const { dialogOpen, notice, canUnlock, isFounder, visible } = useFiguresState();
+  const { dialogOpen, notice, canUnlock, isFounder, visible, lockedUntil } = useFiguresState();
+  const [now, setNow] = useState(() => Date.now());
+  const locked = lockedUntil > now;
+  const minutesLeft = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
+
+  // Compte à rebours du blocage (3 codes faux → 30 minutes).
+  useEffect(() => {
+    if (!dialogOpen || lockedUntil <= Date.now()) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [dialogOpen, lockedUntil]);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -111,10 +122,11 @@ export function FiguresPrivacyHost() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim() || busy) return;
+    if (!code.trim() || busy || locked) return;
     setBusy(true);
     const err = await submitFiguresCode(code);
     setBusy(false);
+    setNow(Date.now());
     if (err) setError(err);
   };
 
@@ -155,7 +167,7 @@ export function FiguresPrivacyHost() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Afficher les chiffres</h3>
-                  <p className="text-[11px] text-slate-500">Saisissez le code du Fondateur.</p>
+                  <p className="text-[11px] text-slate-500">Saisissez le code du Fondateur (3 essais).</p>
                 </div>
               </div>
               <button
@@ -177,7 +189,8 @@ export function FiguresPrivacyHost() {
                   setError('');
                 }}
                 autoComplete="off"
-                placeholder="Code du Fondateur"
+                disabled={locked}
+                placeholder={locked ? 'Saisie bloquée' : 'Code du Fondateur'}
                 className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button
@@ -189,11 +202,17 @@ export function FiguresPrivacyHost() {
                 {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
+            {locked ? (
+              <p className="text-xs font-semibold text-rose-600">
+                Saisie du code bloquée après 3 essais incorrects. Réessayez dans {minutesLeft} minute{minutesLeft > 1 ? 's' : ''}.
+              </p>
+            ) : (
+              error && <p className="text-xs font-semibold text-rose-600">{error}</p>
+            )}
 
             <button
               type="submit"
-              disabled={busy || !code.trim()}
+              disabled={busy || locked || !code.trim()}
               className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold cursor-pointer"
             >
               {busy ? 'Vérification…' : 'Afficher pendant 30 minutes'}

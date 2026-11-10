@@ -426,7 +426,7 @@ export function DashboardView({
     <div className="space-y-7 pb-12">
       {/* Bannière de configuration à compléter — uniquement visible par le Directeur/Fondateur,
           seuls rôles ayant accès à la page Paramètres pour agir sur ces éléments. */}
-      {(activeRoleId === 'directeur' || activeRoleId === 'fondateur') &&
+      {(activeRoleId === 'fondateur_adjoint' || activeRoleId === 'fondateur') &&
         missingSetupItems.length > 0 &&
         !setupBannerDismissed && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">

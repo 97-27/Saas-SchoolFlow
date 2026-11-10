@@ -2,34 +2,12 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
 
+import { allowedPages, homePage } from '@/lib/auth/roles';
+
 /**
- * Pages /admin/<segment> autorisées par rôle, à l'image exacte du menu affiché dans
- * sidebar.tsx pour chaque rôle. fondateur et directeur ont accès à tout (non listés ici).
- * Sans cette liste, un parent qui devine ou clique un ancien lien /admin/dashboard atteignait
- * le tableau de bord financier complet de l'école — la barre latérale masquait le lien mais
- * ne protégeait rien côté serveur.
+ * Pages /admin/<segment> autorisées par poste : lib/auth/roles.ts (même source que le menu).
+ * Sans ce contrôle, un lien deviné ou un ancien favori ouvrait une page masquée du menu.
  */
-const ROLE_ALLOWED_PATHS: Record<string, string[]> = {
-  secretaire: ['dashboard', 'eleves', 'documents', 'versements', 'depenses', 'rapports', 'classes', 'notes-diverses', 'personnel', 'sante'],
-  comptable: ['dashboard', 'eleves', 'inscriptions', 'documents', 'cantine', 'transport', 'internat', 'versements', 'depenses', 'rapports', 'reductions', 'salaires', 'notes-diverses'],
-  enseignant: ['classes', 'presences', 'notes', 'bulletins', 'distinctions', 'notes-diverses'],
-  assistant_direction: ['dashboard', 'eleves', 'documents', 'classes', 'personnel', 'notes-diverses', 'sante'],
-  // "communication" est volontairement absent : c'est la boîte de réception interne de la
-  // Direction (communication-view.tsx n'a pas de vue dédiée aux parents). Les parents ont
-  // leur propre page dédiée "messagerie-parent" pour écrire à la Direction.
-  parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
-  educateur: ['dashboard', 'eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'notes-diverses', 'sante'],
-};
-
-/** Pages réservées au seul Fondateur (le Directeur a accès à tout le reste, Paramètres et
- *  Administration & Codes compris). */
-const FOUNDER_ONLY_PATHS = ['corbeille'];
-
-// Page d'atterrissage par défaut par rôle quand l'URL demandée n'est pas autorisée.
-const ROLE_DEFAULT_PATH: Record<string, string> = {
-  enseignant: 'notes',
-  parent: 'bulletins-parents',
-};
 
 /**
  * Protège les pages /[ecole]/admin/* : sans session valide (cookie signé posé
@@ -76,18 +54,13 @@ export async function proxy(request: NextRequest) {
     }
 
     const roleId = session.roleId;
-    const allowedPaths = ROLE_ALLOWED_PATHS[roleId];
-    // directeur et fondateur (absents de la liste) gardent l'accès total ; tout autre rôle
-    // inconnu est refusé au lieu d'hériter, par défaut, de l'accès total.
-    if (!allowedPaths && roleId !== 'directeur' && roleId !== 'fondateur') {
+    const allowedPaths = allowedPages(roleId);
+    // Poste inconnu : refusé (jamais d'accès total par défaut).
+    if (allowedPaths.length === 0) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
     }
-    if (roleId === 'directeur' && FOUNDER_ONLY_PATHS.includes(subPath)) {
-      return NextResponse.redirect(new URL(`/${ecole}/admin/dashboard`, request.url));
-    }
-    if (allowedPaths && !allowedPaths.includes(subPath)) {
-      const fallback = ROLE_DEFAULT_PATH[roleId] || allowedPaths[0] || 'dashboard';
-      return NextResponse.redirect(new URL(`/${ecole}/admin/${fallback}`, request.url));
+    if (!allowedPaths.includes(subPath)) {
+      return NextResponse.redirect(new URL(`/${ecole}/admin/${homePage(roleId)}`, request.url));
     }
   } catch (e) {
     return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));

@@ -25,13 +25,7 @@ import { Student } from '@/lib/data/types';
 
 export const dynamic = 'force-dynamic';
 
-const ROLE_LABELS: Record<string, string> = {
-  secretaire: 'Secrétaire de Direction',
-  comptable: 'Comptable / Gestionnaire',
-  assistant_direction: 'Assistant(e) de Direction',
-  educateur: 'Éducateur / Conseiller d’Éducation',
-  enseignant: 'Enseignant / Professeur',
-};
+import { ROLE_LABELS } from '@/lib/auth/roles';
 
 const stripTitle = (name: string) =>
   name.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
@@ -152,7 +146,12 @@ async function handleLogin(
 
     const officialFounder = stripTitle(school.founderName || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : ''));
     const officialDirector = stripTitle(school.directorName || school.studiesDirectorName || (slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : ''));
-    const record = staff.find((s) => s.roleId === roleId);
+    // S'il reste plusieurs fiches pour ce poste (anciens doublons), on prend celle dont le code
+    // correspond — avant, seule la PREMIÈRE fiche était comparée, et la page Administration
+    // pouvait afficher une autre fiche (donc un autre code) que celle utilisée pour se connecter.
+    const sameRole = staff.filter((s) => s.roleId === roleId);
+    const record =
+      sameRole.find((s) => String(s.authCode || '').trim().toUpperCase() === inputCode) || sameRole[0];
 
     const nameOk =
       areNamesMatching(fullName, officialFounder) ||
