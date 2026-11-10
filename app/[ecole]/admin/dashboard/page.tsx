@@ -1,7 +1,6 @@
 import React from 'react';
 import { DashboardView } from '@/components/dashboard/dashboard-view';
 import { mockKPIs, mockInvoices, mockStudents, schoolForSlug } from '@/lib/data/mock-data';
-import { getSchoolFromSupabase, getStudentsFromSupabase, getInvoicesFromSupabase, getServicesDataFromSupabase } from '@/lib/supabase/services';
 
 interface DashboardPageProps {
   params: Promise<{ ecole: string }> | { ecole: string };
@@ -10,42 +9,23 @@ interface DashboardPageProps {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+/**
+ * Plus aucune lecture de la base ICI : la page attendait le téléchargement complet des élèves,
+ * reçus et services (sans limite de temps) avant de s'afficher — c'est la page d'arrivée du
+ * Fondateur et du Comptable, d'où une connexion qui pouvait durer très longtemps. Les données
+ * sont lues par le navigateur (/api/sync, limité à 9 s) avant l'affichage (DataReadyGate).
+ */
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;
 
-  let dbSchool = null;
-  let dbStudents: any[] = [];
-  let dbInvoices: any[] = [];
-  let dbServices: any = null;
-
-  try {
-    const [sc, st, inv, srv] = await Promise.all([
-      getSchoolFromSupabase(ecoleSlug),
-      getStudentsFromSupabase(ecoleSlug),
-      getInvoicesFromSupabase(ecoleSlug),
-      getServicesDataFromSupabase(ecoleSlug),
-    ]);
-    dbSchool = sc;
-    dbStudents = st || [];
-    dbInvoices = inv || [];
-    dbServices = srv || null;
-  } catch (err) {
-    console.warn('DashboardPage Supabase fetch warning:', err);
-  }
-
-  const school = dbSchool || schoolForSlug(ecoleSlug);
-  const students = dbStudents && dbStudents.length > 0 ? dbStudents : mockStudents;
-  const invoices = dbInvoices && dbInvoices.length > 0 ? dbInvoices : mockInvoices;
-
   return (
     <DashboardView
-      school={school}
+      school={schoolForSlug(ecoleSlug)}
       schoolSlug={ecoleSlug}
-      initialStudents={students}
-      initialInvoices={invoices}
+      initialStudents={mockStudents}
+      initialInvoices={mockInvoices}
       initialKPIs={mockKPIs}
-      initialServices={dbServices}
     />
   );
 }

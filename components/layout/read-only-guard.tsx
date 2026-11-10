@@ -26,8 +26,11 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
           // Consultation seule : Secrétaire, Assistant(e), Informaticien ; Éducateur sauf l'appel
           // de présence (lib/auth/roles.ts). Enseignant : notes et appel restent modifiables.
           const role = String(parsed.roleId || '');
+          // Le pointage (arrivée, départ, motif d'absence) reste ouvert à tous : chacun pointe pour soi.
           const readOnlyRole =
-            READ_ONLY_ROLES.includes(role) && !(role === 'educateur' && pathname.includes('/presences'));
+            READ_ONLY_ROLES.includes(role) &&
+            !(role === 'educateur' && pathname.includes('/presences')) &&
+            !pathname.includes('/pointage');
           if (parsed.isReadOnly === true || readOnlyRole) {
             setIsReadOnly(true);
             return;

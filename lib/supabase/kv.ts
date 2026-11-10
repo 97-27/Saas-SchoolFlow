@@ -48,6 +48,19 @@ export async function kvGet(schoolId: string, key: string): Promise<KvRow | null
   return { key: data.key, value: data.value, updatedAt: data.updated_at };
 }
 
+/** Toutes les clés qui commencent par `prefix` (comparaison par intervalle : aucun joker). */
+export async function kvListPrefix(schoolId: string, prefix: string): Promise<KvRow[] | null> {
+  const { data, error } = await supabase
+    .from('school_kv')
+    .select('key, value, updated_at')
+    .eq('school_id', schoolId)
+    .gte('key', prefix)
+    .lt('key', `${prefix}￿`)
+    .limit(2000);
+  if (error) return null;
+  return (data || []).map((r: any) => ({ key: r.key, value: r.value, updatedAt: r.updated_at }));
+}
+
 export async function kvPut(schoolId: string, key: string, value: string, actor: string): Promise<KvRow | null> {
   const updatedAt = new Date().toISOString();
   const { error } = await supabase

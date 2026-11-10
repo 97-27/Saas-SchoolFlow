@@ -36,6 +36,7 @@ import {
   Trash2,
   Share2,
 } from 'lucide-react';
+import { FiguresPolicyCard } from '@/components/ui/masked-figure';
 
 interface AdministrationViewProps {
   schoolSlug: string;
@@ -415,7 +416,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
       joinDate: '01/09/2026',
       email: '',
-      phone: '',
+      phone: newPhone.trim(),
       authCode: generatedCode.toUpperCase(),
       status: 'Actif',
       lastLogin: 'Jamais connecté',
@@ -503,6 +504,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
           </button>
         </div>
       </div>
+
+      {/* ================= CHIFFRES OUVERTS AU COMPTABLE (Fondateur / DGA) ================= */}
+      {(viewer.roleId === 'fondateur' || viewer.roleId === 'fondateur_adjoint') && <FiguresPolicyCard schoolSlug={schoolSlug} />}
 
       {/* ================= 4 CARTES KPI STATISTIQUES ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1133,6 +1137,20 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">
+                  Téléphone {newRole === 'enseignant' ? '* (l’enseignant se connecte avec ce numéro)' : ''}
+                </label>
+                <input
+                  type="tel"
+                  required={newRole === 'enseignant'}
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="Ex : +225 07 48 92 11 00"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Poste / Fonction (Code Requis) *</label>
@@ -1385,6 +1403,20 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">
+                  Téléphone {editRole === 'enseignant' ? '* (sert à la connexion de l’enseignant)' : ''}
+                </label>
+                <input
+                  type="tel"
+                  required={editRole === 'enseignant'}
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="Ex : +225 07 48 92 11 00"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
+                />
               </div>
 
               {/* Attributions Pédagogiques STRICTEMENT réservées au profil Enseignant */}

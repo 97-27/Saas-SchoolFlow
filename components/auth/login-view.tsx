@@ -34,7 +34,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { School, Student } from '@/lib/data/types';
-import { defaultSchool, mockStudents, mockSchools } from '@/lib/data/mock-data';
+import { defaultSchool, mockStudents, mockSchools, availableClasses } from '@/lib/data/mock-data';
 import { formatFCFA } from '@/lib/utils/formatters';
 import {
   getLiveSchool,
@@ -168,7 +168,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     department: 'Corps Enseignant',
     defaultAuthCode: 'ENS-2026',
     defaultUserName: '',
-    description: 'Saisie des notes, appel des présences par classe, bulletins scolaires et communication.',
+    description: 'Connexion avec votre numéro de téléphone et votre matière. Saisie des notes, appel des présences, pointage.',
     allowedModules: 'Présences & Absences, Pédagogie & Notes, Bulletins Scolaires',
   },
   parent: {
@@ -182,6 +182,27 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     allowedModules: 'Notes & Bulletins des Enfants, Communication Parents',
   },
 };
+
+const TEACHER_LOGIN_MEMORY_KEY = 'schoolflow_teacher_login_v1';
+const TEACHER_SUBJECTS = [
+  'Français',
+  'Arabe',
+  'Anglais',
+  'Mathématiques',
+  'Physique-Chimie',
+  'SVT',
+  'Histoire-Géographie',
+  'Éducation civique et morale',
+  'Éducation islamique',
+  'Coran',
+  'Espagnol',
+  'Allemand',
+  'Informatique',
+  'EPS',
+  'Arts plastiques',
+  'Musique',
+  'Toutes les matières (Primaire / Maternelle)',
+];
 
 const ROTATING_LOGIN_TEXTS = [
   'Direction, Fondateur & Personnel',
@@ -232,6 +253,20 @@ export function LoginView({
   const [parentPhone, setParentPhone] = useState('');
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [loginAvatar, setLoginAvatar] = useState('');
+  // Enseignant : matière et classe (le numéro est mémorisé par ce navigateur).
+  const [teacherSubject, setTeacherSubject] = useState('');
+  const [teacherClass, setTeacherClass] = useState('');
+  useEffect(() => {
+    if (selectedRole !== 'enseignant') return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(TEACHER_LOGIN_MEMORY_KEY) || 'null');
+      if (saved) {
+        if (saved.phone) setParentPhone(String(saved.phone));
+        if (saved.subject) setTeacherSubject(String(saved.subject));
+        if (saved.teachingClass) setTeacherClass(String(saved.teachingClass));
+      }
+    } catch (e) {}
+  }, [selectedRole]);
 
   // Annuaire de l'école lu en base (/api/auth/directory) : un téléphone qui ouvre le lien pour la
   // première fois n'a rien en mémoire et doit quand même reconnaître l'école et ses membres.
@@ -462,21 +497,30 @@ export function LoginView({
     // ou "M." au début de son nom par habitude, on obtenait "Mr Mr LAWANI..." sur le profil,
     // partout où ce nom était ensuite affiché. On retire ce préfixe déjà tapé avant de laisser
     // la civilité du menu s'appliquer seule.
-    const trimmedName = userName.trim().replace(/^(mr|mme|mlle|m\.?|monsieur|madame|mademoiselle)\.?\s+/i, '').trim();
-    if (!trimmedName) {
-      setErrorMessage('Veuillez saisir votre Nom et Prénoms.');
-      return;
-    }
-
-    const nameParts = trimmedName.split(/\s+/).filter(Boolean);
-    if (nameParts.length < 2) {
-      setErrorMessage('Veuillez saisir votre Nom ET au moins un Prénom (ex : Konate Lassina).');
-      return;
+    // Enseignants : connexion par numéro de téléphone + matière (+ classe), sans nom ni code.
+    const isTeacherLogin = selectedRole === 'enseignant';
+    const trimmedName = isTeacherLogin
+      ? ''
+      : userName.trim().replace(/^(mr|mme|mlle|m\.?|monsieur|madame|mademoiselle)\.?\s+/i, '').trim();
+    if (!isTeacherLogin) {
+      if (!trimmedName) {
+        setErrorMessage('Veuillez saisir votre Nom et Prénoms.');
+        return;
+      }
+      const nameParts = trimmedName.split(/\s+/).filter(Boolean);
+      if (nameParts.length < 2) {
+        setErrorMessage('Veuillez saisir votre Nom ET au moins un Prénom (ex : Konate Lassina).');
+        return;
+      }
     }
 
     const cleanEmail = loginEmail.trim();
-    if (!cleanEmail) {
+    if (!isTeacherLogin && !cleanEmail) {
       setErrorMessage('Veuillez renseigner votre Adresse Email Professionnelle obligatoire.');
+      return;
+    }
+    if (isTeacherLogin && !teacherSubject.trim()) {
+      setErrorMessage('Veuillez indiquer la matière que vous enseignez (ex : Français, Arabe, Anglais).');
       return;
     }
 
@@ -492,7 +536,7 @@ export function LoginView({
     }
 
     // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
-    if (selectedRole !== 'parent' && !authCodeInput.trim()) {
+    if (selectedRole !== 'parent' && !isTeacherLogin && !authCodeInput.trim()) {
       setErrorMessage(
         selectedRole === 'fondateur'
           ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur."
@@ -518,9 +562,11 @@ export function LoginView({
           slug: activeSlug,
           roleId: selectedRole,
           fullName: trimmedName,
-          code: authCodeInput.trim(),
+          code: isTeacherLogin ? '' : authCodeInput.trim(),
           phone: cleanPhone,
           email: cleanEmail,
+          subject: isTeacherLogin ? teacherSubject.trim() : undefined,
+          teachingClass: isTeacherLogin ? teacherClass : undefined,
         }),
       });
       loginResult = await res.json().catch(() => null);
@@ -552,8 +598,21 @@ export function LoginView({
     const cleanAuthCode =
       selectedRole === 'parent'
         ? `PARENT-${cleanPhone.replace(/\D/g, '') || Date.now()}`
+        : isTeacherLogin
+        ? String(loginResult.authCode || '').toUpperCase()
         : authCodeInput.trim().toUpperCase();
 
+    // L'enseignant n'a plus qu'à vérifier ses informations la prochaine fois.
+    if (isTeacherLogin) {
+      try {
+        localStorage.setItem(
+          TEACHER_LOGIN_MEMORY_KEY,
+          JSON.stringify({ phone: cleanPhone, subject: teacherSubject.trim(), teachingClass: teacherClass })
+        );
+      } catch (e) {}
+    }
+
+    // Plus d'attente artificielle (il y avait 1,2 s de pauses avant d'ouvrir la page).
     setTimeout(() => {
       const isSupremeAdmin = selectedRole === 'fondateur' || selectedRole === 'fondateur_adjoint';
       const isParent = selectedRole === 'parent';
@@ -634,6 +693,8 @@ export function LoginView({
         authCode: cleanAuthCode,
         isAdmin: isSupremeAdmin,
         matchedChildrenIds: matchedParentStudents.map((s) => s.id),
+        teachingSubject: isTeacherLogin ? teacherSubject.trim() : undefined,
+        teachingClass: isTeacherLogin ? teacherClass : undefined,
         // Photo strictement personnelle : uniquement clée sur le code d'authentification
         // unique de la personne. Les anciennes clés par rôle et la clé globale "custom"
         // faisaient qu'une photo importée par une personne s'affichait ensuite chez toute
@@ -686,10 +747,8 @@ export function LoginView({
       // Page d'arrivée du poste (lib/auth/roles.ts) : le Directeur n'a plus le Tableau de bord.
       const destinationUrl = `/${activeSlug}/admin/${homePage(selectedRole)}`;
 
-      setTimeout(() => {
-        router.push(destinationUrl);
-      }, 700);
-    }, 500);
+      router.push(destinationUrl);
+    }, 0);
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -1100,6 +1159,7 @@ export function LoginView({
                   </div>
                 </div>
 
+                {selectedRole !== 'enseignant' && (<>
                 {/* Photo de Profil (Optionnelle à la connexion, enregistrée définitivement) */}
                 <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 shadow-2xs">
                   <div className="flex items-center gap-2.5">
@@ -1239,11 +1299,18 @@ export function LoginView({
                   </div>
                 </div>
 
+                </>)}
+
                 {/* 4. Numéro de Téléphone / WhatsApp (OBLIGATOIRE POUR TOUS) */}
                 <div className="space-y-1.5 animate-in fade-in">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>
-                      4. {selectedRole === 'parent' ? "Numéro de Téléphone Parent / WhatsApp *" : "Numéro de Téléphone Direct / WhatsApp *"}
+                      {selectedRole === 'enseignant' ? '2. ' : '4. '}
+                      {selectedRole === 'parent'
+                        ? "Numéro de Téléphone Parent / WhatsApp *"
+                        : selectedRole === 'enseignant'
+                        ? 'Votre numéro de téléphone (enregistré par la Direction) *'
+                        : "Numéro de Téléphone Direct / WhatsApp *"}
                     </span>
                     <span className="text-[10px] text-emerald-700 font-bold">Obligatoire</span>
                   </label>
@@ -1262,12 +1329,57 @@ export function LoginView({
                   <p className="text-[10px] text-slate-500">
                     {selectedRole === 'parent'
                       ? "ℹ️ Renseignez le numéro exact fourni lors de l'inscription de votre enfant (avec indicatif du pays)."
+                      : selectedRole === 'enseignant'
+                      ? 'ℹ️ Le numéro donné à la Direction. Ce navigateur s’en souviendra pour la prochaine fois.'
                       : "ℹ️ Ce numéro sera automatiquement enregistré sur votre profil officiel de l'école."}
                   </p>
                 </div>
 
+                {/* Enseignant : matière enseignée et classe */}
+                {selectedRole === 'enseignant' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800 block text-xs">3. Matière enseignée *</label>
+                      <div className="relative">
+                        <GraduationCap className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          required
+                          list="teacher-subjects-list"
+                          value={teacherSubject}
+                          onChange={(e) => setTeacherSubject(e.target.value)}
+                          placeholder="Ex : Français, Arabe, Anglais"
+                          className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
+                        />
+                        <datalist id="teacher-subjects-list">
+                          {TEACHER_SUBJECTS.map((s) => (
+                            <option key={s} value={s} />
+                          ))}
+                        </datalist>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800 block text-xs">4. Classe</label>
+                      <div className="relative">
+                        <Users className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <select
+                          value={teacherClass}
+                          onChange={(e) => setTeacherClass(e.target.value)}
+                          className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
+                        >
+                          <option value="">Plusieurs classes</option>
+                          {availableClasses.filter((c) => c !== 'Toutes les classes').map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 5. Code d'Authentification Officiel (Requis pour Fondateur, Directeur et tous les Personnels) */}
-                {selectedRole !== 'parent' && (
+                {selectedRole !== 'parent' && selectedRole !== 'enseignant' && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">

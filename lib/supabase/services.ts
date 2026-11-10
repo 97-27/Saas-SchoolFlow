@@ -40,8 +40,9 @@ async function getSchoolId(slug: string): Promise<string | null> {
 }
 
 // 1. GESTION DES ÉCOLES (SCHOOLS)
-export async function getSchoolFromSupabase(slug: string): Promise<School | null> {
+export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolean } = {}): Promise<School | null> {
   if (!isSupabaseConfigured) return null;
+  const withStamp = opts.stamp !== false;
   try {
     const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
     let { data, error } = await supabase
@@ -60,7 +61,7 @@ export async function getSchoolFromSupabase(slug: string): Promise<School | null
     let stampUrl = '';
     let ministryCode = '';
     let approvalNumber = '';
-    try {
+    if (withStamp) try {
       const { data: stampRow } = await supabase
         .from('staff_users')
         .select('avatar_url, department')
@@ -1520,6 +1521,84 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
     console.error('Erreur getStaffUsersFromSupabase:', err);
     return [];
   }
+}
+
+/**
+ * Version LÉGÈRE pour la connexion, l'annuaire et les vérifications de code : sans photo
+ * (avatar_url) ni autres colonnes volumineuses. Les photos étaient enregistrées en entier dans la
+ * fiche (image encodée de plusieurs centaines de Ko) : la connexion téléchargeait celles de
+ * TOUT le personnel à chaque essai, d'où une connexion très lente sur une petite connexion.
+ */
+export async function getStaffAuthRecords(schoolSlug: string): Promise<
+  { id: string; fullName: string; email: string; phone: string; roleId: string; role: string; authCode: string; status: string }[]
+> {
+  if (!isSupabaseConfigured || !schoolSlug) return [];
+  const schoolId = await getSchoolId(schoolSlug);
+  if (!schoolId) return [];
+  const { data, error } = await supabase
+    .from('staff_users')
+    .select('id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at')
+    .eq('school_id', schoolId)
+    .not('role_id', 'like', 'system_%')
+    .neq('role_id', 'school_stamp')
+    .order('created_at', { ascending: true });
+  if (error || !data) return [];
+  return data.map((d: any) => ({
+    id: d.id,
+    fullName: d.full_name || '',
+    email: d.email || '',
+    phone: d.phone || '',
+    roleId: d.role_id,
+    role: d.role_title,
+    authCode: d.auth_code,
+    status: d.is_active ? 'Actif' : 'Verrouillé',
+  }));
+}
+
+/** Fiche complète (avec photo) d'UN membre, après vérification de son code. */
+export async function getStaffUserById(schoolSlug: string, id: string): Promise<any | null> {
+  if (!isSupabaseConfigured || !schoolSlug || !id) return null;
+  const schoolId = await getSchoolId(schoolSlug);
+  if (!schoolId) return null;
+  const { data } = await supabase.from('staff_users').select('*').eq('school_id', schoolId).eq('id', id).maybeSingle();
+  if (!data) return null;
+  return {
+    id: data.id,
+    fullName: data.full_name,
+    email: data.email || '',
+    phone: data.phone || '',
+    roleId: data.role_id,
+    role: data.role_title,
+    authCode: data.auth_code,
+    status: data.is_active ? 'Actif' : 'Verrouillé',
+    avatarUrl: data.avatar_url,
+    matricule: data.matricule || `EMP-${String(data.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+  };
+}
+
+/** Informations de l'école utiles à la connexion seulement (sans logo ni cachet). */
+export async function getSchoolLoginInfo(slug: string): Promise<
+  { id: string; slug: string; name: string; shortName: string; status: string; founderName: string; directorName: string; logoUrl: string } | null
+> {
+  if (!isSupabaseConfigured || !slug) return null;
+  const cleanSlug = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  const { data } = await supabase
+    .from('schools')
+    .select('id, slug, name, short_name, status, founder_name, director_name')
+    .eq('slug', cleanSlug)
+    .maybeSingle();
+  if (!data) return null;
+  schoolIdCache.set(cleanSlug, data.id);
+  return {
+    id: data.id,
+    slug: data.slug,
+    name: data.name,
+    shortName: data.short_name || '',
+    status: data.status || 'active',
+    founderName: data.founder_name || '',
+    directorName: data.director_name || '',
+    logoUrl: '',
+  };
 }
 
 export async function saveStaffUserToSupabase(staff: {

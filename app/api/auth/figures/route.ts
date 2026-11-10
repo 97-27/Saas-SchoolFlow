@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStaffUsersFromSupabase } from '@/lib/supabase/services';
+import { getStaffAuthRecords as getStaffUsersFromSupabase } from '@/lib/supabase/services';
 import { jsonError, requireSession } from '@/lib/server/auth';
 import { FIGURES_UNLOCK_ROLES, FIGURES_VISIBLE_ROLES } from '@/lib/auth/roles';
 import { kvSchoolId, kvGet, kvPut } from '@/lib/supabase/kv';
@@ -21,6 +21,26 @@ export const dynamic = 'force-dynamic';
  */
 const MAX_FAILURES = 3;
 const LOCK_MS = 30 * 60 * 1000;
+
+/**
+ * Interrupteur du Fondateur / Fondateur adjoint (Administration & Codes) : « chiffres ouverts au
+ * Comptable ». Ouvert → le Comptable voit les chiffres sans code. Fermé → masqués aussitôt, y
+ * compris un déverrouillage par code en cours (changedAt plus récent que le déverrouillage).
+ * Clé hors des familles synchronisées : seul ce serveur la lit et l'écrit.
+ */
+const POLICY_KEY = 'sf_private_figures_policy';
+type Policy = { open: boolean; changedAt: number };
+
+async function readPolicy(schoolId: string): Promise<Policy> {
+  const row = await kvGet(schoolId, POLICY_KEY);
+  if (!row) return { open: false, changedAt: 0 };
+  try {
+    const v = JSON.parse(row.value);
+    return { open: v.open === true, changedAt: Number(v.changedAt) || 0 };
+  } catch {
+    return { open: false, changedAt: 0 };
+  }
+}
 
 type Attempts = { failures: number; lockedUntil: number };
 
@@ -45,13 +65,46 @@ export async function GET(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
   let lockedUntil = 0;
-  if (FIGURES_UNLOCK_ROLES.includes(session.roleId)) {
+  let policy: Policy = { open: false, changedAt: 0 };
+  const concerned = FIGURES_UNLOCK_ROLES.includes(session.roleId) || FIGURES_VISIBLE_ROLES.includes(session.roleId);
+  if (concerned) {
     const schoolId = await kvSchoolId(slug);
-    const a = schoolId ? await readAttempts(schoolId, attemptsKey(session)) : null;
-    if (a && a.lockedUntil > Date.now()) lockedUntil = a.lockedUntil;
+    if (schoolId) {
+      policy = await readPolicy(schoolId);
+      if (FIGURES_UNLOCK_ROLES.includes(session.roleId)) {
+        const a = await readAttempts(schoolId, attemptsKey(session));
+        if (a && a.lockedUntil > Date.now()) lockedUntil = a.lockedUntil;
+      }
+    }
   }
   return NextResponse.json(
-    { success: true, roleId: session.roleId, lockedUntil },
+    { success: true, roleId: session.roleId, lockedUntil, openToComptable: policy.open, policyChangedAt: policy.changedAt },
+    { headers: { 'Cache-Control': 'no-store' } }
+  );
+}
+
+/** Fondateur / Fondateur adjoint : ouvrir ou fermer les chiffres au Comptable. */
+export async function PUT(request: NextRequest) {
+  const auth = await requireSession(request);
+  if ('error' in auth) return auth.error;
+  const { session, slug } = auth;
+  if (!FIGURES_VISIBLE_ROLES.includes(session.roleId)) {
+    return jsonError('Réservé au Fondateur et au Fondateur adjoint.', 403);
+  }
+  let body: any;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonError('Requête invalide.', 400);
+  }
+  if (typeof body?.open !== 'boolean') return jsonError('Requête invalide.', 400);
+  const schoolId = await kvSchoolId(slug);
+  if (!schoolId) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+  const policy: Policy = { open: body.open, changedAt: Date.now() };
+  const saved = await kvPut(schoolId, POLICY_KEY, JSON.stringify(policy), `${session.roleId}|${session.staffId || ''}`);
+  if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+  return NextResponse.json(
+    { success: true, openToComptable: policy.open, policyChangedAt: policy.changedAt },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }

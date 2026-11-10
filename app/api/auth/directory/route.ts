@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { canonicalSlug, clientIp, isRateLimited, jsonError, STAFF_ROLES } from '@/lib/server/auth';
-import { getSchoolFromSupabase, getStaffUsersFromSupabase } from '@/lib/supabase/services';
+import { getSchoolLoginInfo as getSchoolFromSupabase, getStaffAuthRecords as getStaffUsersFromSupabase } from '@/lib/supabase/services';
 
 /**
  * ANNUAIRE DE LA PAGE DE CONNEXION (sans session)

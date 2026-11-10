@@ -115,6 +115,13 @@ function handleRemoteIncomingPayload(payload: any, cleanSlug: string): void {
     return;
   }
 
+  // Le Fondateur vient d'ouvrir / fermer les chiffres au Comptable : simple signal, l'état réel
+  // est relu au serveur (lib/client/figures-privacy.ts).
+  if (payload.action === 'figures_policy_changed') {
+    window.dispatchEvent(new Event('schoolflow-figures-policy-changed'));
+    return;
+  }
+
   // Laisser à l'auteur le temps de terminer son enregistrement avant de relire le serveur.
   setTimeout(() => syncSchoolDataWithServer(cleanSlug, true), 1500);
 }
@@ -1012,6 +1019,19 @@ export function startCrossDeviceSync(slug: string = 'epc-manoi'): void {
  * Synchronise les données réelles enregistrées depuis l'API serveur pour assurer la persistance
  * lorsque le lien du site est partagé avec d'autres utilisateurs ou ouvert sur d'autres appareils.
  */
+// Première synchronisation terminée (réussie ou non) : voir DataReadyGate (dashboard-shell.tsx).
+let firstSyncDone = false;
+const firstSyncWaiters: (() => void)[] = [];
+function markFirstSyncDone() {
+  if (firstSyncDone) return;
+  firstSyncDone = true;
+  firstSyncWaiters.splice(0).forEach((r) => r());
+}
+export function whenFirstSyncDone(): Promise<void> {
+  if (firstSyncDone) return Promise.resolve();
+  return new Promise((r) => firstSyncWaiters.push(r));
+}
+
 export function syncSchoolDataWithServer(slug: string, force: boolean = false): void {
   if (typeof window === 'undefined' || typeof fetch === 'undefined' || isSyncingServer) return;
   const now = Date.now();
@@ -1031,10 +1051,12 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
       } catch (e) {
         reportClientError(e, 'Synchronisation');
       }
+      markFirstSyncDone();
       retryPendingStudentSaves(slug).catch(() => {});
     })
     .catch(() => {
       isSyncingServer = false;
+      markFirstSyncDone();
     });
 }
 

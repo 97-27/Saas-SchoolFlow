@@ -197,6 +197,19 @@ export async function flushCloudKv(keepalive = false): Promise<void> {
   }
 }
 
+// Première lecture terminée (réussie ou non) : l'écran peut s'afficher sans copie périmée.
+let firstPullDone = false;
+const firstPullWaiters: (() => void)[] = [];
+function markFirstPullDone() {
+  if (firstPullDone) return;
+  firstPullDone = true;
+  firstPullWaiters.splice(0).forEach((r) => r());
+}
+export function whenCloudKvReady(): Promise<void> {
+  if (firstPullDone) return Promise.resolve();
+  return new Promise((r) => firstPullWaiters.push(r));
+}
+
 /** Récupère en base les modifications faites sur les autres appareils. */
 export async function pullCloudKv(full = false): Promise<void> {
   if (!activeSlug || pulling) return;
@@ -253,6 +266,7 @@ export async function pullCloudKv(full = false): Promise<void> {
     // hors connexion : nouvel essai au prochain passage
   } finally {
     pulling = false;
+    markFirstPullDone();
   }
 }
 

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getSchoolFromSupabase,
+  getSchoolLoginInfo,
   getSchoolSubscriptionInfo,
-  getStaffUsersFromSupabase,
+  getStaffAuthRecords,
+  getStaffUserById,
   getStudentsFromSupabase,
 } from '@/lib/supabase/services';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
@@ -79,7 +80,8 @@ async function handleLogin(
   phone: string
 ): Promise<NextResponse> {
 
-  const school = await getSchoolFromSupabase(slug);
+  // Lectures LÉGÈRES (sans logo, cachet ni photos) : voir getStaffAuthRecords.
+  const school = await getSchoolLoginInfo(slug);
   if (!school) return refuse('❌ Établissement introuvable. Vérifiez le lien de connexion de votre école.', 404);
   if (school.status === 'suspended') {
     return refuse("❌ L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow.");
@@ -127,6 +129,39 @@ async function handleLogin(
     );
   }
 
+  // ─── Enseignants : numéro de téléphone enregistré par la Direction + matière ───
+  if (roleId === 'enseignant') {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 8) return refuse('Veuillez saisir votre numéro de téléphone.', 400);
+    const subject = String(body?.subject || '').trim();
+    if (!subject) return refuse('Veuillez indiquer la matière que vous enseignez.', 400);
+    // Comparaison sur les 8 derniers chiffres : « +225 07 48 92 11 00 » = « 0748921100 ».
+    const tail = digits.slice(-8);
+    const teachers = (await getStaffAuthRecords(slug)).filter(
+      (s) => s.roleId === 'enseignant' && String(s.phone || '').replace(/\D/g, '').slice(-8) === tail
+    );
+    if (teachers.length === 0) {
+      return refuse(
+        "❌ Ce numéro n'est enregistré pour aucun enseignant de l'établissement. Demandez à la Direction de l'ajouter (Administration & Codes, champ téléphone)."
+      );
+    }
+    if (teachers.length > 1) {
+      return refuse('❌ Ce numéro est enregistré pour plusieurs enseignants. Demandez à la Direction de corriger les fiches.');
+    }
+    const t = teachers[0];
+    if (t.status === 'Verrouillé') {
+      return refuse("❌ Accès bloqué : ce compte a été verrouillé par la Direction de l'école.");
+    }
+    const full = (await getStaffUserById(slug, t.id)) || t;
+    const code = String(t.authCode || '').toUpperCase();
+    // Le navigateur garde le code interne de l'enseignant (notes diverses, photo…) : il est
+    // déjà connecté avec son numéro, ce code ne lui donne rien de plus.
+    return issueSession(
+      { slug, roleId, code, staffId: t.id, subscriptionEndDate },
+      { staffUser: full, extraJson: { authCode: code } }
+    );
+  }
+
   // ─── Personnel (Fondateur, Directeur et collaborateurs) : code personnel obligatoire ───
   if (!inputCode) {
     return refuse("Veuillez saisir votre Code d'Authentification officiel transmis par la Direction.", 400);
@@ -139,13 +174,13 @@ async function handleLogin(
     );
   }
 
-  const staff = await getStaffUsersFromSupabase(slug);
+  const staff = await getStaffAuthRecords(slug);
 
   if (roleId === 'fondateur' || roleId === 'directeur') {
     if (fullName.length < 2) return refuse('Veuillez renseigner votre Nom et Prénoms officiels.', 400);
 
     const officialFounder = stripTitle(school.founderName || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : ''));
-    const officialDirector = stripTitle(school.directorName || school.studiesDirectorName || (slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : ''));
+    const officialDirector = stripTitle(school.directorName || (slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : ''));
     // S'il reste plusieurs fiches pour ce poste (anciens doublons), on prend celle dont le code
     // correspond — avant, seule la PREMIÈRE fiche était comparée, et la page Administration
     // pouvait afficher une autre fiche (donc un autre code) que celle utilisée pour se connecter.
@@ -177,7 +212,7 @@ async function handleLogin(
 
     return issueSession(
       { slug, roleId, code: inputCode, staffId: record.id, subscriptionEndDate },
-      { staffUser: record }
+      { staffUser: (await getStaffUserById(slug, record.id)) || record }
     );
   }
 
@@ -193,7 +228,10 @@ async function handleLogin(
     );
   }
 
-  return issueSession({ slug, roleId, code: inputCode, staffId: record.id, subscriptionEndDate }, { staffUser: record });
+  return issueSession(
+    { slug, roleId, code: inputCode, staffId: record.id, subscriptionEndDate },
+    { staffUser: (await getStaffUserById(slug, record.id)) || record }
+  );
 }
 
 async function issueSession(
@@ -206,7 +244,7 @@ async function issueSession(
     parentPhones?: string[];
     subscriptionEndDate?: string;
   },
-  extra: { staffUser?: any; matchedStudents?: Student[] }
+  extra: { staffUser?: any; matchedStudents?: Student[]; extraJson?: Record<string, unknown> }
 ) {
   let token: string;
   try {
@@ -237,6 +275,7 @@ async function issueSession(
       staffUser,
       matchedStudents: extra.matchedStudents,
       subscriptionEndDate: data.subscriptionEndDate,
+      ...(extra.extraJson || {}),
     },
     { headers: { 'Cache-Control': 'no-store' } }
   );

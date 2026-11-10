@@ -65,6 +65,7 @@ export const ALL_PAGES = [
   'communication',
   'bulletins-parents',
   'personnel',
+  'pointage',
   'sante',
   'notes-diverses',
   'corbeille',
@@ -79,12 +80,13 @@ const ROLE_PAGES: Record<string, string[]> = {
   fondateur: ALL_PAGES,
   fondateur_adjoint: ALL_PAGES,
   informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille'].includes(p)),
-  directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'sante', 'notes-diverses'],
-  comptable: ['dashboard', 'inscriptions', 'eleves', ...SERVICES, ...FINANCE, 'reductions', 'salaires', 'personnel', 'sante', 'notes-diverses'],
-  secretaire: ['eleves', 'documents', ...SERVICES],
-  assistant_direction: ['eleves', 'documents', 'classes', 'personnel', 'sante', 'notes-diverses'],
-  educateur: ['eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'sante', 'notes-diverses'],
-  enseignant: [...PEDAGOGY, 'notes-diverses'],
+  // « pointage » : chaque membre du personnel pointe son arrivée / son départ (page commune).
+  directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'pointage', 'sante', 'notes-diverses'],
+  comptable: ['dashboard', 'inscriptions', 'eleves', ...SERVICES, ...FINANCE, 'reductions', 'salaires', 'personnel', 'pointage', 'sante', 'notes-diverses'],
+  secretaire: ['eleves', 'documents', ...PEDAGOGY, ...SERVICES, 'pointage'],
+  assistant_direction: ['eleves', 'documents', 'classes', 'personnel', 'pointage', 'sante', 'notes-diverses'],
+  educateur: ['eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'pointage', 'sante', 'notes-diverses'],
+  enseignant: [...PEDAGOGY, 'pointage', 'notes-diverses'],
   // « communication » est la boîte de réception de la Direction : les parents ont leur page.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
 };
@@ -125,6 +127,14 @@ export const DELETE_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur', 'com
 export const SERVICES_WRITE_ROLES = ['fondateur', 'fondateur_adjoint', 'comptable'];
 /** Consultation seule (aucune écriture ; l'Éducateur garde l'appel de présence). */
 export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur', 'informaticien'];
+
+// ─── Pointage du personnel ─────────────────────────────────────────────────────────────
+/** Règlent les horaires / la position de l'école et justifient les absences. */
+export const POINTAGE_MANAGER_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur'];
+/** Voient le tableau de tout le personnel (les autres ne voient que leur propre pointage). */
+export const POINTAGE_VIEW_ALL_ROLES = [...POINTAGE_MANAGER_ROLES, 'comptable', 'informaticien'];
+/** Ne pointent pas (direction générale). */
+export const POINTAGE_EXEMPT_ROLES = FOUNDER_ROLES;
 
 // ─── Chiffres globaux ──────────────────────────────────────────────────────────────────
 /** Voient les chiffres globaux en clair. */

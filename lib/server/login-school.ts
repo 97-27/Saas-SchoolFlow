@@ -11,7 +11,8 @@ import { canonicalSlug } from '@/lib/server/auth';
 export async function loadLoginSchool(rawSlug: string): Promise<School> {
   const slug = canonicalSlug(String(rawSlug || '').toLowerCase());
   try {
-    const real = slug ? await getSchoolFromSupabase(slug) : null;
+    // Sans le cachet (image lourde, inutile sur la page de connexion).
+    const real = slug ? await getSchoolFromSupabase(slug, { stamp: false }) : null;
     if (real) {
       const base = mockSchools[slug];
       return { ...(base || {}), ...real, slug: real.slug || slug } as School;

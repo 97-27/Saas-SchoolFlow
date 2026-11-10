@@ -11,7 +11,9 @@ import {
   lockFigures,
   submitFiguresCode,
   refreshFiguresSession,
+  setFiguresOpenToComptable,
 } from '@/lib/client/figures-privacy';
+import { broadcastLiveUpdate } from '@/lib/data/live-store';
 
 /**
  * Affiche un chiffre global en clair pour le Fondateur, sinon « •••••• » cliquable.
@@ -73,6 +75,69 @@ export function FiguresGate({ children, title }: { children: React.ReactNode; ti
   );
 }
 
+/**
+ * Administration & Codes (Fondateur / Fondateur adjoint) : interrupteur « Chiffres ouverts au
+ * Comptable ». Fermer masque aussitôt les chiffres sur l'écran du Comptable (signal immédiat +
+ * relecture toutes les 15 s), y compris un déverrouillage par code en cours.
+ */
+export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
+  const { openToComptable, isFounder } = useFiguresState();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!isFounder) return null;
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const err = await setFiguresOpenToComptable(!openToComptable);
+    setBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    broadcastLiveUpdate({ action: 'figures_policy_changed', schoolSlug });
+  };
+
+  return (
+    <div
+      className={`rounded-3xl border p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
+        openToComptable ? 'bg-emerald-50/70 border-emerald-200' : 'bg-white border-slate-200/80'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+            openToComptable ? 'bg-emerald-600 text-white' : 'bg-rose-50 text-rose-600'
+          }`}
+        >
+          {openToComptable ? <Eye className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+        </div>
+        <div>
+          <h2 className="text-sm font-extrabold text-slate-900 font-heading">Chiffres globaux du Comptable</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {openToComptable
+              ? 'OUVERTS : le Comptable voit les totaux, recettes et rapports sans code.'
+              : 'FERMÉS : chiffres masqués « •••••• » chez le Comptable (code du Fondateur demandé).'}
+          </p>
+          {error && <p className="text-xs font-semibold text-rose-600 mt-1">{error}</p>}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={busy}
+        className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0 ${
+          openToComptable ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+        }`}
+      >
+        {openToComptable ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        {busy ? 'Enregistrement…' : openToComptable ? 'Fermer les chiffres' : 'Ouvrir les chiffres au Comptable'}
+      </button>
+    </div>
+  );
+}
+
 /** Variante texte (attribut title, message…) : renvoie la chaîne ou le masque. */
 export function useFigureText() {
   const { visible } = useFiguresState();
@@ -84,7 +149,7 @@ export function useFigureText() {
  * bouton « Masquer les chiffres ». Montée UNE seule fois, dans DashboardShell.
  */
 export function FiguresPrivacyHost() {
-  const { dialogOpen, notice, canUnlock, isFounder, visible, lockedUntil } = useFiguresState();
+  const { dialogOpen, notice, canUnlock, isFounder, visible, lockedUntil, openByFounder } = useFiguresState();
   const [now, setNow] = useState(() => Date.now());
   const locked = lockedUntil > now;
   const minutesLeft = Math.max(1, Math.ceil((lockedUntil - now) / 60000));
@@ -139,7 +204,7 @@ export function FiguresPrivacyHost() {
         </div>
       )}
 
-      {canUnlock && visible && !isFounder && (
+      {canUnlock && visible && !isFounder && !openByFounder && (
         <button
           type="button"
           onClick={lockFigures}
