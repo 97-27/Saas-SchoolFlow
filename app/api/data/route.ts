@@ -244,6 +244,10 @@ export async function POST(request: NextRequest) {
       if (!isFounder(session) && target?.roleId === 'fondateur') {
         return jsonError('Seul le Fondateur peut supprimer le compte du Fondateur.', 403);
       }
+      // Un Fondateur adjoint (DGA) ne se supprime pas entre DGA : seul le Fondateur le peut.
+      if (!isFounder(session) && target?.roleId === 'fondateur_adjoint') {
+        return jsonError('Seul le Fondateur peut supprimer un Fondateur adjoint (DGA).', 403);
+      }
       return ok(await deleteStaffUserFromSupabase(rawCode, slug));
     }
 

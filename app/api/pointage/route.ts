@@ -147,7 +147,19 @@ export async function POST(request: NextRequest) {
     if (!isManager) return jsonError('Seuls le Fondateur, le Fondateur adjoint et le Directeur règlent le pointage.', 403);
     const c = body?.config || {};
     const next: PointageConfig = { ...config };
-    if (typeof c.enabled === 'boolean') next.enabled = c.enabled;
+    if (typeof c.enabled === 'boolean') {
+      // Activé après l'heure de fin d'arrivée : on ne compte personne absent aujourd'hui.
+      if (c.enabled && !config.enabled) {
+        const end = isValidHHMM(c.arrivalEnd) ? c.arrivalEnd : config.arrivalEnd;
+        if (clock.time > end) {
+          const [y, m, d] = clock.date.split('-').map(Number);
+          next.enabledSince = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+        } else {
+          next.enabledSince = clock.date;
+        }
+      }
+      next.enabled = c.enabled;
+    }
     for (const f of ['arrivalStart', 'arrivalEnd', 'departureStart', 'departureEnd'] as const) {
       if (c[f] !== undefined) {
         if (!isValidHHMM(c[f])) return jsonError('Heure invalide (format HH:MM).', 400);

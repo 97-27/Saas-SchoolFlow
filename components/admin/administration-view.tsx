@@ -128,6 +128,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
   // Générer un code lisible et robuste selon le poste
   const generateRandomCode = (role: string) => {
+    const existing = new Set(staffList.map((s) => String(s.authCode || '').toUpperCase()));
+    // Enseignant : code personnel à 4 chiffres (il se connecte avec son numéro + ce code).
+    if (role === 'enseignant') {
+      let pin = '';
+      do {
+        pin = String(Math.floor(1000 + Math.random() * 9000));
+      } while (existing.has(pin));
+      return pin;
+    }
     const prefix =
       role === 'enseignant'
         ? 'ENS'
@@ -231,13 +240,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
   // Qui peut supprimer qui (même règle que le serveur) :
   //  • Fondateur : tout membre ;
-  //  • Fondateur adjoint : tout membre SAUF le Fondateur ;
+  //  • Fondateur adjoint (DGA) : tout membre SAUF le Fondateur et un autre DGA ;
   //  • personne ne supprime son propre compte, ni une fiche de démonstration.
   const canDeleteMember = (member: StaffUser): boolean => {
     if (member.id === 'staff-founder' || member.id === 'staff-001') return false;
     if (viewer.code && member.authCode && member.authCode.toUpperCase() === viewer.code) return false;
     if (viewer.roleId === 'fondateur') return true;
-    if (viewer.roleId === 'fondateur_adjoint') return member.roleId !== 'fondateur';
+    if (viewer.roleId === 'fondateur_adjoint') return member.roleId !== 'fondateur' && member.roleId !== 'fondateur_adjoint';
     return false;
   };
   const needsNameConfirmation = (member: StaffUser | null) =>
@@ -251,6 +260,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       showToast(
         staff.roleId === 'fondateur'
           ? 'Seul le Fondateur peut gérer son propre compte.'
+          : staff.roleId === 'fondateur_adjoint'
+          ? 'Seul le Fondateur peut supprimer un Fondateur adjoint (DGA).'
           : "Vous n'avez pas le droit de supprimer ce compte."
       );
       return;
@@ -1489,7 +1500,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="font-bold text-slate-700 block text-[11px]">
-                      Code d&apos;Authentification *
+                      {editRole === 'enseignant' ? 'Code personnel à 4 chiffres *' : <>Code d&apos;Authentification *</>}
                     </label>
                     <button
                       type="button"
@@ -1503,6 +1514,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <input
                     type="text"
                     required
+                    pattern={editRole === 'enseignant' ? '\\d{4}' : undefined}
+                    title={editRole === 'enseignant' ? 'Exactement 4 chiffres' : undefined}
                     value={editAuthCodeValue}
                     onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
                     className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"

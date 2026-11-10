@@ -3,6 +3,9 @@
  * /api/pointage (serveur). Aucun import serveur ici.
  */
 
+/** Matières et classes cochées par l'enseignant à sa connexion (school_kv, lu par /api/sync). */
+export const TEACHER_TEACHING_PREFIX = 'sf_private_teacher_teaching_';
+
 export type PointageConfig = {
   /** Activé par la Direction (Fondateur, Fondateur adjoint, Directeur). */
   enabled: boolean;
@@ -20,6 +23,8 @@ export type PointageConfig = {
   radiusMeters: number;
   /** Fuseau horaire de l'établissement. */
   timezone: string;
+  /** Premier jour (AAAA-MM-JJ) où le pointage a été activé : rien n'est compté avant. */
+  enabledSince?: string;
 };
 
 export const DEFAULT_POINTAGE_CONFIG: PointageConfig = {
@@ -45,7 +50,7 @@ export type PointageRecord = {
   absence?: { reason: string; at: string; by: 'self' | 'direction' };
 };
 
-export type PointageStatus = 'present' | 'parti' | 'absent_justifie' | 'absent' | 'en_attente' | 'non_travaille';
+export type PointageStatus = 'present' | 'parti' | 'absent_justifie' | 'absent' | 'en_attente' | 'non_travaille' | 'inactif';
 
 export const STATUS_LABELS: Record<PointageStatus, string> = {
   present: 'Présent',
@@ -54,6 +59,7 @@ export const STATUS_LABELS: Record<PointageStatus, string> = {
   absent: 'Absent',
   en_attente: 'Pas encore pointé',
   non_travaille: 'Jour non travaillé',
+  inactif: 'Pointage non activé',
 };
 
 export const WEEKDAY_LABELS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -102,7 +108,11 @@ function weekdayOf(date: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-/** Statut d'une personne pour un jour donné. */
+/**
+ * Statut d'une personne pour un jour donné. « Absent » seulement quand la plage d'arrivée est
+ * PASSÉE sans pointage : tant qu'elle est ouverte (ou pas encore commencée), « Pas encore pointé ».
+ * Les jours d'avant l'activation du pointage ne comptent jamais comme absence.
+ */
 export function dayStatus(
   rec: PointageRecord | null | undefined,
   config: PointageConfig,
@@ -111,8 +121,18 @@ export function dayStatus(
 ): PointageStatus {
   if (rec?.arrival) return rec.departure ? 'parti' : 'present';
   if (rec?.absence) return 'absent_justifie';
+  if (!config.enabled) return 'inactif';
   if (!config.workDays.includes(weekdayOf(date))) return 'non_travaille';
+  if (config.enabledSince && date < config.enabledSince) return 'inactif';
   if (date < clock.date) return 'absent';
   if (date === clock.date && clock.time > config.arrivalEnd) return 'absent';
   return 'en_attente';
+}
+
+/** Ce qu'affiche la colonne « Départ » pour une personne arrivée. */
+export function departureLabel(rec: PointageRecord | null | undefined, config: PointageConfig, date: string, clock: { date: string; time: string }): string {
+  if (!rec?.arrival) return '—';
+  if (rec.departure) return rec.departure.time;
+  if (date < clock.date || (date === clock.date && clock.time > config.departureEnd)) return 'Non pointé';
+  return 'Pas encore pointé';
 }

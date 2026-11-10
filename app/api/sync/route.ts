@@ -33,6 +33,8 @@ import {
 import { SessionPayload } from '@/lib/server/session';
 import { setRequestActor } from '@/lib/server/actor';
 import { canAccessPage } from '@/lib/auth/roles';
+import { kvListPrefix, kvSchoolId } from '@/lib/supabase/kv';
+import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -304,6 +306,26 @@ export async function GET(request: NextRequest) {
         const numB = parseInt((b.invoiceNumber || b.id).replace(/\D/g, ''), 10) || 0;
         return numA - numB;
       });
+    }
+
+    // Matières et classes cochées par chaque enseignant à sa connexion (Administration & Codes).
+    if (Array.isArray(schoolData.staffUsers) && schoolData.staffUsers.some((u: any) => u?.roleId === 'enseignant')) {
+      try {
+        const kvSchool = await kvSchoolId(slug);
+        const rows = kvSchool ? await kvListPrefix(kvSchool, TEACHER_TEACHING_PREFIX) : null;
+        if (rows && rows.length) {
+          const byId = new Map<string, any>();
+          for (const r of rows) {
+            try {
+              byId.set(r.key.slice(TEACHER_TEACHING_PREFIX.length), JSON.parse(r.value));
+            } catch {}
+          }
+          schoolData.staffUsers = schoolData.staffUsers.map((u: any) => {
+            const t = u?.roleId === 'enseignant' ? byId.get(String(u.id)) : null;
+            return t ? { ...u, subjectOrGrade: t.subjects || u.subjectOrGrade, assignedClasses: t.classes || u.assignedClasses } : u;
+          });
+        }
+      } catch (e) {}
     }
 
     const visibleData = filterForSession(schoolData, session);

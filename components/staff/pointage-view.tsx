@@ -23,7 +23,10 @@ import {
   STATUS_LABELS,
   WEEKDAY_LABELS,
   dayStatus,
+  departureLabel,
 } from '@/lib/data/pointage';
+import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { TimePicker } from '@/components/ui/time-picker';
 
 type Member = { id: string; fullName: string; roleId: string; roleLabel: string };
 type Payload = {
@@ -46,8 +49,9 @@ const STATUS_STYLES: Record<PointageStatus, string> = {
   parti: 'bg-emerald-600 text-white border-emerald-700',
   absent_justifie: 'bg-amber-50 text-amber-800 border-amber-300',
   absent: 'bg-rose-50 text-rose-700 border-rose-200',
-  en_attente: 'bg-slate-100 text-slate-600 border-slate-200',
+  en_attente: 'bg-slate-100 text-slate-700 border-slate-300',
   non_travaille: 'bg-slate-100 text-slate-500 border-slate-200',
+  inactif: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 
 function StatusBadge({ status }: { status: PointageStatus }) {
@@ -287,14 +291,22 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Arrivée</p>
-              <p className="text-lg font-extrabold text-slate-900 font-heading">{data.me?.arrival?.time || '—'}</p>
+              <p className={`font-extrabold font-heading ${data.me?.arrival ? 'text-lg text-slate-900' : 'text-sm text-slate-500 py-1'}`}>
+                {data.me?.arrival?.time || (data.myStatus === 'en_attente' ? 'Pas encore pointé' : '—')}
+              </p>
               {data.me?.arrival?.distance !== undefined && (
                 <p className="text-[11px] text-slate-500">À {data.me.arrival.distance} m de l’école</p>
               )}
             </div>
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Départ</p>
-              <p className="text-lg font-extrabold text-slate-900 font-heading">{data.me?.departure?.time || '—'}</p>
+              {(() => {
+                const label = departureLabel(data.me, data.config, data.today, { date: data.today, time: data.now });
+                const isTime = /^\d/.test(label);
+                return (
+                  <p className={`font-extrabold font-heading ${isTime ? 'text-lg text-slate-900' : 'text-sm text-slate-500 py-1'}`}>{label}</p>
+                );
+              })()}
             </div>
           </div>
 
@@ -433,17 +445,18 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
               <Users className="w-5 h-5 text-emerald-600" />
               <h2 className="text-base font-extrabold text-slate-900 font-heading">Pointage du personnel</h2>
             </div>
-            <input
-              type="date"
-              value={date}
-              max={today}
-              onChange={(e) => {
-                if (!e.target.value) return;
-                setDate(e.target.value);
-                load(e.target.value);
-              }}
-              className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
-            />
+            <div className="w-full sm:w-[190px]">
+              <FrenchDateInput
+                value={date}
+                align="right"
+                onChange={(v) => {
+                  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+                  const d = v > today ? today : v; // pas de pointage dans le futur
+                  setDate(d);
+                  load(d);
+                }}
+              />
+            </div>
           </div>
           <p className="text-xs text-slate-500 capitalize">{frDate(data.date)}</p>
 
@@ -487,12 +500,25 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
                       <p className="text-[11px] text-slate-500">{member.roleLabel}</p>
                     </td>
                     <td className="py-2.5 px-2 font-bold text-slate-900">
-                      {rec?.arrival?.time || '—'}
-                      {rec?.arrival?.distance !== undefined && (
-                        <span className="block text-[10px] font-medium text-slate-500">{rec.arrival.distance} m</span>
+                      {rec?.arrival ? (
+                        <>
+                          {rec.arrival.time}
+                          {rec.arrival.distance !== undefined && (
+                            <span className="block text-[10px] font-medium text-slate-500">{rec.arrival.distance} m</span>
+                          )}
+                        </>
+                      ) : status === 'en_attente' ? (
+                        <span className="text-[11px] font-semibold text-slate-500">Pas encore pointé</span>
+                      ) : (
+                        '—'
                       )}
                     </td>
-                    <td className="py-2.5 px-2 font-bold text-slate-900">{rec?.departure?.time || '—'}</td>
+                    <td className="py-2.5 px-2 font-bold text-slate-900">
+                      {(() => {
+                        const label = departureLabel(rec, data.config, data.date, { date: data.today, time: data.now });
+                        return /^\d/.test(label) ? label : <span className="text-[11px] font-semibold text-slate-500">{label}</span>;
+                      })()}
+                    </td>
                     <td className="py-2.5 px-2">
                       <StatusBadge status={status} />
                     </td>
@@ -581,15 +607,10 @@ function ConfigCard({
   onClearLocation: () => void;
 }) {
   const time = (field: 'arrivalStart' | 'arrivalEnd' | 'departureStart' | 'departureEnd', label: string) => (
-    <label className="space-y-1 block">
+    <div className="space-y-1">
       <span className="font-bold text-slate-700 block text-xs">{label}</span>
-      <input
-        type="time"
-        value={draft[field]}
-        onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
-        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
-      />
-    </label>
+      <TimePicker value={draft[field]} onChange={(v) => setDraft({ ...draft, [field]: v })} />
+    </div>
   );
 
   return (

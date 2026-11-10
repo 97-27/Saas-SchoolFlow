@@ -27,6 +27,8 @@ import { Student } from '@/lib/data/types';
 export const dynamic = 'force-dynamic';
 
 import { ROLE_LABELS } from '@/lib/auth/roles';
+import { kvGet, kvPut, kvSchoolId } from '@/lib/supabase/kv';
+import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 
 const stripTitle = (name: string) =>
   name.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
@@ -60,7 +62,10 @@ export async function POST(request: NextRequest) {
   if (roleId !== 'parent' && !STAFF_ROLES.includes(roleId)) return jsonError('Profil inconnu.', 400);
 
   // Échecs comptés par personne (adresse + école + poste + nom), jamais les connexions réussies.
-  const personKey = `login:${clientIp(request)}:${slug}:${roleId}:${fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80)}`;
+  // Enseignant : compté par numéro de téléphone (pas de nom saisi) — un code à 4 chiffres ne doit
+  // pas pouvoir être essayé en rafale.
+  const who = roleId === 'enseignant' ? phone.replace(/\D/g, '').slice(-8) : fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80);
+  const personKey = `login:${clientIp(request)}:${slug}:${roleId}:${who}`;
   if (isLoginBlocked(personKey)) {
     return jsonError('Trop de tentatives incorrectes pour ce profil. Veuillez patienter 10 minutes avant de réessayer.', 429);
   }
@@ -151,6 +156,50 @@ async function handleLogin(
     const t = teachers[0];
     if (t.status === 'Verrouillé') {
       return refuse("❌ Accès bloqué : ce compte a été verrouillé par la Direction de l'école.");
+    }
+    // Code personnel à 4 chiffres. Un ancien code « ENS-1234 » reste valable en tapant 1234.
+    // Compteur d'essais EN BASE (tous les serveurs le partagent) : 5 codes faux → 15 min bloqué.
+    const schoolId = await kvSchoolId(slug);
+    const attemptsKey = `sf_private_teacher_login_attempts_${t.id}`;
+    let attempts = { failures: 0, lockedUntil: 0 };
+    if (schoolId) {
+      const row = await kvGet(schoolId, attemptsKey);
+      try {
+        if (row) attempts = { failures: Number(JSON.parse(row.value).failures) || 0, lockedUntil: Number(JSON.parse(row.value).lockedUntil) || 0 };
+      } catch {}
+    }
+    const nowMs = Date.now();
+    if (attempts.lockedUntil > nowMs) {
+      const min = Math.ceil((attempts.lockedUntil - nowMs) / 60000);
+      return jsonError(`❌ Trop de codes incorrects. Réessayez dans ${min} minute${min > 1 ? 's' : ''}.`, 429);
+    }
+    if (attempts.lockedUntil) attempts = { failures: 0, lockedUntil: 0 };
+
+    const pin = inputCode.replace(/\D/g, '');
+    const stored = String(t.authCode || '').trim().toUpperCase();
+    if (!/^\d{4}$/.test(pin) || !(stored === pin || stored.replace(/\D/g, '') === pin)) {
+      const failures = attempts.failures + 1;
+      const lockedUntil = failures >= 5 ? nowMs + 15 * 60 * 1000 : 0;
+      if (schoolId) await kvPut(schoolId, attemptsKey, JSON.stringify({ failures, lockedUntil }), `enseignant|${t.id}`);
+      return refuse(
+        lockedUntil
+          ? '❌ Code incorrect. Connexion bloquée 15 minutes après 5 essais.'
+          : `❌ Code personnel incorrect. Il vous reste ${5 - failures} essai${5 - failures > 1 ? 's' : ''}.`
+      );
+    }
+    if (schoolId && attempts.failures) {
+      await kvPut(schoolId, attemptsKey, JSON.stringify({ failures: 0, lockedUntil: 0 }), `enseignant|${t.id}`);
+    }
+    // Matières et classes cochées : enregistrées sur la fiche de l'enseignant (visibles en
+    // Administration & Codes).
+    const classes = String(body?.teachingClass || '').trim().slice(0, 400);
+    if (schoolId) {
+      await kvPut(
+        schoolId,
+        `${TEACHER_TEACHING_PREFIX}${t.id}`,
+        JSON.stringify({ subjects: subject.slice(0, 400), classes, at: new Date().toISOString() }),
+        `enseignant|${t.id}`
+      );
     }
     const full = (await getStaffUserById(slug, t.id)) || t;
     const code = String(t.authCode || '').toUpperCase();

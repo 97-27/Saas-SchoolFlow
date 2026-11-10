@@ -184,6 +184,41 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
 };
 
 const TEACHER_LOGIN_MEMORY_KEY = 'schoolflow_teacher_login_v1';
+
+/**
+ * Mémoire de connexion de CE navigateur : à la première connexion réussie, le nom, le téléphone et
+ * l'email sont retenus. Ensuite, dès que la personne tape son nom (ou clique dessus) ou son
+ * numéro, son email revient tout seul — plus besoin de le ressaisir. Rien n'est affiché tant que
+ * la personne n'a pas tapé SON nom ou SON numéro (jamais les coordonnées d'un autre d'office).
+ */
+const LOGIN_PROFILES_KEY = 'schoolflow_login_profiles_v1';
+type LoginProfile = { roleId: string; name: string; email: string; phone: string };
+const normName = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^(mr|mme|mlle|m\.?)\s+/, '').replace(/\s+/g, ' ').trim();
+const phoneTail = (s: string) => s.replace(/\D/g, '').slice(-8);
+function readLoginProfiles(): LoginProfile[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LOGIN_PROFILES_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function rememberLoginProfile(p: LoginProfile) {
+  try {
+    const list = readLoginProfiles().filter((x) => !(x.roleId === p.roleId && normName(x.name) === normName(p.name)));
+    localStorage.setItem(LOGIN_PROFILES_KEY, JSON.stringify([p, ...list].slice(0, 20)));
+  } catch {}
+}
+function findLoginProfile(roleId: string, name: string, phone: string): LoginProfile | undefined {
+  const list = readLoginProfiles().filter((x) => x.roleId === roleId);
+  const n = normName(name);
+  const t = phoneTail(phone);
+  return (
+    (n.length >= 3 ? list.find((x) => normName(x.name) === n) : undefined) ||
+    (t.length === 8 ? list.find((x) => phoneTail(x.phone) === t) : undefined)
+  );
+}
 const TEACHER_SUBJECTS = [
   'Français',
   'Arabe',
@@ -253,17 +288,37 @@ export function LoginView({
   const [parentPhone, setParentPhone] = useState('');
   const [authCodeInput, setAuthCodeInput] = useState('');
   const [loginAvatar, setLoginAvatar] = useState('');
+  // Email (et téléphone) retrouvés dès que la personne a tapé son nom ou son numéro.
+  useEffect(() => {
+    if (selectedRole === 'parent' || selectedRole === 'enseignant') return;
+    const p = findLoginProfile(selectedRole, userName, parentPhone);
+    if (!p) return;
+    if (!loginEmail.trim() && p.email) setLoginEmail(p.email);
+    if (!parentPhone.trim() && p.phone) setParentPhone(p.phone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userName, parentPhone, selectedRole]);
+
   // Enseignant : matière et classe (le numéro est mémorisé par ce navigateur).
-  const [teacherSubject, setTeacherSubject] = useState('');
-  const [teacherClass, setTeacherClass] = useState('');
+  // Plusieurs matières et plusieurs classes possibles (cases à cocher).
+  const [teacherSubjects, setTeacherSubjects] = useState<string[]>([]);
+  const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
+  const [teacherOtherSubject, setTeacherOtherSubject] = useState('');
+  const [teacherPin, setTeacherPin] = useState('');
+  const teacherSubject = [...teacherSubjects, ...(teacherOtherSubject.trim() ? [teacherOtherSubject.trim()] : [])].join(', ');
+  const teacherClass = teacherClasses.join(', ');
+  const toggleIn = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
   useEffect(() => {
     if (selectedRole !== 'enseignant') return;
     try {
       const saved = JSON.parse(localStorage.getItem(TEACHER_LOGIN_MEMORY_KEY) || 'null');
       if (saved) {
         if (saved.phone) setParentPhone(String(saved.phone));
-        if (saved.subject) setTeacherSubject(String(saved.subject));
-        if (saved.teachingClass) setTeacherClass(String(saved.teachingClass));
+        if (Array.isArray(saved.subjects)) {
+          setTeacherSubjects(saved.subjects.filter((s: string) => TEACHER_SUBJECTS.includes(s)));
+          const other = saved.subjects.filter((s: string) => !TEACHER_SUBJECTS.includes(s)).join(', ');
+          if (other) setTeacherOtherSubject(other);
+        }
+        if (Array.isArray(saved.classes)) setTeacherClasses(saved.classes);
       }
     } catch (e) {}
   }, [selectedRole]);
@@ -520,7 +575,15 @@ export function LoginView({
       return;
     }
     if (isTeacherLogin && !teacherSubject.trim()) {
-      setErrorMessage('Veuillez indiquer la matière que vous enseignez (ex : Français, Arabe, Anglais).');
+      setErrorMessage('Cochez au moins une matière que vous enseignez (ex : Français, Arabe, Anglais).');
+      return;
+    }
+    if (isTeacherLogin && teacherClasses.length === 0) {
+      setErrorMessage('Cochez au moins une classe dans laquelle vous enseignez.');
+      return;
+    }
+    if (isTeacherLogin && !/^\d{4}$/.test(teacherPin.trim())) {
+      setErrorMessage('Saisissez votre code personnel à 4 chiffres (donné par la Direction).');
       return;
     }
 
@@ -562,7 +625,7 @@ export function LoginView({
           slug: activeSlug,
           roleId: selectedRole,
           fullName: trimmedName,
-          code: isTeacherLogin ? '' : authCodeInput.trim(),
+          code: isTeacherLogin ? teacherPin.trim() : authCodeInput.trim(),
           phone: cleanPhone,
           email: cleanEmail,
           subject: isTeacherLogin ? teacherSubject.trim() : undefined,
@@ -602,12 +665,22 @@ export function LoginView({
         ? String(loginResult.authCode || '').toUpperCase()
         : authCodeInput.trim().toUpperCase();
 
+    // Nom, téléphone et email retenus pour la prochaine connexion sur ce navigateur.
+    if (selectedRole !== 'parent' && !isTeacherLogin && trimmedName) {
+      rememberLoginProfile({ roleId: selectedRole, name: trimmedName, email: cleanEmail, phone: cleanPhone });
+    }
+
     // L'enseignant n'a plus qu'à vérifier ses informations la prochaine fois.
     if (isTeacherLogin) {
       try {
         localStorage.setItem(
           TEACHER_LOGIN_MEMORY_KEY,
-          JSON.stringify({ phone: cleanPhone, subject: teacherSubject.trim(), teachingClass: teacherClass })
+          // Jamais le code à 4 chiffres : seulement le numéro, les matières et les classes.
+          JSON.stringify({
+            phone: cleanPhone,
+            subjects: [...teacherSubjects, ...(teacherOtherSubject.trim() ? [teacherOtherSubject.trim()] : [])],
+            classes: teacherClasses,
+          })
         );
       } catch (e) {}
     }
@@ -1335,44 +1408,106 @@ export function LoginView({
                   </p>
                 </div>
 
-                {/* Enseignant : matière enseignée et classe */}
+                {/* Enseignant : matières et classes enseignées (cases à cocher) + code à 4 chiffres */}
                 {selectedRole === 'enseignant' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
+                  <div className="space-y-4 animate-in fade-in">
                     <div className="space-y-1.5">
-                      <label className="font-bold text-slate-800 block text-xs">3. Matière enseignée *</label>
-                      <div className="relative">
-                        <GraduationCap className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                          type="text"
-                          required
-                          list="teacher-subjects-list"
-                          value={teacherSubject}
-                          onChange={(e) => setTeacherSubject(e.target.value)}
-                          placeholder="Ex : Français, Arabe, Anglais"
-                          className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
-                        />
-                        <datalist id="teacher-subjects-list">
-                          {TEACHER_SUBJECTS.map((s) => (
-                            <option key={s} value={s} />
-                          ))}
-                        </datalist>
+                      <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>3. Matières enseignées *</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Cochez une ou plusieurs</span>
+                      </label>
+                      <div className="flex flex-wrap gap-1.5 p-2.5 rounded-2xl bg-slate-50 border border-slate-300 shadow-2xs">
+                        {TEACHER_SUBJECTS.map((s) => {
+                          const on = teacherSubjects.includes(s);
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setTeacherSubjects((l) => toggleIn(l, s))}
+                              className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 ${
+                                on
+                                  ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50 hover:border-emerald-300'
+                              }`}
+                            >
+                              {on && <Check className="w-3 h-3" />}
+                              {s}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="text"
+                        value={teacherOtherSubject}
+                        onChange={(e) => setTeacherOtherSubject(e.target.value)}
+                        placeholder="Autre matière (facultatif)"
+                        className="w-full px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-semibold text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>4. Classes enseignées *</span>
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">Cochez une ou plusieurs</span>
+                      </label>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 p-2.5 rounded-2xl bg-slate-50 border border-slate-300 shadow-2xs">
+                        {availableClasses.filter((c) => c !== 'Toutes les classes').map((c) => {
+                          const on = teacherClasses.includes(c);
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setTeacherClasses((l) => toggleIn(l, c))}
+                              className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center justify-center gap-1 ${
+                                on
+                                  ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50 hover:border-emerald-300'
+                              }`}
+                            >
+                              {on && <Check className="w-3 h-3" />}
+                              {c}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
+
                     <div className="space-y-1.5">
-                      <label className="font-bold text-slate-800 block text-xs">4. Classe</label>
+                      <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>5. Code personnel à 4 chiffres *</span>
+                        </span>
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          Donné par la Direction
+                        </span>
+                      </label>
                       <div className="relative">
-                        <Users className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <select
-                          value={teacherClass}
-                          onChange={(e) => setTeacherClass(e.target.value)}
-                          className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
+                        <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type={showAuthCode ? 'text' : 'password'}
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={4}
+                          value={teacherPin}
+                          onChange={(e) => setTeacherPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="••••"
+                          className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-sm font-mono font-black tracking-[0.5em] text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthCode(!showAuthCode)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                          title={showAuthCode ? 'Masquer le code' : 'Afficher le code'}
                         >
-                          <option value="">Plusieurs classes</option>
-                          {availableClasses.filter((c) => c !== 'Toutes les classes').map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          {showAuthCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                   </div>

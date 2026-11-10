@@ -920,22 +920,51 @@ function isUserTyping(): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
 
+/**
+ * Bandeau « Nouvelle version » : TOUJOURS affiché en bas de l'écran (avant, l'écran se
+ * rechargeait tout seul sans prévenir quand personne ne tapait — l'école ne savait pas qu'une
+ * mise à jour avait eu lieu). Il reste affiché jusqu'au rechargement ; la personne termine sa
+ * saisie puis clique. Couleurs de l'application : fond noir, bouton vert, pastille jaune.
+ */
 function showAppUpdateBanner(): void {
   if (appUpdateBannerShown || typeof document === 'undefined') return;
   appUpdateBannerShown = true;
   const bar = document.createElement('div');
   bar.setAttribute('role', 'alert');
   bar.style.cssText =
-    'position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:560px;margin:0 auto;' +
-    'background:#0f172a;color:#fff;border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;' +
-    'justify-content:space-between;flex-wrap:wrap;box-shadow:0 10px 30px rgba(0,0,0,.35);font:600 14px/1.4 system-ui,sans-serif';
-  const text = document.createElement('span');
-  text.textContent = 'Une nouvelle version de SchoolFlow est en ligne. Terminez votre saisie puis rechargez.';
+    'position:fixed;left:12px;right:12px;bottom:16px;z-index:2147483647;max-width:620px;margin:0 auto;' +
+    'background:#0f172a;color:#fff;border-radius:18px;padding:14px 16px;display:flex;gap:14px;align-items:center;' +
+    'justify-content:space-between;flex-wrap:wrap;box-shadow:0 14px 40px rgba(15,23,42,.45);font-family:inherit;' +
+    'border:1px solid rgba(16,185,129,.35)';
+
+  const left = document.createElement('div');
+  left.style.cssText = 'display:flex;gap:12px;align-items:flex-start;flex:1 1 300px;min-width:0';
+  const dot = document.createElement('span');
+  dot.textContent = '↻';
+  dot.style.cssText =
+    'flex:0 0 auto;width:34px;height:34px;border-radius:12px;background:#fbbf24;color:#0f172a;display:flex;' +
+    'align-items:center;justify-content:center;font:800 18px/1 inherit';
+  const texts = document.createElement('div');
+  const title = document.createElement('div');
+  title.textContent = 'Mise à jour de SchoolFlow disponible';
+  title.style.cssText = 'font-weight:800;font-size:14px;line-height:1.3';
+  const sub = document.createElement('div');
+  sub.textContent =
+    'De nouvelles améliorations viennent d’être mises en ligne. Terminez la saisie en cours, puis rechargez la page pour en profiter (vos données enregistrées ne sont pas perdues).';
+  sub.style.cssText = 'font-weight:500;font-size:12px;line-height:1.45;color:#cbd5e1;margin-top:2px';
+  texts.append(title, sub);
+  left.append(dot, texts);
+
   const btn = document.createElement('button');
   btn.textContent = 'Recharger maintenant';
-  btn.style.cssText = 'background:#10b981;color:#fff;border:0;border-radius:10px;padding:8px 14px;font:700 14px system-ui,sans-serif;cursor:pointer';
+  btn.style.cssText =
+    'flex:0 0 auto;background:#059669;color:#fff;border:0;border-radius:12px;padding:10px 16px;' +
+    'font:700 13px/1 inherit;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.35)';
+  btn.onmouseenter = () => (btn.style.background = '#047857');
+  btn.onmouseleave = () => (btn.style.background = '#059669');
   btn.onclick = () => window.location.reload();
-  bar.append(text, btn);
+
+  bar.append(left, btn);
   document.body.appendChild(bar);
 }
 
@@ -951,8 +980,7 @@ function checkAppVersion(): void {
         return;
       }
       if (v === loadedAppVersion) return;
-      if (isUserTyping()) showAppUpdateBanner();
-      else window.location.reload();
+      showAppUpdateBanner();
     })
     .catch(() => {});
 }
@@ -2971,11 +2999,9 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
             if (schoolSlug === 'epc-manoi' || finalName.toUpperCase().includes('MOUHAMED')) {
               finalName = 'LAWANI MOUSSA';
             }
-          } else if (def.roleId === 'directeur') {
-            if (schoolSlug === 'epc-manoi') {
-              finalName = 'LAWANI MOUHAMED';
-            }
           }
+          // Directeur : le nom enregistré en base (plus de nom imposé — un nouveau Directeur
+          // s'affichait sous l'ancien nom).
           // Photo strictement personnelle, clée uniquement sur le code d'authentification
           // unique. Les anciennes clés par nom affiché ou par rôle pouvaient faire fuiter la
           // photo d'une personne vers une autre partageant le même nom ou le même rôle.
@@ -3019,13 +3045,12 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
         }
       }
 
-      // Fiches de démonstration (anciens codes FND-2026 / DIR-2026, inutilisables depuis le
-      // renouvellement des codes) : retirées dès que le vrai compte de ce rôle existe.
+      // Fiches de démonstration (anciens codes FND-2026 / DIR-2026, refusés à la connexion et
+      // absentes de la base) : TOUJOURS retirées. Avant, la fiche « Directeur » de démonstration
+      // réapparaissait dès qu'aucun vrai Directeur n'existait (ex. après sa suppression), et elle
+      // ne pouvait pas être supprimée.
       for (const d of baseDefaults) {
-        const realExists = Array.from(codeMap.values()).some(
-          (s) => s.roleId === d.roleId && s.authCode && s.authCode.toUpperCase() !== d.authCode.toUpperCase()
-        );
-        if (realExists) codeMap.delete(d.authCode);
+        codeMap.delete(d.authCode);
       }
       // Fondateur puis Directeur en tête de liste, les autres membres ensuite.
       const rank = (s: StaffUser) => (s.roleId === 'fondateur' ? 0 : s.roleId === 'directeur' ? 1 : 2);
