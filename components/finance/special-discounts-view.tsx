@@ -106,20 +106,10 @@ export function SpecialDiscountsView({
   const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
   const scopedDiscountsKey = isPilotSchool ? DISCOUNTS_STORAGE_KEY : `${DISCOUNTS_STORAGE_KEY}_${schoolSlug}`;
   const sanitizeReceipts = (list: FamilyDiscountReceipt[]): FamilyDiscountReceipt[] => {
-    return (list || []).filter(
-      (r) =>
-        r &&
-        !r.parentName?.includes('KOUASSI Kouamé') &&
-        !r.parentName?.includes('BAMBA Souleymane') &&
-        !r.parentName?.includes('TRAORÉ Mamadou') &&
-        !r.parentName?.includes('KOFFI N’Dri') &&
-        !r.parentName?.includes('DIALLO Ibrahima') &&
-        !r.children?.some((c) =>
-          ['Chantal Adjobi', 'Salif Bado', 'Mariam Barry', 'Roland Akoto', 'Estelle N’Guessan', 'Hervé Bamba', 'Kady Sangaré'].some((name) =>
-            c.fullName?.includes(name)
-          )
-        )
-    );
+    // BUG CORRIGÉ (11/2026) : ce filtre « anti-démo » effaçait toute réduction d'un vrai parent
+    // portant un nom courant (BAMBA Souleymane, DIALLO Ibrahima…). Plus aucune donnée réelle
+    // n'est retirée automatiquement.
+    return (Array.isArray(list) ? list : []).filter((r) => r && typeof r === 'object');
   };
 
   // Relit toujours la version la plus fraîche depuis localStorage juste avant de fusionner un

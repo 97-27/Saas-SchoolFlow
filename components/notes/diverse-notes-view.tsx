@@ -88,18 +88,9 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   const [students, setStudents] = useState<Student[]>([]);
 
   const sanitizeNotes = (list: DiverseNote[]): DiverseNote[] => {
-    return (list || []).filter(
-      (n) =>
-        n &&
-        !n.noteNumber?.startsWith('NOTE-2026-') &&
-        !n.title?.includes('Dispositif de Soutien Pédagogique') &&
-        !n.title?.includes('Règlement Intérieur') &&
-        !n.title?.includes('Visite Médicale') &&
-        !n.title?.includes('Conseil de Direction') &&
-        !n.title?.includes('Rappel Procédures de Caisse') &&
-        !n.targetStudentName?.includes('Kouadio Aya Grâce') &&
-        !n.author?.includes('M. Amadou Fall')
-    );
+    // BUG CORRIGÉ (11/2026) : les vraies notes sont numérotées NOTE-2026-… et ce filtre
+    // « anti-démo » les effaçait. Plus aucune donnée réelle n'est retirée automatiquement.
+    return (Array.isArray(list) ? list : []).filter((n) => n && typeof n === 'object');
   };
 
   const [activeSession, setActiveSession] = useState<{

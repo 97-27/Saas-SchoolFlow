@@ -31,6 +31,12 @@ interface AttendanceViewProps {
 }
 
 type AttendanceStatus = 'present' | 'absent' | 'late';
+/**
+ * notifiedAt / notifiedBy : le parent a été averti par WhatsApp (date et auteur). Enregistré avec
+ * l'appel, donc dans Supabase (cloud-kv) et dans les Archives des années : l'école peut prouver,
+ * même des années plus tard, qu'elle a prévenu la famille.
+ */
+type AttendanceRec = { status: AttendanceStatus; reason: string; notifiedAt?: string; notifiedBy?: string };
 
 // Toutes les classes font l'appel avant le cours : Maternelle, Primaire et Collège.
 // (Mêmes intitulés que les fiches élèves.)
@@ -83,7 +89,7 @@ export function AttendanceView({
   // onglet/appareil) enregistre l'appel d'une autre classe voit sa propre sauvegarde réécrire
   // l'intégralité de la carte des présences avec sa copie périmée, effaçant silencieusement les
   // présences que l'autre venait d'enregistrer.
-  const readFreshAttendanceMap = (): Record<string, { status: AttendanceStatus; reason: string }> => {
+  const readFreshAttendanceMap = (): Record<string, AttendanceRec> => {
     if (typeof window === 'undefined') return {};
     try {
       const raw = localStorage.getItem(attendanceStorageKey);
@@ -92,14 +98,14 @@ export function AttendanceView({
       return {};
     }
   };
-  const persistAttendanceMap = (map: Record<string, { status: AttendanceStatus; reason: string }>) => {
+  const persistAttendanceMap = (map: Record<string, AttendanceRec>) => {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(attendanceStorageKey, JSON.stringify(map));
     } catch (e) {}
   };
 
-  const [attendanceMap, setAttendanceMap] = useState<Record<string, { status: AttendanceStatus; reason: string }>>(
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, AttendanceRec>>(
     readFreshAttendanceMap
   );
 
@@ -265,6 +271,27 @@ export function AttendanceView({
 
     return { total, present, absent, late, rate };
   }, [classStudents, selectedDate, selectedSlot, attendanceMap]);
+
+  // Trace de l'avertissement envoyé au parent (même après verrouillage de l'appel : prévenir la
+  // famille ne modifie pas l'appel lui-même).
+  const markParentNotified = (studentId: string) => {
+    const key = `${selectedDate}_${selectedSlot}_${studentId}`;
+    let by = '';
+    try {
+      const s = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
+      by = String(s?.pureName || s?.fullName || s?.role || '').trim();
+    } catch (e) {}
+    const fresh = readFreshAttendanceMap();
+    if (!fresh[key]) return;
+    const next = { ...fresh, [key]: { ...fresh[key], notifiedAt: new Date().toISOString(), notifiedBy: by } };
+    setAttendanceMap(next);
+    persistAttendanceMap(next);
+  };
+
+  const notifiedLabel = (rec: AttendanceRec | undefined) =>
+    rec?.notifiedAt
+      ? `Parent averti le ${new Date(rec.notifiedAt).toLocaleDateString('fr-FR')} à ${new Date(rec.notifiedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${rec.notifiedBy ? ` par ${rec.notifiedBy}` : ''}`
+      : '';
 
   // Générateur de message WhatsApp DISTINCT pour Retard vs Absence
   const generateParentWhatsAppUrl = (stu: Student, isLate: boolean, customReason: string) => {
@@ -708,6 +735,7 @@ export function AttendanceView({
                             href={generateParentWhatsAppUrl(stu, false, record.reason)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => markParentNotified(stu.id)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm shadow-rose-600/30 transition-all cursor-pointer"
                             title="Alerter le parent de l'absence par WhatsApp"
                           >
@@ -719,13 +747,21 @@ export function AttendanceView({
                             href={generateParentWhatsAppUrl(stu, true, record.reason)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => markParentNotified(stu.id)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-950 bg-amber-200 hover:bg-amber-300 border border-amber-400 shadow-sm shadow-amber-500/20 transition-all cursor-pointer"
                             title="Notifier le retard au parent par WhatsApp"
                           >
                             <MessageCircle className="w-3.5 h-3.5 text-amber-800" />
                             <span>Notifier Retard (WhatsApp)</span>
                           </a>
-                        ) : (
+                        ) : null}
+                        {(isAbsent || isLate) && notifiedLabel(record) && (
+                          <span className="mt-1.5 flex items-center justify-center gap-1 text-[10px] font-semibold text-emerald-700">
+                            <CheckCheck className="w-3 h-3 shrink-0" />
+                            <span>{notifiedLabel(record)}</span>
+                          </span>
+                        )}
+                        {!isAbsent && !isLate && (
                           <span className="text-emerald-700 text-xs font-medium flex items-center justify-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
                             <span>Conforme</span>

@@ -105,19 +105,13 @@ export function SalariesView({
   const isPilotSchool = !schoolSlug || schoolSlug === 'epc-manoi';
   const scopedSalariesKey = isPilotSchool ? STORAGE_KEY : `${STORAGE_KEY}_${schoolSlug}`;
 
-  const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] => {
-    return (list || []).filter(
-      (s) =>
-        s &&
-        !s.receiptNumber?.startsWith('SAL-2026-') &&
-        !s.staffName?.includes('KOUAME KOUASSI') &&
-        !s.staffName?.includes('TOURE ABOUBACAR') &&
-        !s.staffName?.includes('MENSAH AKOUVI') &&
-        !s.staffName?.includes('DIALLO SOULEYMANE') &&
-        !s.staffName?.includes('BAMBA FATOU') &&
-        !s.staffName?.includes('YAO BROU')
-    );
-  };
+  // BUG CORRIGÉ (11/2026) : ce filtre retirait tout reçu « SAL-2026-… » (et certains noms très
+  // courants) en le prenant pour une ancienne donnée de démonstration — or les VRAIS reçus sont
+  // numérotés SAL-2026-001, 002… : à chaque ouverture de la page, les salaires enregistrés
+  // disparaissaient, et la suppression partait même en base. On ne filtre plus que les entrées
+  // vides : AUCUNE donnée réelle n'est jamais retirée automatiquement.
+  const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] =>
+    (Array.isArray(list) ? list : []).filter((s) => s && typeof s === 'object' && s.id);
 
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
@@ -250,7 +244,7 @@ export function SalariesView({
       const m = s.receiptNumber?.match(/(\d+)$/);
       return m ? Math.max(max, parseInt(m[1], 10)) : max;
     }, 0) + 1;
-    const recNum = `SAL-2026-${String(nextIndex).padStart(3, '0')}`;
+    const recNum = `SAL-${new Date().getFullYear()}-${String(nextIndex).padStart(3, '0')}`;
     const cleanRef = transactionRef.trim() || `PAY-${paymentMethod.slice(0, 3).toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
     const newPayment: SalaryPayment = {

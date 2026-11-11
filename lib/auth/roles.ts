@@ -70,6 +70,7 @@ export const ALL_PAGES = [
   'sante',
   'notes-diverses',
   'corbeille',
+  'archives',
   'parametres',
 ];
 
@@ -80,10 +81,11 @@ const FINANCE = ['versements', 'depenses', 'rapports'];
 const ROLE_PAGES: Record<string, string[]> = {
   fondateur: ALL_PAGES,
   fondateur_adjoint: ALL_PAGES,
-  informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille'].includes(p)),
+  informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille', 'archives'].includes(p)),
   // « pointage » : chaque membre du personnel pointe son arrivée / son départ (page commune).
   directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'pointage', 'sante', 'notes-diverses'],
-  comptable: ['dashboard', 'inscriptions', 'eleves', ...SERVICES, ...FINANCE, 'reductions', 'salaires', 'personnel', 'pointage', 'sante', 'notes-diverses'],
+  // « archives » : le Comptable n'y entre qu'avec le code des chiffres (vérifié par /api/archives).
+  comptable: ['dashboard', 'inscriptions', 'eleves', ...SERVICES, ...FINANCE, 'reductions', 'salaires', 'personnel', 'pointage', 'sante', 'notes-diverses', 'archives'],
   secretaire: ['eleves', 'documents', ...PEDAGOGY, ...SERVICES, 'pointage'],
   assistant_direction: ['eleves', 'documents', 'classes', 'personnel', 'pointage', 'sante', 'notes-diverses'],
   educateur: ['eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'pointage', 'sante', 'notes-diverses'],

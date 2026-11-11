@@ -29,6 +29,7 @@ import {
   HeartPulse,
   Trash2,
   Clock,
+  Archive,
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
@@ -212,6 +213,7 @@ export function Sidebar({
     { key: 'sante', page: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
     { key: 'notes_diverses', page: 'notes-diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     { key: 'corbeille', page: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
+    { key: 'archives', page: 'archives', title: 'Archives des années', href: `${baseUrl}/archives`, icon: Archive, active: pathname.includes('/archives') },
     { key: 'parametres', page: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
   ];
 

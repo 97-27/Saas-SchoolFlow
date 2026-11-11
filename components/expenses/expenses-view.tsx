@@ -100,19 +100,10 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
   const sanitizeExpenses = (list: ExpenseItem[]): ExpenseItem[] => {
-    return (list || []).filter(
-      (exp) =>
-        exp &&
-        !exp.reference?.startsWith('DEP-2026-') &&
-        !exp.title?.includes('Rames de papier') &&
-        !exp.title?.includes('Facture Électricité CIE') &&
-        !exp.title?.includes('Réparation Climatiseurs') &&
-        !exp.title?.includes('Achat Produits Entretien') &&
-        !exp.title?.includes('Salaires Enseignants') &&
-        !exp.beneficiary?.includes('Librairie de France') &&
-        !exp.beneficiary?.includes('CIE Côte d’Ivoire') &&
-        !exp.beneficiary?.includes('SOTRA Transports')
-    );
+    // BUG CORRIGÉ (11/2026) : les vraies dépenses sont numérotées DEP-2026-… et ce filtre
+    // « anti-démo » les effaçait à chaque ouverture (ainsi que toute vraie facture CIE, tout
+    // « Salaires Enseignants »…). Plus aucune donnée réelle n'est retirée automatiquement.
+    return (Array.isArray(list) ? list : []).filter((exp) => exp && typeof exp === 'object');
   };
 
   // Liste des dépenses persistée (vide par défaut : 0 FCFA et purgée des anciens mocks)
