@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireSession(request, request.nextUrl.searchParams.get('slug'));
   if ('error' in auth) return auth.error;
   return NextResponse.json(
-    { success: true, roleId: auth.session.roleId, slug: auth.slug },
+    { success: true, roleId: auth.session.roleId, slug: auth.slug, yearEpoch: auth.session.yearEpoch || 0 },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }

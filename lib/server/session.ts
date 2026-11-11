@@ -26,6 +26,8 @@ export interface SessionPayload {
   /** Parents uniquement : numéros (chiffres seuls) enregistrés sur les fiches de leurs enfants. */
   parentPhones?: string[];
   subscriptionEndDate?: string;
+  /** Numéro d'année scolaire de l'école à la connexion (voir lib/server/year-epoch.ts). */
+  yearEpoch?: number;
   iat: number;
   exp: number;
 }

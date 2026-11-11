@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
+import { getYearEpoch } from './year-epoch';
 import {
   FOUNDER_ROLES,
   ALL_STAFF_ROLES,
@@ -67,6 +68,18 @@ export async function requireSession(
     if (!isNaN(end) && Date.now() > end) {
       return { error: jsonError('Abonnement expiré. Veuillez renouveler votre abonnement.', 402) };
     }
+  }
+
+  // Passage à l'année suivante : toute session ouverte avant est refusée (l'appareil se
+  // reconnecte et efface sa copie de l'année passée). Base injoignable (null) : pas de blocage.
+  const epoch = await getYearEpoch(sessionSlug);
+  if (epoch !== null && (session.yearEpoch || 0) !== epoch) {
+    return {
+      error: NextResponse.json(
+        { success: false, yearChanged: true, error: 'Nouvelle année scolaire : veuillez vous reconnecter.' },
+        { status: 401 }
+      ),
+    };
   }
 
   return { session, slug: sessionSlug };

@@ -5,6 +5,7 @@ import { installCloudKv, whenCloudKvReady } from '@/lib/data/cloud-kv';
 import { whenFirstSyncDone, startCrossDeviceSync } from '@/lib/data/live-store';
 import { isSessionVerified, markSessionVerified } from '@/lib/client/session-flag';
 import { installGlobalErrorReporting } from '@/lib/client/error-report';
+import { syncYearEpoch, wipeLocalSchoolData } from '@/lib/client/year-reset';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
@@ -67,8 +68,15 @@ function kickToLogin(slug: string) {
 async function verifySession(slug: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/auth/session?slug=${encodeURIComponent(slug)}&t=${Date.now()}`, { cache: 'no-store' });
+    const json = await res.json().catch(() => null);
     if (res.status === 401 || res.status === 403) {
+      // Nouvelle année scolaire : la copie locale de l'année passée est effacée tout de suite.
+      if (json?.yearChanged) wipeLocalSchoolData();
       kickToLogin(slug);
+      return false;
+    }
+    if (res.ok && json?.success && syncYearEpoch(slug, json.yearEpoch)) {
+      window.location.reload();
       return false;
     }
     return true; // hors connexion / erreur serveur : on ne bloque pas
@@ -102,6 +110,11 @@ function useSessionGuard(slug: string): boolean {
       if (document.visibilityState === 'visible') recheck();
     };
     const onStorage = (e: StorageEvent) => {
+      // Autre onglet : passage à l'année suivante → cet onglet repart de zéro lui aussi.
+      if (e.key && e.key.startsWith('schoolflow_year_epoch_') && e.newValue !== e.oldValue) {
+        window.location.reload();
+        return;
+      }
       if (e.key === 'schoolflow_logout_at' || (e.key === 'schoolflow_active_session_v2' && !e.newValue)) kickToLogin(slug);
     };
     window.addEventListener('pageshow', onPageShow);

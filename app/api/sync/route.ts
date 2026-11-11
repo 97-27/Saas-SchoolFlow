@@ -35,6 +35,7 @@ import { setRequestActor } from '@/lib/server/actor';
 import { canAccessPage } from '@/lib/auth/roles';
 import { kvListPrefix, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
+import { getYearEpoch } from '@/lib/server/year-epoch';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -161,6 +162,10 @@ export async function GET(request: NextRequest) {
     const { session, slug } = auth;
 
     ensureDataFile();
+    // Copie de secours en mémoire de CE serveur : celle d'une année passée est jetée (sinon,
+    // après « Passer à l'année suivante », elle réafficherait les anciens élèves et reçus).
+    const yearEpoch = (await getYearEpoch(slug)) ?? 0;
+    if (memoryStore[slug] && (memoryStore[slug].__yearEpoch ?? 0) !== yearEpoch) delete memoryStore[slug];
     let schoolData = memoryStore[slug] ? { ...memoryStore[slug] } : null;
 
     // Supabase est la source de vérité : on la relit à chaque requête, quel que soit
@@ -240,6 +245,7 @@ export async function GET(request: NextRequest) {
             return prev?.lastLogin ? { ...u, lastLogin: prev.lastLogin } : u;
           });
         }
+        schoolData.__yearEpoch = yearEpoch;
         memoryStore[slug] = schoolData;
       } catch (sbErr) {
         console.warn('Erreur chargement Supabase dans /api/sync GET:', sbErr);
@@ -460,7 +466,10 @@ export async function POST(request: NextRequest) {
     }
 
     ensureDataFile();
-    const currentSchool = memoryStore[slug] || {};
+    // Copie en mémoire d'une année passée : jamais reprise comme base d'une écriture.
+    const postEpoch = (await getYearEpoch(slug)) ?? 0;
+    if (memoryStore[slug] && (memoryStore[slug].__yearEpoch ?? 0) !== postEpoch) delete memoryStore[slug];
+    const currentSchool = memoryStore[slug] || { __yearEpoch: postEpoch };
 
     const autoBannedIds = ['MAT-2026', 'ID-2026002', '25bcb95a-62d2-47b1-bfa6-6820cb30dd6e'];
     let existingDeleted: string[] = Array.from(

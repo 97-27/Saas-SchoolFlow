@@ -56,6 +56,7 @@ import { getAllSchoolsFromSupabase, saveStaffUserToSupabase } from '@/lib/supaba
 import { homePage } from '@/lib/auth/roles';
 import { markSessionVerified } from '@/lib/client/session-flag';
 import { installCloudKv } from '@/lib/data/cloud-kv';
+import { syncYearEpoch } from '@/lib/client/year-reset';
 import { startCrossDeviceSync } from '@/lib/data/live-store';
 
 export type UserRole =
@@ -694,6 +695,10 @@ export function LoginView({
       setIsLoading(false);
       return;
     }
+
+    // Nouvelle année scolaire depuis la dernière visite sur cet appareil : la copie locale de
+    // l'année passée est effacée AVANT toute lecture ou tout envoi (rien ne repart en base).
+    syncYearEpoch(activeSlug, typeof loginResult.yearEpoch === 'number' ? loginResult.yearEpoch : 0);
 
     const matchedParentStudents: Student[] = loginResult.matchedStudents || [];
     const verifiedStaffUser: any = loginResult.staffUser || null;

@@ -6,11 +6,11 @@ import { getStaffAuthRecords } from '@/lib/supabase/services';
 import { FOUNDER_ROLES, ROLE_LABELS } from '@/lib/auth/roles';
 import { verifyFiguresCode } from '@/lib/server/figures-code';
 import {
+  ARCHIVE_LIST_COLUMNS as LIST_COLUMNS,
   ARCHIVE_SECTIONS,
   ArchiveSection,
   ArchiveSnapshot,
-  buildSchoolSnapshot,
-  computeSummary,
+  createArchive,
   extractSection,
 } from '@/lib/server/archives';
 
@@ -74,38 +74,6 @@ async function actorName(slug: string, session: any): Promise<string> {
   return label;
 }
 
-const LIST_COLUMNS = 'id, academic_year, kind, label, created_at, created_by, summary, size_bytes';
-
-async function createArchive(slug: string, schoolId: string, kind: 'cloture' | 'manuel' | 'auto', label: string, createdBy: string) {
-  const snap = await buildSchoolSnapshot(slug, schoolId);
-  if (!snap) return { error: 'Lecture des données impossible pour le moment : archive non créée. Réessayez.' };
-  const data = JSON.stringify(snap);
-  const summary = computeSummary(snap);
-  const academicYear = String(snap.school?.academicYear || '').trim() || `${new Date().getFullYear()}`;
-  const { data: row, error } = await supabase
-    .from('school_archives')
-    .insert({
-      school_id: schoolId,
-      academic_year: academicYear,
-      kind,
-      label: label.slice(0, 120),
-      created_by: createdBy.slice(0, 160),
-      summary,
-      data,
-      size_bytes: data.length,
-    })
-    .select(LIST_COLUMNS)
-    .single();
-  if (error) {
-    const missing = /school_archives/i.test(error.message || '') && /(does not exist|not find|schema cache)/i.test(error.message || '');
-    return {
-      error: missing
-        ? 'La table des archives n’existe pas encore : lancez le script 012 dans Supabase (SQL Editor).'
-        : 'Enregistrement de l’archive impossible pour le moment. Réessayez.',
-    };
-  }
-  return { row };
-}
 
 export async function GET(request: NextRequest) {
   const access = await checkAccess(request);
@@ -168,8 +136,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const { data: sch } = await supabase.from('schools').select('academic_year').eq('id', schoolId).maybeSingle();
   return NextResponse.json(
-    { success: true, archives: data || [], canCreate: founder, roleId: session.roleId, autoCreated },
+    {
+      success: true,
+      archives: data || [],
+      canCreate: founder,
+      roleId: session.roleId,
+      autoCreated,
+      academicYear: (sch as any)?.academic_year || '',
+    },
     { headers: NO_STORE }
   );
 }

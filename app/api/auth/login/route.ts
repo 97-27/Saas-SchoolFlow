@@ -29,6 +29,7 @@ export const dynamic = 'force-dynamic';
 import { ROLE_LABELS } from '@/lib/auth/roles';
 import { kvGet, kvPut, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
+import { getYearEpoch } from '@/lib/server/year-epoch';
 
 const stripTitle = (name: string) =>
   name.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
@@ -316,8 +317,10 @@ async function issueSession(
   extra: { staffUser?: any; matchedStudents?: Student[]; extraJson?: Record<string, unknown> }
 ) {
   let token: string;
+  // Numéro d'année scolaire actuel : la session et l'appareil se calent dessus (voir year-epoch).
+  const yearEpoch = (await getYearEpoch(data.slug, true)) ?? 0;
   try {
-    token = await createSessionToken(data);
+    token = await createSessionToken({ ...data, yearEpoch });
   } catch (e: any) {
     console.error('[SchoolFlow] Impossible de créer la session :', e?.message);
     return jsonError('Configuration du serveur incomplète (SESSION_SECRET). Contactez le support.', 500);
@@ -344,6 +347,7 @@ async function issueSession(
       staffUser,
       matchedStudents: extra.matchedStudents,
       subscriptionEndDate: data.subscriptionEndDate,
+      yearEpoch,
       ...(extra.extraJson || {}),
     },
     { headers: { 'Cache-Control': 'no-store' } }

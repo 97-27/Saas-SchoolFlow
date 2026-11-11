@@ -149,6 +149,48 @@ export async function buildSchoolSnapshot(slug: string, schoolId: string): Promi
   };
 }
 
+export const ARCHIVE_LIST_COLUMNS = 'id, academic_year, kind, label, created_at, created_by, summary, size_bytes';
+
+/** Prend l'instantané et l'enregistre dans school_archives. */
+export async function createArchive(
+  slug: string,
+  schoolId: string,
+  kind: 'cloture' | 'manuel' | 'auto',
+  label: string,
+  createdBy: string
+): Promise<{ row: any } | { error: string }> {
+  const snap = await buildSchoolSnapshot(slug, schoolId);
+  if (!snap) return { error: 'Lecture des données impossible pour le moment : archive non créée. Réessayez.' };
+  const data = JSON.stringify(snap);
+  const summary = computeSummary(snap);
+  const academicYear = String(snap.school?.academicYear || '').trim() || `${new Date().getFullYear()}`;
+  const { data: row, error } = await supabase
+    .from('school_archives')
+    .insert({
+      school_id: schoolId,
+      academic_year: academicYear,
+      kind,
+      label: label.slice(0, 120),
+      created_by: createdBy.slice(0, 160),
+      summary,
+      data,
+      size_bytes: data.length,
+    })
+    .select(ARCHIVE_LIST_COLUMNS)
+    .single();
+  if (error || !row) {
+    const missing = /(does not exist|not find|schema cache)/i.test(error?.message || '');
+    return {
+      error: missing
+        ? 'La table des archives n’existe pas encore : lancez le script 012 dans Supabase (SQL Editor).'
+        : 'Enregistrement de l’archive impossible pour le moment. Réessayez.',
+    };
+  }
+  return { row };
+}
+
+export { listAllKv };
+
 // ─── Lecture par rubrique ───────────────────────────────────────────────────────────────
 
 /** Valeur(s) d'une famille dans l'archive, fusionnées en une seule liste / un seul objet. */

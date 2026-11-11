@@ -23,8 +23,11 @@ import {
   UserX,
   MessageSquare,
   XCircle,
+  RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import { formatFCFA } from '@/lib/utils/formatters';
+import { syncYearEpoch, wipeLocalSchoolData } from '@/lib/client/year-reset';
 
 /**
  * ARCHIVES DES ANNÉES SCOLAIRES
@@ -109,6 +112,8 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
   const [creating, setCreating] = useState<'' | 'manuel' | 'cloture'>('');
   const [confirmCloture, setConfirmCloture] = useState(false);
   const [open, setOpen] = useState<ArchiveRow | null>(null);
+  const [academicYear, setAcademicYear] = useState('');
+  const [showNewYear, setShowNewYear] = useState(false);
 
   const headers = useCallback(
     (extra: Record<string, string> = {}) => ({ ...(code ? { 'x-figures-code': code } : {}), ...extra }),
@@ -140,6 +145,7 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
         setNeedCode(false);
         setArchives(json.archives || []);
         setCanCreate(!!json.canCreate);
+        setAcademicYear(String(json.academicYear || ''));
         if (json.autoCreated) setNotice({ type: 'ok', text: 'Sauvegarde automatique de la semaine enregistrée dans Supabase.' });
       } catch (e) {
         setError('Connexion impossible. Vérifiez Internet puis réessayez.');
@@ -204,7 +210,7 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
     return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [archives]);
 
-  const currentYear = archives[0]?.academic_year || '';
+  const currentYear = academicYear || archives[0]?.academic_year || '';
 
   if (open) {
     return <ArchiveViewer archive={open} headers={headers} onBack={() => setOpen(null)} onCodeLost={() => { setOpen(null); setCode(''); setNeedCode(true); }} />;
@@ -331,6 +337,32 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
             </div>
           )}
 
+          {/* Passage à l'année suivante (Fondateur / DGA) */}
+          {canCreate && (
+            <div className="bg-white p-4 sm:p-6 rounded-3xl border border-rose-200 shadow-xs space-y-4">
+              <div className="flex items-start gap-2">
+                <RotateCcw className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 font-heading">
+                    Passer à l’année suivante{currentYear ? <span className="text-slate-500 font-bold"> • actuellement {currentYear}</span> : null}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    L’année en cours est d’abord archivée en entier, puis <span className="font-bold text-rose-600">toutes les pages repartent de zéro</span>,
+                    pour tous les postes et tous les enseignants. À faire une seule fois, en fin d’année scolaire.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNewYear(true)}
+                disabled={!!creating}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm shadow-rose-600/30 disabled:opacity-50 cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Passer à l’année suivante
+              </button>
+            </div>
+          )}
+
           {/* Années */}
           {byYear.length === 0 ? (
             <div className="bg-white p-8 rounded-3xl border border-slate-200/80 shadow-xs text-center space-y-2">
@@ -390,6 +422,10 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
         </>
       )}
 
+      {showNewYear && (
+        <NewYearModal schoolSlug={schoolSlug} currentYear={currentYear} onClose={() => setShowNewYear(false)} />
+      )}
+
       {/* Confirmation de clôture */}
       {confirmCloture && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -428,6 +464,175 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Passage à l'année suivante ─────────────────────────────────────────────────────────
+
+const nextYearOf = (y: string) => {
+  const m = String(y || '').match(/^(\d{4})-(\d{4})$/);
+  if (m) return `${Number(m[1]) + 1}-${Number(m[2]) + 1}`;
+  const now = new Date().getFullYear();
+  return `${now}-${now + 1}`;
+};
+
+function NewYearModal({ schoolSlug, currentYear, onClose }: { schoolSlug: string; currentYear: string; onClose: () => void }) {
+  const [newYear, setNewYear] = useState(nextYearOf(currentYear));
+  const [keepStaff, setKeepStaff] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
+
+  const typedOk =
+    confirmText.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim() === 'NOUVELLE ANNEE';
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typedOk || !code.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch('/api/archives/new-year', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newYear: newYear.trim(), keepStaff, confirmText, code: code.trim() }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.error || 'Passage impossible pour le moment. Réessayez.');
+        setBusy(false);
+        return;
+      }
+      // Cet appareil efface aussi sa copie de l'année passée, puis repart de zéro.
+      wipeLocalSchoolData();
+      syncYearEpoch(schoolSlug, json.yearEpoch);
+      setDone(`Année ${json.oldYear} archivée. Bienvenue en ${json.newYear} : toutes les pages repartent de zéro.`);
+      setTimeout(() => window.location.replace(`/${schoolSlug}/admin/dashboard`), 2500);
+    } catch {
+      setError('Connexion impossible. Réessayez.');
+      setBusy(false);
+    }
+  };
+
+  const ERASED = [
+    'Élèves, inscriptions et vue d’ensemble',
+    'Reçus, versements et tableau de bord',
+    'Internat, cantine, transport',
+    'Salaires, dépenses, réductions, rappels',
+    'Appel, absences, notes, bulletins, distinctions',
+    'Pointage, santé, documents, notes diverses',
+    'Messages des parents, annonces, corbeille',
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <form onSubmit={submit} className="w-full max-w-lg bg-white rounded-3xl shadow-xl p-5 sm:p-6 space-y-4 my-auto">
+        {done ? (
+          <div className="text-center space-y-3 py-4">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-bold text-slate-900">{done}</p>
+            <p className="text-xs text-slate-500">Tous les autres appareils devront se reconnecter.</p>
+            <Loader2 className="w-4 h-4 mx-auto animate-spin text-emerald-600" />
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 font-heading">Passer à l’année suivante</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {currentYear || 'L’année en cours'} est d’abord archivée en entier (consultable ici pour toujours), puis tout repart de zéro.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 space-y-1.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Remis à zéro sur toutes les pages, pour tous</p>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs text-rose-900">
+                {ERASED.map((t) => (
+                  <li key={t} className="flex items-start gap-1.5">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-rose-500 shrink-0" />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              <span className="font-bold text-slate-700">Gardés :</span> identité, logo et cachet de l’école, position et horaires de pointage, code
+              des chiffres, coefficients des notes, lignes de transport, capacité de l’internat, menu de la cantine, comptes du Fondateur et du DGA.
+            </p>
+
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Nouvelle année scolaire</span>
+              <input
+                value={newYear}
+                onChange={(e) => setNewYear(e.target.value)}
+                placeholder="2027-2028"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+              />
+            </label>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+              <input type="checkbox" checked={keepStaff} onChange={(e) => setKeepStaff(e.target.checked)} className="mt-0.5 w-4 h-4 accent-emerald-600" />
+              <span className="text-xs text-slate-700">
+                <span className="font-bold text-slate-900">Garder les comptes du personnel</span> (Administration & Codes : comptable, secrétaire,
+                enseignants… avec leurs codes). Non coché : seuls le Fondateur et le DGA restent.
+              </span>
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tapez NOUVELLE ANNÉE pour confirmer</span>
+              <input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                autoComplete="off"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-bold text-slate-900 focus:outline-none ${
+                  typedOk ? 'border-emerald-500' : 'border-slate-300 focus:border-emerald-600'
+                }`}
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Votre code personnel de connexion</span>
+              <input
+                type="password"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                autoComplete="off"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+              />
+            </label>
+
+            {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={busy}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                disabled={busy || !typedOk || !code.trim()}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                {busy ? 'Archivage puis remise à zéro…' : 'Archiver et repartir de zéro'}
+              </button>
+            </div>
+          </>
+        )}
+      </form>
     </div>
   );
 }
