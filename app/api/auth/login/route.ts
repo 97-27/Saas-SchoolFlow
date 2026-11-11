@@ -284,8 +284,11 @@ async function handleLogin(
     byCode.find((s) => s.matricule && s.matricule.toUpperCase() === matriculeIn) ||
     byCode.find((s) => !s.matricule);
   if (!record) {
+    const kind = roleId === 'fondateur' || roleId === 'fondateur_adjoint' ? 'matricule professionnel' : "matricule d'embauche";
     return refuse(
-      `❌ Accès refusé : le matricule ou le code est incorrect pour le poste « ${ROLE_LABELS[roleId] || 'Personnel'} ». Vérifiez le poste choisi, votre matricule d'embauche et votre code.`
+      !matriculeIn && byCode.length > 0
+        ? `❌ Saisissez votre ${kind} (il figure sur votre fiche dans Administration & Codes).`
+        : `❌ Accès refusé : le matricule ou le code est incorrect pour le poste « ${ROLE_LABELS[roleId] || 'Personnel'} ». Vérifiez le poste choisi, votre ${kind} et votre code.`
     );
   }
   if (record.status === 'Verrouillé') {

@@ -602,10 +602,8 @@ export function LoginView({
       }
     }
 
-    if (isStaffCodeLogin && !staffMatricule.trim()) {
-      setErrorMessage("Veuillez saisir votre matricule d'embauche (donné par la Direction).");
-      return;
-    }
+    // Matricule : pas bloqué ici (une fiche sans matricule entre encore avec son code seul) ;
+    // le serveur l'exige dès qu'il est enregistré sur la fiche.
     if (isStudentLogin && !studentMatricule.trim()) {
       setErrorMessage("Saisis ton matricule (ou ton numéro d'élève, ex : ID-045).");
       return;
@@ -1024,7 +1022,7 @@ export function LoginView({
 
     setSuccessToast({
       title: cloudWarning ? 'Abonnement activé — vérification requise' : 'Abonnement activé avec succès !',
-      subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Votre code d’accès Directeur est ${directorAuthCode} — retrouvable à tout moment dans Administration.${cloudWarning}`,
+      subtitle: `Bienvenue à l’établissement « ${signupSchoolName} ». Directeur : matricule DIR-001, code ${directorAuthCode}. Fondateur : matricule FND-001, code ${founderAuthCode}. Retrouvables à tout moment dans Administration.${cloudWarning}`,
     });
     setIsLoading(false);
 
@@ -1493,7 +1491,9 @@ export function LoginView({
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>2. Matricule d&apos;embauche *</span>
+                        <span>
+                          2. {selectedRole === 'fondateur' || selectedRole === 'fondateur_adjoint' ? 'Matricule professionnel' : 'Matricule d’embauche'} *
+                        </span>
                       </span>
                       <span className="text-[10px] text-slate-500 font-medium">Donné par la Direction</span>
                     </label>
@@ -1504,7 +1504,7 @@ export function LoginView({
                         autoComplete="off"
                         value={staffMatricule}
                         onChange={(e) => setStaffMatricule(e.target.value.toUpperCase())}
-                        placeholder="Ex : EMP-CPT-001"
+                        placeholder={selectedRole === 'fondateur' ? 'Ex : FND-001' : selectedRole === 'fondateur_adjoint' ? 'Ex : DGA-001' : 'Ex : CPT-001'}
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
                     </div>
@@ -1742,9 +1742,8 @@ export function LoginView({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
-                      <span>Noms et Prénoms du Fondateur</span>
-                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Promoteur (facultatif)</span>
+                    <label className="font-bold text-slate-800 block text-xs whitespace-nowrap overflow-hidden text-ellipsis">
+                      Nom et Prénoms du Fondateur
                     </label>
                     <div className="relative">
                       <ShieldCheck className="w-4 h-4 text-amber-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />

@@ -126,6 +126,30 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     }
   };
 
+  // Matricule automatique : préfixe du poste + numéro suivant libre (ex. CPT-002). Le Fondateur et
+  // le DGA ont un « matricule professionnel » (ils ne sont pas embauchés), les autres un
+  // « matricule d'embauche ». Modifiable avant d'enregistrer.
+  const MATRICULE_PREFIX: Record<string, string> = {
+    fondateur: 'FND',
+    fondateur_adjoint: 'DGA',
+    directeur: 'DIR',
+    informaticien: 'INF',
+    assistant_direction: 'AST',
+    educateur: 'EDU',
+    comptable: 'CPT',
+    secretaire: 'SEC',
+    enseignant: 'ENS',
+  };
+  const generateMatricule = (role: string) => {
+    const prefix = MATRICULE_PREFIX[role] || 'EMP';
+    const used = new Set(staffList.map((s) => String(s.matricule || '').trim().toUpperCase()));
+    let n = 1;
+    while (used.has(`${prefix}-${String(n).padStart(3, '0')}`)) n++;
+    return `${prefix}-${String(n).padStart(3, '0')}`;
+  };
+  const matriculeLabel = (role: string) =>
+    role === 'fondateur' || role === 'fondateur_adjoint' ? 'Matricule professionnel' : 'Matricule d’embauche';
+
   // Générer un code lisible et robuste selon le poste
   const generateRandomCode = (role: string) => {
     const existing = new Set(staffList.map((s) => String(s.authCode || '').toUpperCase()));
@@ -519,6 +543,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             type="button"
             onClick={() => {
               setNewAuthCode(generateRandomCode(newRole));
+              setNewMatricule(generateMatricule(newRole));
               setNewSubject('Toutes les matières (Enseignant Titulaire / Polyvalent)');
               setNewClasses('Toutes les classes');
               setIsAddModalOpen(true);
@@ -1148,7 +1173,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Matricule d&apos;Embauche * (sert à la connexion)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-700 block">{matriculeLabel(newRole)} * (sert à la connexion)</label>
+                    <button
+                      type="button"
+                      onClick={() => setNewMatricule(generateMatricule(newRole))}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Générer
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
@@ -1194,6 +1228,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       const r = e.target.value as any;
                       setNewRole(r);
                       setNewAuthCode(generateRandomCode(r));
+                      setNewMatricule(generateMatricule(r));
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
@@ -1413,7 +1448,18 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               {/* Matricule / Réf & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Matricule d’Embauche * (sert à la connexion)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-700 block">{matriculeLabel(editRole)} * (sert à la connexion)</label>
+                    {!isFounderAccountLocked(editingStaff) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditMatricule(generateMatricule(editRole))}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        Générer
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
