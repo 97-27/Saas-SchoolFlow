@@ -42,6 +42,30 @@ interface AdministrationViewProps {
   schoolSlug: string;
 }
 
+/** Ordre hiérarchique d'affichage des membres (décision de l'établissement, 11/2026). */
+const HIERARCHY_RANK: Record<string, number> = {
+  fondateur: 0,
+  fondateur_adjoint: 1,
+  directeur: 2,
+  secretaire: 3,
+  comptable: 4,
+  assistant_direction: 5,
+  informaticien: 6,
+  educateur: 7,
+  enseignant: 8,
+};
+
+/** Postes proposés à la création / modification, dans le même ordre hiérarchique. */
+const ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'fondateur_adjoint', label: '🏛️ Fondateur adjoint (DGA)' },
+  { value: 'secretaire', label: '📝 Secrétaire de Direction' },
+  { value: 'comptable', label: '💼 Comptable / Gestionnaire' },
+  { value: 'assistant_direction', label: '📋 Assistant(e) de Direction' },
+  { value: 'informaticien', label: '💻 Informaticien' },
+  { value: 'educateur', label: '🛡️ Éducateur / Conseiller d’Éducation' },
+  { value: 'enseignant', label: '👨‍🏫 Enseignant / Professeur (Toutes matières)' },
+];
+
 export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [staffList, setStaffList] = useState<StaffUser[]>(() => getLiveStaffUsers(schoolSlug));
   const [searchTerm, setSearchTerm] = useState('');
@@ -506,9 +530,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
     return matchesSearch && matchesRole && matchesTab;
   }).sort((a, b) => {
-    // Le Fondateur toujours en premier, puis le Directeur, puis les autres membres.
-    const rank = (s: StaffUser) => (s.roleId === 'fondateur' ? 0 : s.roleId === 'directeur' ? 1 : 2);
-    return rank(a) - rank(b);
+    // Ordre hiérarchique (décision de l'établissement 11/2026) ; à poste égal, ordre alphabétique.
+    const ra = HIERARCHY_RANK[a.roleId] ?? 99;
+    const rb = HIERARCHY_RANK[b.roleId] ?? 99;
+    return ra !== rb ? ra - rb : a.fullName.localeCompare(b.fullName, 'fr');
   });
 
   // Statistiques
@@ -700,13 +725,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 focus:border-emerald-600 focus:outline-none cursor-pointer"
             >
               <option value="all">Tous les postes avec code</option>
-              <option value="enseignant">Enseignants (Toutes matières)</option>
+              <option value="fondateur_adjoint">Fondateurs adjoints (DGA)</option>
               <option value="secretaire">Secrétaires</option>
               <option value="comptable">Comptables</option>
               <option value="assistant_direction">Assistant(e) Direction</option>
-              <option value="educateur">Éducateurs / Conseillers d’Éducation</option>
-              <option value="fondateur_adjoint">Fondateurs adjoints (DGA)</option>
               <option value="informaticien">Informaticiens</option>
+              <option value="educateur">Éducateurs / Conseillers d’Éducation</option>
+              <option value="enseignant">Enseignants (Toutes matières)</option>
             </select>
           </div>
         </div>
@@ -1157,7 +1182,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               </button>
             </div>
 
-            <form onSubmit={handleAddStaffSubmit} className="space-y-3 text-xs">
+            {/* autoComplete="off" : sans cela, Chrome prend « Nom + Matricule » pour un numéro de
+                voyageur et propose de l'enregistrer dans ses adresses. */}
+            <form onSubmit={handleAddStaffSubmit} autoComplete="off" className="space-y-3 text-xs">
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -1188,7 +1215,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     required
                     value={newMatricule}
                     onChange={(e) => setNewMatricule(e.target.value.toUpperCase())}
-                    placeholder="Ex : EMP-ENS-007"
+                    autoComplete="off"
+                    placeholder="Ex : CPT-002"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
                   />
                 </div>
@@ -1232,13 +1260,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
-                    <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
-                    <option value="informaticien">💻 Informaticien</option>
-                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
-                    <option value="secretaire">📝 Secrétaire de Direction</option>
-                    <option value="comptable">💼 Comptable / Gestionnaire</option>
-                    <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                    <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation</option>
+                    {ROLE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1252,14 +1276,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600"
                   />
                 </div>
-              </div>
-
-              {/* Note informative sur la saisie autonome du contact et de l'email à la connexion */}
-              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-950 text-[11px] flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>
-                  <strong>Connexion autonome :</strong> Aucun numéro ni email n&apos;est exigé ici. Le collaborateur renseignera son email et son contact lors de sa première connexion avec son code d&apos;accès.
-                </span>
               </div>
 
               {/* Informations Pédagogiques STRICTEMENT réservées au profil Enseignant */}
@@ -1328,6 +1344,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   required
                   value={newAuthCode}
                   onChange={(e) => setNewAuthCode(e.target.value.toUpperCase())}
+                  autoComplete="off"
                   className="w-full px-3.5 py-2 rounded-xl bg-white border border-emerald-300 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest"
                 />
                 <p className="text-[10px] text-emerald-800">
@@ -1396,7 +1413,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               </div>
             )}
 
-            <form onSubmit={handleSaveFullEdit} className="space-y-3.5 text-xs">
+            <form onSubmit={handleSaveFullEdit} autoComplete="off" className="space-y-3.5 text-xs">
               <fieldset disabled={isFounderAccountLocked(editingStaff)} className="space-y-3.5 min-w-0 disabled:opacity-80">
 
               {/* Nom & Prénoms + Rôle */}
@@ -1433,13 +1450,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       onChange={(e) => setEditRole(e.target.value as any)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
                     >
-                      <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
-                    <option value="informaticien">💻 Informaticien</option>
-                    <option value="enseignant">👨‍🏫 Enseignant / Professeur (Toutes matières)</option>
-                      <option value="secretaire">📝 Secrétaire de Direction</option>
-                      <option value="comptable">💼 Comptable / Gestionnaire</option>
-                      <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                      <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation</option>
+                      {ROLE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
                     </select>
                   )}
                 </div>
@@ -1465,7 +1478,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     required
                     value={editMatricule}
                     onChange={(e) => setEditMatricule(e.target.value.toUpperCase())}
-                    placeholder={editingStaff.roleId === 'fondateur' ? 'Ex : FND-001' : editingStaff.roleId === 'directeur' ? 'Ex : DIR-001' : 'Ex : EMP-ENS-004'}
+                    autoComplete="off"
+                    placeholder={editingStaff.roleId === 'fondateur' ? 'Ex : FND-001' : editingStaff.roleId === 'directeur' ? 'Ex : DIR-001' : 'Ex : CPT-002'}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
                   />
                 </div>
