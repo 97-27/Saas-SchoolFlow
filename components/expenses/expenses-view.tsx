@@ -110,9 +110,11 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   const [expenses, setExpenses] = useState<ExpenseItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
+        // Clé « nue » = école pilote seulement : une école neuve ne doit jamais hériter des
+        // dépenses d'une autre école partageant le même navigateur.
         const saved =
           localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) ||
-          localStorage.getItem(EXPENSES_STORAGE_KEY);
+          (schoolSlug === 'epc-manoi' ? localStorage.getItem(EXPENSES_STORAGE_KEY) : null);
         if (saved) {
           const parsed = JSON.parse(saved);
           return sanitizeExpenses(parsed);
@@ -188,15 +190,9 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
         try {
           const saved =
             localStorage.getItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`) ||
-            localStorage.getItem(EXPENSES_STORAGE_KEY);
+            (schoolSlug === 'epc-manoi' ? localStorage.getItem(EXPENSES_STORAGE_KEY) : null);
           if (saved) {
-            const parsed = JSON.parse(saved);
-            const cleaned = sanitizeExpenses(parsed);
-            if (cleaned.length !== parsed.length) {
-              localStorage.setItem(`${EXPENSES_STORAGE_KEY}_${schoolSlug}`, JSON.stringify(cleaned));
-              localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(cleaned));
-            }
-            setExpenses(cleaned);
+            setExpenses(sanitizeExpenses(JSON.parse(saved)));
             return;
           }
         } catch (e) {}

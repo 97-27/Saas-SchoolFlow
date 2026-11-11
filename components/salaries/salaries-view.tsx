@@ -54,14 +54,14 @@ const STORAGE_KEY = 'schoolflow_staff_salaries_v1';
 
 const EMPTY_SALARY: SalaryPayment = {
   id: '',
-  receiptNumber: 'SAL-2026-001',
+  receiptNumber: '—',
   civility: 'Mr',
   staffName: '—',
   role: 'Membre du personnel',
-  matricule: 'EMP-001',
+  matricule: '—',
   phone: '—',
-  payPeriod: 'Septembre 2026',
-  paymentDate: '30/09/2026',
+  payPeriod: '—',
+  paymentDate: '—',
   baseSalary: 0,
   bonuses: 0,
   deductions: 0,
@@ -73,18 +73,24 @@ const EMPTY_SALARY: SalaryPayment = {
   createdAt: '',
 };
 
-const PAY_PERIODS = [
-  'Septembre 2026',
-  'Octobre 2026',
-  'Novembre 2026',
-  'Décembre 2026',
-  'Janvier 2027',
-  'Février 2027',
-  'Mars 2027',
-  'Avril 2027',
-  'Mai 2027',
-  'Juin 2027',
-];
+const MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+/** Mois de paie de l'année scolaire (Septembre → Août), déduits de l'année de l'école. */
+function payPeriodsFor(academicYear: string | undefined): string[] {
+  const m = String(academicYear || '').match(/^(\d{4})-(\d{4})$/);
+  const y1 = m ? Number(m[1]) : new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const y2 = y1 + 1;
+  return [
+    ...['Septembre', 'Octobre', 'Novembre', 'Décembre'].map((mo) => `${mo} ${y1}`),
+    ...['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août'].map((mo) => `${mo} ${y2}`),
+  ];
+}
+
+const todayFr = () => {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+};
+const currentPeriod = () => `${MONTHS_FR[new Date().getMonth()]} ${new Date().getFullYear()}`;
 
 interface SalariesViewProps {
   schoolSlug?: string;
@@ -187,8 +193,19 @@ export function SalariesView({
   const [role, setRole] = useState<string>('');
   const [matricule, setMatricule] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
-  const [payPeriod, setPayPeriod] = useState<string>('Septembre 2026');
-  const [paymentDate, setPaymentDate] = useState<string>('30/09/2026');
+  // Mois de paie : ceux de l'année scolaire de l'école (plus jamais figés sur 2026-2027).
+  const PAY_PERIODS = useMemo(() => payPeriodsFor(currentSchool.academicYear), [currentSchool.academicYear]);
+  const [payPeriod, setPayPeriod] = useState<string>(currentPeriod);
+  const [paymentDate, setPaymentDate] = useState<string>(todayFr);
+  useEffect(() => {
+    if (!PAY_PERIODS.includes(payPeriod)) setPayPeriod(PAY_PERIODS.includes(currentPeriod()) ? currentPeriod() : PAY_PERIODS[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [PAY_PERIODS]);
+  // Filtre : les mois de l'année + ceux déjà présents sur des reçus (anciens mois).
+  const FILTER_PERIODS = useMemo(
+    () => Array.from(new Set([...PAY_PERIODS, ...salaries.map((s) => s.payPeriod).filter(Boolean)])),
+    [PAY_PERIODS, salaries]
+  );
   const [baseSalary, setBaseSalary] = useState<number | ''>('');
   const [bonuses, setBonuses] = useState<number | ''>('');
   const [deductions, setDeductions] = useState<number | ''>('');
@@ -256,7 +273,7 @@ export function SalariesView({
       matricule: matricule.trim() || `EMP-2026-${String(nextIndex).padStart(3, '0')}`,
       phone: phone.trim(),
       payPeriod: payPeriod,
-      paymentDate: paymentDate || '30/09/2026',
+      paymentDate: paymentDate || todayFr(),
       baseSalary: Number(baseSalary) || 0,
       bonuses: Number(bonuses) || 0,
       deductions: Number(deductions) || 0,
@@ -1371,7 +1388,7 @@ export function SalariesView({
               className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 cursor-pointer"
             >
               <option value="ALL">Tous les mois</option>
-              {PAY_PERIODS.map((p) => (
+              {FILTER_PERIODS.map((p) => (
                 <option key={p} value={p}>
                   {p}
                 </option>
