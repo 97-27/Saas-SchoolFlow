@@ -90,8 +90,16 @@ async function handleLogin(
   phone: string
 ): Promise<NextResponse> {
 
-  // Lectures LÉGÈRES (sans logo, cachet ni photos) : voir getStaffAuthRecords.
-  const school = await getSchoolLoginInfo(slug);
+  // Lectures LÉGÈRES (sans logo, cachet ni photos) : voir getStaffAuthRecords. Elles partent
+  // TOUTES EN MÊME TEMPS (avant : l'une après l'autre, chaque aller-retour s'additionnait).
+  const isFamily = roleId === 'parent' || roleId === 'eleve';
+  const schoolP = getSchoolLoginInfo(slug);
+  const subP = slug !== 'epc-manoi' ? getSchoolSubscriptionInfo(slug) : Promise.resolve(null);
+  const staffP: Promise<Awaited<ReturnType<typeof getStaffAuthRecords>>> = isFamily ? Promise.resolve([]) : getStaffAuthRecords(slug);
+  staffP.catch(() => {});
+  subP.catch(() => {});
+
+  const school = await schoolP;
   if (!school) return refuse('❌ Établissement introuvable. Vérifiez le lien de connexion de votre école.', 404);
   if (school.status === 'suspended') {
     return refuse("❌ L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow.");
@@ -100,7 +108,7 @@ async function handleLogin(
   // Échéance réelle d'abonnement (jamais pour l'établissement pilote).
   let subscriptionEndDate: string | undefined;
   if (slug !== 'epc-manoi') {
-    const sub = await getSchoolSubscriptionInfo(slug);
+    const sub = await subP;
     if (sub) {
       subscriptionEndDate = sub.endDate;
       if (sub.isExpired) {
@@ -181,7 +189,7 @@ async function handleLogin(
     if (!subject) return refuse('Veuillez indiquer la matière que vous enseignez.', 400);
     // Comparaison sur les 8 derniers chiffres : « +225 07 48 92 11 00 » = « 0748921100 ».
     const tail = digits.slice(-8);
-    const teachers = (await getStaffAuthRecords(slug)).filter(
+    const teachers = (await staffP).filter(
       (s) => s.roleId === 'enseignant' && String(s.phone || '').replace(/\D/g, '').slice(-8) === tail
     );
     if (teachers.length === 0) {
@@ -262,52 +270,22 @@ async function handleLogin(
     );
   }
 
-  const staff = await getStaffAuthRecords(slug);
+  const staff = await staffP;
 
-  if (roleId === 'fondateur' || roleId === 'directeur') {
-    if (fullName.length < 2) return refuse('Veuillez renseigner votre Nom et Prénoms officiels.', 400);
-
-    const officialFounder = stripTitle(school.founderName || (slug === 'epc-manoi' ? 'LAWANI MOUSSA' : ''));
-    const officialDirector = stripTitle(school.directorName || (slug === 'epc-manoi' ? 'LAWANI MOUHAMED' : ''));
-    // S'il reste plusieurs fiches pour ce poste (anciens doublons), on prend celle dont le code
-    // correspond — avant, seule la PREMIÈRE fiche était comparée, et la page Administration
-    // pouvait afficher une autre fiche (donc un autre code) que celle utilisée pour se connecter.
-    const sameRole = staff.filter((s) => s.roleId === roleId);
-    const record =
-      sameRole.find((s) => String(s.authCode || '').trim().toUpperCase() === inputCode) || sameRole[0];
-
-    const nameOk =
-      areNamesMatching(fullName, officialFounder) ||
-      areNamesMatching(fullName, officialDirector) ||
-      (record ? areNamesMatching(fullName, record.fullName || '') : false);
-    if (!nameOk) {
-      return refuse(
-        "❌ Accès refusé : ce nom ne correspond pas à la Direction officielle de cet établissement. Seuls le Directeur désigné et le Fondateur ayant souscrit l'abonnement peuvent utiliser ce profil."
-      );
-    }
-
-    // Plus AUCUN code générique de secours (FND-2026 / DIR-2026) : sans fiche configurée en
-    // base, la connexion est refusée — ces codes identiques pour toutes les écoles ouvraient
-    // l'accès à quiconque connaissait le nom du Directeur.
-    if (!record || !record.authCode) {
-      return refuse(
-        '❌ Aucun code d’accès n’est encore configuré pour ce profil dans la base de l’établissement. Contactez le support SchoolFlow pour l’activer.'
-      );
-    }
-    if (String(record.authCode).trim().toUpperCase() !== inputCode) {
-      return refuse("❌ Accès refusé : le Code d'Authentification saisi est incorrect pour ce profil.");
-    }
-
-    return issueSession(
-      { slug, roleId, code: inputCode, staffId: record.id, subscriptionEndDate },
-      { staffUser: (await getStaffUserById(slug, record.id)) || record }
-    );
-  }
-
-  const record = staff.find((s) => s.roleId === roleId && String(s.authCode || '').trim().toUpperCase() === inputCode);
+  // Matricule d'embauche + code personnel (décision de l'établissement, 11/2026). Nom, email et
+  // téléphone ne sont plus demandés : ils sont enregistrés sur la fiche par la Direction.
+  // Transition : une fiche dont le matricule n'a pas encore été saisi en Administration accepte
+  // le code seul (sinon le Fondateur lui-même ne pourrait plus entrer pour saisir les matricules).
+  const matriculeIn = String(body?.matricule || '').trim().toUpperCase();
+  const byCode = staff.filter(
+    (s) => s.roleId === roleId && String(s.authCode || '').trim().toUpperCase() === inputCode
+  );
+  const record =
+    byCode.find((s) => s.matricule && s.matricule.toUpperCase() === matriculeIn) ||
+    byCode.find((s) => !s.matricule);
   if (!record) {
     return refuse(
-      `❌ Accès refusé : ce code d'authentification est invalide pour le poste de « ${ROLE_LABELS[roleId] || 'Personnel'} ». Vérifiez le poste sélectionné ou contactez la Direction de l'école.`
+      `❌ Accès refusé : le matricule ou le code est incorrect pour le poste « ${ROLE_LABELS[roleId] || 'Personnel'} ». Vérifiez le poste choisi, votre matricule d'embauche et votre code.`
     );
   }
   if (record.status === 'Verrouillé') {

@@ -1132,7 +1132,13 @@ export function Topbar({
                       try {
                         await fetch('/api/auth/logout', { method: 'POST' });
                       } catch (e) {}
-                      router.push(`/${schoolSlug}/login`);
+                      // Prévenir les autres onglets ouverts, puis REMPLACER la page (rechargement
+                      // complet) : la mémoire de l'application est vidée et la flèche « retour »
+                      // ne peut plus revenir sur l'espace de gestion.
+                      try {
+                        localStorage.setItem('schoolflow_logout_at', String(Date.now()));
+                      } catch (e) {}
+                      window.location.replace(`/${schoolSlug}/login`);
                     }}
                     className="w-full px-4 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 flex items-center justify-center gap-2 border border-rose-200 transition-colors cursor-pointer"
                   >

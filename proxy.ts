@@ -66,7 +66,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
   }
 
-  return NextResponse.next();
+  // Jamais de copie des pages de gestion dans le navigateur (ni cache, ni « retour arrière »
+  // instantané) : après une déconnexion, la flèche « retour » ne doit rien réafficher.
+  const res = NextResponse.next();
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.headers.set('Pragma', 'no-cache');
+  return res;
 }
 
 export const config = {

@@ -12,6 +12,7 @@ import {
   submitFiguresCode,
   refreshFiguresSession,
   setFiguresOpenToComptable,
+  setFiguresCode,
 } from '@/lib/client/figures-privacy';
 import { broadcastLiveUpdate } from '@/lib/data/live-store';
 
@@ -37,7 +38,7 @@ export function Figure({ children, className = '' }: { children: React.ReactNode
           requestFiguresUnlock();
         }
       }}
-      title="Chiffre masqué — cliquez pour l’afficher (code du Fondateur)"
+      title="Chiffre masqué — cliquez pour l’afficher (code des chiffres)"
       className={`inline-flex items-center gap-1 align-baseline cursor-pointer select-none tracking-widest hover:opacity-70 transition-opacity ${className}`}
     >
       <span aria-hidden="true">{MASK}</span>
@@ -59,7 +60,7 @@ export function FiguresGate({ children, title }: { children: React.ReactNode; ti
       <h2 className="text-base font-bold text-slate-900">{title}</h2>
       <p className="text-xs text-slate-500">
         Les chiffres globaux de l’établissement sont réservés au Fondateur.
-        {canUnlock ? ' Saisissez le code du Fondateur pour les afficher.' : ''}
+        {canUnlock ? ' Saisissez le code des chiffres pour les afficher.' : ''}
       </p>
       {canUnlock && (
         <button
@@ -81,10 +82,30 @@ export function FiguresGate({ children, title }: { children: React.ReactNode; ti
  * relecture toutes les 15 s), y compris un déverrouillage par code en cours.
  */
 export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
-  const { openToComptable, isFounder } = useFiguresState();
+  const { openToComptable, isFounder, figuresCode } = useFiguresState();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showCode, setShowCode] = useState(false);
   if (!isFounder) return null;
+
+  const saveCode = async (value: string | 'generate') => {
+    if (codeBusy) return;
+    setCodeBusy(true);
+    setCodeMsg(null);
+    const err = await setFiguresCode(value);
+    setCodeBusy(false);
+    if (err) {
+      setCodeMsg({ ok: false, text: err });
+      return;
+    }
+    setCodeInput('');
+    setShowCode(true);
+    setCodeMsg({ ok: true, text: 'Nouveau code enregistré. Donnez-le au Comptable ; l’ancien ne marche plus.' });
+    broadcastLiveUpdate({ action: 'figures_policy_changed', schoolSlug });
+  };
 
   const toggle = async () => {
     if (busy) return;
@@ -100,11 +121,8 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
   };
 
   return (
-    <div
-      className={`rounded-3xl border p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${
-        openToComptable ? 'bg-emerald-50/70 border-emerald-200' : 'bg-white border-slate-200/80'
-      }`}
-    >
+    <div className={`rounded-3xl border shadow-xs ${openToComptable ? 'bg-emerald-50/70 border-emerald-200' : 'bg-white border-slate-200/80'}`}>
+    <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="flex items-start gap-3">
         <div
           className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
@@ -134,6 +152,69 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
         {openToComptable ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         {busy ? 'Enregistrement…' : openToComptable ? 'Fermer les chiffres' : 'Ouvrir les chiffres au Comptable'}
       </button>
+    </div>
+
+    {/* Code des chiffres (6 chiffres) : le Comptable affiche lui-même les chiffres avec ce code. */}
+    <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-200/70 space-y-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-slate-900">Code des chiffres du Comptable (6 chiffres)</p>
+          <p className="text-[11px] text-slate-500">
+            Avec ce code, le Comptable affiche les chiffres 30 min sans votre intervention. Changez-le quand vous voulez.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-mono font-black tracking-[0.3em] text-sm min-w-[96px] text-center">
+            {figuresCode ? (showCode ? figuresCode : '••••••') : '——'}
+          </span>
+          {figuresCode && (
+            <button
+              type="button"
+              onClick={() => setShowCode((v) => !v)}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              title={showCode ? 'Cacher le code' : 'Voir le code'}
+            >
+              {showCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={codeInput}
+          onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="Nouveau code (6 chiffres)"
+          className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+        />
+        <button
+          type="button"
+          disabled={codeBusy || codeInput.length !== 6}
+          onClick={() => saveCode(codeInput)}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+        >
+          Enregistrer ce code
+        </button>
+        <button
+          type="button"
+          disabled={codeBusy}
+          onClick={() => saveCode('generate')}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+        >
+          {codeBusy ? '…' : 'Générer un code'}
+        </button>
+      </div>
+      {codeMsg && (
+        <p className={`text-xs font-semibold ${codeMsg.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{codeMsg.text}</p>
+      )}
+      {!figuresCode && (
+        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+          Aucun code des chiffres pour l’instant : le Comptable doit saisir votre code personnel. Créez-en un pour ne plus avoir à le donner.
+        </p>
+      )}
+    </div>
     </div>
   );
 }
@@ -232,7 +313,7 @@ export function FiguresPrivacyHost() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Afficher les chiffres</h3>
-                  <p className="text-[11px] text-slate-500">Saisissez le code du Fondateur (3 essais).</p>
+                  <p className="text-[11px] text-slate-500">Code des chiffres donné par le Fondateur ou le DGA (3 essais).</p>
                 </div>
               </div>
               <button
@@ -255,7 +336,7 @@ export function FiguresPrivacyHost() {
                 }}
                 autoComplete="off"
                 disabled={locked}
-                placeholder={locked ? 'Saisie bloquée' : 'Code du Fondateur'}
+                placeholder={locked ? 'Saisie bloquée' : 'Code des chiffres'}
                 className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-slate-300 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <button

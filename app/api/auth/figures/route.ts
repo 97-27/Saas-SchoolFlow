@@ -29,16 +29,25 @@ const LOCK_MS = 30 * 60 * 1000;
  * Clé hors des familles synchronisées : seul ce serveur la lit et l'écrit.
  */
 const POLICY_KEY = 'sf_private_figures_policy';
-type Policy = { open: boolean; changedAt: number };
+/**
+ * code : code à 6 chiffres des chiffres, fixé (et changé quand il veut) par le Fondateur ou le
+ * DGA, et donné au Comptable. Tant qu'il n'existe pas, le code du Fondateur / DGA sert.
+ * Changer le code referme aussitôt un déverrouillage en cours (changedAt).
+ */
+type Policy = { open: boolean; changedAt: number; code: string };
 
 async function readPolicy(schoolId: string): Promise<Policy> {
   const row = await kvGet(schoolId, POLICY_KEY);
-  if (!row) return { open: false, changedAt: 0 };
+  if (!row) return { open: false, changedAt: 0, code: '' };
   try {
     const v = JSON.parse(row.value);
-    return { open: v.open === true, changedAt: Number(v.changedAt) || 0 };
+    return {
+      open: v.open === true,
+      changedAt: Number(v.changedAt) || 0,
+      code: typeof v.code === 'string' && /^\d{6}$/.test(v.code) ? v.code : '',
+    };
   } catch {
-    return { open: false, changedAt: 0 };
+    return { open: false, changedAt: 0, code: '' };
   }
 }
 
@@ -65,7 +74,7 @@ export async function GET(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
   let lockedUntil = 0;
-  let policy: Policy = { open: false, changedAt: 0 };
+  let policy: Policy = { open: false, changedAt: 0, code: '' };
   const concerned = FIGURES_UNLOCK_ROLES.includes(session.roleId) || FIGURES_VISIBLE_ROLES.includes(session.roleId);
   if (concerned) {
     const schoolId = await kvSchoolId(slug);
@@ -78,7 +87,16 @@ export async function GET(request: NextRequest) {
     }
   }
   return NextResponse.json(
-    { success: true, roleId: session.roleId, lockedUntil, openToComptable: policy.open, policyChangedAt: policy.changedAt },
+    {
+      success: true,
+      roleId: session.roleId,
+      lockedUntil,
+      openToComptable: policy.open,
+      policyChangedAt: policy.changedAt,
+      // Le code n'est renvoyé qu'au Fondateur et au DGA (pour le donner au Comptable).
+      ...(FIGURES_VISIBLE_ROLES.includes(session.roleId) ? { figuresCode: policy.code } : {}),
+      hasFiguresCode: !!policy.code,
+    },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }
@@ -97,14 +115,29 @@ export async function PUT(request: NextRequest) {
   } catch (e) {
     return jsonError('Requête invalide.', 400);
   }
-  if (typeof body?.open !== 'boolean') return jsonError('Requête invalide.', 400);
+  const hasOpen = typeof body?.open === 'boolean';
+  const hasCode = body?.code !== undefined;
+  if (!hasOpen && !hasCode) return jsonError('Requête invalide.', 400);
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
-  const policy: Policy = { open: body.open, changedAt: Date.now() };
+  const current = await readPolicy(schoolId);
+  const policy: Policy = { ...current, changedAt: Date.now() };
+  if (hasOpen) policy.open = body.open;
+  if (hasCode) {
+    if (body.code === 'generate') policy.code = String(Math.floor(100000 + Math.random() * 900000));
+    else if (typeof body.code === 'string' && /^\d{6}$/.test(body.code.trim())) policy.code = body.code.trim();
+    else return jsonError('Le code doit contenir exactement 6 chiffres.', 400);
+  }
   const saved = await kvPut(schoolId, POLICY_KEY, JSON.stringify(policy), `${session.roleId}|${session.staffId || ''}`);
   if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
   return NextResponse.json(
-    { success: true, openToComptable: policy.open, policyChangedAt: policy.changedAt },
+    {
+      success: true,
+      openToComptable: policy.open,
+      policyChangedAt: policy.changedAt,
+      figuresCode: policy.code,
+      hasFiguresCode: !!policy.code,
+    },
     { headers: { 'Cache-Control': 'no-store' } }
   );
 }
@@ -144,13 +177,20 @@ export async function POST(request: NextRequest) {
   const inputCode = String(body?.code || '').trim().toUpperCase();
   if (!inputCode) return jsonError('Veuillez saisir le code.', 400);
 
-  const staff = await getStaffUsersFromSupabase(slug);
-  const validCodes = staff
-    .filter((s) => FIGURES_VISIBLE_ROLES.includes(s.roleId))
-    .map((s) => String(s.authCode || '').trim().toUpperCase())
-    .filter(Boolean);
+  // Code des chiffres à 6 chiffres (fixé par le Fondateur / DGA) ; à défaut, leur code personnel.
+  const policy = await readPolicy(schoolId);
+  let validCodes: string[];
+  if (policy.code) {
+    validCodes = [policy.code];
+  } else {
+    const staff = await getStaffUsersFromSupabase(slug);
+    validCodes = staff
+      .filter((s) => FIGURES_VISIBLE_ROLES.includes(s.roleId))
+      .map((s) => String(s.authCode || '').trim().toUpperCase())
+      .filter(Boolean);
+  }
   if (validCodes.length === 0) {
-    return jsonError("Aucun code Fondateur n'est configuré pour cet établissement.", 409);
+    return jsonError("Aucun code des chiffres n'est configuré pour cet établissement.", 409);
   }
 
   const actor = `${session.roleId}|${session.staffId || ''}`;

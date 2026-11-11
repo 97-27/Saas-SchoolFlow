@@ -33,9 +33,14 @@ type State = {
   lockedUntil: number;
   openToComptable: boolean;
   policyChangedAt: number;
+  /** Code des chiffres (6 chiffres) : connu seulement du Fondateur / DGA. */
+  figuresCode: string;
+  hasFiguresCode: boolean;
 };
 
 const EMPTY: State = {
+  figuresCode: '',
+  hasFiguresCode: false,
   roleId: '',
   unlockedUntil: 0,
   dialogOpen: false,
@@ -94,6 +99,8 @@ function fetchServerState() {
         lockedUntil: Number(j.lockedUntil) || 0,
         openToComptable: open,
         policyChangedAt,
+        figuresCode: typeof j.figuresCode === 'string' ? j.figuresCode : '',
+        hasFiguresCode: j.hasFiguresCode === true,
       };
       // Fermé APRÈS le déverrouillage par code : il est annulé tout de suite.
       const unlockStart = state.unlockedUntil - UNLOCK_MS;
@@ -177,21 +184,35 @@ export function lockFigures() {
   setState({ unlockedUntil: 0 });
 }
 
-/** Fondateur / Fondateur adjoint : ouvre ou ferme les chiffres au Comptable. */
-export async function setFiguresOpenToComptable(open: boolean): Promise<string | null> {
+async function putPolicy(body: Record<string, unknown>): Promise<string | null> {
   try {
     const res = await fetch('/api/auth/figures', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ open }),
+      body: JSON.stringify(body),
     });
     const j = await res.json().catch(() => null);
     if (!res.ok || !j?.success) return j?.error || 'Enregistrement impossible. Réessayez.';
-    setState({ openToComptable: j.openToComptable === true, policyChangedAt: Number(j.policyChangedAt) || Date.now() });
+    setState({
+      openToComptable: j.openToComptable === true,
+      policyChangedAt: Number(j.policyChangedAt) || Date.now(),
+      figuresCode: typeof j.figuresCode === 'string' ? j.figuresCode : '',
+      hasFiguresCode: j.hasFiguresCode === true,
+    });
     return null;
   } catch (e) {
     return 'Connexion impossible. Réessayez.';
   }
+}
+
+/** Fondateur / Fondateur adjoint : ouvre ou ferme les chiffres au Comptable. */
+export function setFiguresOpenToComptable(open: boolean): Promise<string | null> {
+  return putPolicy({ open });
+}
+
+/** Fondateur / Fondateur adjoint : fixe (6 chiffres) ou génère le code des chiffres du Comptable. */
+export function setFiguresCode(code: string | 'generate'): Promise<string | null> {
+  return putPolicy({ code });
 }
 
 /** Vérifie le code auprès du serveur. Renvoie un message d'erreur, ou null si c'est bon. */

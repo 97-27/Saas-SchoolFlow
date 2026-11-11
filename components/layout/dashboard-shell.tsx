@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { installCloudKv, whenCloudKvReady } from '@/lib/data/cloud-kv';
-import { whenFirstSyncDone } from '@/lib/data/live-store';
+import { whenFirstSyncDone, startCrossDeviceSync } from '@/lib/data/live-store';
+import { isSessionVerified, markSessionVerified } from '@/lib/client/session-flag';
 import { installGlobalErrorReporting } from '@/lib/client/error-report';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -47,6 +48,77 @@ function DataReadyGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * GARDE DE SESSION (côté écran, en plus du contrôle serveur de proxy.ts)
+ * Après « Verrouiller la session », la flèche « retour » du navigateur pouvait réafficher l'espace
+ * de gestion gardé en mémoire. Désormais rien n'est affiché tant que le serveur n'a pas confirmé
+ * que la session (cookie signé) est valide ; la vérification est refaite au retour sur l'onglet,
+ * au « retour arrière » du navigateur et quand un autre onglet se déconnecte.
+ */
+
+function kickToLogin(slug: string) {
+  try {
+    localStorage.removeItem('schoolflow_active_session_v2');
+    sessionStorage.removeItem('schoolflow_figures_unlocked_until_v1');
+  } catch (e) {}
+  window.location.replace(`/${slug}/login`);
+}
+
+async function verifySession(slug: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/auth/session?slug=${encodeURIComponent(slug)}&t=${Date.now()}`, { cache: 'no-store' });
+    if (res.status === 401 || res.status === 403) {
+      kickToLogin(slug);
+      return false;
+    }
+    return true; // hors connexion / erreur serveur : on ne bloque pas
+  } catch (e) {
+    return true;
+  }
+}
+
+function useSessionGuard(slug: string): boolean {
+  const [ok, setOk] = useState(isSessionVerified());
+  useEffect(() => {
+    let alive = true;
+    // Aucune session locale : inutile d'attendre le serveur.
+    try {
+      if (!localStorage.getItem('schoolflow_active_session_v2')) {
+        kickToLogin(slug);
+        return;
+      }
+    } catch (e) {}
+    verifySession(slug).then((valid) => {
+      if (valid && alive) {
+        markSessionVerified();
+        setOk(true);
+      }
+    });
+    const recheck = () => verifySession(slug);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) recheck();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') recheck();
+    };
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'schoolflow_logout_at' || (e.key === 'schoolflow_active_session_v2' && !e.newValue)) kickToLogin(slug);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('popstate', recheck);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      alive = false;
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('popstate', recheck);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [slug]);
+  return ok;
+}
+
 interface DashboardShellProps {
   children: React.ReactNode;
   schoolSlug?: string;
@@ -59,12 +131,24 @@ export function DashboardShell({
   breadcrumbs,
 }: DashboardShellProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const sessionOk = useSessionGuard(schoolSlug);
 
   // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
+  // La lecture des données démarre tout de suite, en même temps que la vérification de session.
   useEffect(() => {
     installCloudKv(schoolSlug);
+    startCrossDeviceSync(schoolSlug);
     installGlobalErrorReporting();
   }, [schoolSlug]);
+
+  if (!sessionOk) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center gap-4 text-center" role="status">
+        <div className="w-11 h-11 rounded-full border-4 border-emerald-100 border-t-emerald-600 animate-spin" />
+        <p className="text-sm font-bold text-slate-900">Vérification de la session…</p>
+      </div>
+    );
+  }
 
   return (
     <ReadOnlyGuard>

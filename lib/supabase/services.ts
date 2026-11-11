@@ -1508,9 +1508,9 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
       authCode: d.auth_code,
       status: d.is_active ? 'Actif' : 'Verrouillé',
       avatarUrl: d.avatar_url,
-      // Jamais dérivé du code d'accès : le matricule est imprimé (fiches de paie, listes) et
-      // "EMP-<code>" révélait le code de connexion secret de chaque employé.
-      matricule: d.matricule || `EMP-${String(d.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+      // Le matricule d'embauche saisi par la Direction (colonne « matricule », migration 010).
+      // Plus de numéro fabriqué « EMP-xxxxxx » : il ne correspondait à rien de réel.
+      matricule: String(d.matricule || '').trim(),
       subjectOrGrade: d.subject_or_grade || 'Administration',
       assignedClasses: d.assigned_classes || 'Toutes',
       address: d.address || 'Abidjan, Côte d’Ivoire',
@@ -1530,20 +1530,26 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
  * TOUT le personnel à chaque essai, d'où une connexion très lente sur une petite connexion.
  */
 export async function getStaffAuthRecords(schoolSlug: string): Promise<
-  { id: string; fullName: string; email: string; phone: string; roleId: string; role: string; authCode: string; status: string }[]
+  { id: string; fullName: string; email: string; phone: string; roleId: string; role: string; authCode: string; status: string; matricule: string }[]
 > {
   if (!isSupabaseConfigured || !schoolSlug) return [];
   const schoolId = await getSchoolId(schoolSlug);
   if (!schoolId) return [];
-  const { data, error } = await supabase
-    .from('staff_users')
-    .select('id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at')
-    .eq('school_id', schoolId)
-    .not('role_id', 'like', 'system_%')
-    .neq('role_id', 'school_stamp')
-    .order('created_at', { ascending: true });
+  const query = (cols: string) =>
+    supabase
+      .from('staff_users')
+      .select(cols)
+      .eq('school_id', schoolId)
+      .not('role_id', 'like', 'system_%')
+      .neq('role_id', 'school_stamp')
+      .order('created_at', { ascending: true });
+  const base = 'id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at';
+  // Colonne « matricule » (migration 010) : si elle n'existe pas encore, on relit sans elle.
+  let { data, error } = await query(`${base}, matricule`);
+  if (error && /matricule/i.test(error.message || '')) ({ data, error } = await query(base));
   if (error || !data) return [];
-  return data.map((d: any) => ({
+  return (data as any[]).map((d: any) => ({
+    matricule: String(d.matricule || '').trim(),
     id: d.id,
     fullName: d.full_name || '',
     email: d.email || '',
@@ -1572,7 +1578,8 @@ export async function getStaffUserById(schoolSlug: string, id: string): Promise<
     authCode: data.auth_code,
     status: data.is_active ? 'Actif' : 'Verrouillé',
     avatarUrl: data.avatar_url,
-    matricule: data.matricule || `EMP-${String(data.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+    // Le matricule d'embauche saisi par la Direction, jamais un numéro fabriqué.
+    matricule: String(data.matricule || '').trim(),
   };
 }
 
@@ -1618,7 +1625,7 @@ export async function saveStaffUserToSupabase(staff: {
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return false;
 
-    const payload = {
+    const payload: Record<string, any> = {
       school_id: schoolId,
       full_name: staff.fullName,
       email: staff.email,
@@ -1629,6 +1636,10 @@ export async function saveStaffUserToSupabase(staff: {
       avatar_url: staff.avatarUrl || null,
       is_active: staff.status === 'Actif',
     };
+    // Matricule d'embauche (colonne ajoutée par la migration 010) : envoyé seulement s'il est
+    // fourni, jamais un numéro fabriqué.
+    const mat = String(staff.matricule || '').trim().toUpperCase();
+    if (mat && !/^EMP-[0-9A-F]{6}$/i.test(mat)) payload.matricule = mat;
 
     // Retrouver la fiche existante : d'abord par son identifiant réel (un changement de code ne
     // doit pas créer une nouvelle fiche), puis par code, et pour Directeur/Fondateur par rôle (une
@@ -1665,18 +1676,23 @@ export async function saveStaffUserToSupabase(staff: {
       // du code dans la fiche du membre). Un appareil qui garde un ancien code en mémoire ne peut
       // plus le remettre en base en enregistrant un nom, une photo ou un statut.
       const { auth_code: _code, ...withoutCode } = payload;
-      const { error: updateErr } = await supabase
-        .from('staff_users')
-        .update(allowCodeChange ? payload : withoutCode)
-        .eq('id', existingStaff[0].id);
+      const updatePayload: Record<string, any> = allowCodeChange ? payload : withoutCode;
+      let { error: updateErr } = await supabase.from('staff_users').update(updatePayload).eq('id', existingStaff[0].id);
+      // Colonne « matricule » pas encore créée (migration 010 non lancée) : on enregistre le reste.
+      if (updateErr && /matricule/i.test(updateErr.message || '') && 'matricule' in updatePayload) {
+        const { matricule: _m, ...noMat } = updatePayload;
+        ({ error: updateErr } = await supabase.from('staff_users').update(noMat).eq('id', existingStaff[0].id));
+      }
       if (updateErr) {
         console.warn('saveStaffUserToSupabase update warning:', updateErr.message);
         return false;
       }
     } else {
-      const { error: insertErr } = await supabase
-        .from('staff_users')
-        .insert(payload);
+      let { error: insertErr } = await supabase.from('staff_users').insert(payload);
+      if (insertErr && /matricule/i.test(insertErr.message || '') && 'matricule' in payload) {
+        const { matricule: _m, ...noMat } = payload;
+        ({ error: insertErr } = await supabase.from('staff_users').insert(noMat));
+      }
       if (insertErr) {
         console.warn('saveStaffUserToSupabase insert warning:', insertErr.message);
         return false;

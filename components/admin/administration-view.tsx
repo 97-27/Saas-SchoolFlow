@@ -170,13 +170,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       'fondateur', 'fondateur_adjoint', 'directeur', 'informaticien', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
-    setEditMatricule(
-      staff.roleId === 'fondateur'
-        ? (staff.matricule || 'FND-001')
-        : staff.roleId === 'directeur'
-        ? (staff.matricule || 'DIR-001')
-        : (staff.matricule || `EMP-${staff.authCode}`)
-    );
+    // Le vrai matricule enregistré (vide s'il n'a jamais été saisi : à compléter).
+    setEditMatricule(/^EMP-[0-9A-F]{6}$/i.test(staff.matricule || '') ? '' : staff.matricule || '');
     setEditSubject(
       staff.subjectOrGrade ||
       (staff.roleId === 'fondateur'
@@ -297,6 +292,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       showToast('Le compte du Fondateur ne peut être modifié que par le Fondateur lui-même.');
       return;
     }
+    const mat = editMatricule.trim().toUpperCase();
+    if (mat && staffList.some((s) => s.id !== editingStaff.id && String(s.matricule || '').trim().toUpperCase() === mat)) {
+      showToast(`⚠️ Le matricule ${mat} est déjà attribué à un autre membre.`);
+      return;
+    }
 
     const roleTitleMap: Record<string, string> = {
       fondateur: 'Fondateur (Contrôle Total)',
@@ -316,12 +316,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       fullName: editFullName.trim(),
       role: roleTitleMap[editRole] || editingStaff.role || 'Membre du Personnel',
       roleId: editRole,
-      matricule:
-        editRole === 'fondateur'
-          ? (editMatricule.trim() || 'FND-001')
-          : editRole === 'directeur'
-          ? (editMatricule.trim() || 'DIR-001')
-          : (editMatricule.trim() || `EMP-${editAuthCodeValue.trim()}`),
+      matricule: editMatricule.trim().toUpperCase(),
       subjectOrGrade:
         editSubject.trim() ||
         (editRole === 'enseignant'
@@ -396,6 +391,26 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     e.preventDefault();
     if (!newFullName.trim()) return;
 
+    // Matricule d'embauche, téléphone et email : obligatoires (le membre se connecte avec son
+    // matricule + son code ; téléphone et email s'affichent sur son profil).
+    const matricule = newMatricule.trim().toUpperCase();
+    if (!matricule) {
+      showToast("⚠️ Saisissez le matricule d'embauche du membre.");
+      return;
+    }
+    if (staffList.some((s) => String(s.matricule || '').trim().toUpperCase() === matricule)) {
+      showToast(`⚠️ Le matricule ${matricule} est déjà attribué à un autre membre.`);
+      return;
+    }
+    if (newPhone.replace(/\D/g, '').length < 8) {
+      showToast('⚠️ Saisissez le numéro de téléphone du membre.');
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(newEmail.trim())) {
+      showToast("⚠️ Saisissez l'adresse email du membre.");
+      return;
+    }
+
     const manualCode = newAuthCode.trim().toUpperCase();
     if (manualCode && staffList.some((s) => s.authCode === manualCode)) {
       showToast(`⚠️ Le code ${manualCode} est déjà utilisé par un autre membre du personnel.`);
@@ -420,13 +435,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       fullName: newFullName.trim(),
       role: roleTitleMap[newRole] || 'Membre du Personnel',
       roleId: newRole,
-      matricule: newMatricule.trim() || `EMP-${generatedCode.toUpperCase()}`,
+      matricule,
       subjectOrGrade: newSubject.trim() || (newRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
       assignedClasses: newClasses.trim() || (newRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
       joinDate: '01/09/2026',
-      email: '',
+      email: newEmail.trim(),
       phone: newPhone.trim(),
       authCode: generatedCode.toUpperCase(),
       status: 'Actif',
@@ -434,7 +449,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     };
 
     addLiveStaffUser(newStaffMember, schoolSlug);
-    showToast(`Compte configuré pour ${newStaffMember.fullName} (Code: ${newStaffMember.authCode})`);
+    showToast(`Compte créé pour ${newStaffMember.fullName} — Matricule ${matricule}, Code ${newStaffMember.authCode}`);
     
     // Reset
     setNewFullName('');
@@ -759,11 +774,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                               : member.role}
                           </span>
                           <span className="font-mono text-[10px] opacity-75 border-l border-current/30 pl-1.5">
-                            {member.roleId === 'fondateur'
-                              ? 'FND-001'
-                              : member.roleId === 'directeur'
-                              ? (member.matricule || 'DIR-001')
-                              : (member.matricule || `EMP-${member.authCode}`)}
+                            {member.matricule || 'Matricule à saisir'}
                           </span>
                         </span>
                       </div>
@@ -1137,29 +1148,41 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Matricule d&apos;Embauche</label>
+                  <label className="font-bold text-slate-700 block">Matricule d&apos;Embauche * (sert à la connexion)</label>
                   <input
                     type="text"
+                    required
                     value={newMatricule}
-                    onChange={(e) => setNewMatricule(e.target.value)}
+                    onChange={(e) => setNewMatricule(e.target.value.toUpperCase())}
                     placeholder="Ex : EMP-ENS-007"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  Téléphone {newRole === 'enseignant' ? '* (l’enseignant se connecte avec ce numéro)' : ''}
-                </label>
-                <input
-                  type="tel"
-                  required={newRole === 'enseignant'}
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="Ex : +225 07 48 92 11 00"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Téléphone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="Ex : +225 07 48 92 11 00"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Adresse email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="Ex : nom.prenom@gmail.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1390,29 +1413,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               {/* Matricule / Réf & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">
-                    {editingStaff.roleId === 'fondateur'
-                      ? 'Réf. Promoteur & Mandat'
-                      : editingStaff.roleId === 'directeur'
-                      ? 'Réf. Direction Générale'
-                      : 'Matricule d’Embauche'}
-                  </label>
-                  {editingStaff.roleId === 'fondateur' ? (
-                    <input
-                      type="text"
-                      disabled
-                      value="FND-001 (Promoteur & Propriétaire Légal)"
-                      className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-amber-50/60 font-mono font-bold text-amber-950 cursor-not-allowed select-none"
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={editMatricule}
-                      onChange={(e) => setEditMatricule(e.target.value)}
-                      placeholder={editingStaff.roleId === 'directeur' ? 'DIR-001' : 'Ex : EMP-ENS-004'}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
-                    />
-                  )}
+                  <label className="font-bold text-slate-700 block">Matricule d’Embauche * (sert à la connexion)</label>
+                  <input
+                    type="text"
+                    required
+                    value={editMatricule}
+                    onChange={(e) => setEditMatricule(e.target.value.toUpperCase())}
+                    placeholder={editingStaff.roleId === 'fondateur' ? 'Ex : FND-001' : editingStaff.roleId === 'directeur' ? 'Ex : DIR-001' : 'Ex : EMP-ENS-004'}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1427,18 +1436,29 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">
-                  Téléphone {editRole === 'enseignant' ? '* (sert à la connexion de l’enseignant)' : ''}
-                </label>
-                <input
-                  type="tel"
-                  required={editRole === 'enseignant'}
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="Ex : +225 07 48 92 11 00"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Téléphone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="Ex : +225 07 48 92 11 00"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block">Adresse email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="Ex : nom.prenom@gmail.com"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-900 focus:border-emerald-600"
+                  />
+                </div>
               </div>
 
               {/* Attributions Pédagogiques STRICTEMENT réservées au profil Enseignant */}

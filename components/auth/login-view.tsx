@@ -54,6 +54,9 @@ import {
 } from '@/lib/data/live-store';
 import { getAllSchoolsFromSupabase, saveStaffUserToSupabase } from '@/lib/supabase/remote';
 import { homePage } from '@/lib/auth/roles';
+import { markSessionVerified } from '@/lib/client/session-flag';
+import { installCloudKv } from '@/lib/data/cloud-kv';
+import { startCrossDeviceSync } from '@/lib/data/live-store';
 
 export type UserRole =
   | 'directeur'
@@ -195,6 +198,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
 };
 
 const TEACHER_LOGIN_MEMORY_KEY = 'schoolflow_teacher_login_v1';
+const STAFF_MATRICULE_MEMORY_KEY = 'schoolflow_staff_matricule_v1';
 
 /**
  * Mémoire de connexion de CE navigateur : à la première connexion réussie, le nom, le téléphone et
@@ -315,6 +319,16 @@ export function LoginView({
   const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
   const [teacherOtherSubject, setTeacherOtherSubject] = useState('');
   const [teacherPin, setTeacherPin] = useState('');
+  // Personnel : matricule d'embauche (retenu par ce navigateur pour chaque poste, jamais le code).
+  const [staffMatricule, setStaffMatricule] = useState('');
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STAFF_MATRICULE_MEMORY_KEY) || '{}');
+      setStaffMatricule(typeof saved?.[selectedRole] === 'string' ? saved[selectedRole] : '');
+    } catch (e) {
+      setStaffMatricule('');
+    }
+  }, [selectedRole]);
   // Élève : matricule et classe.
   const [studentMatricule, setStudentMatricule] = useState('');
   const [studentGrade, setStudentGrade] = useState('');
@@ -568,10 +582,15 @@ export function LoginView({
     // la civilité du menu s'appliquer seule.
     // Enseignants : connexion par numéro de téléphone + matière (+ classe), sans nom ni code.
     const isTeacherLogin = selectedRole === 'enseignant';
-    const trimmedName = isTeacherLogin
-      ? ''
-      : userName.trim().replace(/^(mr|mme|mlle|m\.?|monsieur|madame|mademoiselle)\.?\s+/i, '').trim();
-    if (!isTeacherLogin) {
+    const isStudentLogin = selectedRole === 'eleve';
+    // Personnel (Fondateur, DGA, Directeur, Comptable…) : matricule d'embauche + code seulement.
+    const isStaffCodeLogin = selectedRole !== 'parent' && !isTeacherLogin && !isStudentLogin;
+    // Nom saisi : parents et élèves seulement.
+    const trimmedName =
+      selectedRole === 'parent' || isStudentLogin
+        ? userName.trim().replace(/^(mr|mme|mlle|m\.?|monsieur|madame|mademoiselle)\.?\s+/i, '').trim()
+        : '';
+    if (selectedRole === 'parent' || isStudentLogin) {
       if (!trimmedName) {
         setErrorMessage('Veuillez saisir votre Nom et Prénoms.');
         return;
@@ -583,7 +602,10 @@ export function LoginView({
       }
     }
 
-    const isStudentLogin = selectedRole === 'eleve';
+    if (isStaffCodeLogin && !staffMatricule.trim()) {
+      setErrorMessage("Veuillez saisir votre matricule d'embauche (donné par la Direction).");
+      return;
+    }
     if (isStudentLogin && !studentMatricule.trim()) {
       setErrorMessage("Saisis ton matricule (ou ton numéro d'élève, ex : ID-045).");
       return;
@@ -594,8 +616,8 @@ export function LoginView({
     }
 
     const cleanEmail = loginEmail.trim();
-    if (!isTeacherLogin && !isStudentLogin && !cleanEmail) {
-      setErrorMessage('Veuillez renseigner votre Adresse Email Professionnelle obligatoire.');
+    if (selectedRole === 'parent' && !cleanEmail) {
+      setErrorMessage('Veuillez renseigner votre Adresse Email.');
       return;
     }
     if (isTeacherLogin && !teacherSubject.trim()) {
@@ -611,15 +633,15 @@ export function LoginView({
       return;
     }
 
-    // Vérification obligatoire du contact téléphonique / WhatsApp pour TOUS les utilisateurs
-    const cleanPhone = parentPhone.trim();
-    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 8) {
+    // Téléphone : parents, élèves (numéro du parent) et enseignants.
+    const cleanPhone = isStaffCodeLogin ? '' : parentPhone.trim();
+    if (!isStaffCodeLogin && cleanPhone.replace(/\D/g, '').length < 8) {
       setErrorMessage(
         selectedRole === 'parent'
           ? "Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant."
           : isStudentLogin
           ? "Saisis le numéro de téléphone de ton parent (celui donné à l'inscription)."
-          : "Veuillez renseigner obligatoirement votre numéro de téléphone / WhatsApp professionnel direct."
+          : 'Veuillez saisir votre numéro de téléphone.'
       );
       return;
     }
@@ -656,7 +678,7 @@ export function LoginView({
           email: cleanEmail,
           subject: isTeacherLogin ? teacherSubject.trim() : undefined,
           teachingClass: isTeacherLogin ? teacherClass : undefined,
-          matricule: isStudentLogin ? studentMatricule.trim() : undefined,
+          matricule: isStudentLogin ? studentMatricule.trim() : isStaffCodeLogin ? staffMatricule.trim() : undefined,
           grade: isStudentLogin ? studentGrade : undefined,
         }),
       });
@@ -695,9 +717,13 @@ export function LoginView({
         ? String(loginResult.authCode || '').toUpperCase()
         : authCodeInput.trim().toUpperCase();
 
-    // Nom, téléphone et email retenus pour la prochaine connexion sur ce navigateur.
-    if (selectedRole !== 'parent' && !isTeacherLogin && !isStudentLogin && trimmedName) {
-      rememberLoginProfile({ roleId: selectedRole, name: trimmedName, email: cleanEmail, phone: cleanPhone });
+    // Matricule retenu par ce navigateur pour ce poste (jamais le code).
+    if (isStaffCodeLogin) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STAFF_MATRICULE_MEMORY_KEY) || '{}') || {};
+        saved[selectedRole] = staffMatricule.trim();
+        localStorage.setItem(STAFF_MATRICULE_MEMORY_KEY, JSON.stringify(saved));
+      } catch (e) {}
     }
 
     // L'enseignant n'a plus qu'à vérifier ses informations la prochaine fois.
@@ -847,10 +873,18 @@ export function LoginView({
         title: 'Authentification réussie !',
         subtitle: `Bienvenue, ${finalFullName} (${roleBadge})`,
       });
-      setIsLoading(false);
+      // Le bouton reste en « ouverture… » jusqu'à l'arrivée sur la page (pas de double clic).
 
       // Page d'arrivée du poste (lib/auth/roles.ts) : le Directeur n'a plus le Tableau de bord.
       const destinationUrl = `/${activeSlug}/admin/${homePage(selectedRole)}`;
+
+      // Gagner du temps : la session vient d'être validée par le serveur (pas de 2e vérification)
+      // et la lecture des données démarre MAINTENANT, pendant le chargement de la page suivante.
+      markSessionVerified();
+      try {
+        installCloudKv(activeSlug);
+        startCrossDeviceSync(activeSlug);
+      } catch (e) {}
 
       router.push(destinationUrl);
     }, 0);
@@ -1231,7 +1265,7 @@ export function LoginView({
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>1. Poste / Fonction dans l'Établissement *</span>
-                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">9 Profils d'Accès</span>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">11 Profils d'Accès</span>
                   </label>
                   <div className="relative">
                     <Briefcase className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1268,25 +1302,23 @@ export function LoginView({
                 {selectedRole !== 'enseignant' && (<>
                 {/* Photo de Profil (Optionnelle à la connexion, enregistrée définitivement) */}
                 {selectedRole !== 'eleve' && (
-                <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 shadow-2xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative w-11 h-11 rounded-xl bg-white border border-emerald-300 overflow-hidden shrink-0 flex items-center justify-center shadow-2xs">
-                      {loginAvatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={loginAvatar} alt="Photo profil" className="w-full h-full object-cover" />
-                      ) : (
-                        <User className="w-5 h-5 text-emerald-600" />
-                      )}
-                    </div>
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center gap-4 shadow-2xs">
+                  <div className="relative w-20 h-20 sm:w-[88px] sm:h-[88px] rounded-2xl bg-white border-2 border-emerald-300 overflow-hidden shrink-0 flex items-center justify-center shadow-sm">
+                    {loginAvatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={loginAvatar} alt="Photo profil" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-9 h-9 text-emerald-600" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
                     <div>
-                      <span className="text-xs font-bold text-slate-900 block">Photo de Profil</span>
-                      <span className="text-[10px] text-slate-500">
-                        {loginAvatar ? '✓ Photo enregistrée définitivement' : 'Optionnelle — Sauvegardée dès la 1ère connexion'}
+                      <span className="text-sm font-bold text-slate-900 block">Photo de Profil</span>
+                      <span className="text-[11px] text-slate-500 leading-snug block">
+                        {loginAvatar ? '✓ Photo enregistrée sur votre profil' : 'Optionnelle — enregistrée dès la 1ère connexion'}
                       </span>
                     </div>
-                  </div>
-                  <div>
-                    <label className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 text-[11px] font-bold hover:bg-emerald-100 cursor-pointer shadow-2xs transition-all inline-flex items-center gap-1.5">
+                    <label className="px-3.5 py-1.5 rounded-xl bg-white border border-emerald-300 text-emerald-800 text-xs font-bold hover:bg-emerald-100 cursor-pointer shadow-2xs transition-all inline-flex items-center gap-1.5">
                       <span>{loginAvatar ? 'Changer' : 'Ajouter'}</span>
                       <input
                         type="file"
@@ -1299,7 +1331,9 @@ export function LoginView({
                 </div>
                 )}
 
-                {/* 2. Civilité & Nom et Prénoms */}
+                {/* 2. Civilité & Nom et Prénoms — parents et élèves seulement (le personnel se
+                    connecte avec son matricule d'embauche + son code) */}
+                {(selectedRole === 'parent' || selectedRole === 'eleve') && (
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>2. Civilité, Nom et Prénoms *</span>
@@ -1387,8 +1421,10 @@ export function LoginView({
                   )}
                 </div>
 
-                {/* 3. Adresse Email Professionnelle (OBLIGATOIRE) — pas pour un élève */}
-                {selectedRole !== 'eleve' && (
+                )}
+
+                {/* 3. Adresse Email — parents seulement (celle du personnel est sur sa fiche) */}
+                {selectedRole === 'parent' && (
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>3. Adresse Email Professionnelle *</span>
@@ -1411,7 +1447,8 @@ export function LoginView({
 
                 </>)}
 
-                {/* 4. Numéro de Téléphone / WhatsApp (OBLIGATOIRE POUR TOUS) */}
+                {/* 4. Numéro de Téléphone — parents, élèves (numéro du parent) et enseignants */}
+                {(selectedRole === 'parent' || selectedRole === 'eleve' || selectedRole === 'enseignant') && (
                 <div className="space-y-1.5 animate-in fade-in">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>
@@ -1448,6 +1485,31 @@ export function LoginView({
                       : "ℹ️ Ce numéro sera automatiquement enregistré sur votre profil officiel de l'école."}
                   </p>
                 </div>
+                )}
+
+                {/* Personnel : matricule d'embauche (avec le code ci-dessous) */}
+                {selectedRole !== 'parent' && selectedRole !== 'eleve' && selectedRole !== 'enseignant' && (
+                  <div className="space-y-1.5 animate-in fade-in">
+                    <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>2. Matricule d&apos;embauche *</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">Donné par la Direction</span>
+                    </label>
+                    <div className="relative">
+                      <Briefcase className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={staffMatricule}
+                        onChange={(e) => setStaffMatricule(e.target.value.toUpperCase())}
+                        placeholder="Ex : EMP-CPT-001"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Élève : matricule + classe */}
                 {selectedRole === 'eleve' && (
@@ -1594,12 +1656,12 @@ export function LoginView({
                 )}
 
                 {/* 5. Code d'Authentification Officiel (Requis pour Fondateur, Directeur et tous les Personnels) */}
-                {selectedRole !== 'parent' && selectedRole !== 'enseignant' && (
+                {selectedRole !== 'parent' && selectedRole !== 'enseignant' && selectedRole !== 'eleve' && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>5. Code d&apos;Authentification Sécurisé *</span>
+                        <span>3. Code d&apos;Authentification Sécurisé *</span>
                       </span>
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                         Code Secret Requis
@@ -1660,7 +1722,7 @@ export function LoginView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="font-bold text-slate-800 block text-xs">
-                      Nom et Prénoms du Directeur des Études (Responsable) *
+                      Nom et Prénoms du Directeur des Études *
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
