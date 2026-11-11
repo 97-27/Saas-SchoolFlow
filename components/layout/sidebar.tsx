@@ -222,6 +222,12 @@ export function Sidebar({
       { key: 'messagerie-parent', title: 'Écrire à la Direction', href: `${baseUrl}/messagerie-parent`, icon: Mail, active: pathname.includes('/messagerie-parent') },
       { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     ];
+  } else if (roleId === 'eleve') {
+    // 🎒 ÉLÈVE : ses notes et bulletins, ses notes diverses.
+    navItems = [
+      { key: 'bulletins-parents', title: 'Mes Notes & Bulletins', href: `${baseUrl}/bulletins-parents`, icon: MessageSquare, active: pathname.includes('/bulletins-parents') },
+      { key: 'notes_diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
+    ];
   } else {
     navItems = catalog.filter((item) => (item.isGroup ? item.subItems.length > 0 : can(item.page)));
   }

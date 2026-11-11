@@ -299,12 +299,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     }
 
     const roleTitleMap: Record<string, string> = {
-      fondateur: 'Contrôle Total',
+      fondateur: 'Fondateur (Contrôle Total)',
       fondateur_adjoint: 'Fondateur adjoint (DGA)',
-      directeur: 'Contrôle',
+      directeur: 'Directeur des Études (Contrôle)',
       informaticien: 'Informaticien',
       assistant_direction: 'Assistant(e) de Direction',
-      educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
+      educateur: 'Éducateur / Conseiller d’Éducation',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
@@ -406,7 +406,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       fondateur_adjoint: 'Fondateur adjoint (DGA)',
       informaticien: 'Informaticien',
       assistant_direction: 'Assistant(e) de Direction',
-      educateur: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
+      educateur: 'Éducateur / Conseiller d’Éducation',
       comptable: 'Comptable / Gestionnaire',
       secretaire: 'Secrétaire de Direction',
       enseignant: 'Enseignant / Professeur Titulaire (Toutes matières)',
@@ -664,7 +664,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <option value="secretaire">Secrétaires</option>
               <option value="comptable">Comptables</option>
               <option value="assistant_direction">Assistant(e) Direction</option>
-              <option value="educateur">Éducateurs (Vie Scolaire)</option>
+              <option value="educateur">Éducateurs / Conseillers d’Éducation</option>
               <option value="fondateur_adjoint">Fondateurs adjoints (DGA)</option>
               <option value="informaticien">Informaticiens</option>
             </select>
@@ -739,9 +739,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                         }`}>
                           <span>
                             {member.roleId === 'fondateur'
-                              ? '👑 Contrôle Total'
+                              ? '👑 Fondateur (Contrôle Total)'
                               : member.roleId === 'directeur'
-                              ? '👑 Contrôle'
+                              ? '👑 Directeur des Études (Contrôle)'
                               : member.roleId === 'enseignant'
                               ? '👨‍🏫 Enseignant'
                               : member.roleId === 'secretaire'
@@ -942,7 +942,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
                     <div>
                       <span className="text-slate-500 text-[11px] block">Statut Légal :</span>
-                      <strong className="text-amber-950 font-bold">Contrôle Total (Fondateur & Promoteur Légal)</strong>
+                      <strong className="text-amber-950 font-bold">Fondateur (Contrôle Total)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 text-[11px] block">Réf. Promoteur & Mandat :</span>
@@ -963,7 +963,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-1">
                     <div>
                       <span className="text-slate-500 text-[11px] block">Fonction Officielle :</span>
-                      <strong className="text-emerald-950 font-bold">Contrôle (Directeur des Études)</strong>
+                      <strong className="text-emerald-950 font-bold">Directeur des Études (Contrôle)</strong>
                     </div>
                     <div>
                       <span className="text-slate-500 text-[11px] block">Réf. Direction :</span>
@@ -1180,7 +1180,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     <option value="secretaire">📝 Secrétaire de Direction</option>
                     <option value="comptable">💼 Comptable / Gestionnaire</option>
                     <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                    <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
+                    <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation</option>
                   </select>
                 </div>
 
@@ -1311,7 +1311,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-extrabold text-slate-900 font-heading">
-                    Modifier les Informations & Code
+                    {isFounderAccountLocked(editingStaff) ? 'Fiche du Fondateur' : 'Modifier les Informations & Code'}
                   </h3>
                   <p className="text-xs text-slate-500">
                     Membre : <strong>{editingStaff.fullName}</strong>
@@ -1328,8 +1328,19 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               </button>
             </div>
 
+            {isFounderAccountLocked(editingStaff) && (
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2">
+                <Lock className="w-4 h-4 shrink-0 text-amber-600" />
+                <span>
+                  <strong>Lecture seule.</strong> Le compte du Fondateur (coordonnées et code) ne peut être modifié que par le
+                  Fondateur lui-même. Son code reste confidentiel.
+                </span>
+              </div>
+            )}
+
             <form onSubmit={handleSaveFullEdit} className="space-y-3.5 text-xs">
-              
+              <fieldset disabled={isFounderAccountLocked(editingStaff)} className="space-y-3.5 min-w-0 disabled:opacity-80">
+
               {/* Nom & Prénoms + Rôle */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -1351,12 +1362,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   {editingStaff.roleId === 'fondateur' ? (
                     <div className="w-full px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span>👑 Contrôle Total (Fondateur / Promoteur)</span>
+                      <span>👑 Fondateur (Contrôle Total)</span>
                     </div>
                   ) : editingStaff.roleId === 'directeur' ? (
                     <div className="w-full px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-950 font-black text-xs flex items-center gap-1.5 shadow-2xs">
                       <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>👑 Contrôle (Directeur des Études)</span>
+                      <span>👑 Directeur des Études (Contrôle)</span>
                     </div>
                   ) : (
                     <select
@@ -1370,7 +1381,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="comptable">💼 Comptable / Gestionnaire</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                      <option value="educateur">🛡️ Éducateur / Vie Scolaire</option>
+                      <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation</option>
                     </select>
                   )}
                 </div>
@@ -1502,26 +1513,36 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     <label className="font-bold text-slate-700 block text-[11px]">
                       {editRole === 'enseignant' ? 'Code personnel à 4 chiffres *' : <>Code d&apos;Authentification *</>}
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
-                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                    >
-                      Régénérer
-                    </button>
+                    {!isCodeHidden(editingStaff) && (
+                      <button
+                        type="button"
+                        onClick={() => setEditAuthCodeValue(generateRandomCode(editRole))}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        Régénérer
+                      </button>
+                    )}
                   </div>
 
-                  <input
-                    type="text"
-                    required
-                    pattern={editRole === 'enseignant' ? '\\d{4}' : undefined}
-                    title={editRole === 'enseignant' ? 'Exactement 4 chiffres' : undefined}
-                    value={editAuthCodeValue}
-                    onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
-                  />
+                  {/* Un code masqué (« MASQUE-… ») n'est JAMAIS affiché : c'était un faux code. */}
+                  {isCodeHidden(editingStaff) ? (
+                    <div className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-100 font-bold text-xs text-slate-600 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" /> Confidentiel
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      pattern={editRole === 'enseignant' ? '\\d{4}' : undefined}
+                      title={editRole === 'enseignant' ? 'Exactement 4 chiffres' : undefined}
+                      value={editAuthCodeValue}
+                      onChange={(e) => setEditAuthCodeValue(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-400 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest bg-emerald-50/50"
+                    />
+                  )}
                 </div>
               </div>
+              </fieldset>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
@@ -1529,14 +1550,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   onClick={() => setEditingStaff(null)}
                   className="px-4 py-2.5 rounded-xl font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
-                  Annuler
+                  {isFounderAccountLocked(editingStaff) ? 'Fermer' : 'Annuler'}
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
-                >
-                  Enregistrer les Modifications
-                </button>
+                {!isFounderAccountLocked(editingStaff) && (
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+                  >
+                    Enregistrer les Modifications
+                  </button>
+                )}
               </div>
 
             </form>

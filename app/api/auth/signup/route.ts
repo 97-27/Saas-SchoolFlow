@@ -135,11 +135,11 @@ export async function POST(request: NextRequest) {
   const founderAuthCode = generateAuthCode('FND');
   const [dirSaved, fndSaved] = await Promise.all([
     saveStaffUserToSupabase(
-      { fullName: responsableName, role: 'Contrôle', roleId: 'directeur', email, phone, authCode: directorAuthCode, status: 'Actif' },
+      { fullName: responsableName, role: 'Directeur des Études (Contrôle)', roleId: 'directeur', email, phone, authCode: directorAuthCode, status: 'Actif' },
       newSchool.slug
     ),
     saveStaffUserToSupabase(
-      { fullName: founderName, role: 'Contrôle Total', roleId: 'fondateur', email, phone, authCode: founderAuthCode, status: 'Actif' },
+      { fullName: founderName, role: 'Fondateur (Contrôle Total)', roleId: 'fondateur', email, phone, authCode: founderAuthCode, status: 'Actif' },
       newSchool.slug
     ),
   ]);

@@ -1,8 +1,21 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { DATA_UPDATED_EVENT, startCrossDeviceSync, CLIENT_INSTANCE_ID } from '@/lib/data/live-store';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  DATA_UPDATED_EVENT,
+  startCrossDeviceSync,
+  CLIENT_INSTANCE_ID,
+  getLiveInvoices,
+  whenFirstSyncDone,
+} from '@/lib/data/live-store';
 import { CheckCircle2, Bell, X } from 'lucide-react';
+import { playCashSound } from '@/lib/utils/audio';
+import { formatFCFA } from '@/lib/utils/formatters';
+import { useFiguresState } from '@/lib/client/figures-privacy';
+
+/** Reçoivent l'alerte « versement reçu ». */
+const PAYMENT_ALERT_ROLES = ['fondateur', 'fondateur_adjoint', 'comptable'];
+const NOTIF_PROMPT_KEY = 'schoolflow_payment_notif_prompt_v1';
 
 interface RealtimeNotifierProps {
   schoolSlug?: string;
@@ -78,6 +91,99 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [schoolSlug]);
 
+  // ─── VERSEMENTS REÇUS SUR UN AUTRE APPAREIL : notification + sonnerie « argent » ───
+  // Le signal temps réel ne transporte aucune donnée (sécurité) : chaque appareil compare donc
+  // les reçus avant / après chaque relecture de la base. Un montant payé qui augmente = un
+  // versement vient d'être encaissé ailleurs. Fondateur, DGA et Comptable seulement.
+  const paidSnapshot = useRef<Map<string, number> | null>(null);
+  const [canHearPayments, setCanHearPayments] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<string>('unsupported');
+  const [notifPromptDismissed, setNotifPromptDismissed] = useState(true);
+  const figures = useFiguresState();
+
+  useEffect(() => {
+    let role = '';
+    try {
+      role = String(JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}').roleId || '');
+    } catch (e) {}
+    const eligible = PAYMENT_ALERT_ROLES.includes(role);
+    setCanHearPayments(eligible);
+    if (typeof Notification !== 'undefined') setNotifPermission(Notification.permission);
+    try {
+      setNotifPromptDismissed(localStorage.getItem(NOTIF_PROMPT_KEY) === '1');
+    } catch (e) {}
+    if (!eligible) return;
+
+    const snapshot = () => {
+      const m = new Map<string, number>();
+      for (const inv of getLiveInvoices([], schoolSlug)) {
+        if (inv?.id) m.set(inv.id, Number(inv.paidAmount) || 0);
+      }
+      return m;
+    };
+    whenFirstSyncDone().then(() => {
+      paidSnapshot.current = snapshot();
+    });
+
+    const onData = (e: any) => {
+      if (!paidSnapshot.current) return;
+      const before = paidSnapshot.current;
+      const invoices = getLiveInvoices([], schoolSlug);
+      const now = new Map<string, number>();
+      const received: { inv: any; delta: number }[] = [];
+      for (const inv of invoices) {
+        if (!inv?.id) continue;
+        const paid = Number(inv.paidAmount) || 0;
+        now.set(inv.id, paid);
+        const delta = paid - (before.get(inv.id) ?? 0);
+        if (delta > 0) received.push({ inv, delta });
+      }
+      paidSnapshot.current = now;
+      // Seulement ce qui vient de la base (autre appareil) : pas sa propre saisie.
+      if (e?.detail?.action !== 'server_hydrated' || received.length === 0) return;
+      announcePayments(received);
+    };
+    window.addEventListener(DATA_UPDATED_EVENT, onData);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, onData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolSlug]);
+
+  const announcePayments = (received: { inv: any; delta: number }[]) => {
+    playCashSound();
+    const showAmounts = figuresVisibleRef.current;
+    const shown = received.slice(0, 3);
+    const items: RealtimeToast[] = shown.map(({ inv, delta }) => ({
+      id: Date.now() + Math.random(),
+      type: 'payment',
+      title: '💰 Versement reçu',
+      message: `${String(inv.studentName || 'Élève').toUpperCase()}${inv.studentGrade ? ` (${inv.studentGrade})` : ''}${
+        showAmounts ? ` — ${formatFCFA(delta)}` : ''
+      }`,
+      subInfo: `${inv.feeType || 'Scolarité'} • Reçu ${inv.invoiceNumber || ''}`.trim(),
+    }));
+    if (received.length > shown.length) {
+      items.push({
+        id: Date.now() + Math.random(),
+        type: 'payment',
+        title: '💰 Autres versements',
+        message: `+ ${received.length - shown.length} autre(s) versement(s) enregistrés.`,
+      });
+    }
+    setQueue((q) => [...q, ...items]);
+
+    // Notification du téléphone / de l'ordinateur (si autorisée), utile quand l'onglet est en arrière-plan.
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        for (const it of items) {
+          new Notification(it.title, { body: `${it.message}${it.subInfo ? `\n${it.subInfo}` : ''}`, tag: String(it.id) });
+        }
+      }
+    } catch (e) {}
+  };
+
+  const figuresVisibleRef = useRef(false);
+  figuresVisibleRef.current = figures.visible;
+
   // Fait avancer le carrousel : dès qu'aucun toast n'est affiché, prendre le suivant dans la file.
   useEffect(() => {
     if (toast || queue.length === 0) return;
@@ -94,9 +200,58 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     return () => clearTimeout(timer);
   }, [toast]);
 
-  if (!toast) return null;
+  const showNotifPrompt = canHearPayments && notifPermission === 'default' && !notifPromptDismissed;
+  const dismissPrompt = () => {
+    setNotifPromptDismissed(true);
+    try {
+      localStorage.setItem(NOTIF_PROMPT_KEY, '1');
+    } catch (e) {}
+  };
+
+  const prompt = showNotifPrompt ? (
+    <div className="fixed bottom-4 left-4 right-4 sm:right-auto sm:max-w-sm z-[140] bg-white border border-emerald-200 rounded-2xl shadow-2xl p-4 space-y-3 print:hidden animate-in fade-in slide-in-from-bottom-2">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <Bell className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-extrabold text-slate-900 font-heading">Alertes de versements</p>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            Recevoir une notification et une sonnerie sur cet appareil à chaque versement encaissé ?
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const p = await Notification.requestPermission();
+              setNotifPermission(p);
+              if (p === 'granted') playCashSound();
+            } catch (e) {}
+            dismissPrompt();
+          }}
+          className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+        >
+          Activer
+        </button>
+        <button
+          type="button"
+          onClick={dismissPrompt}
+          className="px-3 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+        >
+          Plus tard
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  if (!toast) return prompt;
 
   return (
+    <>
+    {prompt}
     <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[99999] max-w-md w-[92vw] sm:w-auto animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto">
       <div className="bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500/80 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl flex items-start gap-3">
         <div className="relative p-2 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0 mt-0.5">
@@ -136,5 +291,6 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
         </button>
       </div>
     </div>
+    </>
   );
 }

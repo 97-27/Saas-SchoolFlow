@@ -123,13 +123,15 @@ function filterForSession(data: Record<string, any>, session: SessionPayload): R
     out.diverseNotes = out.diverseNotes.filter((n: any) => upperCode(n?.authorCode) === ownCode);
   }
 
-  if (session.roleId === 'parent') {
+  // Parent : ses enfants. Élève : sa seule fiche (childIds = lui), aucun message des parents.
+  if (session.roleId === 'parent' || session.roleId === 'eleve') {
     const childIds = new Set(session.childIds || []);
     const phones = session.parentPhones || [];
     out.students = (out.students || []).filter((s: any) => childIds.has(s.id));
     out.invoices = (out.invoices || []).filter((inv: any) => childIds.has(inv.studentId));
     out.staffUsers = [];
-    out.parentMessages = (out.parentMessages || []).filter((m: any) => parentOwnsMessage(m, phones));
+    out.parentMessages =
+      session.roleId === 'parent' ? (out.parentMessages || []).filter((m: any) => parentOwnsMessage(m, phones)) : [];
     for (const key of STUDENT_SCOPED_SERVICE_KEYS) {
       if (out[key] !== undefined) out[key] = filterByStudent(out[key], childIds);
     }

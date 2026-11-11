@@ -57,6 +57,35 @@ export function playRegistrationSuccessSound(): void {
 }
 
 /**
+ * Sonnerie « argent » (cha-ching de caisse) : un versement vient d'être encaissé.
+ */
+export function playCashSound(): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // « cha » puis « ching » : deux tintements métalliques brillants, le second plus long.
+    const strike = (t: number, freqs: number[], dur: number, vol: number) => {
+      freqs.forEach((f) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, now + t);
+        gain.gain.setValueAtTime(0, now + t);
+        gain.gain.linearRampToValueAtTime(vol, now + t + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0008, now + t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + dur + 0.02);
+      });
+    };
+    strike(0, [1567.98, 2093.0], 0.12, 0.12);
+    strike(0.11, [2093.0, 2637.02, 3135.96], 0.9, 0.14);
+  } catch (e) {}
+}
+
+/**
  * Sonore de copie / coller dans le presse-papier (double-tick rapide et propre)
  */
 export function playCopySound(): void {

@@ -30,9 +30,9 @@ export const ALL_STAFF_ROLES = [
 ];
 
 export const ROLE_LABELS: Record<string, string> = {
-  fondateur: 'Fondateur',
+  fondateur: 'Fondateur (Contrôle Total)',
   fondateur_adjoint: 'Fondateur adjoint (DGA)',
-  directeur: 'Directeur',
+  directeur: 'Directeur des Études (Contrôle)',
   informaticien: 'Informaticien',
   assistant_direction: 'Assistant(e) de Direction',
   secretaire: 'Secrétaire de Direction',
@@ -40,6 +40,7 @@ export const ROLE_LABELS: Record<string, string> = {
   enseignant: 'Enseignant / Professeur',
   educateur: 'Éducateur / Conseiller d’Éducation',
   parent: 'Parent / Tuteur',
+  eleve: 'Élève',
 };
 
 /** Toutes les pages /admin/<segment>. */
@@ -89,6 +90,8 @@ const ROLE_PAGES: Record<string, string[]> = {
   enseignant: [...PEDAGOGY, 'pointage', 'notes-diverses'],
   // « communication » est la boîte de réception de la Direction : les parents ont leur page.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],
+  // Élève : ses notes et bulletins uniquement (même page que les parents, limitée à lui).
+  eleve: ['bulletins-parents', 'notes-diverses'],
 };
 
 /** Page d'arrivée de chaque poste. */
@@ -99,7 +102,11 @@ const ROLE_HOME: Record<string, string> = {
   educateur: 'eleves',
   enseignant: 'notes',
   parent: 'bulletins-parents',
+  eleve: 'bulletins-parents',
 };
+
+/** Familles (parent) et élèves : ne voient que leurs propres enfants / leur propre fiche. */
+export const FAMILY_ROLES = ['parent', 'eleve'];
 
 export function isFounderRole(roleId: string | undefined | null): boolean {
   return FOUNDER_ROLES.includes(String(roleId || ''));

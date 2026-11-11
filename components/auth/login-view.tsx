@@ -65,7 +65,8 @@ export type UserRole =
   | 'comptable'
   | 'secretaire'
   | 'enseignant'
-  | 'parent';
+  | 'parent'
+  | 'eleve';
 
 export interface RoleConfig {
   id: UserRole;
@@ -82,8 +83,8 @@ export interface RoleConfig {
 export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   fondateur: {
     id: 'fondateur',
-    title: 'Contrôle Total (Fondateur / Promoteur)',
-    badge: '👑 Contrôle Total',
+    title: 'Fondateur (Contrôle Total)',
+    badge: '👑 Fondateur (Contrôle Total)',
     department: 'Présidence & Conseil d’Administration',
     defaultAuthCode: 'FND-2026',
     defaultUserName: '',
@@ -93,8 +94,8 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   },
   directeur: {
     id: 'directeur',
-    title: 'Contrôle (Directeur des Études)',
-    badge: '👑 Contrôle',
+    title: 'Directeur des Études (Contrôle)',
+    badge: '👑 Directeur des Études (Contrôle)',
     department: 'Direction des Études',
     defaultAuthCode: 'DIR-2026',
     defaultUserName: '',
@@ -133,8 +134,8 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
   },
   educateur: {
     id: 'educateur',
-    title: 'Éducateur / Conseiller d’Éducation (Vie Scolaire)',
-    badge: '🛡️ Éducateur (Vie Scolaire)',
+    title: 'Éducateur / Conseiller d’Éducation',
+    badge: '🛡️ Éducateur / Conseiller d’Éducation',
     department: 'Vie Scolaire & Discipline',
     defaultAuthCode: 'EDU-2026',
     defaultUserName: '',
@@ -170,6 +171,16 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     defaultUserName: '',
     description: 'Connexion avec votre numéro de téléphone et votre matière. Saisie des notes, appel des présences, pointage.',
     allowedModules: 'Présences & Absences, Pédagogie & Notes, Bulletins Scolaires',
+  },
+  eleve: {
+    id: 'eleve',
+    title: 'Élève',
+    badge: '🎒 Élève',
+    department: 'Espace Élève',
+    defaultAuthCode: '',
+    defaultUserName: '',
+    description: 'Connexion avec ton matricule, ta classe, ton nom et le numéro de ton parent. Consultation de tes notes et bulletins.',
+    allowedModules: 'Mes Notes & Bulletins, Notes Diverses',
   },
   parent: {
     id: 'parent',
@@ -304,6 +315,9 @@ export function LoginView({
   const [teacherClasses, setTeacherClasses] = useState<string[]>([]);
   const [teacherOtherSubject, setTeacherOtherSubject] = useState('');
   const [teacherPin, setTeacherPin] = useState('');
+  // Élève : matricule et classe.
+  const [studentMatricule, setStudentMatricule] = useState('');
+  const [studentGrade, setStudentGrade] = useState('');
   const teacherSubject = [...teacherSubjects, ...(teacherOtherSubject.trim() ? [teacherOtherSubject.trim()] : [])].join(', ');
   const teacherClass = teacherClasses.join(', ');
   const toggleIn = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -569,8 +583,18 @@ export function LoginView({
       }
     }
 
+    const isStudentLogin = selectedRole === 'eleve';
+    if (isStudentLogin && !studentMatricule.trim()) {
+      setErrorMessage("Saisis ton matricule (ou ton numéro d'élève, ex : ID-045).");
+      return;
+    }
+    if (isStudentLogin && !studentGrade) {
+      setErrorMessage('Choisis ta classe.');
+      return;
+    }
+
     const cleanEmail = loginEmail.trim();
-    if (!isTeacherLogin && !cleanEmail) {
+    if (!isTeacherLogin && !isStudentLogin && !cleanEmail) {
       setErrorMessage('Veuillez renseigner votre Adresse Email Professionnelle obligatoire.');
       return;
     }
@@ -593,13 +617,15 @@ export function LoginView({
       setErrorMessage(
         selectedRole === 'parent'
           ? "Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant."
+          : isStudentLogin
+          ? "Saisis le numéro de téléphone de ton parent (celui donné à l'inscription)."
           : "Veuillez renseigner obligatoirement votre numéro de téléphone / WhatsApp professionnel direct."
       );
       return;
     }
 
     // Pour tous les membres du personnel (y compris Fondateur et Directeur), le code d'authentification officiel est strictement requis
-    if (selectedRole !== 'parent' && !isTeacherLogin && !authCodeInput.trim()) {
+    if (selectedRole !== 'parent' && !isTeacherLogin && !isStudentLogin && !authCodeInput.trim()) {
       setErrorMessage(
         selectedRole === 'fondateur'
           ? "Veuillez saisir votre Code d'Authentification officiel de Fondateur."
@@ -630,6 +656,8 @@ export function LoginView({
           email: cleanEmail,
           subject: isTeacherLogin ? teacherSubject.trim() : undefined,
           teachingClass: isTeacherLogin ? teacherClass : undefined,
+          matricule: isStudentLogin ? studentMatricule.trim() : undefined,
+          grade: isStudentLogin ? studentGrade : undefined,
         }),
       });
       loginResult = await res.json().catch(() => null);
@@ -661,12 +689,14 @@ export function LoginView({
     const cleanAuthCode =
       selectedRole === 'parent'
         ? `PARENT-${cleanPhone.replace(/\D/g, '') || Date.now()}`
+        : isStudentLogin
+        ? `ELEVE-${matchedParentStudents[0]?.id || ''}`
         : isTeacherLogin
         ? String(loginResult.authCode || '').toUpperCase()
         : authCodeInput.trim().toUpperCase();
 
     // Nom, téléphone et email retenus pour la prochaine connexion sur ce navigateur.
-    if (selectedRole !== 'parent' && !isTeacherLogin && trimmedName) {
+    if (selectedRole !== 'parent' && !isTeacherLogin && !isStudentLogin && trimmedName) {
       rememberLoginProfile({ roleId: selectedRole, name: trimmedName, email: cleanEmail, phone: cleanPhone });
     }
 
@@ -704,6 +734,8 @@ export function LoginView({
       const formattedInputName = trimmedName ? `${civility ? `${civility} ` : ''}${trimmedName}`.trim() : '';
       const finalFullName = isParent
         ? officialParentName
+        : isStudentLogin
+        ? (firstChild?.fullName || trimmedName)
         : (formattedInputName || verifiedStaffUser?.fullName || matchedStaff?.fullName || ROLE_CONFIGS[selectedRole]?.defaultUserName || 'Personnel');
 
       const finalEmail = isParent
@@ -715,7 +747,7 @@ export function LoginView({
         : (cleanPhone || verifiedStaffUser?.phone || matchedStaff?.phone || '');
 
       // Enregistrer immédiatement les coordonnées saisies (nom, email pro, téléphone et photo) sur la fiche du collaborateur
-      if (!isParent && cleanAuthCode && (cleanEmail || cleanPhone || formattedInputName || loginAvatar)) {
+      if (!isParent && !isStudentLogin && cleanAuthCode && (cleanEmail || cleanPhone || formattedInputName || loginAvatar)) {
         updateStaffLoginContact(cleanAuthCode, {
           fullName: finalFullName,
           email: finalEmail,
@@ -742,15 +774,15 @@ export function LoginView({
       }
       const roleBadge =
         selectedRole === 'fondateur'
-          ? '👑 Contrôle Total'
+          ? '👑 Fondateur (Contrôle Total)'
           : selectedRole === 'directeur'
-          ? '👑 Contrôle'
+          ? '👑 Directeur des Études (Contrôle)'
           : ROLE_CONFIGS[selectedRole].badge;
       const roleTitle =
         selectedRole === 'fondateur'
-          ? 'Contrôle Total'
+          ? 'Fondateur (Contrôle Total)'
           : selectedRole === 'directeur'
-          ? 'Contrôle'
+          ? 'Directeur des Études (Contrôle)'
           : (verifiedStaffUser?.role || ROLE_CONFIGS[selectedRole].title);
 
       const sessionData = {
@@ -909,7 +941,7 @@ export function LoginView({
         {
           id: `staff-directeur-${Date.now()}`,
           fullName: signupResponsableName.trim(),
-          role: 'Contrôle',
+          role: 'Directeur des Études (Contrôle)',
           roleId: 'directeur',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
@@ -922,7 +954,7 @@ export function LoginView({
         {
           id: `staff-fondateur-${Date.now() + 1}`,
           fullName: signupFounderName.trim() || signupResponsableName.trim(),
-          role: 'Contrôle Total',
+          role: 'Fondateur (Contrôle Total)',
           roleId: 'fondateur',
           email: signupEmail.trim(),
           phone: cleanSignupPhone,
@@ -937,9 +969,9 @@ export function LoginView({
         fullName: `Dr. ${signupResponsableName.trim()}`,
         civility: 'Mr',
         pureName: signupResponsableName.trim(),
-        role: 'Contrôle',
+        role: 'Directeur des Études (Contrôle)',
         roleId: 'directeur',
-        roleBadge: '👑 Contrôle',
+        roleBadge: '👑 Directeur des Études (Contrôle)',
         department: 'Direction des Études',
         email: signupEmail.trim(),
         phone: cleanSignupPhone,
@@ -1217,16 +1249,17 @@ export function LoginView({
                       }}
                       className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
                     >
-                      <option value="fondateur">👑 Contrôle Total (Fondateur / Promoteur)</option>
+                      <option value="fondateur">👑 Fondateur (Contrôle Total)</option>
                       <option value="fondateur_adjoint">🏛️ Fondateur adjoint (DGA)</option>
-                      <option value="directeur">👑 Contrôle (Directeur / Directrice des Études)</option>
+                      <option value="directeur">👑 Directeur des Études (Contrôle)</option>
                       <option value="assistant_direction">📋 Assistant(e) de Direction</option>
-                      <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation (Vie Scolaire)</option>
+                      <option value="educateur">🛡️ Éducateur / Conseiller d’Éducation</option>
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="informaticien">💻 Informaticien</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
                       <option value="parent">👨‍👩‍👧 Parent d'Élève (Espace Famille)</option>
+                      <option value="eleve">🎒 Élève</option>
                     </select>
                     <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
@@ -1234,6 +1267,7 @@ export function LoginView({
 
                 {selectedRole !== 'enseignant' && (<>
                 {/* Photo de Profil (Optionnelle à la connexion, enregistrée définitivement) */}
+                {selectedRole !== 'eleve' && (
                 <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <div className="relative w-11 h-11 rounded-xl bg-white border border-emerald-300 overflow-hidden shrink-0 flex items-center justify-center shadow-2xs">
@@ -1263,12 +1297,13 @@ export function LoginView({
                     </label>
                   </div>
                 </div>
+                )}
 
                 {/* 2. Civilité & Nom et Prénoms */}
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>2. Civilité, Nom et Prénoms *</span>
-                    {selectedRole !== 'parent' && (
+                    {selectedRole !== 'parent' && selectedRole !== 'eleve' && (
                       <span className="text-[10px] text-slate-500 font-medium">Nom officiel du collaborateur</span>
                     )}
                   </label>
@@ -1300,7 +1335,7 @@ export function LoginView({
                   </div>
 
                   {/* Affichage direct des membres du personnel enregistrés pour ce rôle */}
-                  {selectedRole !== 'parent' && (
+                  {selectedRole !== 'parent' && selectedRole !== 'eleve' && (
                     <div className="pt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10.5px] font-semibold text-slate-500">Personnel identifié :</span>
                       {(() => {
@@ -1352,7 +1387,8 @@ export function LoginView({
                   )}
                 </div>
 
-                {/* 3. Adresse Email Professionnelle (OBLIGATOIRE) */}
+                {/* 3. Adresse Email Professionnelle (OBLIGATOIRE) — pas pour un élève */}
+                {selectedRole !== 'eleve' && (
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>3. Adresse Email Professionnelle *</span>
@@ -1371,6 +1407,7 @@ export function LoginView({
                     />
                   </div>
                 </div>
+                )}
 
                 </>)}
 
@@ -1378,9 +1415,11 @@ export function LoginView({
                 <div className="space-y-1.5 animate-in fade-in">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>
-                      {selectedRole === 'enseignant' ? '2. ' : '4. '}
+                      {selectedRole === 'enseignant' ? '2. ' : selectedRole === 'eleve' ? '3. ' : '4. '}
                       {selectedRole === 'parent'
                         ? "Numéro de Téléphone Parent / WhatsApp *"
+                        : selectedRole === 'eleve'
+                        ? 'Numéro de téléphone de ton parent *'
                         : selectedRole === 'enseignant'
                         ? 'Votre numéro de téléphone (enregistré par la Direction) *'
                         : "Numéro de Téléphone Direct / WhatsApp *"}
@@ -1402,11 +1441,52 @@ export function LoginView({
                   <p className="text-[10px] text-slate-500">
                     {selectedRole === 'parent'
                       ? "ℹ️ Renseignez le numéro exact fourni lors de l'inscription de votre enfant (avec indicatif du pays)."
+                      : selectedRole === 'eleve'
+                      ? 'ℹ️ Le numéro que ton parent a donné à l’inscription.'
                       : selectedRole === 'enseignant'
                       ? 'ℹ️ Le numéro donné à la Direction. Ce navigateur s’en souviendra pour la prochaine fois.'
                       : "ℹ️ Ce numéro sera automatiquement enregistré sur votre profil officiel de l'école."}
                   </p>
                 </div>
+
+                {/* Élève : matricule + classe */}
+                {selectedRole === 'eleve' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800 block text-xs flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>4. Matricule *</span>
+                      </label>
+                      <input
+                        type="text"
+                        autoComplete="off"
+                        value={studentMatricule}
+                        onChange={(e) => setStudentMatricule(e.target.value.toUpperCase())}
+                        placeholder="Ex : 26014829K ou ID-045"
+                        className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-800 block text-xs flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>5. Ta classe *</span>
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={studentGrade}
+                          onChange={(e) => setStudentGrade(e.target.value)}
+                          className="w-full px-3.5 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-bold text-slate-900 transition-all appearance-none cursor-pointer shadow-2xs"
+                        >
+                          <option value="">Choisir…</option>
+                          {availableClasses.filter((c) => c !== 'Toutes les classes').map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Enseignant : matières et classes enseignées (cases à cocher) + code à 4 chiffres */}
                 {selectedRole === 'enseignant' && (

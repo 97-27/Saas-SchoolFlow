@@ -143,15 +143,15 @@ export function Topbar({
               email: cleanEmail,
               phone: parsed.phone || staffMember?.phone || '',
               role: isFounder
-                ? 'Contrôle Total'
+                ? 'Fondateur (Contrôle Total)'
                 : isDirector
-                ? 'Contrôle'
+                ? 'Directeur des Études (Contrôle)'
                 : (staffMember?.role || parsed.role || 'Personnel'),
               roleId: parsed.roleId || 'directeur',
               roleBadge: isFounder
-                ? '👑 Contrôle Total'
+                ? '👑 Fondateur (Contrôle Total)'
                 : isDirector
-                ? '👑 Contrôle'
+                ? '👑 Directeur des Études (Contrôle)'
                 : (parsed.roleBadge || 'Personnel'),
               department: parsed.department || (isFounder ? 'Présidence & Conseil' : isDirector ? 'Direction Générale' : 'Direction'),
               avatarUrl: persistentAvatar,
@@ -186,9 +186,9 @@ export function Topbar({
         fullName: defaultName,
         email: defaultDir?.email || '',
         phone: defaultDir?.phone || '',
-        role: 'Contrôle',
+        role: 'Directeur des Études (Contrôle)',
         roleId: 'directeur',
-        roleBadge: '👑 Contrôle',
+        roleBadge: '👑 Directeur des Études (Contrôle)',
         department: 'Direction des Études',
         avatarUrl: persistentDirAvatar,
       });
@@ -472,7 +472,7 @@ export function Topbar({
         loadParentNotifications();
         return;
       }
-      if (currentRole === 'enseignant') {
+      if (currentRole === 'enseignant' || currentRole === 'eleve') {
         setNotifications([]);
         setUnreadCount(0);
         return;
@@ -848,7 +848,7 @@ export function Topbar({
                   suppressHydrationWarning
                   className="text-[10px] font-bold text-emerald-700 truncate max-w-[160px]"
                 >
-                  {activeSession.roleId === 'directeur' ? '👑 Contrôle' : (activeSession.roleBadge || activeSession.role || 'Personnel')}
+                  {activeSession.roleId === 'directeur' ? '👑 Directeur des Études (Contrôle)' : (activeSession.roleBadge || activeSession.role || 'Personnel')}
                 </span>
               </div>
             </button>
@@ -898,7 +898,7 @@ export function Topbar({
                     </h4>
                     <p className="text-xs font-bold text-emerald-300 leading-tight mt-0.5">
                       {activeSession.roleId === 'directeur'
-                        ? 'Contrôle'
+                        ? 'Directeur des Études (Contrôle)'
                         : activeSession.roleId === 'comptable'
                         ? 'Comptable / Gestionnaire'
                         : activeSession.roleId === 'secretaire'
@@ -908,24 +908,26 @@ export function Topbar({
                         : activeSession.roleId === 'enseignant'
                         ? 'Enseignant / Professeur'
                         : activeSession.roleId === 'fondateur'
-                        ? 'Contrôle Total'
+                        ? 'Fondateur (Contrôle Total)'
                         : activeSession.roleId === 'fondateur_adjoint'
                         ? 'Fondateur adjoint (DGA)'
                         : activeSession.roleId === 'informaticien'
                         ? 'Informaticien'
                         : activeSession.roleId === 'parent'
                         ? "Parent d'Élève"
+                        : activeSession.roleId === 'eleve'
+                        ? 'Élève'
                         : activeSession.role}
                     </p>
                     <p className="text-[11px] text-amber-300 font-extrabold uppercase tracking-wide mt-1">
                       {activeSession.roleId === 'directeur'
-                        ? '👑 Direction des Études'
+                        ? '👑 Directeur des Études (Contrôle)'
                         : activeSession.roleId === 'fondateur_adjoint'
                         ? '🏛️ Fondateur adjoint • Contrôle Total'
                         : activeSession.roleId === 'informaticien'
                         ? '💻 Informatique • Consultation'
                         : activeSession.roleId === 'fondateur'
-                        ? '👑 Contrôle Total'
+                        ? '👑 Fondateur (Contrôle Total)'
                         : activeSession.roleId === 'comptable'
                         ? 'Gestionnaire Financier & Caisse'
                         : activeSession.roleId === 'enseignant'
@@ -936,6 +938,8 @@ export function Topbar({
                         ? 'Direction Adjointe & Pédagogie'
                         : activeSession.roleId === 'parent'
                         ? 'Espace Famille & Scolarité'
+                        : activeSession.roleId === 'eleve'
+                        ? 'Espace Élève • Notes & Bulletins'
                         : 'Administration & Scolarités'}
                     </p>
                   </div>
@@ -955,7 +959,7 @@ export function Topbar({
                       {activeSession.roleId === 'parent'
                         ? (activeSession.roleBadge || 'PAR-FAMILLE')
                         : activeSession.roleId === 'fondateur'
-                        ? 'FND-001 (Promoteur)'
+                        ? 'FND-001 (Fondateur)'
                         : activeSession.roleId === 'directeur'
                         ? 'DIR-001 (Direction)'
                         : activeSession.roleId === 'comptable'

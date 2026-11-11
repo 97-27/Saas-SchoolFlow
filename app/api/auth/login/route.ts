@@ -59,12 +59,17 @@ export async function POST(request: NextRequest) {
   const phone = String(body?.phone || '').trim();
 
   if (!slug || !roleId) return jsonError('Établissement ou profil manquant.', 400);
-  if (roleId !== 'parent' && !STAFF_ROLES.includes(roleId)) return jsonError('Profil inconnu.', 400);
+  if (roleId !== 'parent' && roleId !== 'eleve' && !STAFF_ROLES.includes(roleId)) return jsonError('Profil inconnu.', 400);
 
   // Échecs comptés par personne (adresse + école + poste + nom), jamais les connexions réussies.
   // Enseignant : compté par numéro de téléphone (pas de nom saisi) — un code à 4 chiffres ne doit
-  // pas pouvoir être essayé en rafale.
-  const who = roleId === 'enseignant' ? phone.replace(/\D/g, '').slice(-8) : fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80);
+  // pas pouvoir être essayé en rafale. Élève : compté par matricule.
+  const who =
+    roleId === 'enseignant'
+      ? phone.replace(/\D/g, '').slice(-8)
+      : roleId === 'eleve'
+      ? String(body?.matricule || '').trim().toUpperCase().slice(0, 40)
+      : fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80);
   const personKey = `login:${clientIp(request)}:${slug}:${roleId}:${who}`;
   if (isLoginBlocked(personKey)) {
     return jsonError('Trop de tentatives incorrectes pour ce profil. Veuillez patienter 10 minutes avant de réessayer.', 429);
@@ -131,6 +136,40 @@ async function handleLogin(
     return issueSession(
       { slug, roleId, code, childIds: matched.map((s) => s.id), parentPhones, subscriptionEndDate },
       { matchedStudents: matched as Student[] }
+    );
+  }
+
+  // ─── Élèves : matricule + téléphone du parent + classe + nom et prénoms ───
+  // Les quatre doivent correspondre à la fiche d'inscription : le matricule seul identifie l'élève
+  // dans SON école (pas de confusion entre homonymes ni entre écoles), le téléphone du parent
+  // empêche un camarade qui connaîtrait le matricule d'entrer à sa place.
+  if (roleId === 'eleve') {
+    const matricule = String(body?.matricule || '').trim().toUpperCase();
+    const grade = String(body?.grade || '').trim();
+    if (!matricule) return refuse("Veuillez saisir votre matricule (ou numéro d'élève).", 400);
+    if (fullName.length < 2) return refuse('Veuillez saisir votre nom et vos prénoms.', 400);
+    if (phone.replace(/\D/g, '').length < 8) return refuse("Veuillez saisir le numéro de téléphone de votre parent (celui donné à l'inscription).", 400);
+    if (!grade) return refuse('Veuillez choisir votre classe.', 400);
+
+    const norm = (v: string) => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    const students = await getStudentsFromSupabase(slug);
+    const s = students.find((st) =>
+      [st.matricule, st.studentNumber].some((v) => v && String(v).trim().toUpperCase() === matricule)
+    );
+    const ok =
+      !!s &&
+      checkPhoneMatchesStudent(phone, s) &&
+      areNamesMatching(fullName, s.fullName || `${s.lastName || ''} ${s.firstName || ''}`) &&
+      norm(s.grade || '').startsWith(norm(grade));
+    if (!s || !ok) {
+      // Même message quel que soit le champ faux : ne rien révéler à un inconnu.
+      return refuse(
+        "❌ Accès refusé : le matricule, le nom, la classe et le téléphone du parent doivent correspondre exactement à la fiche d'inscription. En cas de doute, renseigne-toi au secrétariat."
+      );
+    }
+    return issueSession(
+      { slug, roleId, code: `ELEVE-${s.id}`, childIds: [s.id], parentPhones: [], subscriptionEndDate },
+      { matchedStudents: [s as Student] }
     );
   }
 

@@ -28,10 +28,10 @@ const ALL_STAFF = ['fondateur', 'fondateur_adjoint', 'directeur', 'informaticien
 const PEDAGOGIE = ['fondateur', 'fondateur_adjoint', 'directeur', 'enseignant'];
 
 export const KV_FAMILIES: KvFamily[] = [
-  { base: 'schoolflow_grades', label: 'Notes', read: [...ALL_STAFF, 'parent'], write: PEDAGOGIE },
-  { base: 'schoolflow_grades_config_v1', label: 'Paramètres des notes', read: [...ALL_STAFF, 'parent'], write: DIRECTION },
-  { base: 'schoolflow_grades_portal_status_v1', label: 'Portail des notes', read: [...ALL_STAFF, 'parent'], write: DIRECTION },
-  { base: 'schoolflow_validated_class_bulletins_v1', label: 'Bulletins validés', read: [...ALL_STAFF, 'parent'], write: PEDAGOGIE },
+  { base: 'schoolflow_grades', label: 'Notes', read: [...ALL_STAFF, 'parent', 'eleve'], write: PEDAGOGIE },
+  { base: 'schoolflow_grades_config_v1', label: 'Paramètres des notes', read: [...ALL_STAFF, 'parent', 'eleve'], write: DIRECTION },
+  { base: 'schoolflow_grades_portal_status_v1', label: 'Portail des notes', read: [...ALL_STAFF, 'parent', 'eleve'], write: DIRECTION },
+  { base: 'schoolflow_validated_class_bulletins_v1', label: 'Bulletins validés', read: [...ALL_STAFF, 'parent', 'eleve'], write: PEDAGOGIE },
   { base: 'schoolflow_attendance_records_v1', label: 'Appel de présence', read: ALL_STAFF, write: [...PEDAGOGIE, 'educateur'] },
   { base: 'schoolflow_attendance_locked', label: 'Verrous d’appel', read: ALL_STAFF, write: [...PEDAGOGIE, 'educateur'] },
   { base: 'schoolflow_school_expenses_v1', label: 'Dépenses', read: [...FINANCE, 'informaticien'], write: FINANCE },

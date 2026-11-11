@@ -186,7 +186,8 @@ export function ParentBulletinsView({
     } catch (e) {}
   }, []);
 
-  const isParentRole = activeSession?.roleId === 'parent';
+  // L'élève connecté voit la même page que sa famille, limitée à sa propre fiche.
+  const isParentRole = activeSession?.roleId === 'parent' || activeSession?.roleId === 'eleve';
 
   // Messagerie Parent -> Direction (Génération de notifications réelles pour tout le personnel)
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);

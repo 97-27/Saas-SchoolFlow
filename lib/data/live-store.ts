@@ -2874,7 +2874,7 @@ export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-founder',
     fullName: 'LAWANI MOUSSA',
-    role: 'Contrôle Total',
+    role: 'Fondateur (Contrôle Total)',
     roleId: 'fondateur',
     matricule: 'FND-001',
     subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -2891,7 +2891,7 @@ export const defaultStaffUsers: StaffUser[] = [
   {
     id: 'staff-001',
     fullName: 'LAWANI MOUHAMED',
-    role: 'Contrôle',
+    role: 'Directeur des Études (Contrôle)',
     roleId: 'directeur',
     matricule: 'DIR-001',
     subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -2925,7 +2925,7 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     {
       id: 'staff-founder',
       fullName: cleanFounder,
-      role: 'Contrôle Total',
+      role: 'Fondateur (Contrôle Total)',
       roleId: 'fondateur',
       matricule: 'FND-001',
       subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -2942,7 +2942,7 @@ export function getInitialStaffForSchool(schoolSlug: string = 'epc-manoi'): Staf
     {
       id: 'staff-001',
       fullName: cleanDirector,
-      role: 'Contrôle',
+      role: 'Directeur des Études (Contrôle)',
       roleId: 'directeur',
       matricule: 'DIR-001',
       subjectOrGrade: 'Direction des Études & Pédagogie',
@@ -3017,7 +3017,7 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
             ...u,
             fullName: finalName,
             avatarUrl: persistentAvatar,
-            role: def.roleId === 'fondateur' ? 'Contrôle Total' : def.roleId === 'directeur' ? 'Contrôle' : (u.role || def.role),
+            role: def.roleId === 'fondateur' ? 'Fondateur (Contrôle Total)' : def.roleId === 'directeur' ? 'Directeur des Études (Contrôle)' : (u.role || def.role),
             roleId: def.roleId || u.roleId,
             matricule: def.roleId === 'fondateur' ? 'FND-001' : def.roleId === 'directeur' ? 'DIR-001' : (u.matricule || def.matricule),
             joinDate: def.roleId === 'fondateur' ? 'Fondateur de l\'Établissement (Depuis 2026)' : (u.joinDate || def.joinDate),
@@ -3993,7 +3993,7 @@ export function resetSchoolData(
         {
           id: 'staff-founder',
           fullName: (school.founderName || 'LAWANI MOUSSA').replace(/\s*\((Fondateur|Fondatrice)\)/gi, '').trim(),
-          role: 'Contrôle Total',
+          role: 'Fondateur (Contrôle Total)',
           roleId: 'fondateur',
           matricule: 'EMP-FND-001',
           subjectOrGrade: 'Présidence & Conseil d’Administration',
@@ -4010,7 +4010,7 @@ export function resetSchoolData(
         {
           id: 'staff-001',
           fullName: (school.directorName || 'LAWANI MOUHAMED').replace(/\s*\((Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim(),
-          role: 'Contrôle',
+          role: 'Directeur des Études (Contrôle)',
           roleId: 'directeur',
           matricule: 'EMP-DIR-001',
           subjectOrGrade: 'Direction des Études & Pédagogie',
