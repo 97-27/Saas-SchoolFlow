@@ -36,11 +36,16 @@ type State = {
   /** Code des chiffres (6 chiffres) : connu seulement du Fondateur / DGA. */
   figuresCode: string;
   hasFiguresCode: boolean;
+  /** Code des Archives des années (6 chiffres) : connu seulement du Fondateur / DGA. */
+  archivesCode: string;
+  hasArchivesCode: boolean;
 };
 
 const EMPTY: State = {
   figuresCode: '',
   hasFiguresCode: false,
+  archivesCode: '',
+  hasArchivesCode: false,
   roleId: '',
   unlockedUntil: 0,
   dialogOpen: false,
@@ -101,6 +106,8 @@ function fetchServerState() {
         policyChangedAt,
         figuresCode: typeof j.figuresCode === 'string' ? j.figuresCode : '',
         hasFiguresCode: j.hasFiguresCode === true,
+        archivesCode: typeof j.archivesCode === 'string' ? j.archivesCode : '',
+        hasArchivesCode: j.hasArchivesCode === true,
       };
       // Fermé APRÈS le déverrouillage par code : il est annulé tout de suite.
       const unlockStart = state.unlockedUntil - UNLOCK_MS;
@@ -198,6 +205,8 @@ async function putPolicy(body: Record<string, unknown>): Promise<string | null> 
       policyChangedAt: Number(j.policyChangedAt) || Date.now(),
       figuresCode: typeof j.figuresCode === 'string' ? j.figuresCode : '',
       hasFiguresCode: j.hasFiguresCode === true,
+      archivesCode: typeof j.archivesCode === 'string' ? j.archivesCode : '',
+      hasArchivesCode: j.hasArchivesCode === true,
     });
     return null;
   } catch (e) {
@@ -213,6 +222,11 @@ export function setFiguresOpenToComptable(open: boolean): Promise<string | null>
 /** Fondateur / Fondateur adjoint : fixe (6 chiffres) ou génère le code des chiffres du Comptable. */
 export function setFiguresCode(code: string | 'generate'): Promise<string | null> {
   return putPolicy({ code });
+}
+
+/** Fondateur / Fondateur adjoint : fixe (6 chiffres), génère ou retire ('' = même code que les chiffres) le code des Archives. */
+export function setArchivesCode(code: string | 'generate'): Promise<string | null> {
+  return putPolicy({ archivesCode: code });
 }
 
 /** Vérifie le code auprès du serveur. Renvoie un message d'erreur, ou null si c'est bon. */

@@ -11,6 +11,9 @@ import { Topbar } from './topbar';
 import { ReadOnlyGuard } from './read-only-guard';
 import { RealtimeNotifier } from './realtime-notifier';
 import { FiguresPrivacyHost } from '@/components/ui/masked-figure';
+import { PwaBanners } from './pwa-banners';
+import { SetupReminder } from './setup-reminder';
+import { BrandLoader } from '@/components/ui/brand-loader';
 
 /**
  * Les écrans lisent d'abord la copie gardée dans le navigateur : à l'ouverture, on voyait donc
@@ -38,15 +41,7 @@ function DataReadyGate({ children }: { children: React.ReactNode }) {
   }, [ready]);
 
   if (ready) return <>{children}</>;
-  return (
-    <div className="flex flex-col items-center justify-center py-24 gap-4 text-center" role="status" aria-live="polite">
-      <div className="w-11 h-11 rounded-full border-4 border-emerald-100 border-t-emerald-600 animate-spin" />
-      <div>
-        <p className="text-sm font-bold text-slate-900">Chargement des données de l’établissement…</p>
-        <p className="text-xs text-slate-500 mt-1">Lecture de la base en cours, un instant.</p>
-      </div>
-    </div>
-  );
+  return <BrandLoader compact />;
 }
 
 /**
@@ -156,9 +151,8 @@ export function DashboardShell({
 
   if (!sessionOk) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center gap-4 text-center" role="status">
-        <div className="w-11 h-11 rounded-full border-4 border-emerald-100 border-t-emerald-600 animate-spin" />
-        <p className="text-sm font-bold text-slate-900">Vérification de la session…</p>
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+        <BrandLoader title="Vérification de la session…" />
       </div>
     );
   }
@@ -177,6 +171,7 @@ export function DashboardShell({
 
         {/* Main Content Area */}
         <div className="lg:pl-64 flex flex-col min-h-screen print:pl-0 print:min-h-0">
+          <PwaBanners />
           <div className="print:hidden">
             <Topbar
               schoolSlug={schoolSlug}
@@ -188,7 +183,10 @@ export function DashboardShell({
           {/* PC portable (1024–1279 px, souvent agrandi à 125 % par Windows) : marges réduites pour
               laisser la place au contenu à côté du menu ; grandes marges seulement sur grand écran. */}
           <main className="flex-1 min-w-0 p-3.5 sm:p-5 lg:p-5 xl:p-8 w-full max-w-[1600px] mx-auto print:p-0 print:m-0 print:max-w-full">
-            <DataReadyGate>{children}</DataReadyGate>
+            <DataReadyGate>
+              <SetupReminder schoolSlug={schoolSlug} />
+              {children}
+            </DataReadyGate>
           </main>
         </div>
 

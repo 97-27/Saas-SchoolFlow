@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
   let lockedUntil = 0;
-  let policy: FiguresPolicy = { open: false, changedAt: 0, code: '' };
+  let policy: FiguresPolicy = { open: false, changedAt: 0, code: '', archivesCode: '' };
   const concerned = FIGURES_UNLOCK_ROLES.includes(session.roleId) || FIGURES_VISIBLE_ROLES.includes(session.roleId);
   if (concerned) {
     const schoolId = await kvSchoolId(slug);
@@ -56,8 +56,9 @@ export async function GET(request: NextRequest) {
       openToComptable: policy.open,
       policyChangedAt: policy.changedAt,
       // Le code n'est renvoyé qu'au Fondateur et au DGA (pour le donner au Comptable).
-      ...(FIGURES_VISIBLE_ROLES.includes(session.roleId) ? { figuresCode: policy.code } : {}),
+      ...(FIGURES_VISIBLE_ROLES.includes(session.roleId) ? { figuresCode: policy.code, archivesCode: policy.archivesCode } : {}),
       hasFiguresCode: !!policy.code,
+      hasArchivesCode: !!policy.archivesCode,
     },
     { headers: { 'Cache-Control': 'no-store' } }
   );
@@ -79,7 +80,8 @@ export async function PUT(request: NextRequest) {
   }
   const hasOpen = typeof body?.open === 'boolean';
   const hasCode = body?.code !== undefined;
-  if (!hasOpen && !hasCode) return jsonError('Requête invalide.', 400);
+  const hasArchives = body?.archivesCode !== undefined;
+  if (!hasOpen && !hasCode && !hasArchives) return jsonError('Requête invalide.', 400);
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
   const current = await readFiguresPolicy(schoolId);
@@ -90,6 +92,12 @@ export async function PUT(request: NextRequest) {
     else if (typeof body.code === 'string' && /^\d{6}$/.test(body.code.trim())) policy.code = body.code.trim();
     else return jsonError('Le code doit contenir exactement 6 chiffres.', 400);
   }
+  if (hasArchives) {
+    if (body.archivesCode === 'generate') policy.archivesCode = String(Math.floor(100000 + Math.random() * 900000));
+    else if (body.archivesCode === '') policy.archivesCode = '';
+    else if (typeof body.archivesCode === 'string' && /^\d{6}$/.test(body.archivesCode.trim())) policy.archivesCode = body.archivesCode.trim();
+    else return jsonError('Le code des archives doit contenir exactement 6 chiffres.', 400);
+  }
   const saved = await kvPut(schoolId, FIGURES_POLICY_KEY, JSON.stringify(policy), `${session.roleId}|${session.staffId || ''}`);
   if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
   return NextResponse.json(
@@ -99,6 +107,8 @@ export async function PUT(request: NextRequest) {
       policyChangedAt: policy.changedAt,
       figuresCode: policy.code,
       hasFiguresCode: !!policy.code,
+      archivesCode: policy.archivesCode,
+      hasArchivesCode: !!policy.archivesCode,
     },
     { headers: { 'Cache-Control': 'no-store' } }
   );

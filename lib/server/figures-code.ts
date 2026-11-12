@@ -12,21 +12,21 @@ export const FIGURES_MAX_FAILURES = 3;
 export const FIGURES_LOCK_MS = 30 * 60 * 1000;
 export const FIGURES_POLICY_KEY = 'sf_private_figures_policy';
 
-export type FiguresPolicy = { open: boolean; changedAt: number; code: string };
+/** archivesCode : code à 6 chiffres des Archives des années (Comptable) ; vide = code des chiffres. */
+export type FiguresPolicy = { open: boolean; changedAt: number; code: string; archivesCode: string };
+export type CodeKind = 'figures' | 'archives';
 export type FiguresAttempts = { failures: number; lockedUntil: number };
 
 export async function readFiguresPolicy(schoolId: string): Promise<FiguresPolicy> {
+  const empty: FiguresPolicy = { open: false, changedAt: 0, code: '', archivesCode: '' };
   const row = await kvGet(schoolId, FIGURES_POLICY_KEY);
-  if (!row) return { open: false, changedAt: 0, code: '' };
+  if (!row) return empty;
   try {
     const v = JSON.parse(row.value);
-    return {
-      open: v.open === true,
-      changedAt: Number(v.changedAt) || 0,
-      code: typeof v.code === 'string' && /^\d{6}$/.test(v.code) ? v.code : '',
-    };
+    const six = (x: unknown) => (typeof x === 'string' && /^\d{6}$/.test(x) ? x : '');
+    return { open: v.open === true, changedAt: Number(v.changedAt) || 0, code: six(v.code), archivesCode: six(v.archivesCode) };
   } catch {
-    return { open: false, changedAt: 0, code: '' };
+    return empty;
   }
 }
 
@@ -55,7 +55,8 @@ export async function verifyFiguresCode(
   slug: string,
   schoolId: string,
   session: { roleId: string; staffId?: string; code: string },
-  rawCode: string
+  rawCode: string,
+  kind: CodeKind = 'figures'
 ): Promise<FiguresCheck> {
   const key = figuresAttemptsKey(session);
   const attempts = await readFiguresAttempts(schoolId, key);
@@ -72,8 +73,11 @@ export async function verifyFiguresCode(
 
   const policy = await readFiguresPolicy(schoolId);
   let validCodes: string[];
-  if (policy.code) {
-    validCodes = [policy.code];
+  // Archives : leur propre code s'il existe, sinon le code des chiffres, sinon le code personnel
+  // du Fondateur / DGA.
+  const dedicated = kind === 'archives' ? policy.archivesCode || policy.code : policy.code;
+  if (dedicated) {
+    validCodes = [dedicated];
   } else {
     const staff = await getStaffAuthRecords(slug);
     validCodes = staff

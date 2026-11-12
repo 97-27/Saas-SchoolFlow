@@ -30,6 +30,7 @@ import { ROLE_LABELS } from '@/lib/auth/roles';
 import { kvGet, kvPut, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 import { getYearEpoch } from '@/lib/server/year-epoch';
+import { splitTeachingList, teachingMismatches } from '@/lib/data/teaching';
 
 const stripTitle = (name: string) =>
   name.replace(/\s*\((Fondateur|Fondatrice|Directeur des Études|Directeur Général|Directeur)\)/gi, '').trim();
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
   // pas pouvoir être essayé en rafale. Élève : compté par matricule.
   const who =
     roleId === 'enseignant'
-      ? phone.replace(/\D/g, '').slice(-8)
+      ? String(body?.matricule || '').trim().toUpperCase().slice(0, 40) || phone.replace(/\D/g, '').slice(-8)
       : roleId === 'eleve'
       ? String(body?.matricule || '').trim().toUpperCase().slice(0, 40)
       : fullName.toLowerCase().replace(/\s+/g, ' ').slice(0, 80);
@@ -182,24 +183,32 @@ async function handleLogin(
     );
   }
 
-  // ─── Enseignants : numéro de téléphone enregistré par la Direction + matière ───
+  // ─── Enseignants : matricule d'embauche + matières / classes cochées + code à 4 chiffres ───
+  // (décision de l'établissement 11/2026). Les matières et classes cochées doivent correspondre
+  // à la fiche saisie en Administration & Codes : vérifié ici, avant d'ouvrir la session.
   if (roleId === 'enseignant') {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 8) return refuse('Veuillez saisir votre numéro de téléphone.', 400);
     const subject = String(body?.subject || '').trim();
-    if (!subject) return refuse('Veuillez indiquer la matière que vous enseignez.', 400);
-    // Comparaison sur les 8 derniers chiffres : « +225 07 48 92 11 00 » = « 0748921100 ».
-    const tail = digits.slice(-8);
-    const teachers = (await staffP).filter(
-      (s) => s.roleId === 'enseignant' && String(s.phone || '').replace(/\D/g, '').slice(-8) === tail
-    );
+    if (!subject) return refuse('Cochez au moins une matière que vous enseignez.', 400);
+    const classesIn = String(body?.teachingClass || '').trim();
+    if (!classesIn) return refuse('Cochez au moins une classe dans laquelle vous enseignez.', 400);
+    const matriculeIn = String(body?.matricule || '').trim().toUpperCase();
+    const digits = phone.replace(/\D/g, '');
+    if (!matriculeIn && digits.length < 8) return refuse("Saisissez votre matricule d'embauche.", 400);
+
+    const allTeachers = (await staffP).filter((s) => s.roleId === 'enseignant');
+    let teachers = matriculeIn ? allTeachers.filter((s) => s.matricule && s.matricule.toUpperCase() === matriculeIn) : [];
+    // Transition : une fiche sans matricule reste reconnue par son téléphone.
+    if (teachers.length === 0 && digits.length >= 8) {
+      const tail = digits.slice(-8);
+      teachers = allTeachers.filter((s) => !s.matricule && String(s.phone || '').replace(/\D/g, '').slice(-8) === tail);
+    }
     if (teachers.length === 0) {
       return refuse(
-        "❌ Ce numéro n'est enregistré pour aucun enseignant de l'établissement. Demandez à la Direction de l'ajouter (Administration & Codes, champ téléphone)."
+        "❌ Matricule d'embauche inconnu pour un enseignant de l'établissement. Vérifiez-le sur votre fiche (Administration & Codes) ou demandez à la Direction."
       );
     }
     if (teachers.length > 1) {
-      return refuse('❌ Ce numéro est enregistré pour plusieurs enseignants. Demandez à la Direction de corriger les fiches.');
+      return refuse('❌ Ce matricule est enregistré pour plusieurs enseignants. Demandez à la Direction de corriger les fiches.');
     }
     const t = teachers[0];
     if (t.status === 'Verrouillé') {
@@ -238,9 +247,21 @@ async function handleLogin(
     if (schoolId && attempts.failures) {
       await kvPut(schoolId, attemptsKey, JSON.stringify({ failures: 0, lockedUntil: 0 }), `enseignant|${t.id}`);
     }
+    // Code juste : les matières et classes cochées doivent correspondre à la fiche (vérification
+    // en temps réel contre Administration & Codes). Une fiche « Toutes les … » accepte tout.
+    const badSubjects = teachingMismatches(t.subjectOrGrade, splitTeachingList(subject));
+    const badClasses = teachingMismatches(t.assignedClasses, splitTeachingList(classesIn));
+    if (badSubjects.length || badClasses.length) {
+      const parts: string[] = [];
+      if (badSubjects.length) parts.push(`matière${badSubjects.length > 1 ? 's' : ''} « ${badSubjects.join(', ')} »`);
+      if (badClasses.length) parts.push(`classe${badClasses.length > 1 ? 's' : ''} « ${badClasses.join(', ')} »`);
+      return refuse(
+        `❌ ${parts.join(' et ')} : ne figure${badSubjects.length + badClasses.length > 1 ? 'nt' : ''} pas sur votre fiche. Cochez uniquement ce que la Direction a enregistré (fiche : ${t.subjectOrGrade || '—'} / ${t.assignedClasses || '—'}).`
+      );
+    }
     // Matières et classes cochées : enregistrées sur la fiche de l'enseignant (visibles en
     // Administration & Codes).
-    const classes = String(body?.teachingClass || '').trim().slice(0, 400);
+    const classes = classesIn.slice(0, 400);
     if (schoolId) {
       await kvPut(
         schoolId,

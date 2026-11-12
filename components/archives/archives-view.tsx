@@ -258,7 +258,7 @@ export function ArchivesView({ schoolSlug }: { schoolSlug: string }) {
           </div>
           <div className="space-y-1">
             <h2 className="text-base font-extrabold text-slate-900 font-heading">Archives protégées</h2>
-            <p className="text-xs text-slate-500">Saisissez le code des chiffres (6 chiffres) remis par le Fondateur ou le DGA.</p>
+            <p className="text-xs text-slate-500">Saisissez le code des archives (6 chiffres) remis par le Fondateur ou le DGA.</p>
           </div>
           <input
             type="password"

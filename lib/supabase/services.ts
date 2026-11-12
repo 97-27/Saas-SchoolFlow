@@ -1530,7 +1530,19 @@ export async function getStaffUsersFromSupabase(schoolSlug: string): Promise<any
  * TOUT le personnel à chaque essai, d'où une connexion très lente sur une petite connexion.
  */
 export async function getStaffAuthRecords(schoolSlug: string): Promise<
-  { id: string; fullName: string; email: string; phone: string; roleId: string; role: string; authCode: string; status: string; matricule: string }[]
+  {
+    id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+    roleId: string;
+    role: string;
+    authCode: string;
+    status: string;
+    matricule: string;
+    subjectOrGrade: string;
+    assignedClasses: string;
+  }[]
 > {
   if (!isSupabaseConfigured || !schoolSlug) return [];
   const schoolId = await getSchoolId(schoolSlug);
@@ -1543,7 +1555,7 @@ export async function getStaffAuthRecords(schoolSlug: string): Promise<
       .not('role_id', 'like', 'system_%')
       .neq('role_id', 'school_stamp')
       .order('created_at', { ascending: true });
-  const base = 'id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at';
+  const base = 'id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at, subject_or_grade, assigned_classes';
   // Colonne « matricule » (migration 010) : si elle n'existe pas encore, on relit sans elle.
   let { data, error } = await query(`${base}, matricule`);
   if (error && /matricule/i.test(error.message || '')) ({ data, error } = await query(base));
@@ -1558,6 +1570,8 @@ export async function getStaffAuthRecords(schoolSlug: string): Promise<
     role: d.role_title,
     authCode: d.auth_code,
     status: d.is_active ? 'Actif' : 'Verrouillé',
+    subjectOrGrade: String(d.subject_or_grade || ''),
+    assignedClasses: String(d.assigned_classes || ''),
   }));
 }
 

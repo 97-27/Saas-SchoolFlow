@@ -410,8 +410,8 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
   const RestoreButton = ({ entry, label }: { entry: JournalEntry; label: string }) => {
     if (entry.restoredAt) {
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
           Restauré le {formatWhen(entry.restoredAt)}
           {entry.restoredBy ? ` par ${entry.restoredBy}` : ''}
         </span>
@@ -420,16 +420,16 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
     if (confirmId === entry.id) {
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-slate-700">Confirmer ?</span>
+          <span className="text-xs font-semibold text-slate-700">Confirmer ?</span>
           <button
             onClick={() => restore(entry.id)}
-            className="min-h-[40px] rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 cursor-pointer"
           >
             Oui, {label.toLowerCase()}
           </button>
           <button
             onClick={() => setConfirmId(null)}
-            className="min-h-[40px] rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
           >
             Annuler
           </button>
@@ -440,25 +440,36 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
       <button
         onClick={() => setConfirmId(entry.id)}
         disabled={busyId !== null}
-        className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-200 bg-white text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 cursor-pointer"
       >
-        {busyId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+        {busyId === entry.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
         {label}
       </button>
     );
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl pb-12">
-      <div className="mb-6">
-        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Corbeille &amp; Journal</h1>
-        <p className="mt-1 text-sm leading-relaxed text-slate-500 sm:text-base">
-          Tout ce qui est supprimé ou modifié est gardé ici : qui, quand et quoi. Un clic suffit pour le remettre en place.
-        </p>
+    <div className="space-y-5 pb-12">
+      {/* En-tête (même style que les autres pages) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-xs shrink-0">
+            <Trash2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">Corbeille &amp; Journal</h1>
+            <p className="text-xs text-slate-500">
+              Tout ce qui est supprimé ou modifié est gardé ici : qui, quand et quoi. Un clic le remet en place.
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] font-bold shrink-0">
+          <ShieldCheck className="w-3.5 h-3.5" /> Fondateur &amp; DGA
+        </span>
       </div>
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1 sm:inline-flex">
+      <div className="bg-white p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:inline-flex">
           {(
             [
               ['trash', 'Corbeille', Trash2],
@@ -471,11 +482,11 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                 setTab(key);
                 setConfirmId(null);
               }}
-              className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition ${
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition cursor-pointer ${
                 tab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <Icon className="h-3.5 w-3.5 shrink-0" />
               {label}
             </button>
           ))}
@@ -487,13 +498,13 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Nom, numéro, reçu…"
-              className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-emerald-400"
+              className="w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3 py-2.5 text-xs text-slate-900 outline-none focus:border-emerald-600"
             />
           </label>
           <button
             onClick={load}
             aria-label="Actualiser"
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            className="inline-flex items-center justify-center px-3 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 cursor-pointer"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -503,8 +514,8 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
       {toast && (
         <div
           role="status"
-          className={`mb-4 flex items-start gap-2 rounded-2xl px-4 py-3 text-sm font-semibold ${
-            toast.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'
+          className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-xs font-semibold ${
+            toast.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}
         >
           {toast.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
@@ -513,15 +524,15 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
       )}
 
       {!available && !loading && !error && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
           La corbeille n&apos;est pas encore activée dans la base : lancez le script 007 dans Supabase &gt; SQL Editor.
         </div>
       )}
-      {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">{error}</div>}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" /> Chargement…
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-center gap-2 py-14 text-xs text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-600" /> Chargement…
         </div>
       ) : tab === 'trash' ? (
         visibleGroups.length === 0 ? (
@@ -529,21 +540,21 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
         ) : (
           <>
           {!q && visibleGroups.some((g) => !g.main.restoredAt) && (
-            <div className="mb-3 rounded-2xl border border-red-100 bg-white p-3">
+            <div className="rounded-2xl border border-rose-200 bg-white p-3">
               {purgeId === 'all' ? (
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <span className="text-sm font-semibold text-red-700">
+                  <span className="text-xs font-semibold text-rose-700">
                     Tout effacer pour toujours ? Tapez <b>SUPPRIMER</b> pour confirmer :
                   </span>
                   <input
                     value={purgeText}
                     onChange={(e) => setPurgeText(e.target.value)}
-                    className="min-h-[40px] rounded-xl border border-red-200 px-3 text-sm"
+                    className="px-3 py-2 rounded-xl border border-rose-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-rose-500"
                   />
                   <button
                     onClick={() => purge('all')}
                     disabled={purgeText.trim().toUpperCase() !== 'SUPPRIMER'}
-                    className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-40"
+                    className="px-3.5 py-2 rounded-xl bg-rose-600 text-xs font-bold text-white disabled:opacity-40 cursor-pointer"
                   >
                     Vider la corbeille
                   </button>
@@ -552,60 +563,60 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                       setPurgeId(null);
                       setPurgeText('');
                     }}
-                    className="min-h-[40px] rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600"
+                    className="px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 cursor-pointer"
                   >
                     Annuler
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-500">
+                  <span className="text-[11px] text-slate-500">
                     « Supprimer définitivement » efface l’élément de la corbeille : il ne pourra plus jamais être restauré.
                   </span>
                   <button
                     onClick={() => setPurgeId('all')}
                     disabled={busyId !== null}
-                    className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-rose-200 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
                   >
-                    {busyId === -1 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {busyId === -1 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                     Vider toute la corbeille
                   </button>
                 </div>
               )}
             </div>
           )}
-          <ul className="space-y-3">
+          <ul className="space-y-2.5">
             {visibleGroups.map((g) => {
               const d = describeTrash(g);
               const Icon = d.icon;
               return (
-                <li key={g.main.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <li key={g.main.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                      <Icon className="h-5 w-5" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+                      <Icon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-sm font-bold leading-snug text-slate-900 sm:text-base">{d.title}</p>
-                      {d.detail && <p className="mt-0.5 break-words text-sm text-slate-500">{d.detail}</p>}
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="break-words text-sm font-bold leading-snug text-slate-900">{d.title}</p>
+                      {d.detail && <p className="mt-0.5 break-words text-xs text-slate-500">{d.detail}</p>}
+                      <p className="mt-1 text-[11px] text-slate-400">
                         {formatWhen(g.main.at)} · par {g.main.actor}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                  <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2">
                     {!g.main.restoredAt &&
                       (purgeId === g.main.id ? (
-                        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-red-50 p-2">
-                          <span className="text-sm font-semibold text-red-700">Supprimer pour toujours ? Plus aucune restauration possible.</span>
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 p-2">
+                          <span className="text-xs font-semibold text-rose-700">Supprimer pour toujours ? Plus aucune restauration possible.</span>
                           <button
                             onClick={() => purge(g.main.id)}
-                            className="min-h-[40px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700"
+                            className="px-3.5 py-2 rounded-xl bg-rose-600 text-xs font-bold text-white hover:bg-rose-700 cursor-pointer"
                           >
                             Oui, supprimer
                           </button>
                           <button
                             onClick={() => setPurgeId(null)}
-                            className="min-h-[40px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600"
+                            className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 cursor-pointer"
                           >
                             Annuler
                           </button>
@@ -617,9 +628,9 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                             setPurgeId(g.main.id);
                           }}
                           disabled={busyId !== null}
-                          className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-rose-200 bg-white text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
                         >
-                          {busyId === g.main.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          {busyId === g.main.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                           Supprimer définitivement
                         </button>
                       ))}
@@ -634,20 +645,20 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
       ) : visibleChanges.length === 0 ? (
         available && !error && <EmptyState text={q ? 'Aucun résultat pour cette recherche.' : 'Aucune modification enregistrée pour le moment.'} />
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2.5">
           {visibleChanges.map((e) => {
             const d = describeChange(e);
             return (
-              <li key={e.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="break-words text-sm font-bold leading-snug text-slate-900 sm:text-base">{d.title}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
+              <li key={e.id} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xs">
+                <p className="break-words text-sm font-bold leading-snug text-slate-900">{d.title}</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">
                   {formatWhen(e.at)} · par {e.actor}
                 </p>
                 {d.changes.length > 0 && (
-                  <dl className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3 text-sm">
+                  <dl className="mt-2.5 space-y-1.5 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
                     {d.changes.map((c, i) => (
                       <div key={i} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                        {c.field && <dt className="shrink-0 font-semibold text-slate-600 sm:w-52">{c.field}</dt>}
+                        {c.field && <dt className="shrink-0 font-bold text-slate-600 sm:w-48">{c.field}</dt>}
                         <dd className="min-w-0 break-words text-slate-800">
                           {c.before ? (
                             <>
@@ -672,7 +683,7 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
                   </dl>
                 )}
                 {e.op === 'UPDATE' && (
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-2.5 flex justify-end">
                     <RestoreButton entry={e} label="Annuler la modification" />
                   </div>
                 )}
@@ -682,8 +693,8 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
         </ul>
       )}
 
-      <p className="mt-8 flex items-start gap-2 text-xs leading-relaxed text-slate-400">
-        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+      <p className="flex items-start gap-2 text-[11px] leading-relaxed text-slate-400">
+        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         Ce journal est tenu par la base elle-même : aucune suppression ni modification ne peut lui échapper, quel que soit
         l&apos;appareil utilisé.
       </p>
@@ -693,9 +704,9 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-16 text-center text-slate-500">
-      <CheckCircle2 className="mb-2 h-8 w-8 text-emerald-400" />
-      <p className="text-sm font-medium">{text}</p>
+    <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white shadow-xs py-14 text-center text-slate-500">
+      <CheckCircle2 className="mb-2 h-7 w-7 text-emerald-500" />
+      <p className="text-xs font-semibold">{text}</p>
     </div>
   );
 }

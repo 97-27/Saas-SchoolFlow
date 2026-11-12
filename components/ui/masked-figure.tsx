@@ -13,6 +13,7 @@ import {
   refreshFiguresSession,
   setFiguresOpenToComptable,
   setFiguresCode,
+  setArchivesCode,
 } from '@/lib/client/figures-privacy';
 import { broadcastLiveUpdate } from '@/lib/data/live-store';
 
@@ -82,14 +83,36 @@ export function FiguresGate({ children, title }: { children: React.ReactNode; ti
  * relecture toutes les 15 s), y compris un déverrouillage par code en cours.
  */
 export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
-  const { openToComptable, isFounder, figuresCode } = useFiguresState();
+  const { openToComptable, isFounder, figuresCode, archivesCode } = useFiguresState();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showCode, setShowCode] = useState(false);
+  const [archInput, setArchInput] = useState('');
+  const [archBusy, setArchBusy] = useState(false);
+  const [archMsg, setArchMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showArch, setShowArch] = useState(false);
   if (!isFounder) return null;
+
+  const saveArchives = async (value: string | 'generate') => {
+    if (archBusy) return;
+    setArchBusy(true);
+    setArchMsg(null);
+    const err = await setArchivesCode(value);
+    setArchBusy(false);
+    if (err) {
+      setArchMsg({ ok: false, text: err });
+      return;
+    }
+    setArchInput('');
+    setShowArch(true);
+    setArchMsg({
+      ok: true,
+      text: value === '' ? 'Code retiré : les Archives s’ouvrent avec le code des chiffres.' : 'Code des archives enregistré. Donnez-le au Comptable.',
+    });
+  };
 
   const saveCode = async (value: string | 'generate') => {
     if (codeBusy) return;
@@ -214,6 +237,71 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
           Aucun code des chiffres pour l’instant : le Comptable doit saisir votre code personnel. Créez-en un pour ne plus avoir à le donner.
         </p>
       )}
+    </div>
+
+    {/* Code des Archives des années (6 chiffres) : demandé au Comptable à chaque ouverture des Archives. */}
+    <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-200/70 space-y-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold text-slate-900">Code des Archives des années (6 chiffres)</p>
+          <p className="text-[11px] text-slate-500">
+            Demandé au Comptable à chaque ouverture des Archives. Sans code dédié, c’est le code des chiffres qui sert.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-mono font-black tracking-[0.3em] text-sm min-w-[96px] text-center">
+            {archivesCode ? (showArch ? archivesCode : '••••••') : '——'}
+          </span>
+          {archivesCode && (
+            <button
+              type="button"
+              onClick={() => setShowArch((v) => !v)}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              title={showArch ? 'Cacher le code' : 'Voir le code'}
+            >
+              {showArch ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={archInput}
+          onChange={(e) => setArchInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="Nouveau code (6 chiffres)"
+          className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+        />
+        <button
+          type="button"
+          disabled={archBusy || archInput.length !== 6}
+          onClick={() => saveArchives(archInput)}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+        >
+          Enregistrer
+        </button>
+        <button
+          type="button"
+          disabled={archBusy}
+          onClick={() => saveArchives('generate')}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+        >
+          {archBusy ? '…' : 'Générer'}
+        </button>
+        {archivesCode && (
+          <button
+            type="button"
+            disabled={archBusy}
+            onClick={() => saveArchives('')}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
+          >
+            Retirer
+          </button>
+        )}
+      </div>
+      {archMsg && <p className={`text-xs font-semibold ${archMsg.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{archMsg.text}</p>}
     </div>
     </div>
   );

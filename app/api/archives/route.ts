@@ -50,7 +50,7 @@ async function checkAccess(request: NextRequest): Promise<Access> {
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return { ok: false, res: jsonError('Archives indisponibles pour le moment. Réessayez.', 503) };
   if (!founder) {
-    const check = await verifyFiguresCode(slug, schoolId, session, request.headers.get('x-figures-code') || '');
+    const check = await verifyFiguresCode(slug, schoolId, session, request.headers.get('x-figures-code') || '', 'archives');
     if (!check.ok) {
       return {
         ok: false,

@@ -57,6 +57,7 @@ import { homePage } from '@/lib/auth/roles';
 import { markSessionVerified } from '@/lib/client/session-flag';
 import { installCloudKv } from '@/lib/data/cloud-kv';
 import { syncYearEpoch } from '@/lib/client/year-reset';
+import { TEACHER_SUBJECTS } from '@/lib/data/teaching';
 import { startCrossDeviceSync } from '@/lib/data/live-store';
 
 export type UserRole =
@@ -235,25 +236,7 @@ function findLoginProfile(roleId: string, name: string, phone: string): LoginPro
     (t.length === 8 ? list.find((x) => phoneTail(x.phone) === t) : undefined)
   );
 }
-const TEACHER_SUBJECTS = [
-  'Français',
-  'Arabe',
-  'Anglais',
-  'Mathématiques',
-  'Physique-Chimie',
-  'SVT',
-  'Histoire-Géographie',
-  'Éducation civique et morale',
-  'Éducation islamique',
-  'Coran',
-  'Espagnol',
-  'Allemand',
-  'Informatique',
-  'EPS',
-  'Arts plastiques',
-  'Musique',
-  'Toutes les matières (Primaire / Maternelle)',
-];
+// Liste unique partagée avec Administration & Codes et le serveur (lib/data/teaching.ts).
 
 const ROTATING_LOGIN_TEXTS = [
   'Direction, Fondateur & Personnel',
@@ -341,7 +324,6 @@ export function LoginView({
     try {
       const saved = JSON.parse(localStorage.getItem(TEACHER_LOGIN_MEMORY_KEY) || 'null');
       if (saved) {
-        if (saved.phone) setParentPhone(String(saved.phone));
         if (Array.isArray(saved.subjects)) {
           setTeacherSubjects(saved.subjects.filter((s: string) => TEACHER_SUBJECTS.includes(s)));
           const other = saved.subjects.filter((s: string) => !TEACHER_SUBJECTS.includes(s)).join(', ');
@@ -632,9 +614,15 @@ export function LoginView({
       return;
     }
 
-    // Téléphone : parents, élèves (numéro du parent) et enseignants.
-    const cleanPhone = isStaffCodeLogin ? '' : parentPhone.trim();
-    if (!isStaffCodeLogin && cleanPhone.replace(/\D/g, '').length < 8) {
+    // Enseignant : matricule d'embauche + matières / classes cochées + code à 4 chiffres.
+    if (isTeacherLogin && !staffMatricule.trim()) {
+      setErrorMessage("Saisissez votre matricule d'embauche (il figure sur votre fiche, donné par la Direction).");
+      return;
+    }
+
+    // Téléphone : parents et élèves (numéro du parent).
+    const cleanPhone = isStaffCodeLogin || isTeacherLogin ? '' : parentPhone.trim();
+    if (!isStaffCodeLogin && !isTeacherLogin && cleanPhone.replace(/\D/g, '').length < 8) {
       setErrorMessage(
         selectedRole === 'parent'
           ? "Veuillez renseigner le numéro de téléphone WhatsApp ou tuteur renseigné lors de l'inscription de votre enfant."
@@ -677,7 +665,7 @@ export function LoginView({
           email: cleanEmail,
           subject: isTeacherLogin ? teacherSubject.trim() : undefined,
           teachingClass: isTeacherLogin ? teacherClass : undefined,
-          matricule: isStudentLogin ? studentMatricule.trim() : isStaffCodeLogin ? staffMatricule.trim() : undefined,
+          matricule: isStudentLogin ? studentMatricule.trim() : selectedRole !== 'parent' ? staffMatricule.trim() : undefined,
           grade: isStudentLogin ? studentGrade : undefined,
         }),
       });
@@ -721,7 +709,7 @@ export function LoginView({
         : authCodeInput.trim().toUpperCase();
 
     // Matricule retenu par ce navigateur pour ce poste (jamais le code).
-    if (isStaffCodeLogin) {
+    if (isStaffCodeLogin || isTeacherLogin) {
       try {
         const saved = JSON.parse(localStorage.getItem(STAFF_MATRICULE_MEMORY_KEY) || '{}') || {};
         saved[selectedRole] = staffMatricule.trim();
@@ -734,9 +722,8 @@ export function LoginView({
       try {
         localStorage.setItem(
           TEACHER_LOGIN_MEMORY_KEY,
-          // Jamais le code à 4 chiffres : seulement le numéro, les matières et les classes.
+          // Jamais le code à 4 chiffres : seulement les matières et les classes.
           JSON.stringify({
-            phone: cleanPhone,
             subjects: [...teacherSubjects, ...(teacherOtherSubject.trim() ? [teacherOtherSubject.trim()] : [])],
             classes: teacherClasses,
           })
@@ -1450,19 +1437,13 @@ export function LoginView({
 
                 </>)}
 
-                {/* 4. Numéro de Téléphone — parents, élèves (numéro du parent) et enseignants */}
-                {(selectedRole === 'parent' || selectedRole === 'eleve' || selectedRole === 'enseignant') && (
+                {/* 4. Numéro de Téléphone — parents et élèves (numéro du parent) */}
+                {(selectedRole === 'parent' || selectedRole === 'eleve') && (
                 <div className="space-y-1.5 animate-in fade-in">
                   <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                     <span>
-                      {selectedRole === 'enseignant' ? '2. ' : selectedRole === 'eleve' ? '3. ' : '4. '}
-                      {selectedRole === 'parent'
-                        ? "Numéro de Téléphone Parent / WhatsApp *"
-                        : selectedRole === 'eleve'
-                        ? 'Numéro de téléphone de ton parent *'
-                        : selectedRole === 'enseignant'
-                        ? 'Votre numéro de téléphone (enregistré par la Direction) *'
-                        : "Numéro de Téléphone Direct / WhatsApp *"}
+                      {selectedRole === 'eleve' ? '3. ' : '4. '}
+                      {selectedRole === 'parent' ? 'Numéro de Téléphone Parent / WhatsApp *' : 'Numéro de téléphone de ton parent *'}
                     </span>
                     <span className="text-[10px] text-emerald-700 font-bold">Obligatoire</span>
                   </label>
@@ -1481,17 +1462,13 @@ export function LoginView({
                   <p className="text-[10px] text-slate-500">
                     {selectedRole === 'parent'
                       ? "ℹ️ Renseignez le numéro exact fourni lors de l'inscription de votre enfant (avec indicatif du pays)."
-                      : selectedRole === 'eleve'
-                      ? 'ℹ️ Le numéro que ton parent a donné à l’inscription.'
-                      : selectedRole === 'enseignant'
-                      ? 'ℹ️ Le numéro donné à la Direction. Ce navigateur s’en souviendra pour la prochaine fois.'
-                      : "ℹ️ Ce numéro sera automatiquement enregistré sur votre profil officiel de l'école."}
+                      : 'ℹ️ Le numéro que ton parent a donné à l’inscription.'}
                   </p>
                 </div>
                 )}
 
-                {/* Personnel : matricule d'embauche (avec le code ci-dessous) */}
-                {selectedRole !== 'parent' && selectedRole !== 'eleve' && selectedRole !== 'enseignant' && (
+                {/* Personnel et enseignants : matricule d'embauche (avec le code ci-dessous) */}
+                {selectedRole !== 'parent' && selectedRole !== 'eleve' && (
                   <div className="space-y-1.5 animate-in fade-in">
                     <label className="font-bold text-slate-800 block text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">

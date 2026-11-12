@@ -12,10 +12,14 @@ import { CheckCircle2, Bell, X } from 'lucide-react';
 import { playCashSound } from '@/lib/utils/audio';
 import { formatFCFA } from '@/lib/utils/formatters';
 import { useFiguresState } from '@/lib/client/figures-privacy';
+import { POINTAGE_VIEW_ALL_ROLES } from '@/lib/auth/roles';
+import { ensurePushSubscription, pushSupported, subscribeToPush } from '@/lib/client/push';
 
 /** Reçoivent l'alerte « versement reçu ». */
 const PAYMENT_ALERT_ROLES = ['fondateur', 'fondateur_adjoint', 'comptable'];
-const NOTIF_PROMPT_KEY = 'schoolflow_payment_notif_prompt_v1';
+/** Reçoivent l'alerte « pointage » (arrivée / départ / absence d'un membre du personnel). */
+const POINTAGE_ALERT_ROLES = POINTAGE_VIEW_ALL_ROLES;
+const NOTIF_PROMPT_KEY = 'schoolflow_payment_notif_prompt_v2';
 
 interface RealtimeNotifierProps {
   schoolSlug?: string;
@@ -101,18 +105,40 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
   const [notifPromptDismissed, setNotifPromptDismissed] = useState(true);
   const figures = useFiguresState();
 
+  const [canHearPointage, setCanHearPointage] = useState(false);
+
   useEffect(() => {
     let role = '';
     try {
       role = String(JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}').roleId || '');
     } catch (e) {}
     const eligible = PAYMENT_ALERT_ROLES.includes(role);
+    const pointageEligible = POINTAGE_ALERT_ROLES.includes(role);
     setCanHearPayments(eligible);
+    setCanHearPointage(pointageEligible);
     if (typeof Notification !== 'undefined') setNotifPermission(Notification.permission);
     try {
       setNotifPromptDismissed(localStorage.getItem(NOTIF_PROMPT_KEY) === '1');
     } catch (e) {}
-    if (!eligible) return;
+    // Notifications déjà autorisées : l'abonnement en arrière-plan suit le compte connecté.
+    if (eligible || pointageEligible) ensurePushSubscription();
+
+    // Alerte reçue par le service worker pendant que l'onglet est ouvert : sonnerie + bandeau.
+    const onSwMessage = (e: MessageEvent) => {
+      const p = e?.data?.type === 'sf-push' ? e.data.payload : null;
+      if (!p) return;
+      if (p.sound === 'cash') playCashSound();
+      setQueue((q) => [...q, { id: Date.now() + Math.random(), type: 'payment', title: String(p.title || 'SchoolFlow'), message: String(p.body || '') }]);
+    };
+    try {
+      navigator.serviceWorker?.addEventListener('message', onSwMessage);
+    } catch (e) {}
+    const cleanupSw = () => {
+      try {
+        navigator.serviceWorker?.removeEventListener('message', onSwMessage);
+      } catch (e) {}
+    };
+    if (!eligible) return cleanupSw;
 
     const snapshot = () => {
       const m = new Map<string, number>();
@@ -144,7 +170,10 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
       announcePayments(received);
     };
     window.addEventListener(DATA_UPDATED_EVENT, onData);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, onData);
+    return () => {
+      window.removeEventListener(DATA_UPDATED_EVENT, onData);
+      cleanupSw();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolSlug]);
 
@@ -200,7 +229,7 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const showNotifPrompt = canHearPayments && notifPermission === 'default' && !notifPromptDismissed;
+  const showNotifPrompt = (canHearPayments || canHearPointage) && notifPermission === 'default' && !notifPromptDismissed;
   const dismissPrompt = () => {
     setNotifPromptDismissed(true);
     try {
@@ -215,9 +244,13 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
           <Bell className="w-4 h-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-extrabold text-slate-900 font-heading">Alertes de versements</p>
+          <p className="text-sm font-extrabold text-slate-900 font-heading">
+            {canHearPayments ? 'Alertes de versements et de pointage' : 'Alertes de pointage'}
+          </p>
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            Recevoir une notification et une sonnerie sur cet appareil à chaque versement encaissé ?
+            {canHearPayments
+              ? 'Être prévenu sur cet appareil, même application fermée, à chaque versement encaissé (avec sonnerie) et à chaque pointage du personnel ?'
+              : 'Être prévenu sur cet appareil, même application fermée, à chaque pointage du personnel ?'}
           </p>
         </div>
       </div>
@@ -228,7 +261,11 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
             try {
               const p = await Notification.requestPermission();
               setNotifPermission(p);
-              if (p === 'granted') playCashSound();
+              if (p === 'granted') {
+                if (canHearPayments) playCashSound();
+                // Abonnement en arrière-plan (téléphone verrouillé, application fermée).
+                if (pushSupported()) subscribeToPush();
+              }
             } catch (e) {}
             dismissPrompt();
           }}

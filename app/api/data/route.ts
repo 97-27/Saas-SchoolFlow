@@ -38,6 +38,7 @@ import {
 import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
 import { setRequestActor, actorLabel } from '@/lib/server/actor';
 import { isFounderRole } from '@/lib/auth/roles';
+import { notifyPaymentIfIncreased, paidAmountBefore } from '@/lib/server/push-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -149,10 +150,16 @@ export async function POST(request: NextRequest) {
         })
       );
 
-    case 'saveInvoice':
+    case 'saveInvoice': {
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
       if (isLegacyDemoInvoice(args[0])) return ok(false);
-      return ok(await saveInvoiceToSupabase(args[0], slug));
+      // Montant payé avant / après : un versement encaissé prévient la Direction et le Comptable
+      // sur leur téléphone (notification en arrière-plan, sonnerie « argent »).
+      const before = await paidAmountBefore(slug, args[0]);
+      const result = await saveInvoiceToSupabase(args[0], slug);
+      if (result) notifyPaymentIfIncreased(slug, args[0], before, session).catch(() => {});
+      return ok(result);
+    }
 
     case 'deleteStudent':
       if (!hasRole(session, DELETE_ROLES)) return deny();

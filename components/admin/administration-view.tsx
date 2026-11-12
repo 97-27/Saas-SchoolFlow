@@ -37,6 +37,53 @@ import {
   Share2,
 } from 'lucide-react';
 import { FiguresPolicyCard } from '@/components/ui/masked-figure';
+import { TEACHER_SUBJECTS, TEACHER_CLASSES, splitTeachingList } from '@/lib/data/teaching';
+
+/** Cases à cocher des matières / classes d'un enseignant (valeur « A, B, C »). */
+function TeachingChips({
+  options,
+  value,
+  onChange,
+  columns = false,
+}: {
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+  columns?: boolean;
+}) {
+  const selected = splitTeachingList(value);
+  const toggle = (opt: string) => {
+    const next = selected.includes(opt) ? selected.filter((s) => s !== opt) : [...selected, opt];
+    onChange(options.filter((o) => next.includes(o)).join(', '));
+  };
+  return (
+    <div className={`${columns ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5' : 'flex flex-wrap gap-1.5'} p-2.5 rounded-xl bg-white border border-slate-300`}>
+      {options.map((opt) => {
+        const on = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer inline-flex items-center ${
+              columns ? 'justify-center' : ''
+            } gap-1 ${on ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50 hover:border-emerald-300'}`}
+          >
+            {on && <Check className="w-3 h-3 shrink-0" />}
+            <span className="truncate">{opt}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Nombre au hasard réellement imprévisible (jamais Math.random pour un code d'accès). */
+function secureInt(maxExclusive: number): number {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % maxExclusive;
+}
 
 interface AdministrationViewProps {
   schoolSlug: string;
@@ -78,8 +125,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [newFullName, setNewFullName] = useState('');
   const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'fondateur_adjoint' | 'informaticien'>('enseignant');
   const [newMatricule, setNewMatricule] = useState('');
-  const [newSubject, setNewSubject] = useState('Toutes les matières (Enseignant Titulaire / Polyvalent)');
-  const [newClasses, setNewClasses] = useState('Toutes les classes');
+  // Enseignant : matières et classes COCHÉES par la Direction (plus de « toutes » par défaut) ;
+  // à la connexion, l'enseignant doit cocher les mêmes (vérifié par le serveur).
+  const [newSubject, setNewSubject] = useState('');
+  const [newClasses, setNewClasses] = useState('');
   const [newDiploma, setNewDiploma] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -181,7 +230,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     if (role === 'enseignant') {
       let pin = '';
       do {
-        pin = String(Math.floor(1000 + Math.random() * 9000));
+        pin = String(1000 + secureInt(9000));
       } while (existing.has(pin));
       return pin;
     }
@@ -204,8 +253,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const existingCodes = new Set(staffList.map((s) => s.authCode));
     let candidate = '';
     do {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      candidate = `${prefix}-${rand}`;
+      candidate = `${prefix}-${1000 + secureInt(9000)}`;
     } while (existingCodes.has(candidate));
     return candidate;
   };
@@ -345,6 +393,10 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       showToast(`⚠️ Le matricule ${mat} est déjà attribué à un autre membre.`);
       return;
     }
+    if (editRole === 'enseignant' && (!splitTeachingList(editSubject).length || !splitTeachingList(editClasses).length)) {
+      showToast('⚠️ Cochez au moins une matière ET une classe pour cet enseignant.');
+      return;
+    }
 
     const roleTitleMap: Record<string, string> = {
       fondateur: 'Fondateur (Contrôle Total)',
@@ -366,15 +418,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       roleId: editRole,
       matricule: editMatricule.trim().toUpperCase(),
       subjectOrGrade:
-        editSubject.trim() ||
-        (editRole === 'enseignant'
-          ? 'Toutes les matières (Enseignant Polyvalent)'
-          : editRole === 'fondateur'
-          ? 'Présidence & Conseil d’Administration'
-          : editRole === 'directeur'
-          ? 'Direction Générale des Études'
-          : 'Administration Générale'),
-      assignedClasses: editClasses.trim() || (editRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
+        editRole === 'enseignant'
+          ? editSubject.trim()
+          : editSubject.trim() ||
+            (editRole === 'fondateur'
+              ? 'Présidence & Conseil d’Administration'
+              : editRole === 'directeur'
+              ? 'Direction Générale des Études'
+              : 'Administration Générale'),
+      assignedClasses: editRole === 'enseignant' ? editClasses.trim() : editClasses.trim() || 'Toutes',
       diplomaOrExperience: editDiploma.trim() || undefined,
       address: editAddress.trim() || undefined,
       email: editEmail.trim(), // Permet d'enregistrer l'adresse email réelle
@@ -459,6 +511,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       return;
     }
 
+    if (newRole === 'enseignant' && (!splitTeachingList(newSubject).length || !splitTeachingList(newClasses).length)) {
+      showToast('⚠️ Cochez au moins une matière ET une classe pour cet enseignant.');
+      return;
+    }
+
     const manualCode = newAuthCode.trim().toUpperCase();
     if (manualCode && staffList.some((s) => s.authCode === manualCode)) {
       showToast(`⚠️ Le code ${manualCode} est déjà utilisé par un autre membre du personnel.`);
@@ -484,8 +541,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       role: roleTitleMap[newRole] || 'Membre du Personnel',
       roleId: newRole,
       matricule,
-      subjectOrGrade: newSubject.trim() || (newRole === 'enseignant' ? 'Toutes les matières (Enseignant Polyvalent)' : 'Administration'),
-      assignedClasses: newClasses.trim() || (newRole === 'enseignant' ? 'Toutes les classes' : 'Toutes'),
+      subjectOrGrade: newRole === 'enseignant' ? newSubject.trim() : 'Administration',
+      assignedClasses: newRole === 'enseignant' ? newClasses.trim() : 'Toutes',
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
       joinDate: '01/09/2026',
@@ -502,8 +559,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     // Reset
     setNewFullName('');
     setNewMatricule('');
-    setNewSubject('Toutes les matières (Enseignant Titulaire / Polyvalent)');
-    setNewClasses('Toutes les classes');
+    setNewSubject('');
+    setNewClasses('');
     setNewDiploma('');
     setNewAddress('');
     setNewEmail('');
@@ -1287,26 +1344,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Matières Enseignées *</label>
-                      <input
-                        type="text"
-                        value={newSubject}
-                        onChange={(e) => setNewSubject(e.target.value)}
-                        placeholder="Ex : Toutes les matières, Mathématiques, SVT..."
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
-                      />
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block">Matières enseignées * <span className="font-medium text-slate-500">(cochez)</span></label>
+                      <TeachingChips options={TEACHER_SUBJECTS} value={newSubject} onChange={setNewSubject} />
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Classes Assignées *</label>
-                      <input
-                        type="text"
-                        value={newClasses}
-                        onChange={(e) => setNewClasses(e.target.value)}
-                        placeholder="Ex : Toutes les classes, 6ème A, 5ème B..."
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
-                      />
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block">Classes prises en charge * <span className="font-medium text-slate-500">(cochez)</span></label>
+                      <TeachingChips options={TEACHER_CLASSES} value={newClasses} onChange={setNewClasses} columns />
+                      <p className="text-[10px] text-slate-500">À la connexion, l’enseignant doit cocher exactement ces matières et ces classes.</p>
                     </div>
                   </div>
 
@@ -1530,26 +1576,14 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Matières Enseignées *</label>
-                      <input
-                        type="text"
-                        value={editSubject}
-                        onChange={(e) => setEditSubject(e.target.value)}
-                        placeholder="Ex : Toutes les matières, Mathématiques, SVT..."
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
-                      />
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block">Matières enseignées * <span className="font-medium text-slate-500">(cochez)</span></label>
+                      <TeachingChips options={TEACHER_SUBJECTS} value={editSubject} onChange={setEditSubject} />
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="font-bold text-slate-700 block">Classes Assignées *</label>
-                      <input
-                        type="text"
-                        value={editClasses}
-                        onChange={(e) => setEditClasses(e.target.value)}
-                        placeholder="Ex : Toutes les classes, 6ème A, 5ème B..."
-                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
-                      />
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block">Classes prises en charge * <span className="font-medium text-slate-500">(cochez)</span></label>
+                      <TeachingChips options={TEACHER_CLASSES} value={editClasses} onChange={setEditClasses} columns />
                     </div>
                   </div>
 

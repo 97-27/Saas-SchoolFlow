@@ -9,6 +9,7 @@ import {
   POINTAGE_VIEW_ALL_ROLES,
   ROLE_LABELS,
 } from '@/lib/auth/roles';
+import { sendPushToRoles } from '@/lib/server/push';
 import {
   DEFAULT_POINTAGE_CONFIG,
   PointageConfig,
@@ -362,6 +363,27 @@ export async function POST(request: NextRequest) {
 
   const saved = await kvPut(schoolId, recordKey(date, member.id), JSON.stringify(rec), actor);
   if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+
+  // Direction prévenue sur son téléphone (même application fermée) : qui, quoi, à quelle heure.
+  const roleLabel = ROLE_LABELS[member.roleId] || 'Personnel';
+  const what =
+    action === 'arrive'
+      ? `est arrivé(e) à ${rec.arrival?.time}${rec.arrival?.distance !== undefined ? ` (à ${rec.arrival.distance} m de l’école)` : ''}`
+      : action === 'depart'
+      ? `est parti(e) à ${rec.departure?.time}`
+      : `signale une absence : ${rec.absence?.reason || ''}`;
+  sendPushToRoles(
+    schoolId,
+    POINTAGE_VIEW_ALL_ROLES,
+    {
+      title: action === 'absence' ? '🟠 Absence signalée' : action === 'arrive' ? '🟢 Pointage — arrivée' : '🔵 Pointage — départ',
+      body: `${member.fullName} (${roleLabel}) ${what}.`,
+      url: `/${slug}/admin/pointage`,
+      tag: `pointage-${member.id}-${date}-${action}`,
+    },
+    { exceptStaffId: member.id }
+  ).catch(() => {});
+
   return NextResponse.json(
     { success: true, record: rec, status: dayStatus(rec, config, date, clock) },
     { headers: NO_STORE }

@@ -1092,14 +1092,22 @@ export function Topbar({
                               : "Coordonnées certifiées par l'école."}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={startEditingProfile}
-                          className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 shrink-0 ml-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-200 text-[10.5px] transition-colors"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          <span>Modifier</span>
-                        </button>
+                        {/* Personnel : nom, email et téléphone sont fixés par la Direction dans
+                            Administration & Codes — jamais modifiables depuis le profil. */}
+                        {activeSession.roleId === 'parent' ? (
+                          <button
+                            type="button"
+                            onClick={startEditingProfile}
+                            className="text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 shrink-0 ml-1 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-200 text-[10.5px] transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span>Modifier</span>
+                          </button>
+                        ) : (
+                          <span className="shrink-0 ml-1 px-2 py-1 rounded-lg bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-500">
+                            Géré par la Direction
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
