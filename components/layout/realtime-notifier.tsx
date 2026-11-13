@@ -117,8 +117,9 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     setCanHearPayments(eligible);
     setCanHearPointage(pointageEligible);
     if (typeof Notification !== 'undefined') setNotifPermission(Notification.permission);
+    // « Plus tard » ne vaut que pour cette session : le rappel revient à chaque connexion.
     try {
-      setNotifPromptDismissed(localStorage.getItem(NOTIF_PROMPT_KEY) === '1');
+      setNotifPromptDismissed(sessionStorage.getItem(NOTIF_PROMPT_KEY) === '1');
     } catch (e) {}
     // Notifications déjà autorisées : l'abonnement en arrière-plan suit le compte connecté.
     if (eligible || pointageEligible) ensurePushSubscription();
@@ -233,7 +234,7 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
   const dismissPrompt = () => {
     setNotifPromptDismissed(true);
     try {
-      localStorage.setItem(NOTIF_PROMPT_KEY, '1');
+      sessionStorage.setItem(NOTIF_PROMPT_KEY, '1');
     } catch (e) {}
   };
 

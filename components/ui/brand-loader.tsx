@@ -57,7 +57,7 @@ export function BrandLoader({ title, compact = false }: { title?: string; compac
         }
       `}</style>
 
-      <div className="relative w-40 h-40 flex items-center justify-center">
+      <div className="relative w-28 h-28 flex items-center justify-center">
         <div
           className="absolute inset-2 rounded-full bg-gradient-to-br from-emerald-300 to-amber-200 blur-xl"
           style={{ animation: 'sf-halo 2.4s ease-in-out infinite' }}
@@ -70,7 +70,7 @@ export function BrandLoader({ title, compact = false }: { title?: string; compac
           />
         ))}
         <div className="relative" style={{ animation: 'sf-bob 2.8s ease-in-out infinite' }}>
-          <SchoolFlowLogo size="xl" iconOnly showTagline={false} />
+          <SchoolFlowLogo size="md" iconOnly showTagline={false} />
         </div>
       </div>
 

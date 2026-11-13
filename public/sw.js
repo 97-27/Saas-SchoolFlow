@@ -1,9 +1,12 @@
 /* SchoolFlow — service worker : notifications en arrière-plan + page hors connexion.
    Aucune page de gestion n'est mise en cache (données d'élèves) : seule la page « hors
    connexion » et les icônes le sont. */
-const CACHE = 'schoolflow-shell-v1';
+// Version du cache : changer ce numéro supprime les anciens caches sur tous les téléphones.
+const CACHE = 'school-flow-africa-shell-v2';
 const OFFLINE_URL = '/offline.html';
-const PRECACHE = [OFFLINE_URL, '/icons/icon.svg', '/manifest.webmanifest'];
+// Le manifeste (nom de l'application) n'est JAMAIS mis en cache : sinon le téléphone garde
+// l'ancien nom « School Flow » après une mise à jour.
+const PRECACHE = [OFFLINE_URL, '/icons/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));

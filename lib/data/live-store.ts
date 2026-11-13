@@ -1528,7 +1528,8 @@ function applyServerData(slug: string, result: any): void {
             .filter((u: any) => u && u.authCode && !LEGACY_MOCK_STAFF_IDS.has(u.id) && !LEGACY_MOCK_STAFF_IDS.has(u.authCode))
             .map((u: any) => {
               const prev = oldByCode.get(u.authCode.toUpperCase());
-              return prev?.lastLogin ? { ...u, lastLogin: prev.lastLogin } : u;
+              const withPending = applyPendingStaff(u);
+              return prev?.lastLogin ? { ...withPending, lastLogin: prev.lastLogin } : withPending;
             });
           const newStr = JSON.stringify(mergedStaff);
           if (currentLocalRaw !== newStr) {
@@ -3090,6 +3091,32 @@ export function getLiveStaffUsers(schoolSlug: string = 'epc-manoi'): StaffUser[]
  * téléphone qui gardait un ancien code le remettait donc en base par-dessus le nouveau, et le
  * bon code était ensuite refusé à la connexion.
  */
+/**
+ * Fiches du personnel enregistrées à l'instant et pas encore confirmées par la base. Une
+ * synchronisation qui arrive entre-temps (ou une lecture périmée) ne doit pas faire réapparaître
+ * l'ancienne version : on garde la version enregistrée jusqu'à ce que la base la confirme.
+ */
+const pendingStaffSaves = new Map<string, { user: any; at: number }>();
+const PENDING_STAFF_TTL_MS = 30000;
+const STAFF_CONFIRM_KEYS = ['fullName', 'email', 'phone', 'roleId', 'matricule', 'subjectOrGrade', 'assignedClasses', 'status'];
+const sameStaffFields = (a: any, b: any) =>
+  STAFF_CONFIRM_KEYS.every((k) => String(a?.[k] ?? '').trim() === String(b?.[k] ?? '').trim());
+
+/** Remplace une fiche de la synchronisation par la version enregistrée tant que la base ne l'a pas confirmée. */
+function applyPendingStaff(u: any): any {
+  const pend = u?.id ? pendingStaffSaves.get(u.id) : undefined;
+  if (!pend) return u;
+  if (Date.now() - pend.at > PENDING_STAFF_TTL_MS) {
+    pendingStaffSaves.delete(u.id);
+    return u;
+  }
+  if (sameStaffFields(pend.user, u)) {
+    pendingStaffSaves.delete(u.id);
+    return u;
+  }
+  return { ...u, ...pend.user };
+}
+
 export function saveLiveStaffUsers(
   users: StaffUser[],
   schoolSlug: string = 'epc-manoi',
@@ -3107,12 +3134,18 @@ export function saveLiveStaffUsers(
     const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
     for (const u of changed) {
       if (!u || !u.authCode || /^MASQUE-/i.test(u.authCode)) continue;
+      if (u.id) pendingStaffSaves.set(u.id, { user: u, at: Date.now() });
       saveStaffUserToSupabase(u, slug, allowCodeChange)
         .then((ok) => {
-          if (ok === false) notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`);
-          else setTimeout(() => syncSchoolDataWithServer(slug, true), 500);
+          if (ok === false) {
+            if (u.id) pendingStaffSaves.delete(u.id);
+            notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`);
+          } else setTimeout(() => syncSchoolDataWithServer(slug, true), 500);
         })
-        .catch(() => notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`));
+        .catch(() => {
+          if (u.id) pendingStaffSaves.delete(u.id);
+          notifySaveFailure(`le compte de ${u.fullName || 'ce membre'}`);
+        });
     }
 
     if (changed.length) {

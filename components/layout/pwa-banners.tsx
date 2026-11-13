@@ -28,9 +28,9 @@ export function PwaBanners() {
     setIsIos(ios);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
     setStandalone(isStandalone);
+    // Fermé : revient à la prochaine connexion tant que l'application n'est pas installée.
     try {
-      const until = Number(localStorage.getItem(INSTALL_DISMISS_KEY) || 0);
-      setDismissed(until > Date.now());
+      setDismissed(sessionStorage.getItem(INSTALL_DISMISS_KEY) === '1');
     } catch {
       setDismissed(false);
     }
@@ -61,7 +61,7 @@ export function PwaBanners() {
   const dismiss = () => {
     setDismissed(true);
     try {
-      localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now() + DISMISS_DAYS * 24 * 60 * 60 * 1000));
+      sessionStorage.setItem(INSTALL_DISMISS_KEY, '1');
     } catch {}
   };
 
