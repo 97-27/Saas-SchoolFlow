@@ -20,6 +20,7 @@ import {
   GradesConfig,
   MAX_INTERROS,
   MAX_DEVOIRS,
+  INTERROS_VISIBLE,
 } from '@/lib/data/grades-config';
 import {
   Settings2,
@@ -545,6 +546,30 @@ export function GradesView({
   const devoirCols = Math.max(gradesConfig.devoirs, highestFilledIndex(Object.values(gradesMap), 'dev'));
   const interroFields = Array.from({ length: interroCols }, (_, i) => `int${i + 1}`);
   const devoirFields = Array.from({ length: devoirCols }, (_, i) => `dev${i + 1}`);
+  // Message WhatsApp aux parents : notes de la matière affichée + demande de signature de la feuille.
+  const whatsappNotesUrl = (studentId: string, grades: GradeEntry, fullName: string, grade: string): string | null => {
+    const stu = classStudents.find((s) => s.id === studentId);
+    const digits = String(stu?.whatsappPhone || stu?.guardianPhone || '').replace(/\D/g, '');
+    if (digits.length < 8) return null;
+    const phone = digits.startsWith('225') ? digits : `225${digits}`;
+    const fmt = (xs: number[]) => (xs.length ? xs.map((n) => String(n).replace('.', ',')).join(' • ') : '—');
+    const comp = grades.comp && !isNaN(parseFloat(grades.comp)) ? String(parseFloat(grades.comp)).replace('.', ',') : '—';
+    const text =
+      `*${String(currentSchool.name || '').toUpperCase()}*\n\n` +
+      `Chers parents,\n\n` +
+      `Votre enfant *${fullName}* (classe de *${grade}*) a obtenu les notes suivantes en *${selectedSubject}* (${selectedTerm}) :\n\n` +
+      `📝 Interrogations : ${fmt(noteValues(grades, 'int'))}\n` +
+      `📚 Devoirs : ${fmt(noteValues(grades, 'dev'))}\n` +
+      `🎯 Composition : ${comp}\n\n` +
+      `Merci de regarder la feuille d’interrogation, de la *signer* et de la faire revenir à l’école avec votre enfant.\n\n` +
+      `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  };
+
+  // Affichage : 5 interrogations d'emblée, le reste sur demande (les notes comptent toutes).
+  const [showAllInterros, setShowAllInterros] = useState(false);
+  const interroShown = showAllInterros || interroCols <= INTERROS_VISIBLE ? interroFields : interroFields.slice(0, INTERROS_VISIBLE);
+  const hiddenInterros = interroCols - interroShown.length;
 
   // Traitement et calcul des moyennes
   const processedGrades = useMemo(() => {
@@ -1296,9 +1321,20 @@ export function GradesView({
                     <th className="py-3 pl-4 pr-2 text-center w-12">Rang</th>
                     <th className="py-3 px-3 min-w-[180px]">Matricule & Élève</th>
                     <th className="py-3 px-2 text-center w-12">Genre</th>
-                    {interroFields.map((f, i) => (
+                    {interroShown.map((f, i) => (
                       <th key={f} className="py-3 px-1.5 text-center bg-blue-50/40 text-blue-900 w-16">Int. {i + 1}</th>
                     ))}
+                    {interroCols > INTERROS_VISIBLE && (
+                      <th className="py-2 px-1.5 text-center bg-blue-50/40">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllInterros((v) => !v)}
+                          className="px-2 py-1 rounded-lg bg-white border border-blue-200 text-[10px] font-bold text-blue-900 hover:bg-blue-50 cursor-pointer whitespace-nowrap"
+                        >
+                          {showAllInterros ? 'Réduire' : `+ ${hiddenInterros} autres`}
+                        </button>
+                      </th>
+                    )}
                     {devoirFields.map((f, i) => (
                       <th key={f} className="py-3 px-2 text-center bg-amber-50/50 text-amber-900 whitespace-nowrap min-w-[75px]">Devoir {i + 1}</th>
                     ))}
@@ -1310,7 +1346,7 @@ export function GradesView({
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredGrades.length === 0 ? (
                     <tr>
-                      <td colSpan={6 + interroCols + devoirCols} className="py-12 text-center text-slate-400">
+                      <td colSpan={6 + interroShown.length + (interroCols > INTERROS_VISIBLE ? 1 : 0) + devoirCols} className="py-12 text-center text-slate-400">
                         Aucun élève trouvé dans la classe {selectedClass}.
                       </td>
                     </tr>
@@ -1345,13 +1381,28 @@ export function GradesView({
                             <span className="font-mono text-[10px] text-slate-400 font-medium">
                               {g.matricule}
                             </span>
+                            {(() => {
+                              const url = whatsappNotesUrl(g.studentId, g.grades, g.fullName, g.grade);
+                              return url ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100"
+                                  title="Envoyer ces notes aux parents par WhatsApp"
+                                >
+                                  WhatsApp parents
+                                </a>
+                              ) : null;
+                            })()}
                           </td>
 
                           <td className="py-2.5 px-2 text-center">
                             <GenderBadge gender={g.gender} />
                           </td>
 
-                          {interroFields.map((f) => (
+                          {interroCols > INTERROS_VISIBLE && <td className="bg-blue-50/20" />}
+                          {interroShown.map((f) => (
                             <td key={f} className="py-2 px-1 text-center bg-blue-50/20">
                               <input
                                 type="text"

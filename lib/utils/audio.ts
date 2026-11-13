@@ -59,7 +59,7 @@ export function playRegistrationSuccessSound(): void {
 /**
  * Sonnerie « argent » (cha-ching de caisse) : un versement vient d'être encaissé.
  */
-export function playCashSound(): void {
+function synthCash(): void {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -83,6 +83,24 @@ export function playCashSound(): void {
     strike(0, [1567.98, 2093.0], 0.12, 0.12);
     strike(0.11, [2093.0, 2637.02, 3135.96], 0.9, 0.14);
   } catch (e) {}
+}
+
+/** Son « argent » personnalisé de l'école : déposer le fichier dans public/sounds/argent.mp3. */
+const CUSTOM_CASH_SOUND = '/sounds/argent.mp3';
+
+/**
+ * Sonnerie « argent » d'un versement : le fichier personnalisé s'il existe, sinon le son de secours.
+ * (Sur téléphone, la notification en arrière-plan garde la sonnerie du téléphone ; ce son se joue
+ * quand l'application est ouverte.)
+ */
+export function playCashSound(): void {
+  try {
+    const a = new Audio(CUSTOM_CASH_SOUND);
+    a.onerror = () => synthCash();
+    a.play().catch(() => synthCash());
+  } catch {
+    synthCash();
+  }
 }
 
 /**

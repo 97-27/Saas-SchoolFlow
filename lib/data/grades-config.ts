@@ -11,8 +11,11 @@
 export type GradesConfig = { interros: number; devoirs: number };
 
 export const DEFAULT_GRADES_CONFIG: GradesConfig = { interros: 5, devoirs: 2 };
-export const MAX_INTERROS = 10;
-export const MAX_DEVOIRS = 6;
+/** Maximum choisi par l'établissement : 15 interrogations et 5 devoirs (réglable par l'école). */
+export const MAX_INTERROS = 15;
+export const MAX_DEVOIRS = 5;
+/** Nombre de colonnes d'interrogations affiché d'emblée ; le reste s'ouvre avec un bouton. */
+export const INTERROS_VISIBLE = 5;
 
 export const gradesConfigKey = (slug: string) => `schoolflow_grades_config_v1_${slug === 'college-excellence' ? 'epc-manoi' : slug}`;
 

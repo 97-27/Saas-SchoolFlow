@@ -1555,10 +1555,12 @@ export async function getStaffAuthRecords(schoolSlug: string): Promise<
       .not('role_id', 'like', 'system_%')
       .neq('role_id', 'school_stamp')
       .order('created_at', { ascending: true });
-  const base = 'id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at, subject_or_grade, assigned_classes';
-  // Colonne « matricule » (migration 010) : si elle n'existe pas encore, on relit sans elle.
-  let { data, error } = await query(`${base}, matricule`);
-  if (error && /matricule/i.test(error.message || '')) ({ data, error } = await query(base));
+  const base = 'id, full_name, email, phone, role_id, role_title, auth_code, is_active, created_at';
+  // Colonnes ajoutées par les migrations 010 (matricule) et 013 (matières, classes). Si l'une
+  // manque encore dans la base, on relit sans elle : la connexion ne doit jamais tomber en panne.
+  let { data, error } = await query(`${base}, matricule, subject_or_grade, assigned_classes`);
+  if (error) ({ data, error } = await query(`${base}, matricule`));
+  if (error) ({ data, error } = await query(base));
   if (error || !data) return [];
   return (data as any[]).map((d: any) => ({
     matricule: String(d.matricule || '').trim(),
@@ -1632,6 +1634,8 @@ export async function saveStaffUserToSupabase(staff: {
   status: string;
   avatarUrl?: string;
   matricule?: string;
+  subjectOrGrade?: string;
+  assignedClasses?: string;
 }, schoolSlug: string, allowCodeChange: boolean = false): Promise<boolean> {
   if (!isSupabaseConfigured) return false;
   try {
@@ -1654,6 +1658,15 @@ export async function saveStaffUserToSupabase(staff: {
     // fourni, jamais un numéro fabriqué.
     const mat = String(staff.matricule || '').trim().toUpperCase();
     if (mat && !/^EMP-[0-9A-F]{6}$/i.test(mat)) payload.matricule = mat;
+    // Matières et classes (migration 013) : enregistrées sur la fiche, pour la vérification de
+    // connexion des enseignants.
+    if (typeof staff.subjectOrGrade === 'string') payload.subject_or_grade = staff.subjectOrGrade.trim().slice(0, 400);
+    if (typeof staff.assignedClasses === 'string') payload.assigned_classes = staff.assignedClasses.trim().slice(0, 400);
+    const withoutTeaching = (p: Record<string, any>) => {
+      const { subject_or_grade: _s, assigned_classes: _a, ...rest } = p;
+      return rest;
+    };
+    const TEACH_COL = /subject_or_grade|assigned_classes/i;
 
     // Retrouver la fiche existante : d'abord par son identifiant réel (un changement de code ne
     // doit pas créer une nouvelle fiche), puis par code, et pour Directeur/Fondateur par rôle (une
@@ -1697,6 +1710,10 @@ export async function saveStaffUserToSupabase(staff: {
         const { matricule: _m, ...noMat } = updatePayload;
         ({ error: updateErr } = await supabase.from('staff_users').update(noMat).eq('id', existingStaff[0].id));
       }
+      // Colonnes matières / classes pas encore créées (migration 013) : on enregistre le reste.
+      if (updateErr && TEACH_COL.test(updateErr.message || '')) {
+        ({ error: updateErr } = await supabase.from('staff_users').update(withoutTeaching(updatePayload)).eq('id', existingStaff[0].id));
+      }
       if (updateErr) {
         console.warn('saveStaffUserToSupabase update warning:', updateErr.message);
         return false;
@@ -1706,6 +1723,9 @@ export async function saveStaffUserToSupabase(staff: {
       if (insertErr && /matricule/i.test(insertErr.message || '') && 'matricule' in payload) {
         const { matricule: _m, ...noMat } = payload;
         ({ error: insertErr } = await supabase.from('staff_users').insert(noMat));
+      }
+      if (insertErr && TEACH_COL.test(insertErr.message || '')) {
+        ({ error: insertErr } = await supabase.from('staff_users').insert(withoutTeaching(payload)));
       }
       if (insertErr) {
         console.warn('saveStaffUserToSupabase insert warning:', insertErr.message);

@@ -14,6 +14,8 @@ import { FiguresPrivacyHost } from '@/components/ui/masked-figure';
 import { PwaBanners } from './pwa-banners';
 import { SetupReminder } from './setup-reminder';
 import { BrandLoader } from '@/components/ui/brand-loader';
+import { useSingleTab } from '@/lib/client/single-tab';
+import { AppWindow } from 'lucide-react';
 
 /**
  * Les écrans lisent d'abord la copie gardée dans le navigateur : à l'ouverture, on voyait donc
@@ -140,6 +142,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const sessionOk = useSessionGuard(schoolSlug);
+  const tab = useSingleTab();
 
   // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
   // La lecture des données démarre tout de suite, en même temps que la vérification de session.
@@ -148,6 +151,34 @@ export function DashboardShell({
     startCrossDeviceSync(schoolSlug);
     installGlobalErrorReporting();
   }, [schoolSlug]);
+
+  // Un seul onglet à la fois : un deuxième onglet attend, il ne duplique pas l'application.
+  if (tab.state === 'blocked') {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-5">
+        <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-200/80 shadow-xs p-6 text-center space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <AppWindow className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-base font-extrabold text-slate-900 font-heading">School Flow Africa est déjà ouvert</h1>
+            <p className="text-xs text-slate-500">
+              Il tourne déjà dans un autre onglet ou une autre fenêtre de ce navigateur. Fermez l’autre pour éviter les doublons,
+              ou travaillez ici.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={tab.takeOver}
+            className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 cursor-pointer"
+          >
+            Utiliser cet onglet
+          </button>
+          <p className="text-[10px] text-slate-400">Cet onglet reprend tout seul dès que l’autre est fermé.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!sessionOk) {
     return (
