@@ -36,6 +36,7 @@ import { canAccessPage } from '@/lib/auth/roles';
 import { kvListPrefix, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 import { getYearEpoch } from '@/lib/server/year-epoch';
+import { sendPushToRoles } from '@/lib/server/push';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -397,6 +398,27 @@ async function mergeParentNewMessages(slug: string, session: SessionPayload, inc
     }));
 
   if (additions.length === 0) return current;
+
+  // La direction est prévenue sur son téléphone (même application fermée) dès qu'un parent écrit.
+  try {
+    const schoolId = await kvSchoolId(slug);
+    if (schoolId) {
+      const first = additions[0];
+      const more = additions.length > 1 ? ` (+${additions.length - 1} autre${additions.length > 2 ? 's' : ''})` : '';
+      const detail = first.subject || String(first.message || '').slice(0, 80);
+      sendPushToRoles(
+        schoolId,
+        ['fondateur', 'fondateur_adjoint', 'directeur'],
+        {
+          title: '💬 Nouveau message d’un parent',
+          body: `${first.parentName || 'Un parent'} — ${first.studentName || ''}${first.studentGrade ? ` (${first.studentGrade})` : ''} : ${detail}${more}`,
+          url: `/${slug}/admin/communication`,
+          tag: `parent-msg-${first.id}`,
+        }
+      ).catch(() => {});
+    }
+  } catch {}
+
   return [...additions, ...current];
 }
 
