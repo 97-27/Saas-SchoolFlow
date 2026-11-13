@@ -24,7 +24,9 @@ export function SetupReminder({ schoolSlug }: { schoolSlug: string }) {
     try {
       const role = String(JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}').roleId || '');
       setEligible(FOUNDER_ROLES.includes(role) || role === 'directeur');
-      setDismissed(sessionStorage.getItem(DISMISS_KEY) === '1');
+      // Pas de masquage mémorisé : tant que le paramétrage n'est pas complet, le rappel revient
+      // à chaque connexion et à chaque chargement de page.
+      setDismissed(false);
     } catch {
       setDismissed(false);
     }
@@ -48,12 +50,8 @@ export function SetupReminder({ schoolSlug }: { schoolSlug: string }) {
 
   if (!eligible || dismissed || missing.length === 0) return null;
 
-  const dismiss = () => {
-    setDismissed(true);
-    try {
-      sessionStorage.setItem(DISMISS_KEY, '1');
-    } catch {}
-  };
+  // La croix ne masque le rappel que pour cette page : il revient au prochain chargement.
+  const dismiss = () => setDismissed(true);
 
   return (
     <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-3.5 sm:p-4 flex items-start gap-3 print:hidden animate-in fade-in">

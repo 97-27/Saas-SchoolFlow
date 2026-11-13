@@ -177,75 +177,14 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
       </button>
     </div>
 
-    {/* Code des chiffres (6 chiffres) : le Comptable affiche lui-même les chiffres avec ce code. */}
-    <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-200/70 space-y-2.5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <p className="text-xs font-bold text-slate-900">Code des chiffres du Comptable (6 chiffres)</p>
-          <p className="text-[11px] text-slate-500">
-            Avec ce code, le Comptable affiche les chiffres 30 min sans votre intervention. Changez-le quand vous voulez.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-mono font-black tracking-[0.3em] text-sm min-w-[96px] text-center">
-            {figuresCode ? (showCode ? figuresCode : '••••••') : '——'}
-          </span>
-          {figuresCode && (
-            <button
-              type="button"
-              onClick={() => setShowCode((v) => !v)}
-              className="p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
-              title={showCode ? 'Cacher le code' : 'Voir le code'}
-            >
-              {showCode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-2">
-        <input
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          value={codeInput}
-          onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="Nouveau code (6 chiffres)"
-          className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-        />
-        <button
-          type="button"
-          disabled={codeBusy || codeInput.length !== 6}
-          onClick={() => saveCode(codeInput)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-        >
-          Enregistrer ce code
-        </button>
-        <button
-          type="button"
-          disabled={codeBusy}
-          onClick={() => saveCode('generate')}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
-        >
-          {codeBusy ? '…' : 'Générer un code'}
-        </button>
-      </div>
-      {codeMsg && (
-        <p className={`text-xs font-semibold ${codeMsg.ok ? 'text-emerald-700' : 'text-rose-600'}`}>{codeMsg.text}</p>
-      )}
-      {!figuresCode && (
-        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-          Aucun code des chiffres pour l’instant : le Comptable doit saisir votre code personnel. Créez-en un pour ne plus avoir à le donner.
-        </p>
-      )}
-    </div>
-
-    {/* Code des Archives des années (6 chiffres) : demandé au Comptable à chaque ouverture des Archives. */}
+    {/* Code des Archives des années (6 chiffres) : demandé au Comptable à chaque ouverture des Archives.
+        (Les chiffres globaux, eux, s'ouvrent seulement avec l'interrupteur ci-dessus : plus de code.) */}
     <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-200/70 space-y-2.5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <p className="text-xs font-bold text-slate-900">Code des Archives des années (6 chiffres)</p>
           <p className="text-[11px] text-slate-500">
-            Demandé au Comptable à chaque ouverture des Archives. Sans code dédié, c’est le code des chiffres qui sert.
+            Demandé au Comptable à chaque ouverture des Archives. Sans code dédié, le Comptable ne peut pas les ouvrir.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

@@ -39,6 +39,7 @@ export function BrandLoader({ title, compact = false }: { title?: string; compac
       </div>
       <div className="space-y-2">
         <p className="text-sm font-extrabold text-slate-900 font-heading">{title || MESSAGES[i]}</p>
+        <p className="text-[11px] font-bold text-emerald-700">School Flow Africa</p>
         <div className="flex items-center justify-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-600 animate-bounce [animation-delay:-0.3s]" />
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce [animation-delay:-0.15s]" />

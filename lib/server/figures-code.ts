@@ -75,9 +75,13 @@ export async function verifyFiguresCode(
   let validCodes: string[];
   // Archives : leur propre code s'il existe, sinon le code des chiffres, sinon le code personnel
   // du Fondateur / DGA.
-  const dedicated = kind === 'archives' ? policy.archivesCode || policy.code : policy.code;
+  const dedicated = kind === 'archives' ? policy.archivesCode : policy.code;
   if (dedicated) {
     validCodes = [dedicated];
+  } else if (kind === 'archives') {
+    // Pas de code des Archives défini : le Comptable ne peut pas entrer (le Fondateur / DGA
+    // doit en fixer un dans Administration & Codes).
+    return { ok: false, status: 409, error: 'Le Fondateur ou le DGA n’a pas encore fixé le code des Archives.' };
   } else {
     const staff = await getStaffAuthRecords(slug);
     validCodes = staff

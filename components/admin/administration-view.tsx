@@ -610,11 +610,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
-                Administration & Codes d&apos;Accès Sécurisés
+              <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight font-heading">
+                Administration &amp; Codes
               </h1>
-              <p className="text-xs text-slate-500 font-sans">
-                Espace Direction • Attribution, réinitialisation des codes d&apos;authentification et gestion du personnel
+              <p className="text-[11px] text-slate-500 font-sans">
+                Personnel, matricules et codes d&apos;accès
               </p>
             </div>
           </div>
@@ -626,14 +626,14 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
             onClick={() => {
               setNewAuthCode(generateRandomCode(newRole));
               setNewMatricule(generateMatricule(newRole));
-              setNewSubject('Toutes les matières (Enseignant Titulaire / Polyvalent)');
-              setNewClasses('Toutes les classes');
+              setNewSubject('');
+              setNewClasses('');
               setIsAddModalOpen(true);
             }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            <span>Ajouter un Utilisateur & Code</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span>Ajouter un membre</span>
           </button>
         </div>
       </div>

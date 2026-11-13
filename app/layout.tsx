@@ -17,12 +17,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SchoolFlow — Plateforme de Gestion Scolaire Moderne",
+  title: "School Flow Africa — Plateforme de Gestion Scolaire",
   description: "Plateforme de gestion d'école tout-en-un : élèves, scolarités, reçus FCFA, notes et présence.",
   // Application installable sur l'écran d'accueil (Android, iPhone, ordinateur).
   manifest: "/manifest.webmanifest",
-  applicationName: "SchoolFlow",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "SchoolFlow" },
+  applicationName: "School Flow Africa",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "School Flow Africa" },
   icons: { icon: "/icons/icon.svg", apple: "/icons/apple-touch-icon.png" },
 };
 
