@@ -368,6 +368,11 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
                         <p className="text-[11px] text-emerald-900 leading-snug">{m.directorReply}</p>
                       </div>
                     )}
+                    <p className="mt-1 text-[10px] font-semibold text-slate-500">
+                      {m.seenByDirectorAt
+                        ? `✓✓ Vu par la Direction le ${new Date(m.seenByDirectorAt).toLocaleDateString('fr-FR')}`
+                        : '✓ Envoyé — pas encore vu par la Direction'}
+                    </p>
                   </div>
                 );
               })}

@@ -491,6 +491,40 @@ export function CommunicationView({
   // Brouillons de réponse en cours de saisie, par message
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
+  // « Vu » par la direction : chaque message reçoit la date où la direction l'a vu pour la première
+  // fois. Le champ est enregistré avec le message (base), donc visible sur tous les appareils, et le
+  // parent voit « Vu par la direction ». Ce n'est pas le statut de traitement (Nouveau / Traité).
+  useEffect(() => {
+    if (!messages.some((m) => !(m as any).seenByDirectorAt)) return;
+    const nowIso = new Date().toISOString();
+    setMessages((prev) => {
+      const updated = prev.map((m) => ((m as any).seenByDirectorAt ? m : ({ ...m, seenByDirectorAt: nowIso } as ParentMessage)));
+      try {
+        localStorage.setItem(scopedMessagesKey, JSON.stringify(updated));
+      } catch (e) {}
+      fetch(`/api/sync?slug=${encodeURIComponent(schoolSlug)}&t=${Date.now()}`)
+        .then((res) => res.json())
+        .then((result) => {
+          const cloudAll: ParentMessage[] = Array.isArray(result?.data?.parentMessages) ? result.data.parentMessages : [];
+          const byId = new Map<string, ParentMessage>();
+          cloudAll.forEach((m) => byId.set(m.id, m));
+          updated.forEach((m) => {
+            const cur = byId.get(m.id);
+            if (cur && !(cur as any).seenByDirectorAt && (m as any).seenByDirectorAt) byId.set(m.id, { ...cur, seenByDirectorAt: (m as any).seenByDirectorAt } as ParentMessage);
+            else if (!cur) byId.set(m.id, m);
+          });
+          return fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: schoolSlug, parentMessages: Array.from(byId.values()) }),
+          });
+        })
+        .catch(() => {});
+      return updated;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
   // Répondre directement par WhatsApp
   const handleReplyWhatsApp = (msg: ParentMessage) => {
     const cleanPhone = msg.parentPhone.replace(/\D/g, '') || '22507000000';
