@@ -388,12 +388,12 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   };
 
   const tabs = [
-    { id: 'identity', label: 'Identité, Logo & Emblème', icon: Building2 },
-    { id: 'location', label: 'Localisation & Ville', icon: MapPin },
-    { id: 'calendar', label: 'Année & Calendrier', icon: Calendar },
-    { id: 'services', label: 'Cycles & Services', icon: GraduationCap },
-    { id: 'direction', label: 'Direction & Cachet', icon: Award },
-    { id: 'subscription', label: 'Abonnement & Compte', icon: ShieldAlert },
+    { id: 'identity', label: 'Identité', icon: Building2 },
+    { id: 'location', label: 'Localisation', icon: MapPin },
+    { id: 'calendar', label: 'Année', icon: Calendar },
+    { id: 'services', label: 'Cycles', icon: GraduationCap },
+    { id: 'direction', label: 'Direction', icon: Award },
+    { id: 'subscription', label: 'Abonnement', icon: ShieldAlert },
   ] as const;
 
   return (

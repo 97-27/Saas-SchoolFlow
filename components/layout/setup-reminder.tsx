@@ -37,7 +37,8 @@ export function SetupReminder({ schoolSlug }: { schoolSlug: string }) {
       if (!s.stampUrl) m.push('Cachet officiel');
       if (!String(s.phone || '').trim()) m.push('Téléphone');
       if (!String(s.email || '').trim()) m.push('Email');
-      if (!String(s.address || '').trim() || /abidjan, côte d’ivoire$/i.test(String(s.address || '').trim()) && !s.city) m.push('Adresse');
+      // L'adresse physique se saisit dans Paramètres → Localisation (enregistrée dans « city »).
+      if (!String(s.city || '').trim() && !String(s.address || '').trim()) m.push('Adresse');
       if (!String(s.founderName || '').trim()) m.push('Nom du Fondateur');
       if (!/^\d{4}-\d{4}$/.test(String(s.academicYear || ''))) m.push('Année scolaire');
       if (!s.hasMaternelle && !s.hasPrimaire && !s.hasCollege && !s.hasLycee) m.push('Cycles enseignés');

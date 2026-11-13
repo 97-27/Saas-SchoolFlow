@@ -182,8 +182,8 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
     <div className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-200/70 space-y-2.5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <p className="text-xs font-bold text-slate-900">Code des Archives des années (6 chiffres)</p>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] font-bold text-slate-900">Code des Archives (6 chiffres)</p>
+          <p className="text-[10px] text-slate-500">
             Demandé au Comptable à chaque ouverture des Archives. Sans code dédié, le Comptable ne peut pas les ouvrir.
           </p>
         </div>
@@ -210,14 +210,14 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
           maxLength={6}
           value={archInput}
           onChange={(e) => setArchInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="Nouveau code (6 chiffres)"
-          className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          placeholder="Nouveau code"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:border-emerald-500"
         />
         <button
           type="button"
           disabled={archBusy || archInput.length !== 6}
           onClick={() => saveArchives(archInput)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+          className="px-3 py-2 rounded-xl text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
         >
           Enregistrer
         </button>
@@ -225,7 +225,7 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
           type="button"
           disabled={archBusy}
           onClick={() => saveArchives('generate')}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+          className="px-3 py-2 rounded-xl text-[11px] font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
         >
           {archBusy ? '…' : 'Générer'}
         </button>
@@ -234,7 +234,7 @@ export function FiguresPolicyCard({ schoolSlug }: { schoolSlug: string }) {
             type="button"
             disabled={archBusy}
             onClick={() => saveArchives('')}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
+            className="px-3 py-2 rounded-xl text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
           >
             Retirer
           </button>
