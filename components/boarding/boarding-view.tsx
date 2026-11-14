@@ -10,7 +10,7 @@ import { resolveBoarders } from '@/lib/data/boarding';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
-import { buildServiceMonthInvoice } from '@/lib/data/service-payments';
+import { buildServiceMonthInvoice, monthFromServiceNote } from '@/lib/data/service-payments';
 import {
   BedDouble,
   Building2,
@@ -432,14 +432,52 @@ export function BoardingView({
 
   // Index du pensionnaire actif
   const [activeBoarderIndex, setActiveBoarderIndex] = useState(0);
+  // Aucun reçu tant qu'un interne n'a pas été choisi (clic sur son nom) : la page s'ouvre vierge.
+  const [boarderOpened, setBoarderOpened] = useState(false);
 
   // Pensionnaire actif
   const activeBoarder = useMemo(() => {
-    if (isCreatingNew) return null;
+    if (isCreatingNew || !boarderOpened) return null;
     if (filteredBoarders.length === 0) return boarders[0] || null;
     const safeIndex = Math.min(Math.max(0, activeBoarderIndex), filteredBoarders.length - 1);
     return filteredBoarders[safeIndex] || filteredBoarders[0];
-  }, [filteredBoarders, activeBoarderIndex, boarders, isCreatingNew]);
+  }, [filteredBoarders, activeBoarderIndex, boarders, isCreatingNew, boarderOpened]);
+
+  // Détail mois par mois déjà enregistré (date, montant, mode) : lu dans les factures par mois.
+  const boarderMonthInfo = useMemo(() => {
+    const info: Record<string, { date: string; amount: number; method: string }> = {};
+    if (!activeBoarder || isCreatingNew || typeof window === 'undefined') return info;
+    const keys = new Set(
+      [activeBoarder.student.id, activeBoarder.student.studentNumber, activeBoarder.student.matricule].filter(Boolean) as string[]
+    );
+    getLiveInvoices([], schoolSlug).forEach((inv) => {
+      const m = monthFromServiceNote(inv.notes);
+      if (!m || !(inv.feeType || '').toLowerCase().includes('internat') || !keys.has(inv.studentId)) return;
+      info[m] = { date: inv.issueDate || '', amount: inv.paidAmount || inv.amount || 0, method: inv.paymentMethod || '' };
+    });
+    return info;
+  }, [activeBoarder, isCreatingNew, schoolSlug, boarders]);
+
+  // Date, montant et mode de CHAQUE mois coché : nouveau (saisi ici) ou déjà enregistré.
+  const monthDetailFor = (m: string): { date: string; amount: number; method: string; isNew: boolean } | null => {
+    if (!activeMonthsChecked[m]) return null;
+    if (!previouslyPaidMonths[m]) {
+      return { date: monthDates[m] || formPaymentDate, amount: formMonthlyRate, method: formPaymentMethod, isNew: true };
+    }
+    const info = boarderMonthInfo[m];
+    return {
+      date: info?.date || '',
+      amount: info?.amount || formMonthlyRate,
+      method: info?.method || formPaymentMethod,
+      isNew: false,
+    };
+  };
+  const shortDate = (d: string) => {
+    if (!d) return '—';
+    const iso = d.includes('/') ? d.split('/').reverse().join('-') : d;
+    const [y, mo, da] = iso.split('-');
+    return y && mo && da ? `${da}/${mo}/${y}` : d;
+  };
 
   // États du formulaire interactif avec NOM DE FAMILLE (Majuscule) et Prénoms séparés
   const [formLastName, setFormLastName] = useState('');
@@ -590,6 +628,7 @@ export function BoardingView({
   const handleCancelNewSubscription = () => {
     setIsCreatingNew(false);
     setSelectedEnrolledStudentId('');
+    setBoarderOpened(false);
     if (boarders.length > 0) {
       setActiveBoarderIndex(0);
     }
@@ -882,6 +921,7 @@ export function BoardingView({
     });
 
     setIsConfirmModalOpen(false);
+    setBoarderOpened(true);
 
     // Déclencher la modale finale de confirmation avec bouton OK demandée par la direction
     setSuccessReceiptModalData({
@@ -901,12 +941,14 @@ export function BoardingView({
   // Navigation Reçu Précédent / Suivant
   const handlePrevReceipt = () => {
     setIsCreatingNew(false);
+    setBoarderOpened(true);
     if (filteredBoarders.length === 0) return;
     setActiveBoarderIndex((prev) => (prev > 0 ? prev - 1 : filteredBoarders.length - 1));
   };
 
   const handleNextReceipt = () => {
     setIsCreatingNew(false);
+    setBoarderOpened(true);
     if (filteredBoarders.length === 0) return;
     setActiveBoarderIndex((prev) => (prev < filteredBoarders.length - 1 ? prev + 1 : 0));
   };
@@ -1323,13 +1365,14 @@ export function BoardingView({
     ctx.fillText('ÉTAT DES RÈGLEMENTS PAR MOIS (9 MOIS SCOLAIRES) :', 70, y + 30);
 
     const boxW = 106;
-    const boxH = 48;
+    const boxH = 56;
     const startX = 70;
-    const boxY = y + 44;
+    const boxY = y + 40;
 
     MONTHS_LIST.forEach((m, idx) => {
       const bx = startX + idx * (boxW + 6);
       const isPaid = activeMonthsChecked[m];
+      const payDetail = monthDetailFor(m);
       drawRoundRect(bx, boxY, boxW, boxH, 8);
       ctx.fillStyle = isPaid ? '#d1fae5' : '#f1f5f9';
       ctx.fill();
@@ -1340,9 +1383,14 @@ export function BoardingView({
       ctx.textAlign = 'center';
       ctx.fillStyle = isPaid ? '#065f46' : '#64748b';
       ctx.font = 'bold 12px Inter, sans-serif';
-      ctx.fillText(m.slice(0, 4), bx + boxW / 2, boxY + 20);
+      ctx.fillText(m.slice(0, 4), bx + boxW / 2, boxY + 18);
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(isPaid ? '✓ Réglé' : '—', bx + boxW / 2, boxY + 38);
+      ctx.fillText(isPaid ? `✓ ${shortDate(payDetail?.date || '')}` : '—', bx + boxW / 2, boxY + 38);
+      if (isPaid) {
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#047857';
+        ctx.fillText(formatFCFA(payDetail?.amount || 0), bx + boxW / 2, boxY + 52);
+      }
     });
 
     // Signature & Cachet
@@ -2166,22 +2214,23 @@ export function BoardingView({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           <div className="flex-1 min-w-0">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="search"
-                placeholder="Rechercher un interne déjà inscrit : nom, prénom, numéro, chambre…"
+                placeholder="Rechercher un interne : nom, prénom, numéro, chambre…"
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setIsCreatingNew(false);
                   setActiveBoarderIndex(0);
+                  setBoarderOpened(false);
                 }}
-                className="w-full min-h-[44px] pl-9 pr-3.5 py-2 text-sm rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium"
+                className="w-full min-h-[36px] pl-8 pr-3 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all duration-200 font-medium"
               />
             </div>
             {/* Résultats affichés EN DESSOUS de la recherche : un clic ouvre la fiche de l'interne. */}
             {searchQuery.trim() && (
-              <ul className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-emerald-200 bg-white divide-y divide-slate-100 shadow-sm">
+              <ul className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-emerald-200/80 bg-white divide-y divide-slate-100 shadow-lg shadow-emerald-900/5 animate-in fade-in slide-in-from-top-2 duration-200">
                 <li className="px-3 py-1.5 text-[11px] font-bold text-emerald-800 bg-emerald-50/70">
                   {filteredBoarders.length} interne{filteredBoarders.length > 1 ? 's' : ''} trouvé{filteredBoarders.length > 1 ? 's' : ''}
                 </li>
@@ -2197,15 +2246,28 @@ export function BoardingView({
                           onClick={() => {
                             setIsCreatingNew(false);
                             setActiveBoarderIndex(idx);
+                            setBoarderOpened(true);
                           }}
-                          className={`w-full min-h-[44px] px-3 py-2 text-left flex items-center gap-2 ${isActive ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}
+                          className={`group w-full px-3 py-2 text-left flex items-center gap-2.5 transition-all duration-200 hover:pl-4 ${isActive ? 'bg-gradient-to-r from-emerald-50 to-white' : 'hover:bg-slate-50'}`}
                         >
-                          <span className="font-mono text-xs font-bold text-emerald-800 shrink-0">{b.student.studentNumber || 'ID'}</span>
-                          <span className="min-w-0 flex-1 text-sm font-bold text-slate-900 break-words">
-                            {(b.student.lastName || '').toUpperCase()} {b.student.firstName}
-                            <span className="font-medium text-slate-500"> · {b.student.grade} · {b.roomNumber}</span>
+                          <span
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 transition-transform duration-200 group-hover:scale-105 ${isActive ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'}`}
+                          >
+                            {((b.student.lastName || '').charAt(0) + (b.student.firstName || '').charAt(0)).toUpperCase() || '?'}
                           </span>
-                          {isActive && <span className="shrink-0 text-[10px] font-bold text-emerald-700">Affiché</span>}
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-bold text-slate-900 truncate">
+                              {(b.student.lastName || '').toUpperCase()} {b.student.firstName}
+                            </span>
+                            <span className="block text-[10px] text-slate-500 truncate">
+                              {b.student.studentNumber || 'ID'} · {b.student.grade || '—'} · {b.roomNumber || 'Chambre —'}
+                            </span>
+                          </span>
+                          {isActive ? (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-600 text-white">Affiché</span>
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-emerald-600" />
+                          )}
                         </button>
                       </li>
                     );
@@ -2222,6 +2284,7 @@ export function BoardingView({
                 setSelectedPavilionFilter(e.target.value);
                 setIsCreatingNew(false);
                 setActiveBoarderIndex(0);
+                setBoarderOpened(false);
               }}
               className="w-full sm:w-auto appearance-none pl-3 pr-8 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
             >
@@ -2244,7 +2307,10 @@ export function BoardingView({
                 }
                 setIsCreatingNew(false);
                 const idx = filteredBoarders.findIndex((b) => b.student.id === targetId);
-                if (idx >= 0) setActiveBoarderIndex(idx);
+                if (idx >= 0) {
+                  setActiveBoarderIndex(idx);
+                  setBoarderOpened(true);
+                }
               }}
               className={`w-full appearance-none pl-3 pr-8 py-2 text-xs rounded-xl border font-bold focus:outline-none focus:ring-2 cursor-pointer truncate ${
                 isCreatingNew
@@ -2726,6 +2792,11 @@ export function BoardingView({
                           />
                         </div>
                       )}
+                      {isChecked && !isNewlyChecked && (
+                        <div className="text-[10px] text-center font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg py-1">
+                          Versé le {shortDate(boarderMonthInfo[month]?.date || '')}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -3012,23 +3083,39 @@ export function BoardingView({
               </table>
             </div>
 
-            {/* 5. Liste des mois réglés */}
-            <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs text-emerald-950">
-              <span className="font-extrabold block mb-1.5">Mois d&apos;internat validés par ce reçu :</span>
-              <div className="flex flex-wrap gap-1.5">
-                {MONTHS_LIST.map((m) => (
-                  <span
-                    key={m}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
-                      activeMonthsChecked[m]
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                        : 'bg-white text-slate-400 border-slate-200 line-through'
-                    }`}
-                  >
-                    {m}
-                  </span>
-                ))}
+            {/* 5. Détail mois par mois : date de versement, mode de règlement et montant de chaque mois */}
+            <div className="border border-slate-300 rounded-xl overflow-hidden text-xs">
+              <div className="bg-emerald-50 px-3.5 py-2 font-extrabold text-emerald-950 border-b border-emerald-200">
+                Détail des versements par mois
               </div>
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 text-slate-600 font-extrabold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th className="py-2 px-3.5">Mois</th>
+                    <th className="py-2 px-3.5">Date du versement</th>
+                    <th className="py-2 px-3.5">Mode</th>
+                    <th className="py-2 px-3.5 text-right">Montant</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-slate-900">
+                  {MONTHS_LIST.filter((m) => activeMonthsChecked[m]).map((m) => {
+                    const d = monthDetailFor(m);
+                    return (
+                      <tr key={m}>
+                        <td className="py-2 px-3.5 font-bold">{m}</td>
+                        <td className="py-2 px-3.5 font-mono font-semibold">{shortDate(d?.date || '')}</td>
+                        <td className="py-2 px-3.5">{d?.method || '—'}</td>
+                        <td className="py-2 px-3.5 text-right font-mono font-black">{formatFCFA(d?.amount || 0)}</td>
+                      </tr>
+                    );
+                  })}
+                  {activePaidMonthsCount === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-3 px-3.5 text-center text-slate-500">Aucun mois coché</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
 
             {/* 6. Signature Unique : Intendance & Cachet Officiel de l'École (Sans signature parent) */}

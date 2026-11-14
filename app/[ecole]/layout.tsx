@@ -17,6 +17,7 @@ export async function generateMetadata({ params }: SchoolLayoutProps): Promise<M
   const { ecole } = await params;
   const identity = await loadSchoolPwaIdentity(ecole);
   return {
+    title: identity.label,
     manifest: `/api/school-manifest?ecole=${encodeURIComponent(identity.slug)}`,
     applicationName: identity.label,
     appleWebApp: { capable: true, statusBarStyle: 'default', title: identity.label },

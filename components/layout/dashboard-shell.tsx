@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { installCloudKv, whenCloudKvReady } from '@/lib/data/cloud-kv';
-import { whenFirstSyncDone, startCrossDeviceSync } from '@/lib/data/live-store';
+import { whenFirstSyncDone, startCrossDeviceSync, getLiveSchool } from '@/lib/data/live-store';
 import { isSessionVerified, markSessionVerified } from '@/lib/client/session-flag';
 import { installGlobalErrorReporting } from '@/lib/client/error-report';
 import { syncYearEpoch, wipeLocalSchoolData } from '@/lib/client/year-reset';
@@ -161,7 +161,7 @@ export function DashboardShell({
             <AppWindow className="w-5 h-5" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-base font-extrabold text-slate-900 font-heading">School Flow Africa est déjà ouvert</h1>
+            <h1 className="text-base font-extrabold text-slate-900 font-heading">{getLiveSchool(schoolSlug)?.shortName || 'School Flow Africa'} est déjà ouvert</h1>
             <p className="text-xs text-slate-500">
               Il tourne déjà dans un autre onglet ou une autre fenêtre de ce navigateur. Fermez l’autre pour éviter les doublons,
               ou travaillez ici.
