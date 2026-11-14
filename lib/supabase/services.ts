@@ -1905,10 +1905,20 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
   const [subsRes, payRes] = await Promise.all([
     supabase
       .from('service_subscriptions')
-      .select('student_id, service, monthly_rate, discount, details, student:students(full_name, grade, gender, matricule, guardian_phone, whatsapp_phone)')
+      .select('student_id, service, monthly_rate, discount, details, student:students(full_name, grade, gender, matricule, guardian_name, guardian_phone, whatsapp_phone)')
       .eq('school_id', schoolId)
       .limit(20000),
-    supabase.from('service_month_payments').select('student_id, service, month, paid_at').eq('school_id', schoolId).limit(100000),
+    // Migration 014 : détail de chaque règlement. Sans elle, on relit les colonnes d'origine.
+    supabase
+      .from('service_month_payments')
+      .select('student_id, service, month, paid_at, payment_date, amount, payment_method, receipt_number')
+      .eq('school_id', schoolId)
+      .limit(100000)
+      .then(async (res) =>
+        res.error
+          ? supabase.from('service_month_payments').select('student_id, service, month, paid_at').eq('school_id', schoolId).limit(100000)
+          : res
+      ),
   ]);
   if (subsRes.error || payRes.error) return null;
 
@@ -1917,7 +1927,7 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
   const transportSubscriptions: Record<string, any> = {};
   // Tarif + nom par (eleve, service), pour calculer le montant de chaque reglement du journal
   // des paiements sans avoir a rejoindre a nouveau la table des eleves.
-  const rateMap = new Map<string, { rate: number; studentName: string; grade: string; gender: string; matricule: string }>();
+  const rateMap = new Map<string, { rate: number; studentName: string; grade: string; gender: string; matricule: string; guardianName: string; phone: string }>();
   for (const s of (subsRes.data || []) as any[]) {
     const st = Array.isArray(s.student) ? s.student[0] : s.student;
     const d = (s.details && typeof s.details === 'object' ? s.details : {}) as Record<string, any>;
@@ -1928,6 +1938,8 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
       grade: st?.grade || '',
       gender: female ? 'F' : 'M',
       matricule: st?.matricule || '',
+      guardianName: st?.guardian_name || '',
+      phone: st?.whatsapp_phone || st?.guardian_phone || '',
     });
     if (s.service === 'internat') {
       boardingSubscriptions.push({
@@ -1954,8 +1966,11 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
   // Paiements & Encaissements" puisse afficher "Novembre payé, 25 000 F, le 05/11/2026" au lieu
   // du cumul de tous les mois jamais réglés par cet élève pour ce service.
   const serviceMonthPaymentLog: Array<{
-    studentId: string; service: string; month: string; paidAt: string; amount: number;
+    studentId: string; service: string; month: string;
+    /** Date SAISIE du règlement (AAAA-MM-JJ) ; vide si inconnue (mois coché avant la migration 014). */
+    paidAt: string; amount: number;
     studentName: string; grade: string; gender: string; matricule: string;
+    paymentMethod: string; receiptNumber: string; guardianName: string; phone: string;
   }> = [];
   for (const p of (payRes.data || []) as any[]) {
     const bucket = payments[p.service];
@@ -1966,12 +1981,16 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
       studentId: p.student_id,
       service: p.service,
       month: p.month,
-      paidAt: p.paid_at,
-      amount: info?.rate || 0,
+      paidAt: typeof p.payment_date === 'string' ? p.payment_date.slice(0, 10) : '',
+      amount: p.amount != null ? Number(p.amount) : info?.rate || 0,
       studentName: info?.studentName || '',
       grade: info?.grade || '',
       gender: info?.gender || 'M',
       matricule: info?.matricule || '',
+      paymentMethod: p.payment_method || '',
+      receiptNumber: p.receipt_number || '',
+      guardianName: info?.guardianName || '',
+      phone: info?.phone || '',
     });
   }
 
@@ -1996,6 +2015,11 @@ export interface ServiceChange {
   details?: Record<string, unknown>;
   month?: string;
   paid?: boolean;
+  /** Détail d'un règlement (mois coché) : date saisie, montant du mois, moyen de paiement. */
+  paymentDate?: string;
+  amount?: number;
+  paymentMethod?: string;
+  receiptNumber?: string;
 }
 
 export interface ServiceChangeResult {
@@ -2076,9 +2100,25 @@ export async function applyServiceChangesToSupabase(schoolSlug: string, changes:
       if (!error) ({ error } = await supabase.from('service_subscriptions').delete().match(base));
     } else if (c.action === 'setMonth' && c.month && SERVICE_MONTHS.includes(c.month)) {
       if (c.paid) {
+        // Le mois reçoit la date SAISIE pour ce règlement (et non l'heure d'insertion) ainsi que
+        // son montant, son moyen de paiement et son numéro de reçu (migration 014).
+        const detail = {
+          payment_date: c.paymentDate || null,
+          amount: c.amount != null ? Math.max(0, Math.round(Number(c.amount) || 0)) : null,
+          payment_method: c.paymentMethod || null,
+          receipt_number: c.receiptNumber || null,
+          paid_at: c.paymentDate ? `${c.paymentDate}T12:00:00` : new Date().toISOString(),
+        };
+        const row = { ...base, month: c.month, ...detail };
         ({ error } = await supabase
           .from('service_month_payments')
-          .upsert({ ...base, month: c.month }, { onConflict: 'school_id,student_id,service,month', ignoreDuplicates: true }));
+          .upsert(row, { onConflict: 'school_id,student_id,service,month' }));
+        // Base encore sans la migration 014 : on enregistre le mois sans son détail.
+        if (error && /payment_date|payment_method|receipt_number|amount/i.test(error.message || '')) {
+          ({ error } = await supabase
+            .from('service_month_payments')
+            .upsert({ ...base, month: c.month, paid_at: detail.paid_at }, { onConflict: 'school_id,student_id,service,month' }));
+        }
       } else {
         ({ error } = await supabase.from('service_month_payments').delete().match({ ...base, month: c.month }));
       }

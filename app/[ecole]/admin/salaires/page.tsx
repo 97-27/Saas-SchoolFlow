@@ -5,7 +5,7 @@ import { SalariesView } from '@/components/salaries/salaries-view';
 export default async function SalariesPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

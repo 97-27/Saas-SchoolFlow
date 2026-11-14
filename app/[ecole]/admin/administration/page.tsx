@@ -4,7 +4,7 @@ import { AdministrationView } from '@/components/admin/administration-view';
 export default async function Page({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

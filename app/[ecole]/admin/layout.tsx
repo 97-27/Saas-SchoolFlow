@@ -4,7 +4,7 @@ import { DashboardShell } from '@/components/layout/dashboard-shell';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }
 
 export default async function AdminLayout({

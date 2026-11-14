@@ -4,7 +4,7 @@ import { SettingsForm } from '@/components/settings/settings-form';
 import { Sliders, Sparkles } from 'lucide-react';
 
 interface ParametresPageProps {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }
 
 export default async function ParametresPage({ params }: ParametresPageProps) {

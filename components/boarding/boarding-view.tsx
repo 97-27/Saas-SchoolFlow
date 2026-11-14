@@ -5,11 +5,12 @@ import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/formatters';
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
-import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts, saveBoardingCapacity } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts, saveBoardingCapacity, type ServicePaymentMeta } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { buildServiceMonthInvoice } from '@/lib/data/service-payments';
 import {
   BedDouble,
   Building2,
@@ -310,13 +311,14 @@ export function BoardingView({
       monthlyRate: number;
       paymentDate?: string;
     }>,
-    updatedPayments: Record<string, Record<string, boolean>>
+    updatedPayments: Record<string, Record<string, boolean>>,
+    paymentMeta?: ServicePaymentMeta
   ) => {
     setCustomSubscriptions(updatedSubs);
     setMonthlyPayments(updatedPayments);
     // La place limite n'est PAS renvoyée ici : un écran resté sur une ancienne valeur (souvent 0)
     // l'écrasait en base à chaque paiement ou mois coché.
-    saveLiveBoardingData(updatedSubs, updatedPayments, undefined, schoolSlug);
+    saveLiveBoardingData(updatedSubs, updatedPayments, undefined, schoolSlug, paymentMeta);
   };
 
   // Sauvegarde persistante des paiements
@@ -455,6 +457,14 @@ export function BoardingView({
   const [formPaymentDate, setFormPaymentDate] = useState(getTodayFrenchDateStr());
   const [formPaymentMethod, setFormPaymentMethod] = useState('Espèces');
   const [activeMonthsChecked, setActiveMonthsChecked] = useState<Record<string, boolean>>({});
+  // Date propre à chaque mois nouvellement coché (sans date saisie : la date par défaut du versement).
+  const [monthDates, setMonthDates] = useState<Record<string, string>>({});
+  // Mois déjà réglés avant cette fiche : ils ne reçoivent ni nouvelle date ni nouvelle facture.
+  const previouslyPaidMonths: Record<string, boolean> =
+    !isCreatingNew && activeBoarder ? activeBoarder.months || {} : {};
+  useEffect(() => {
+    setMonthDates({});
+  }, [activeBoarder?.student?.id, isCreatingNew]);
 
   // Nom complet officiel strictement ordonné : NOM DE FAMILLE d'abord, puis Prénom(s)
   const formStudentName = useMemo(() => {
@@ -736,6 +746,23 @@ export function BoardingView({
       ? activeBoarder.student.id
       : `stud-int-${Date.now()}`;
 
+    // Date propre à chaque mois nouvellement coché (saisie sur la grille, sinon la date du versement).
+    const toIsoDate = (d: string) =>
+      d && d.includes('/') ? d.split('/').reverse().join('-') : d || new Date().toISOString().split('T')[0];
+    const defaultIsoDate = toIsoDate(formPaymentDate);
+    const newlyPaidMonths = MONTHS_LIST.filter((m) => activeMonthsChecked[m] && !previouslyPaidMonths[m]);
+    const dateOfMonth = (m: string) => (monthDates[m] ? toIsoDate(monthDates[m]) : defaultIsoDate);
+    const paymentKeys = Array.from(
+      new Set([targetStudentId, matchedExistingStudent?.studentNumber, formMatricule.trim()].filter(Boolean) as string[])
+    );
+    const paymentMeta: ServicePaymentMeta = {};
+    paymentKeys.forEach((k) => {
+      paymentMeta[k] = {};
+      newlyPaidMonths.forEach((m) => {
+        paymentMeta[k][m] = { date: dateOfMonth(m), amount: rate, method: formPaymentMethod || 'Espèces' };
+      });
+    });
+
     // 1. Préparer les mois cochés
     const updatedPayments = {
       ...readFreshBoardingPayMap(),
@@ -772,7 +799,7 @@ export function BoardingView({
     }
 
     // Sauvegarde atomique globale (aucune perte ni écrasement)
-    saveBoardingDataUnified(updatedSubs, updatedPayments);
+    saveBoardingDataUnified(updatedSubs, updatedPayments, paymentMeta);
 
     // 3. Mettre à jour isBoarding: true sur l'élève existant s'il existe (SANS JAMAIS CRÉER DE FAUX ÉLÈVE DANS STUDENTS)
     // Les coordonnées modifiées ici sont enregistrées dans la FICHE de l'élève (et non plus
@@ -799,46 +826,35 @@ export function BoardingView({
       } catch (e) {}
     }
 
-    // 4. Enregistrer la Quittance officielle d'Internat pour le Journal de Caisse & Dashboard
-    const paidMonthsList = MONTHS_LIST.filter((m) => activeMonthsChecked[m]);
-    const cleanId = (matchedExistingStudent?.studentNumber || formStudentId || targetStudentId || '').replace(/\D/g, '').slice(-4);
-    const invoiceNumber = `QUI-INT-${cleanId ? cleanId.padStart(3, '0') : Date.now().toString().slice(-4)}`;
+    // 4. Journal de caisse : une facture PAR MOIS nouvellement réglé, avec sa date, son montant du mois
+    // et son moyen de paiement (même principe que la cantine et le transport).
     const invoiceId = `inv-boarding-${targetStudentId}`;
 
-    const parsedPaymentDate = formPaymentDate && formPaymentDate.includes('/')
-      ? formPaymentDate.split('/').reverse().join('-')
-      : (formPaymentDate || new Date().toISOString().split('T')[0]);
-
-    if (activeTotalCollected > 0) {
-      const boardingInvoice: Invoice = {
-        id: invoiceId,
-        invoiceNumber,
-        studentId: targetStudentId,
-        studentName: finalFullName,
-        studentAvatar: matchedExistingStudent?.avatar || '/avatars/default.png',
-        studentGrade: formClassName,
-        studentGender: formGender === 'F' ? 'female' : 'male',
-        guardianName: matchedExistingStudent?.guardianName || 'Parent / Tuteur',
-        guardianPhone: formParentContact.trim(),
-        feeType: `Internat & Pensionnat (${activePaidMonthsCount} mois: ${paidMonthsList.join(', ')})`,
-        amount: activeTotalAnnualExigible,
-        discountAmount: 0,
-        netAmount: activeTotalAnnualExigible,
-        paidAmount: activeTotalCollected,
-        balanceRemaining: activeRemainingBalance,
-        paymentMethod: formPaymentMethod,
-        enrollmentType: matchedExistingStudent?.enrollmentType || (isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau')),
-        issueDate: parsedPaymentDate,
-        dueDate: parsedPaymentDate,
-        status: activeRemainingBalance === 0 ? 'paid' : 'partial',
-        notes: `${activePaidMonthsCount} mois ${activePaidMonthsCount > 1 ? 'réglés' : 'réglé'} (${paidMonthsList.join(', ')})`,
-        schoolSlug,
-        schoolId: schoolSlug,
-      };
-
-      saveLivePaymentInvoice(boardingInvoice, schoolSlug);
-    } else {
+    if (newlyPaidMonths.length > 0) {
+      newlyPaidMonths.forEach((month) => {
+        saveLivePaymentInvoice(
+          buildServiceMonthInvoice({
+            service: 'internat',
+            studentId: targetStudentId,
+            studentNumber: matchedExistingStudent?.studentNumber,
+            fullName: finalFullName,
+            avatar: matchedExistingStudent?.avatar,
+            grade: formClassName,
+            gender: formGender === 'F' ? 'female' : 'male',
+            guardianName: matchedExistingStudent?.guardianName,
+            guardianPhone: formParentContact.trim(),
+            enrollmentType: matchedExistingStudent?.enrollmentType || (isCreatingNew ? 'nouveau' : (activeBoarder?.student.enrollmentType || 'nouveau')),
+            month,
+            amount: rate,
+            paymentMethod: formPaymentMethod || 'Espèces',
+            paymentDate: dateOfMonth(month),
+          }),
+          schoolSlug
+        );
+      });
+    } else if (activeTotalCollected === 0) {
       // Aucun versement d'internat -> nettoyer toute facture résiduelle à zéro franc
+      // (sans toucher aux factures des mois déjà réglés quand il reste des mois cochés)
       try {
         const invSchoolKey = `${INVOICES_STORAGE_KEY}_${schoolSlug}`;
         const rawInvSchool = localStorage.getItem(invSchoolKey);
@@ -1561,7 +1577,7 @@ export function BoardingView({
     <div className="space-y-6 sm:space-y-7 animate-fadeIn">
       {/* Toast Notification Centrée au Milieu de l'Écran */}
       {toastMessage && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+        <div className="fixed inset-x-0 bottom-5 z-[9999] flex justify-center px-4 pointer-events-none animate-in fade-in duration-200">
           <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5" />
@@ -2325,15 +2341,41 @@ export function BoardingView({
                   </span>
                   <span className="text-[10px] text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded font-bold">Liaison sans doublon</span>
                 </label>
+                {/* Élève choisi : la recherche disparaît et son nom reste verrouillé, avec son reçu dessous */}
+                {selectedEnrolledStudentId && (() => {
+                  const picked = students.find((s) => s.id === selectedEnrolledStudentId || s.studentNumber === selectedEnrolledStudentId);
+                  return (
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white border-2 border-emerald-400 shadow-xs">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">✓ Élève sélectionné</p>
+                        <p className="text-sm font-extrabold text-slate-900 truncate">
+                          {(picked?.lastName || '').toUpperCase()} {picked?.firstName}
+                        </p>
+                        <p className="font-mono text-[11px] text-slate-500">
+                          {picked?.studentNumber || 'ID'} · {picked?.grade}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectEnrolledStudent('')}
+                        className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+                      >
+                        Changer
+                      </button>
+                    </div>
+                  );
+                })()}
+                {!selectedEnrolledStudentId && (
+                  <>
                 {/* Recherche rapide : nom, prénom, numéro (ID-045 ou 45) ou classe */}
                 <div className="relative">
-                  <Search className="w-4 h-4 text-amber-700 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Search className="w-3.5 h-3.5 text-amber-700 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="search"
                     value={enrolledSearch}
                     onChange={(e) => setEnrolledSearch(e.target.value)}
-                    placeholder="Rechercher un élève : nom, prénom, numéro ou classe…"
-                    className="w-full min-h-[44px] pl-9 pr-3 text-sm rounded-xl bg-white border border-amber-300 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                    placeholder="Rechercher un élève : nom, numéro, classe…"
+                    className="w-full py-1.5 pl-8 pr-3 text-xs rounded-xl bg-white border border-amber-300 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30"
                   />
                 </div>
                 {enrolledSearch.trim() && (
@@ -2383,6 +2425,8 @@ export function BoardingView({
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 text-amber-700 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -2591,7 +2635,7 @@ export function BoardingView({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-600">Date du Versement *</label>
+                  <label className="text-[11px] font-bold text-slate-600">Date par défaut *</label>
                   <FrenchDateInput
                     value={formPaymentDate}
                     onChange={setFormPaymentDate}
@@ -2647,31 +2691,42 @@ export function BoardingView({
               <div className="grid grid-cols-3 gap-2">
                 {MONTHS_LIST.map((month, idx) => {
                   const isChecked = !!activeMonthsChecked[month];
+                  const isNewlyChecked = isChecked && !previouslyPaidMonths[month];
                   return (
-                    <button
-                      key={month}
-                      type="button"
-                      onClick={() => handleToggleMonth(month)}
-                      className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                        isChecked
-                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-2xs'
-                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                          {idx + 1}.
-                        </span>
-                        <span className="text-xs truncate">{month}</span>
-                      </div>
-                      <div
-                        className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
-                          isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300'
+                    <div key={month} className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMonth(month)}
+                        className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                          isChecked
+                            ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                         }`}
                       >
-                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                      </div>
-                    </button>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                            {idx + 1}.
+                          </span>
+                          <span className="text-xs truncate">{month}</span>
+                        </div>
+                        <div
+                          className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 ${
+                            isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300'
+                          }`}
+                        >
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </button>
+                      {isNewlyChecked && (
+                        <div className="text-[10px]">
+                          <FrenchDateInput
+                            value={monthDates[month] || formPaymentDate}
+                            onChange={(v) => setMonthDates((prev) => ({ ...prev, [month]: v }))}
+                            className="w-full text-[11px]"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

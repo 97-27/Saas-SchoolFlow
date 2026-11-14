@@ -5,7 +5,7 @@ import { VersementsView } from '@/components/finance/versements-view';
 export default async function VersementsPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

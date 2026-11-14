@@ -3,7 +3,7 @@ import { schoolForSlug, mockStudents } from '@/lib/data/mock-data';
 import { InscriptionsView } from '@/components/students/inscriptions-view';
 
 interface InscriptionsPageProps {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }
 
 export default async function InscriptionsPage({ params }: InscriptionsPageProps) {

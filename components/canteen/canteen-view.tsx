@@ -41,6 +41,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
+import { SCHOOL_MONTHS, buildServiceMonthInvoice } from '@/lib/data/service-payments';
+import type { ServicePaymentMeta } from '@/lib/data/live-store';
+import { captureReceiptPng, copyPngToClipboard, downloadPng } from '@/lib/client/receipt-share';
+import { ReceiptShareModal, type ReceiptShareData } from '@/components/services/receipt-share-modal';
 
 interface CanteenViewProps {
   initialSubscriptions?: any[];
@@ -141,6 +145,7 @@ export function CanteenView({
   const [selectedDiet, setSelectedDiet] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [receiptShare, setReceiptShare] = useState<ReceiptShareData | null>(null);
 
   // Références de défilement horizontal synchronisé
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -160,6 +165,17 @@ export function CanteenView({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [monthsPaymentMethod, setMonthsPaymentMethod] = useState<string>('Espèces');
+  // Date propre à chaque mois coché : sans date saisie, le mois prend la date par défaut.
+  const [monthDates, setMonthDates] = useState<Record<string, string>>({});
+  const modalStudentId = selectedStudentForMonths?.id as string | undefined;
+  // Mois déjà réglés avant d'ouvrir la fiche : leur date ne se modifie pas ici.
+  const modalPreviouslyPaid = useMemo<Record<string, boolean>>(
+    () => (modalStudentId ? readFreshCanteenPayMap()[modalStudentId] || {} : {}),
+    [modalStudentId]
+  );
+  useEffect(() => {
+    setMonthDates({});
+  }, [modalStudentId]);
 
   // État du menu de la semaine modifiable
   const [weeklyMenu, setWeeklyMenu] = useState(() => {
@@ -451,6 +467,8 @@ export function CanteenView({
     if (!selectedStudentForMonths) return;
 
     const stuId = selectedStudentForMonths.id;
+    // Mois déjà réglés AVANT cette modification : seuls les mois nouvellement cochés donnent un encaissement.
+    const previousMonths: Record<string, boolean> = readFreshCanteenPayMap()[stuId] || {};
     const nextPayments = {
       ...readFreshCanteenPayMap(),
       [stuId]: selectedStudentForMonths.monthsState,
@@ -466,45 +484,45 @@ export function CanteenView({
       },
     };
     setCustomDietMap(nextCustom);
-    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug);
-
-    // Synchronisation de la quittance / facture de cantine dans le journal des encaissements
-    const paidMonths = Object.keys(selectedStudentForMonths.monthsState || {}).filter(
-      (m) => selectedStudentForMonths.monthsState[m]
+    // Détail de chaque mois nouvellement coché : date saisie, montant du mois, moyen de paiement.
+    const defaultPayDate = monthsPaymentDate || new Date().toISOString().split('T')[0];
+    const payDateOf = (m: string) => monthDates[m] || defaultPayDate;
+    const newlyPaidMonths = SCHOOL_MONTHS.filter(
+      (m) => selectedStudentForMonths.monthsState?.[m] && !previousMonths[m]
     );
-    const totalPaid = selectedStudentForMonths.totalPaidAmount;
-    const totalExigible = (selectedStudentForMonths.monthlyRate * 9) - (selectedStudentForMonths.discountAmount || 0);
-    const remaining = Math.max(0, totalExigible - totalPaid);
-
-    if (totalPaid > 0) {
-      const todayStr = monthsPaymentDate || new Date().toISOString().split('T')[0];
-      const canteenInvoice = {
-        id: `inv-canteen-${stuId}`,
-        invoiceNumber: `CAN-${selectedStudentForMonths.studentNumber?.replace(/\D/g, '') || stuId.replace(/\D/g, '').slice(-4) || '001'}`,
-        studentId: selectedStudentForMonths.id,
-        studentName: selectedStudentForMonths.fullName,
-        studentAvatar: selectedStudentForMonths.avatar || '/avatars/default.png',
-        studentGrade: selectedStudentForMonths.grade,
-        studentGender: selectedStudentForMonths.gender,
-        guardianName: selectedStudentForMonths.guardianName || 'Parent / Tuteur',
-        guardianPhone: selectedStudentForMonths.whatsappPhone || selectedStudentForReceipt?.guardianPhone || '',
-        feeType: 'Cantine',
-        amount: totalExigible,
-        discountAmount: selectedStudentForMonths.discountAmount || 0,
-        netAmount: totalExigible,
-        paidAmount: totalPaid,
-        balanceRemaining: remaining,
-        paymentMethod: monthsPaymentMethod || 'Espèces',
-        enrollmentType: selectedStudentForMonths.enrollmentType || 'nouveau',
-        issueDate: todayStr,
-        dueDate: todayStr,
-        status: remaining === 0 ? ('paid' as const) : ('partial' as const),
-        notes: paidMonths.length > 0
-          ? `${paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé'} : ${paidMonths.map(m => ['Septembre', 'Octobre', 'Novembre', 'Décembre'].includes(m) ? `${m} 2026` : `${m} 2027`).join(', ')}`
-          : 'Restauration Scolaire (Cantine)',
+    const paymentMeta: ServicePaymentMeta = { [stuId]: {} };
+    newlyPaidMonths.forEach((m) => {
+      paymentMeta[stuId][m] = {
+        date: payDateOf(m),
+        amount: selectedStudentForMonths.monthlyRate,
+        method: monthsPaymentMethod || 'Espèces',
       };
-      saveLivePaymentInvoice(canteenInvoice, schoolSlug);
-    }
+    });
+    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug, paymentMeta);
+
+    // Journal des encaissements : un règlement = un mois nouvellement coché, avec son montant du
+    // mois, sa date, son moyen de paiement et les coordonnées du parent (jamais le cumul).
+    newlyPaidMonths.forEach((month) => {
+      saveLivePaymentInvoice(
+        buildServiceMonthInvoice({
+          service: 'cantine',
+          studentId: stuId,
+          studentNumber: selectedStudentForMonths.studentNumber,
+          fullName: selectedStudentForMonths.fullName,
+          avatar: selectedStudentForMonths.avatar,
+          grade: selectedStudentForMonths.grade,
+          gender: selectedStudentForMonths.gender,
+          guardianName: selectedStudentForMonths.guardianName,
+          guardianPhone: selectedStudentForMonths.whatsappPhone || selectedStudentForMonths.guardianPhone,
+          enrollmentType: selectedStudentForMonths.enrollmentType,
+          month,
+          amount: selectedStudentForMonths.monthlyRate,
+          paymentMethod: monthsPaymentMethod || 'Espèces',
+          paymentDate: payDateOf(month),
+        }),
+        schoolSlug
+      );
+    });
 
     setToastMessage(`✓ Cotisations & Réduction enregistrées pour ${selectedStudentForMonths.fullName}`);
     setTimeout(() => setToastMessage(null), 4000);
@@ -568,37 +586,34 @@ export function CanteenView({
         updatedAt: new Date().toISOString(),
       };
       updateRegisteredStudent(updatedStu, schoolSlug);
+      // Le premier mois (Septembre) est un règlement comme les autres : une facture au montant du mois.
       const todayStr = new Date().toISOString().split('T')[0];
-      const paidAmt = Math.max(0, rate - discount);
-      const totalExigible = (rate * 9) - discount;
-      const remaining = Math.max(0, totalExigible - paidAmt);
-      const canteenInvoice = {
-        id: `inv-canteen-${newSubStudentId}`,
-        invoiceNumber: `CAN-${targetStu.studentNumber?.replace(/\D/g, '') || newSubStudentId.replace(/\D/g, '').slice(-4) || '001'}`,
-        studentId: newSubStudentId,
-        studentName: targetStu.fullName,
-        studentAvatar: targetStu.avatar || '/avatars/default.png',
-        studentGrade: targetStu.grade,
-        studentGender: targetStu.gender,
-        guardianName: targetStu.guardianName || 'Parent / Tuteur',
-        guardianPhone: targetStu.whatsappPhone || targetStu.guardianPhone || '',
-        feeType: 'Cantine',
-        amount: totalExigible,
-        discountAmount: discount,
-        netAmount: totalExigible,
-        paidAmount: paidAmt,
-        balanceRemaining: remaining,
-        paymentMethod: 'Espèces',
-        enrollmentType: targetStu.enrollmentType || 'nouveau',
-        issueDate: todayStr,
-        dueDate: todayStr,
-        status: remaining === 0 ? ('paid' as const) : ('partial' as const),
-        notes: 'Mois réglé : Septembre 2026',
-      };
-      saveLivePaymentInvoice(canteenInvoice, schoolSlug);
+      saveLivePaymentInvoice(
+        buildServiceMonthInvoice({
+          service: 'cantine',
+          studentId: newSubStudentId,
+          studentNumber: targetStu.studentNumber,
+          fullName: targetStu.fullName,
+          avatar: targetStu.avatar,
+          grade: targetStu.grade,
+          gender: targetStu.gender,
+          guardianName: targetStu.guardianName,
+          guardianPhone: targetStu.whatsappPhone || targetStu.guardianPhone,
+          enrollmentType: targetStu.enrollmentType,
+          month: 'Septembre',
+          amount: rate,
+          paymentMethod: 'Espèces',
+          paymentDate: todayStr,
+        }),
+        schoolSlug
+      );
     }
 
-    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug);
+    saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug, {
+      [newSubStudentId]: {
+        Septembre: { date: new Date().toISOString().split('T')[0], amount: rate, method: 'Espèces' },
+      },
+    });
     setIsNewSubModalOpen(false);
     setToastMessage('✓ Nouvelle souscription à la cantine enregistrée avec succès.');
     setTimeout(() => setToastMessage(null), 4000);
@@ -719,58 +734,41 @@ export function CanteenView({
   };
 
   // Partage WhatsApp du reçu avec copie d'image dans le presse-papier
+  // Le reçu part sur WhatsApp : la discussion s'ouvre pendant le clic, l'image est photographiée,
+  // téléchargée automatiquement sur l'appareil et copiée ; l'aperçu permet de la recopier ou de la
+  // retélécharger à tout moment (voir lib/client/receipt-share.ts).
   const handleSendReceiptWhatsApp = async (sub: any) => {
     if (!sub) return;
+    const rawPhone = sub.whatsappPhone || sub.guardianPhone || '';
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    const monthsLabel = sub.paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé';
+    const message = `Bonjour,\nVoici le reçu officiel de restauration (Cantine Scolaire) pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Régime : ${sub.dietaryRestrictions}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
+    const waUrl = cleanPhone
+      ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    // Ouvert pendant le clic, sinon le navigateur bloque la fenêtre.
+    window.open(waUrl, '_blank');
+
+    setIsGeneratingImage(true);
     try {
-      setIsGeneratingImage(true);
-      if (receiptCardRef.current) {
-        try {
-          const html2canvasModule = await import('html2canvas');
-          const html2canvas = html2canvasModule.default;
-          const canvas = await html2canvas(receiptCardRef.current, {
-            scale: 2,
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: '#ffffff',
-            logging: false,
-            imageTimeout: 8000,
-          });
-          if (canvas) {
-            let blob: Blob | null = null;
-            try {
-              blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-            } catch (e) {}
-
-            if (!blob) {
-              try {
-                const dataUrl = canvas.toDataURL('image/png');
-                const res = await fetch(dataUrl);
-                blob = await res.blob();
-              } catch (e) {}
-            }
-
-            if (blob && navigator.clipboard && (window as any).ClipboardItem) {
-              try {
-                await navigator.clipboard.write([new (window as any).ClipboardItem({ 'image/png': blob })]);
-              } catch (e) {}
-            }
-          }
-        } catch (e) {}
+      const blob = await captureReceiptPng(receiptCardRef.current);
+      if (!blob) {
+        setToastMessage('⚠️ Image du reçu non générée. Utilisez « Imprimer le Reçu » puis envoyez-le sur WhatsApp.');
+        setTimeout(() => setToastMessage(null), 6000);
+        return;
       }
-
-      setToastMessage('✅ Le reçu automatique a été copié dans le presse-papiers et WhatsApp est prêt !');
-      setTimeout(() => setToastMessage(null), 7000);
-
-      // Ouverture directe du dialogue WhatsApp avec message récapitulatif
-      const cleanPhone = (sub.guardianPhone || sub.phone || '').replace(/[^0-9]/g, '');
-      const monthsLabel = sub.paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé';
-      const message = `Bonjour,\nVoici le reçu officiel de restauration (Cantine Scolaire) pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Régime : ${sub.dietaryRestrictions}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
-      const waUrl = cleanPhone
-        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
-        : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
-    } catch (e) {
-      console.error(e);
+      const fileName = `Recu-Cantine-${sub.studentNumber || 'ELEVE'}-${String(sub.fullName).replace(/\s+/g, '_')}.png`;
+      downloadPng(blob, fileName);
+      const copied = await copyPngToClipboard(blob);
+      setReceiptShare({
+        imageUrl: URL.createObjectURL(blob),
+        blob,
+        fileName,
+        waUrl,
+        recipient: rawPhone || 'non renseigné',
+        name: sub.fullName,
+        copied,
+      });
     } finally {
       setIsGeneratingImage(false);
     }
@@ -852,7 +850,7 @@ export function CanteenView({
 
       {/* Toast Centré au Milieu de l'Écran */}
       {toastMessage && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200">
+        <div className="fixed inset-x-0 bottom-5 z-[9999] flex justify-center px-4 pointer-events-none animate-in fade-in duration-200">
           <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-6 py-4 rounded-3xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs sm:text-sm font-bold animate-in zoom-in-95 duration-200 max-w-md text-center">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5" />
@@ -1311,7 +1309,7 @@ export function CanteenView({
             {/* Date et Mode de Règlement du versement */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-200">
               <div className="space-y-1">
-                <label className="font-bold text-slate-700 block">Date du Paiement *</label>
+                <label className="font-bold text-slate-700 block">Date par défaut *</label>
                 <FrenchDateInput
                   value={monthsPaymentDate}
                   onChange={setMonthsPaymentDate}
@@ -1360,20 +1358,31 @@ export function CanteenView({
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 {MONTHS_LIST.map((month) => {
                   const isPaid = !!selectedStudentForMonths.monthsState?.[month];
+                  const isNewlyChecked = isPaid && !modalPreviouslyPaid[month];
                   return (
-                    <button
-                      key={month}
-                      type="button"
-                      onClick={() => toggleMonthStatus(month)}
-                      className={`p-2 rounded-xl border text-center font-bold text-xs transition-all cursor-pointer ${
-                        isPaid
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                          : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {month.slice(0, 4)}.
-                      <span className="block text-[10px] font-normal">{isPaid ? '✓ Réglé' : 'Impayé'}</span>
-                    </button>
+                    <div key={month} className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleMonthStatus(month)}
+                        className={`p-2 rounded-xl border text-center font-bold text-xs transition-all cursor-pointer ${
+                          isPaid
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {month.slice(0, 4)}.
+                        <span className="block text-[10px] font-normal">{isPaid ? '✓ Réglé' : 'Impayé'}</span>
+                      </button>
+                      {isNewlyChecked && (
+                        <div className="text-[10px]">
+                          <FrenchDateInput
+                            value={monthDates[month] || monthsPaymentDate}
+                            onChange={(v) => setMonthDates((prev) => ({ ...prev, [month]: v }))}
+                            className="w-full text-[11px]"
+                          />
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -1651,6 +1660,9 @@ export function CanteenView({
           </div>
         </div>
       )}
+
+      {/* Aperçu du reçu envoyé à WhatsApp (téléchargé + copié automatiquement) */}
+      {receiptShare && <ReceiptShareModal data={receiptShare} onClose={() => setReceiptShare(null)} />}
 
       {/* Modale de Confirmation de Suppression de Reçu / Abonnement Cantine */}
       {showDeleteCanteenModal && selectedStudentForReceipt && (

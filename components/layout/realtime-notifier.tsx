@@ -13,13 +13,14 @@ import { playCashSound } from '@/lib/utils/audio';
 import { formatFCFA } from '@/lib/utils/formatters';
 import { useFiguresState } from '@/lib/client/figures-privacy';
 import { POINTAGE_VIEW_ALL_ROLES } from '@/lib/auth/roles';
-import { ensurePushSubscription, pushSupported, subscribeToPush } from '@/lib/client/push';
+import { ensurePushSubscription, pushServerEnabled, pushSupported, subscribeToPush } from '@/lib/client/push';
 
 /** Reçoivent l'alerte « versement reçu ». */
 const PAYMENT_ALERT_ROLES = ['fondateur', 'fondateur_adjoint', 'comptable'];
 /** Reçoivent l'alerte « pointage » (arrivée / départ / absence d'un membre du personnel). */
 const POINTAGE_ALERT_ROLES = POINTAGE_VIEW_ALL_ROLES;
 const NOTIF_PROMPT_KEY = 'schoolflow_payment_notif_prompt_v2';
+const NOTICE_DISMISS_KEY = 'schoolflow_notif_notice_dismissed_v1';
 
 interface RealtimeNotifierProps {
   schoolSlug?: string;
@@ -106,6 +107,9 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
   const figures = useFiguresState();
 
   const [canHearPointage, setCanHearPointage] = useState(false);
+  // Serveur prêt pour les notifications en arrière-plan (clés VAPID présentes) ; null = pas encore sû.
+  const [pushServerOk, setPushServerOk] = useState<boolean | null>(null);
+  const [noticeDismissed, setNoticeDismissed] = useState(true);
 
   useEffect(() => {
     let role = '';
@@ -122,7 +126,13 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
       setNotifPromptDismissed(sessionStorage.getItem(NOTIF_PROMPT_KEY) === '1');
     } catch (e) {}
     // Notifications déjà autorisées : l'abonnement en arrière-plan suit le compte connecté.
-    if (eligible || pointageEligible) ensurePushSubscription();
+    if (eligible || pointageEligible) {
+      ensurePushSubscription();
+      pushServerEnabled().then(setPushServerOk);
+    }
+    try {
+      setNoticeDismissed(sessionStorage.getItem(NOTICE_DISMISS_KEY) === '1');
+    } catch (e) {}
 
     // Alerte reçue par le service worker pendant que l'onglet est ouvert : sonnerie + bandeau.
     const onSwMessage = (e: MessageEvent) => {
@@ -259,16 +269,32 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
         <button
           type="button"
           onClick={async () => {
+            let permission: string = Notification.permission;
             try {
-              const p = await Notification.requestPermission();
-              setNotifPermission(p);
-              if (p === 'granted') {
-                if (canHearPayments) playCashSound();
-                // Abonnement en arrière-plan (téléphone verrouillé, application fermée).
-                if (pushSupported()) subscribeToPush();
-              }
+              permission = await Notification.requestPermission();
             } catch (e) {}
+            setNotifPermission(permission);
             dismissPrompt();
+            if (permission !== 'granted') return;
+            if (canHearPayments) playCashSound();
+            // Abonnement en arrière-plan (téléphone verrouillé, application fermée) : le résultat
+            // est affiché, pour ne plus jamais échouer en silence.
+            const ok = pushSupported() ? await subscribeToPush() : false;
+            const serverOk = await pushServerEnabled();
+            setPushServerOk(serverOk);
+            setQueue((q) => [
+              ...q,
+              {
+                id: Date.now() + Math.random(),
+                type: 'student',
+                title: ok ? '🔔 Notifications activées' : '⚠️ Notifications non activées en arrière-plan',
+                message: ok
+                  ? 'Cet appareil sera prévenu même application fermée.'
+                  : serverOk
+                  ? 'L’abonnement a échoué pour le moment. Rechargez la page et réessayez.'
+                  : 'Le serveur n’a pas encore ses clés de notification (VAPID). Voir l’encadré d’aide.',
+              },
+            ]);
           }}
           className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
         >
@@ -285,11 +311,45 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     </div>
   ) : null;
 
-  if (!toast) return prompt;
+  // Encadré d'aide quand les alertes ne peuvent pas arriver (bloquées, ou serveur sans clés VAPID).
+  const noticeKind: 'denied' | 'no-server' | null =
+    !(canHearPayments || canHearPointage) || noticeDismissed
+      ? null
+      : notifPermission === 'denied'
+      ? 'denied'
+      : notifPermission === 'granted' && pushServerOk === false
+      ? 'no-server'
+      : null;
+  const dismissNotice = () => {
+    setNoticeDismissed(true);
+    try {
+      sessionStorage.setItem(NOTICE_DISMISS_KEY, '1');
+    } catch (e) {}
+  };
+  const notice = noticeKind ? (
+    <div className="fixed bottom-4 left-4 right-4 sm:right-auto sm:max-w-sm z-[140] bg-amber-50 border border-amber-300 rounded-2xl shadow-2xl p-4 space-y-2 print:hidden">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-extrabold text-amber-950">
+          {noticeKind === 'denied' ? 'Notifications bloquées sur cet appareil' : 'Alertes en arrière-plan non configurées'}
+        </p>
+        <button type="button" onClick={dismissNotice} className="p-1 rounded-lg text-amber-700 hover:bg-amber-100 cursor-pointer shrink-0" title="Fermer">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-[11px] text-amber-900 leading-relaxed">
+        {noticeKind === 'denied'
+          ? 'Pour les activer : touchez le cadenas à côté de l’adresse du site, puis Notifications → Autoriser, et rechargez la page.'
+          : 'Le serveur n’a pas encore ses clés de notification. Dans Vercel : VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY et VAPID_SUBJECT, puis redéployer. Sans elles, aucune alerte ne part quand l’application est fermée.'}
+      </p>
+    </div>
+  ) : null;
+
+  if (!toast) return <>{prompt}{notice}</>;
 
   return (
     <>
     {prompt}
+    {notice}
     <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[99999] max-w-md w-[92vw] sm:w-auto animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto">
       <div className="bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500/80 text-white p-3.5 sm:p-4 rounded-2xl shadow-2xl flex items-start gap-3">
         <div className="relative p-2 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0 mt-0.5">

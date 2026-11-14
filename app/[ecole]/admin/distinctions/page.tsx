@@ -5,7 +5,7 @@ import { DistinctionsView } from '@/components/grades/distinctions-view';
 export default async function DistinctionsPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

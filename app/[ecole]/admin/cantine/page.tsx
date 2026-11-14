@@ -5,7 +5,7 @@ import { CanteenView } from '@/components/canteen/canteen-view';
 export default async function CantinePage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

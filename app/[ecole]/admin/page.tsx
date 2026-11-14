@@ -3,7 +3,7 @@ import { DashboardView } from '@/components/dashboard/dashboard-view';
 import { mockKPIs, mockInvoices, mockStudents, schoolForSlug } from '@/lib/data/mock-data';
 
 interface AdminPageProps {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }
 
 export default async function AdminRootPage({ params }: AdminPageProps) {

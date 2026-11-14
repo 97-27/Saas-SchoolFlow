@@ -5,7 +5,7 @@ import { ParentCommunicationView } from '@/components/parents/parent-communicati
 export default async function ParentCommunicationPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

@@ -3,7 +3,7 @@ import { schoolForSlug, mockStudents } from '@/lib/data/mock-data';
 import { StudentTable } from '@/components/students/student-table';
 
 interface ElevesPageProps {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }
 
 export default async function ElevesPage({ params }: ElevesPageProps) {

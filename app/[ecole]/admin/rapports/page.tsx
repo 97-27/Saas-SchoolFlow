@@ -6,7 +6,7 @@ import { FiguresGate } from '@/components/ui/masked-figure';
 export default async function Page({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

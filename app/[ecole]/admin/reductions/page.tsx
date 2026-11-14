@@ -5,7 +5,7 @@ import { SpecialDiscountsView } from '@/components/finance/special-discounts-vie
 export default async function ReductionsPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

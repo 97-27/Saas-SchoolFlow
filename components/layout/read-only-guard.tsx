@@ -4,14 +4,25 @@ import React, { useState, useEffect } from 'react';
 import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { ShieldAlert, Lock, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { READ_ONLY_ROLES } from '@/lib/auth/roles';
+import { READ_ONLY_ROLES, ROLE_LABELS } from '@/lib/auth/roles';
 
 interface ReadOnlyGuardProps {
   children: React.ReactNode;
 }
 
+/**
+ * Libellés de boutons qui modifient des données (enregistrer, verser, supprimer, générer…).
+ * Un clic sur l'un d'eux, pour un poste en consultation, affiche l'avertissement au lieu d'agir.
+ * Les boutons de consultation (voir, imprimer, partager, fermer, filtrer…) restent libres.
+ */
+const WRITE_ACTION_RE =
+  /enregistr|sauvegard|ajouter|supprim|retirer|valider|modifier|créer|nouvelle souscription|nouvelle inscription|archiver|réinitialiser|encaisser|verser|payer|effacer|confirmer|inscrire|mettre à jour|appliquer|générer|souscrire|désabonner|retouch/i;
+// Volontairement absents : « Nouveaux », « Anciens », « Versements », « Inscrits » (filtres et
+// consultation) — ces boutons restent utilisables par tous les postes.
+
 export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [roleId, setRoleId] = useState('');
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockedActionName, setBlockedActionName] = useState('Saisie ou Modification');
 
@@ -33,6 +44,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
             !pathname.includes('/pointage');
           if (parsed.isReadOnly === true || readOnlyRole) {
             setIsReadOnly(true);
+            setRoleId(role);
             return;
           }
         }
@@ -47,11 +59,17 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
     return () => window.removeEventListener(DATA_UPDATED_EVENT, checkSession);
   }, [pathname]);
 
-  // Intercepteur non bloquant : n'interfère JAMAIS avec la navigation, les liens, les onglets ou les tables
+  // Intercepteur : n'interfère pas avec la navigation, les liens, les onglets ni les tableaux ;
+  // il bloque seulement les soumissions de formulaire et les boutons qui modifient des données.
   useEffect(() => {
     if (!isReadOnly) return;
 
-    // 1. Bloquer la soumission de formulaires de modification
+    const showWarning = (actionName: string) => {
+      setBlockedActionName(actionName);
+      setShowBlockModal(true);
+    };
+
+    // 1. Soumission de formulaires de modification
     const handleFormSubmit = (e: SubmitEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
@@ -64,39 +82,53 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
       if (!isSearchOrFilter) {
         e.preventDefault();
         e.stopPropagation();
-        setBlockedActionName('Enregistrement / Validation de formulaire');
-        setShowBlockModal(true);
+        showWarning('Enregistrement / Validation de formulaire');
       }
     };
 
+    // 2. Boutons d'action (enregistrer, verser, supprimer…) : l'action n'est pas exécutée
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const button = target?.closest?.('button, [role="button"]') as HTMLElement | null;
+      if (!button || button.hasAttribute('disabled') || button.closest('[data-readonly-allow]')) return;
+      const label = [button.textContent, button.getAttribute('title'), button.getAttribute('aria-label')]
+        .filter(Boolean)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!label || !WRITE_ACTION_RE.test(label)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showWarning(label.length > 60 ? `${label.slice(0, 57)}…` : label);
+    };
+
     document.addEventListener('submit', handleFormSubmit, true);
+    document.addEventListener('click', handleClick, true);
     return () => {
       document.removeEventListener('submit', handleFormSubmit, true);
+      document.removeEventListener('click', handleClick, true);
     };
   }, [isReadOnly]);
+
+  const roleLabel = ROLE_LABELS[roleId] || 'Consultation';
 
   return (
     <>
       {/* Contenu de la page avec fluidité maximale */}
       {children}
 
-      {/* MODALE D'INTERCEPTION : ACTION BLOQUÉE POUR LE FONDATEUR */}
+      {/* AVERTISSEMENT : ACTION BLOQUÉE POUR UN POSTE EN CONSULTATION */}
       {showBlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl border border-amber-200 shadow-2xl max-w-md w-full p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
-            
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-xs">
                   <ShieldAlert className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-950 font-heading">
-                    Action Non Autorisée
-                  </h3>
-                  <p className="text-xs text-amber-800 font-medium">
-                    Profil en consultation
-                  </p>
+                  <h3 className="text-base font-extrabold text-slate-950 font-heading">Action non autorisée</h3>
+                  <p className="text-xs text-amber-800 font-medium">Profil en consultation</p>
                 </div>
               </div>
 
@@ -112,11 +144,14 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
             <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-900">
                 <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Mode Consultation & Supervision Uniquement</span>
+                <span>Vous ne pouvez rien modifier ni retoucher</span>
               </div>
               <p className="leading-relaxed">
-                Votre profil permet de <strong>consulter</strong> vos pages. Les inscriptions, versements, modifications et suppressions sont réservés au <strong>Fondateur</strong>, au <strong>Fondateur adjoint</strong> et au <strong>Comptable</strong>.
+                Votre poste (<strong>{roleLabel}</strong>) permet de <strong>consulter</strong> cette page. Les
+                enregistrements, versements, modifications et suppressions sont réservés au <strong>Fondateur</strong>,
+                au <strong>Fondateur adjoint</strong> et au <strong>Comptable</strong>. Rien n’a été enregistré.
               </p>
+              <p className="text-[11px] text-amber-800 font-semibold">Action tentée : « {blockedActionName} »</p>
             </div>
 
             <div className="pt-2 flex justify-end">
@@ -125,7 +160,7 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
                 onClick={() => setShowBlockModal(false)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
               >
-                Compris, continuer en consultation
+                Compris, je reste en consultation
               </button>
             </div>
           </div>

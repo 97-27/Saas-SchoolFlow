@@ -24,6 +24,7 @@ import {
   Coins,
 } from 'lucide-react';
 import { getLiveInvoices, getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { monthFromServiceNote } from '@/lib/data/service-payments';
 import { Figure } from '@/components/ui/masked-figure';
 
 interface InvoiceTableProps {
@@ -42,6 +43,9 @@ interface InvoiceTableProps {
     grade: string;
     gender: string;
     matricule: string;
+    paymentMethod?: string;
+    guardianName?: string;
+    phone?: string;
   }>;
 }
 
@@ -115,6 +119,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       paymentMethod: string;
       status: string;
       rawInvoice: Invoice;
+      /** Coordonnées du parent (nom · téléphone), pour les règlements de services. */
+      contact?: string;
     }> = [];
 
     const seenTxKeys = new Set<string>();
@@ -287,6 +293,30 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       cantine: { prestation: '🍽️ Cantine', label: 'Cantine' },
       transport: { prestation: '🚌 Transport', label: 'Transport' },
     };
+    // Facture de CE mois (créée à chaque règlement mensuel) : moyen de paiement, date choisie et
+    // coordonnées du parent. Indexée par élève (identifiant ou matricule) + service + mois.
+    const monthInvoiceByKey = new Map<string, Invoice>();
+    invoices.forEach((inv) => {
+      const month = monthFromServiceNote(inv.notes);
+      const feeLower = (inv.feeType || '').toLowerCase();
+      const service = feeLower.includes('cantine')
+        ? 'cantine'
+        : feeLower.includes('transport')
+          ? 'transport'
+          : feeLower.includes('internat')
+            ? 'internat'
+            : null;
+      if (!month || !service) return;
+      const invStudent = findStudentByRef(students, { id: inv.studentId, name: inv.studentName });
+      [inv.studentId, invStudent?.id, invStudent?.studentNumber]
+        .filter((id): id is string => !!id)
+        .forEach((id) => {
+          const key = `${id}|${service}|${month}`;
+          // Les factures arrivent les plus récentes en premier : la première gagne.
+          if (!monthInvoiceByKey.has(key)) monthInvoiceByKey.set(key, inv);
+        });
+    });
+
     (serviceMonthPaymentLog || []).forEach((p) => {
       const cfg = serviceLabels[p.service];
       if (!cfg || !p.month) return;
@@ -294,6 +324,17 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       if (seenTxKeys.has(txKey)) return;
       seenTxKeys.add(txKey);
       const matchedStudent = findStudentByRef(students, { id: p.studentId, name: p.studentName });
+      const monthInv = [p.studentId, matchedStudent?.id, matchedStudent?.studentNumber]
+        .filter((id): id is string => !!id)
+        .map((id) => monthInvoiceByKey.get(`${id}|${p.service}|${p.month}`))
+        .find((inv) => !!inv);
+      // Date du règlement = date SAISIE (base, migration 014), sinon date de la facture du mois.
+      // Sans aucune date connue (mois coché avant ce correctif), le mois compte dans les totaux
+      // mais n'apparaît pas dans le journal : on n'invente plus une date au jour de l'enregistrement.
+      const payDate = p.paidAt || monthInv?.issueDate || '';
+      if (!payDate) return;
+      const phone = p.phone || monthInv?.guardianPhone || matchedStudent?.whatsappPhone || matchedStudent?.guardianPhone || '';
+      const parentName = p.guardianName || monthInv?.guardianName || matchedStudent?.guardianName || '';
       list.push({
         id: `svc-${txKey}`,
         invoiceId: txKey,
@@ -305,11 +346,12 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
         enrollmentType: matchedStudent?.enrollmentType === 'ancien' ? 'ancien' : 'nouveau',
         prestation: cfg.prestation,
         motif: `Mois de ${p.month} réglé`,
-        paymentDate: p.paidAt,
+        paymentDate: payDate,
         amount: p.amount,
-        paymentMethod: 'Espèces',
+        paymentMethod: p.paymentMethod || monthInv?.paymentMethod || 'Espèces',
         status: 'paid',
-        rawInvoice: { id: txKey, invoiceNumber: txKey } as Invoice,
+        rawInvoice: monthInv || ({ id: txKey, invoiceNumber: txKey } as Invoice),
+        contact: [parentName, phone].filter(Boolean).join(' · ') || undefined,
       });
     });
 
@@ -815,6 +857,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
                         <span className="text-[10px] font-semibold text-slate-600 pl-0.5">
                           {tx.motif}
                         </span>
+                        {tx.contact && (
+                          <span className="text-[10px] font-mono text-slate-500 pl-0.5">📞 {tx.contact}</span>
+                        )}
                       </div>
                     </td>
 

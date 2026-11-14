@@ -2351,8 +2351,8 @@ export function InscriptionsView({
           ne pas interrompre la personne qui vient elle-même d'enregistrer le reçu. Distincte du
           bandeau centré en haut, qui lui ne s'affiche que sur les AUTRES interfaces. */}
       {successToast && (
-        <div className="fixed bottom-5 right-5 z-[9999] max-w-xs pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <div className="pointer-events-auto bg-slate-900/95 text-white border border-emerald-500/50 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-bold">
+        <div className="fixed bottom-5 inset-x-0 z-[9999] flex justify-center px-4 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="pointer-events-auto max-w-md bg-slate-900/95 text-white border border-emerald-500/50 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs font-bold">
             <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-4 h-4" />
             </div>

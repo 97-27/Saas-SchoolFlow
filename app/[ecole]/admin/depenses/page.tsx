@@ -5,7 +5,7 @@ import { ExpensesView } from '@/components/expenses/expenses-view';
 export default async function ExpensesPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

@@ -5,7 +5,7 @@ import { ParentBulletinsView } from '@/components/parents/parent-bulletins-view'
 export default async function ParentBulletinsPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

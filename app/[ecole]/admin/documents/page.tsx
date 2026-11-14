@@ -6,8 +6,8 @@ export default async function DocumentsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
-  searchParams?: Promise<{ search?: string }> | { search?: string };
+  params: Promise<{ ecole: string }>;
+  searchParams?: Promise<{ search?: string }>;
 }) {
   const resolvedParams = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};

@@ -5,7 +5,7 @@ import { DiverseNotesView } from '@/components/notes/diverse-notes-view';
 export default async function NotesDiversesPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

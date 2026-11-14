@@ -4,7 +4,7 @@ import { PointageView } from '@/components/staff/pointage-view';
 export default async function Page({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   return <PointageView schoolSlug={resolvedParams.ecole} />;

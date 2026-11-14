@@ -101,6 +101,10 @@ export interface ServiceChange {
   details?: Record<string, unknown>;
   month?: string;
   paid?: boolean;
+  paymentDate?: string;
+  amount?: number;
+  paymentMethod?: string;
+  receiptNumber?: string;
 }
 
 export interface ServiceChangeResult {

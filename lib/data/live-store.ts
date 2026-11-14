@@ -580,7 +580,10 @@ function subscriptionChange(service: ServiceName, key: string, v: any): ServiceC
   return { service, studentKey: key, action: 'subscribe', monthlyRate: Number(rate) || 0, discount: Number(discount) || 0, details };
 }
 
-function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: any, prevPay: any, nextPay: any): ServiceChange[] {
+/** Détail des règlements : élève -> mois -> { date saisie, montant, moyen de paiement, reçu }. */
+export type ServicePaymentMeta = Record<string, Record<string, { date: string; amount: number; method: string; receipt?: string }>>;
+
+function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: any, prevPay: any, nextPay: any, meta?: ServicePaymentMeta): ServiceChange[] {
   const changes: ServiceChange[] = [];
   const before = serviceSubsToMap(service, prevSubs);
   const after = serviceSubsToMap(service, nextSubs);
@@ -595,7 +598,17 @@ function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: an
     for (const month of SERVICE_MONTH_NAMES) {
       const was = Boolean(pb[key]?.[month]);
       const now = Boolean(pa[key]?.[month]);
-      if (was !== now) changes.push({ service, studentKey: key, action: 'setMonth', month, paid: now });
+      if (was !== now) {
+        const change: ServiceChange = { service, studentKey: key, action: 'setMonth', month, paid: now };
+        const d = meta?.[key]?.[month];
+        if (now && d) {
+          change.paymentDate = d.date;
+          change.amount = d.amount;
+          change.paymentMethod = d.method;
+          change.receiptNumber = d.receipt;
+        }
+        changes.push(change);
+      }
     }
   }
   for (const key of Object.keys(before)) {
@@ -608,7 +621,7 @@ function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: an
  * Enregistre en base uniquement ce qui a changé pour un service, puis met à jour l'état de
  * référence. Avant la migration 004, le serveur répond « legacy » et l'ancien envoi s'applique.
  */
-function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, nextPay: any, label: string): void {
+function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, nextPay: any, label: string, meta?: ServicePaymentMeta): void {
   const keys = SERVICE_DATA_KEYS[service];
   let prevSubs: any;
   let prevPay: any;
@@ -621,7 +634,7 @@ function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, next
     prevSubs = service === 'internat' ? [] : {};
     prevPay = {};
   }
-  const changes = computeServiceChanges(service, prevSubs, nextSubs, prevPay, nextPay);
+  const changes = computeServiceChanges(service, prevSubs, nextSubs, prevPay, nextPay, meta);
 
   // GARDE-FOU : un clic ne retire jamais qu'un élève. Si la liste de l'écran fait disparaître
   // plusieurs élèves d'un coup, elle est incomplète ou périmée : on n'envoie RIEN, on garde
@@ -4553,7 +4566,8 @@ export function deleteHealthIncident(incidentId: string, schoolSlug: string = 'e
 export function saveLiveTransportData(
   customTransportMap: any,
   monthlyPayments: any,
-  schoolSlug: string = 'epc-manoi'
+  schoolSlug: string = 'epc-manoi',
+  paymentMeta?: ServicePaymentMeta
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
@@ -4561,7 +4575,7 @@ export function saveLiveTransportData(
   try {
     localStorage.setItem(isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify(customTransportMap));
     localStorage.setItem(isPilot ? 'schoolflow_transport_monthly_payments_v2' : `schoolflow_transport_monthly_payments_v2_${slug}`, JSON.stringify(monthlyPayments));
-    saveServiceDiff(slug, 'transport', customTransportMap, monthlyPayments, 'la modification du transport');
+    saveServiceDiff(slug, 'transport', customTransportMap, monthlyPayments, 'la modification du transport', paymentMeta);
 
     // (Plus d'envoi de la liste complète : les tables enregistrent ligne par ligne via saveServiceDiff.)
     broadcastLiveUpdate({
@@ -4582,7 +4596,8 @@ export function saveLiveCanteenData(
   customCanteenMap: any,
   monthlyPayments: any,
   weeklyMenu?: any,
-  schoolSlug: string = 'epc-manoi'
+  schoolSlug: string = 'epc-manoi',
+  paymentMeta?: ServicePaymentMeta
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
@@ -4590,7 +4605,7 @@ export function saveLiveCanteenData(
   try {
     localStorage.setItem(isPilot ? 'schoolflow_canteen_subscriptions_v3' : `schoolflow_canteen_subscriptions_v3_${slug}`, JSON.stringify(customCanteenMap));
     localStorage.setItem(isPilot ? 'schoolflow_canteen_monthly_payments_v3' : `schoolflow_canteen_monthly_payments_v3_${slug}`, JSON.stringify(monthlyPayments));
-    saveServiceDiff(slug, 'cantine', customCanteenMap, monthlyPayments, 'la modification de la cantine');
+    saveServiceDiff(slug, 'cantine', customCanteenMap, monthlyPayments, 'la modification de la cantine', paymentMeta);
     if (weeklyMenu) {
       localStorage.setItem(isPilot ? 'schoolflow_canteen_weekly_menu_v2' : `schoolflow_canteen_weekly_menu_v2_${slug}`, JSON.stringify(weeklyMenu));
     }
@@ -4646,7 +4661,8 @@ export function saveLiveBoardingData(
   customSubscriptions: any,
   monthlyPayments: any,
   capacity?: number,
-  schoolSlug: string = 'epc-manoi'
+  schoolSlug: string = 'epc-manoi',
+  paymentMeta?: ServicePaymentMeta
 ): void {
   if (typeof window === 'undefined') return;
   const slug = (!schoolSlug || schoolSlug === 'college-excellence') ? 'epc-manoi' : schoolSlug;
@@ -4656,7 +4672,7 @@ export function saveLiveBoardingData(
   try {
     localStorage.setItem(boardingSubKey, JSON.stringify(customSubscriptions));
     localStorage.setItem(boardingPayKey, JSON.stringify(monthlyPayments));
-    saveServiceDiff(slug, 'internat', customSubscriptions, monthlyPayments, "la modification de l'internat");
+    saveServiceDiff(slug, 'internat', customSubscriptions, monthlyPayments, "la modification de l'internat", paymentMeta);
     if (capacity !== undefined) {
       localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, capacity.toString());
     }

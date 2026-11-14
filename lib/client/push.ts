@@ -60,6 +60,16 @@ export async function subscribeToPush(label = ''): Promise<boolean> {
   }
 }
 
+/** Vrai si le serveur a ses clés VAPID (sinon aucune notification d'arrière-plan n'est possible). */
+export async function pushServerEnabled(): Promise<boolean> {
+  try {
+    const cfg = await fetch('/api/push', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+    return !!cfg?.enabled;
+  } catch {
+    return false;
+  }
+}
+
 /** Réabonne discrètement (une fois par jour) : l'abonnement serveur suit le compte connecté. */
 export async function ensurePushSubscription(): Promise<void> {
   if (!pushSupported() || Notification.permission !== 'granted') return;

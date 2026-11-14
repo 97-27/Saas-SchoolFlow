@@ -5,7 +5,7 @@ import { BoardingView } from '@/components/boarding/boarding-view';
 export default async function InternatPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

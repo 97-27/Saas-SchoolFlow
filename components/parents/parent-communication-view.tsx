@@ -32,6 +32,8 @@ interface ParentMessage {
   unread: boolean;
   directorReply?: string;
   directorReplyAt?: string;
+  /** Date à laquelle la Direction a ouvert le message (affichée au parent : « Vu par la Direction »). */
+  seenByDirectorAt?: string;
 }
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: string }> = {

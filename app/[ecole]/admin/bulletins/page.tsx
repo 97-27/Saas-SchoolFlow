@@ -5,7 +5,7 @@ import { BulletinsView } from '@/components/grades/bulletins-view';
 export default async function BulletinsPage({
   params,
 }: {
-  params: Promise<{ ecole: string }> | { ecole: string };
+  params: Promise<{ ecole: string }>;
 }) {
   const resolvedParams = await params;
   const ecoleSlug = resolvedParams.ecole;

@@ -9,15 +9,27 @@ import { useEffect, useState } from 'react';
  * que l'autre onglet est fermé (battement périmé), il prend la main tout seul. Le bouton
  * « Utiliser cet onglet » lui laisse la main à la place de l'autre, qui affiche alors le même message.
  */
-const KEY = 'schoolflow_open_tab_v1';
+const BASE_KEY = 'schoolflow_open_tab_v1';
 const BEAT_MS = 2000;
 const STALE_MS = 5000;
 
+/**
+ * Le verrou est propre à chaque mode : l'application installée (fenêtre autonome) et l'onglet du
+ * navigateur ont le même stockage sur le téléphone. Sans cette séparation, ouvrir les deux bloquait
+ * l'une des deux à tort. Deux onglets du navigateur restent interdits de se doubler.
+ */
+function lockKey(): string {
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true);
+  return `${BASE_KEY}_${standalone ? 'app' : 'web'}`;
+}
+
 type Beat = { id: string; ts: number };
 
-function readBeat(): Beat | null {
+function readBeat(key: string): Beat | null {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+    const v = JSON.parse(localStorage.getItem(key) || 'null');
     return v && typeof v.id === 'string' && typeof v.ts === 'number' ? v : null;
   } catch {
     return null;
@@ -34,6 +46,7 @@ export function useSingleTab(): { state: 'checking' | 'owner' | 'blocked'; takeO
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let owner = false;
+    const KEY = lockKey();
 
     const isOther = (b: Beat | null) => !!b && b.id !== id && Date.now() - b.ts < STALE_MS;
     const write = () => {
@@ -47,7 +60,7 @@ export function useSingleTab(): { state: 'checking' | 'owner' | 'blocked'; takeO
       setState('owner');
     };
     const check = () => {
-      const cur = readBeat();
+      const cur = readBeat(KEY);
       if (owner) {
         if (isOther(cur)) {
           owner = false;

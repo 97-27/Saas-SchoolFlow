@@ -223,7 +223,10 @@ export function DashboardView({
             } catch (e) {}
           }
           if (res.data.boardingSubscriptions || res.data.canteenSubscriptions || res.data.transportSubscriptions || res.data.installments) {
-            setServicesData(res.data);
+            // Fusion, pas remplacement : la lecture Supabase (journal mois par mois) ne doit pas
+            // disparaître quand la réponse /api/sync arrive sans ce détail, sinon les compteurs
+            // clignotent entre deux valeurs.
+            setServicesData((prev: any) => ({ ...(prev || {}), ...res.data }));
           }
           if (res.data.boardingSubscriptions) {
             localStorage.setItem(dashBoardingSubKey, JSON.stringify(res.data.boardingSubscriptions));
