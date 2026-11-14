@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const manifest = {
     id: `${base || '/'}`,
     name: label,
-    short_name: label.slice(0, 12),
+    short_name: label.slice(0, 12).trim(),
     description: `${fullName} — gestion scolaire`,
     lang: 'fr',
     start_url: `${base}/login?source=pwa`,

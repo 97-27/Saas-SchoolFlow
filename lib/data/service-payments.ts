@@ -103,3 +103,43 @@ export function buildServiceMonthInvoice(input: ServiceMonthPaymentInput): Invoi
     notes: serviceMonthNote(input.month),
   };
 }
+
+/** Détail d'UN mois réglé pour un élève, lu dans les factures par mois. */
+export interface ServiceMonthDetail {
+  invoice: Invoice;
+  date: string; // YYYY-MM-DD (ou vide si inconnue)
+  amount: number;
+  method: string;
+}
+
+/**
+ * Lit, pour un élève et un service, le détail de chaque mois déjà facturé.
+ * keys : identifiants de l'élève (id, numéro, matricule). Une seule entrée par mois (la plus récente).
+ */
+export function serviceMonthDetails(
+  service: 'cantine' | 'transport' | 'internat',
+  keys: Array<string | undefined>,
+  invoices: Invoice[]
+): Record<string, ServiceMonthDetail> {
+  const out: Record<string, ServiceMonthDetail> = {};
+  const idSet = new Set(keys.filter(Boolean) as string[]);
+  const word = service;
+  invoices.forEach((inv) => {
+    const month = monthFromServiceNote(inv.notes);
+    if (!month || !(inv.feeType || '').toLowerCase().includes(word)) return;
+    if (!idSet.has(inv.studentId)) return;
+    out[month] = {
+      invoice: inv,
+      date: inv.issueDate || '',
+      amount: inv.paidAmount || inv.amount || 0,
+      method: inv.paymentMethod || '',
+    };
+  });
+  return out;
+}
+
+/** Convertit JJ/MM/AAAA ou AAAA-MM-JJ en AAAA-MM-JJ (date du jour si vide). */
+export function toIsoPayDate(d: string): string {
+  if (!d) return new Date().toISOString().split('T')[0];
+  return d.includes('/') ? d.split('/').reverse().join('-') : d;
+}

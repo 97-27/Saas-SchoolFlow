@@ -41,7 +41,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
-import { SCHOOL_MONTHS, buildServiceMonthInvoice } from '@/lib/data/service-payments';
+import { SCHOOL_MONTHS, buildServiceMonthInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import type { ServicePaymentMeta } from '@/lib/data/live-store';
 import { captureReceiptPng, copyPngToClipboard, downloadPng } from '@/lib/client/receipt-share';
 import { ReceiptShareModal, type ReceiptShareData } from '@/components/services/receipt-share-modal';
@@ -172,6 +172,19 @@ export function CanteenView({
   const modalPreviouslyPaid = useMemo<Record<string, boolean>>(
     () => (modalStudentId ? readFreshCanteenPayMap()[modalStudentId] || {} : {}),
     [modalStudentId]
+  );
+  // Détail de chaque mois déjà facturé (date, montant, mode) : permet de corriger la date d'un mois réglé.
+  const modalDetails = useMemo<Record<string, ServiceMonthDetail>>(
+    () =>
+      selectedStudentForMonths
+        ? serviceMonthDetails(
+            'cantine',
+            [selectedStudentForMonths.id, selectedStudentForMonths.studentNumber],
+            getLiveInvoices([], schoolSlug)
+          )
+        : {},
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [modalStudentId, schoolSlug]
   );
   useEffect(() => {
     setMonthDates({});
@@ -486,9 +499,17 @@ export function CanteenView({
     setCustomDietMap(nextCustom);
     // Détail de chaque mois nouvellement coché : date saisie, montant du mois, moyen de paiement.
     const defaultPayDate = monthsPaymentDate || new Date().toISOString().split('T')[0];
-    const payDateOf = (m: string) => monthDates[m] || defaultPayDate;
+    const payDateOf = (m: string) => toIsoPayDate(monthDates[m] || defaultPayDate);
     const newlyPaidMonths = SCHOOL_MONTHS.filter(
       (m) => selectedStudentForMonths.monthsState?.[m] && !previousMonths[m]
+    );
+    // Mois DÉJÀ réglés dont la date a été corrigée : on met à jour leur ligne et leur facture.
+    const editedMonths = SCHOOL_MONTHS.filter(
+      (m) =>
+        selectedStudentForMonths.monthsState?.[m] &&
+        previousMonths[m] &&
+        monthDates[m] &&
+        toIsoPayDate(monthDates[m]) !== (modalDetails[m]?.date || '')
     );
     const paymentMeta: ServicePaymentMeta = { [stuId]: {} };
     newlyPaidMonths.forEach((m) => {
@@ -498,10 +519,24 @@ export function CanteenView({
         method: monthsPaymentMethod || 'Espèces',
       };
     });
+    editedMonths.forEach((m) => {
+      paymentMeta[stuId][m] = {
+        date: payDateOf(m),
+        amount: modalDetails[m]?.amount || selectedStudentForMonths.monthlyRate,
+        method: modalDetails[m]?.method || 'Espèces',
+      };
+    });
     saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug, paymentMeta);
 
     // Journal des encaissements : un règlement = un mois nouvellement coché, avec son montant du
     // mois, sa date, son moyen de paiement et les coordonnées du parent (jamais le cumul).
+    // Mois déjà réglé et date corrigée : on réécrit SA facture (même numéro), sans en créer une autre.
+    editedMonths.forEach((month) => {
+      const detail = modalDetails[month];
+      if (detail) {
+        saveLivePaymentInvoice({ ...detail.invoice, issueDate: payDateOf(month), dueDate: payDateOf(month) }, schoolSlug);
+      }
+    });
     newlyPaidMonths.forEach((month) => {
       saveLivePaymentInvoice(
         buildServiceMonthInvoice({
@@ -1373,10 +1408,10 @@ export function CanteenView({
                         {month.slice(0, 4)}.
                         <span className="block text-[10px] font-normal">{isPaid ? '✓ Réglé' : 'Impayé'}</span>
                       </button>
-                      {isNewlyChecked && (
+                      {isPaid && (
                         <div className="text-[10px]">
                           <FrenchDateInput
-                            value={monthDates[month] || monthsPaymentDate}
+                            value={monthDates[month] ?? (isNewlyChecked ? monthsPaymentDate : modalDetails[month]?.date || '')}
                             onChange={(v) => setMonthDates((prev) => ({ ...prev, [month]: v }))}
                             className="w-full text-[11px]"
                           />
@@ -1584,6 +1619,55 @@ export function CanteenView({
                   </tfoot>
                 </table>
               </div>
+
+              {/* Détail mois par mois : date de versement, mode et montant de chaque mois réglé */}
+              {(() => {
+                const det = serviceMonthDetails(
+                  'cantine',
+                  [selectedStudentForReceipt.id, selectedStudentForReceipt.studentNumber],
+                  getLiveInvoices([], schoolSlug)
+                );
+                const paidList = MONTHS_LIST.filter((m) => selectedStudentForReceipt.monthsState?.[m]);
+                return (
+                  <div className="border border-slate-300 rounded-xl overflow-hidden text-xs">
+                    <div className="bg-emerald-50 px-3 py-1.5 font-extrabold text-emerald-950 border-b border-emerald-200">
+                      Détail des versements par mois
+                    </div>
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 text-slate-600 font-bold text-[10px] uppercase">
+                        <tr>
+                          <th className="py-1.5 px-3">Mois</th>
+                          <th className="py-1.5 px-3">Date du versement</th>
+                          <th className="py-1.5 px-3">Mode</th>
+                          <th className="py-1.5 px-3 text-right">Montant</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 text-slate-900">
+                        {paidList.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="py-2 px-3 text-center text-slate-500">Aucun mois réglé</td>
+                          </tr>
+                        )}
+                        {paidList.map((m) => {
+                          const d = det[m];
+                          return (
+                            <tr key={m}>
+                              <td className="py-1.5 px-3 font-bold">{m}</td>
+                              <td className="py-1.5 px-3 font-mono font-semibold">
+                                {d?.date ? toIsoPayDate(d.date).split('-').reverse().join('/') : '—'}
+                              </td>
+                              <td className="py-1.5 px-3">{d?.method || '—'}</td>
+                              <td className="py-1.5 px-3 text-right font-mono font-black">
+                                {formatFCFA(d?.amount || selectedStudentForReceipt.monthlyRate)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
 
               {/* Suivi Visuel des 9 Mois de l'Année Scolaire */}
               <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/70 space-y-1.5">

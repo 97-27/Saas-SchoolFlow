@@ -1843,22 +1843,28 @@ export async function getServicesDataFromSupabase(schoolSlug: string): Promise<a
     const schoolId = await getSchoolId(schoolSlug);
     if (!schoolId) return null;
 
-    const { data } = await supabase
+    // Toutes les lignes techniques de l'école (une seule en principe ; une ancienne version du
+    // logiciel en avait créé d'autres). Lire seulement la plus récente faisait « disparaître » la
+    // place limite. Ordre : les lignes anciennes d'abord, la ligne canonique (celle où
+    // upsert_services_data écrit, auth_code SYS-SRV-DATA) en dernier, pour qu'elle l'emporte.
+    const { data: rows } = await supabase
       .from('staff_users')
-      .select('department')
+      .select('department, auth_code, created_at')
       .eq('school_id', schoolId)
       .eq('role_id', 'system_services_data')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('created_at', { ascending: true });
 
     let blob: Record<string, any> | null = null;
-    if (data?.department) {
+    const ordered = [...(rows || [])].sort((a: any, b: any) => {
+      const ca = a.auth_code === 'SYS-SRV-DATA' ? 1 : 0;
+      const cb = b.auth_code === 'SYS-SRV-DATA' ? 1 : 0;
+      return ca - cb;
+    });
+    for (const row of ordered as any[]) {
+      if (!row?.department) continue;
       try {
-        blob = JSON.parse(data.department);
-      } catch (e) {
-        blob = null;
-      }
+        blob = { ...(blob || {}), ...JSON.parse(row.department) };
+      } catch (e) {}
     }
     // Migration 004 appliquée : abonnements et mois payés viennent des vraies tables (le bloc ne
     // garde que la capacité de l'internat, le menu de la cantine et l'échéancier).

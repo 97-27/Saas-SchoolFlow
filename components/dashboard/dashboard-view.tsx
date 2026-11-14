@@ -172,7 +172,13 @@ export function DashboardView({
           hasNewData = true;
         }
         if (sbServices) {
-          setServicesData(sbServices);
+          // Fusion : si une lecture passagère ne renvoie pas le journal des mois, on garde celui
+          // déjà affiché (sinon les versements disparaissaient puis réapparaissaient).
+          setServicesData((prev: any) => ({
+            ...(prev || {}),
+            ...sbServices,
+            serviceMonthPaymentLog: sbServices.serviceMonthPaymentLog ?? prev?.serviceMonthPaymentLog,
+          }));
           rememberServiceBaseline(activeSlug, sbServices);
           if (sbServices.boardingSubscriptions) {
             localStorage.setItem(dashBoardingSubKey, JSON.stringify(sbServices.boardingSubscriptions));

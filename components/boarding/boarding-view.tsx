@@ -10,7 +10,7 @@ import { resolveBoarders } from '@/lib/data/boarding';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
-import { buildServiceMonthInvoice, monthFromServiceNote } from '@/lib/data/service-payments';
+import { buildServiceMonthInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import {
   BedDouble,
   Building2,
@@ -444,18 +444,13 @@ export function BoardingView({
   }, [filteredBoarders, activeBoarderIndex, boarders, isCreatingNew, boarderOpened]);
 
   // Détail mois par mois déjà enregistré (date, montant, mode) : lu dans les factures par mois.
-  const boarderMonthInfo = useMemo(() => {
-    const info: Record<string, { date: string; amount: number; method: string }> = {};
-    if (!activeBoarder || isCreatingNew || typeof window === 'undefined') return info;
-    const keys = new Set(
-      [activeBoarder.student.id, activeBoarder.student.studentNumber, activeBoarder.student.matricule].filter(Boolean) as string[]
+  const boarderMonthInfo = useMemo<Record<string, ServiceMonthDetail>>(() => {
+    if (!activeBoarder || isCreatingNew || typeof window === 'undefined') return {};
+    return serviceMonthDetails(
+      'internat',
+      [activeBoarder.student.id, activeBoarder.student.studentNumber, activeBoarder.student.matricule],
+      getLiveInvoices([], schoolSlug)
     );
-    getLiveInvoices([], schoolSlug).forEach((inv) => {
-      const m = monthFromServiceNote(inv.notes);
-      if (!m || !(inv.feeType || '').toLowerCase().includes('internat') || !keys.has(inv.studentId)) return;
-      info[m] = { date: inv.issueDate || '', amount: inv.paidAmount || inv.amount || 0, method: inv.paymentMethod || '' };
-    });
-    return info;
   }, [activeBoarder, isCreatingNew, schoolSlug, boarders]);
 
   // Date, montant et mode de CHAQUE mois coché : nouveau (saisi ici) ou déjà enregistré.
@@ -708,7 +703,10 @@ export function BoardingView({
 
     const monthsChanged = MONTHS_LIST.some((m) => !!activeMonthsChecked[m] !== !!initialMonths[m]);
 
-    return lastNameChanged || firstNameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || dateChanged || monthsChanged;
+    // Date corrigée d'un mois (même déjà réglé) : c'est une modification à enregistrer.
+    const datesEdited = MONTHS_LIST.some((m) => !!activeMonthsChecked[m] && !!monthDates[m]);
+
+    return lastNameChanged || firstNameChanged || matChanged || classChanged || genderChanged || pavChanged || roomChanged || contactChanged || rateChanged || methodChanged || dateChanged || monthsChanged || datesEdited;
   }, [
     isCreatingNew,
     activeBoarder,
@@ -725,6 +723,7 @@ export function BoardingView({
     formPaymentDate,
     activeMonthsChecked,
     monthlyPayments,
+    monthDates,
   ]);
 
   const hasPaymentChange = useMemo(() => {
@@ -794,11 +793,26 @@ export function BoardingView({
     const paymentKeys = Array.from(
       new Set([targetStudentId, matchedExistingStudent?.studentNumber, formMatricule.trim()].filter(Boolean) as string[])
     );
+    // Mois DÉJÀ réglés dont la date a été corrigée : on garde son montant et son mode, on change la date.
+    const editedMonths = MONTHS_LIST.filter(
+      (m) =>
+        activeMonthsChecked[m] &&
+        previouslyPaidMonths[m] &&
+        monthDates[m] &&
+        toIsoDate(monthDates[m]) !== (boarderMonthInfo[m]?.date || '')
+    );
     const paymentMeta: ServicePaymentMeta = {};
     paymentKeys.forEach((k) => {
       paymentMeta[k] = {};
       newlyPaidMonths.forEach((m) => {
         paymentMeta[k][m] = { date: dateOfMonth(m), amount: rate, method: formPaymentMethod || 'Espèces' };
+      });
+      editedMonths.forEach((m) => {
+        paymentMeta[k][m] = {
+          date: dateOfMonth(m),
+          amount: boarderMonthInfo[m]?.amount || rate,
+          method: boarderMonthInfo[m]?.method || formPaymentMethod || 'Espèces',
+        };
       });
     });
 
@@ -869,6 +883,13 @@ export function BoardingView({
     // et son moyen de paiement (même principe que la cantine et le transport).
     const invoiceId = `inv-boarding-${targetStudentId}`;
 
+    // Mois déjà réglé et date corrigée : on réécrit SA facture (même numéro), sans en créer une autre.
+    editedMonths.forEach((month) => {
+      const detail = boarderMonthInfo[month];
+      if (detail) {
+        saveLivePaymentInvoice({ ...detail.invoice, issueDate: dateOfMonth(month), dueDate: dateOfMonth(month) }, schoolSlug);
+      }
+    });
     if (newlyPaidMonths.length > 0) {
       newlyPaidMonths.forEach((month) => {
         saveLivePaymentInvoice(
@@ -2783,18 +2804,21 @@ export function BoardingView({
                           {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                         </div>
                       </button>
-                      {isNewlyChecked && (
+                      {isChecked && (
                         <div className="text-[10px]">
                           <FrenchDateInput
-                            value={monthDates[month] || formPaymentDate}
+                            value={
+                              monthDates[month] ??
+                              (isNewlyChecked ? formPaymentDate : boarderMonthInfo[month]?.date || '')
+                            }
                             onChange={(v) => setMonthDates((prev) => ({ ...prev, [month]: v }))}
                             className="w-full text-[11px]"
                           />
-                        </div>
-                      )}
-                      {isChecked && !isNewlyChecked && (
-                        <div className="text-[10px] text-center font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg py-1">
-                          Versé le {shortDate(boarderMonthInfo[month]?.date || '')}
+                          {!isNewlyChecked && (
+                            <span className="block text-center text-[9px] font-semibold text-emerald-700 mt-0.5">
+                              Versé le {shortDate(boarderMonthInfo[month]?.date || '')}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>

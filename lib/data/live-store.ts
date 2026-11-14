@@ -598,7 +598,10 @@ function computeServiceChanges(service: ServiceName, prevSubs: any, nextSubs: an
     for (const month of SERVICE_MONTH_NAMES) {
       const was = Boolean(pb[key]?.[month]);
       const now = Boolean(pa[key]?.[month]);
-      if (was !== now) {
+      // Un mois déjà réglé dont la date (ou le montant, le mode) est modifié : on renvoie quand même
+      // la ligne, sinon la correction de date ne partait jamais vers la base.
+      const dateEdited = now && was && Boolean(meta?.[key]?.[month]);
+      if (was !== now || dateEdited) {
         const change: ServiceChange = { service, studentKey: key, action: 'setMonth', month, paid: now };
         const d = meta?.[key]?.[month];
         if (now && d) {
