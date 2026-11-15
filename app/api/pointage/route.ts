@@ -169,6 +169,9 @@ export async function GET(request: NextRequest) {
       today: clock.date,
       now: clock.time,
       weekday: clock.weekday,
+      // Heure exacte du serveur : l'écran en déduit l'écart avec le téléphone et fait avancer
+      // l'horloge tout seul (le bouton s'ouvre à l'heure pile, sans rafraîchir).
+      serverTime: Date.now(),
       config,
       me: me || null,
       myStatus: dayStatus(me || null, config, date, clock),

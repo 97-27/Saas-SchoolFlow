@@ -24,6 +24,8 @@ import {
   WEEKDAY_LABELS,
   dayStatus,
   departureLabel,
+  distanceMeters,
+  schoolClock,
 } from '@/lib/data/pointage';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import { TimePicker } from '@/components/ui/time-picker';
@@ -35,6 +37,7 @@ type Payload = {
   today: string;
   now: string;
   weekday: number;
+  serverTime?: number;
   config: PointageConfig;
   me: PointageRecord | null;
   myStatus: PointageStatus;
@@ -118,6 +121,18 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   const [draft, setDraft] = useState<PointageConfig | null>(null);
   const [justifyFor, setJustifyFor] = useState<Member | null>(null);
   const [justifyReason, setJustifyReason] = useState('');
+  // Écart entre l'horloge du téléphone et celle du serveur, et « tic » qui fait avancer l'heure
+  // affichée toute seule (le bouton s'ouvre à l'heure pile, sans rafraîchir la page).
+  const [offset, setOffset] = useState(0);
+  const [tick, setTick] = useState(0);
+  // Fenêtre de validation : position vérifiée AVANT d'enregistrer l'arrivée / le départ.
+  const [confirm, setConfirm] = useState<{
+    action: 'arrive' | 'depart';
+    status: 'locating' | 'ready' | 'error';
+    pos?: { lat: number; lng: number; accuracy: number };
+    distance?: number;
+    error?: string;
+  } | null>(null);
 
   const load = useCallback(
     async (d?: string) => {
@@ -126,6 +141,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
         const res = await fetch(`/api/pointage${q}`, { cache: 'no-store' });
         const j = await res.json().catch(() => null);
         if (!res.ok || !j?.success) throw new Error(j?.error || 'Lecture impossible.');
+        if (typeof j.serverTime === 'number') setOffset(j.serverTime - Date.now());
         setData(j);
         setDate(j.date);
         setDraft((prev) => prev || j.config);
@@ -139,13 +155,28 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
 
   useEffect(() => {
     load();
-    // L'heure et les pointages des collègues se mettent à jour toutes les 30 s.
-    const t = setInterval(() => {
+    // Réglages de la Direction et pointages des collègues : relus toutes les 8 s, et aussitôt que
+    // l'écran redevient actif (déverrouillage du téléphone, retour sur l'onglet, réseau revenu).
+    const refresh = () => {
       if (document.visibilityState === 'visible') load(date || undefined);
-    }, 30000);
-    return () => clearInterval(t);
+    };
+    const t = setInterval(refresh, 8000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, date, schoolSlug]);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 5000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (!message) return;
@@ -170,38 +201,56 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
     }
   };
 
-  const punch = (action: 'arrive' | 'depart') =>
-    run(
+  // Étape 1 : la fenêtre s'ouvre et demande la position (le téléphone réclame l'autorisation GPS à
+  // chaque fois si elle n'est pas accordée). Étape 2 : la personne voit sa distance à l'école et valide.
+  const locate = async (action: 'arrive' | 'depart') => {
+    setConfirm({ action, status: 'locating' });
+    try {
+      const pos = await getPosition();
+      const school = data?.config.location;
+      const distance = school ? Math.round(distanceMeters(pos.lat, pos.lng, school.lat, school.lng)) : undefined;
+      setConfirm({ action, status: 'ready', pos, distance });
+    } catch (e: any) {
+      // Sans position enregistrée pour l'école, le serveur accepte quand même.
+      if (!data?.config.location) setConfirm({ action, status: 'ready' });
+      else setConfirm({ action, status: 'error', error: e?.message || 'Position introuvable.' });
+    }
+  };
+
+  const confirmPunch = async () => {
+    if (!confirm || confirm.status !== 'ready') return;
+    const { action, pos } = confirm;
+    const ok = await run(
       action,
-      async () => {
-        let pos: { lat: number; lng: number; accuracy: number } | null = null;
-        try {
-          pos = await getPosition();
-        } catch (e) {
-          // Sans position enregistrée pour l'école, le serveur accepte quand même.
-          if (data?.config.location) throw e;
-        }
-        return post({ action, ...(pos || {}) });
-      },
+      () => post({ action, ...(pos || {}) }),
       action === 'arrive' ? 'Arrivée pointée. Bonne journée !' : 'Départ pointé. À demain !'
     );
+    void ok;
+    setConfirm(null);
+  };
+
+  const live = useMemo(
+    () => (data ? schoolClock(data.config.timezone, new Date(Date.now() + offset)) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, offset, tick]
+  );
 
   const today = data?.today || '';
   const isToday = !!data && data.date === data.today;
   const cfg = data?.config;
-  const now = data?.now || '';
+  const now = live?.time || data?.now || '';
   const arrivalOpen = !!cfg && cfg.enabled && now >= cfg.arrivalStart && now <= cfg.arrivalEnd;
   const departureOpen = !!cfg && cfg.enabled && now >= cfg.departureStart && now <= cfg.departureEnd;
   const workDay = !!cfg && cfg.workDays.includes(data?.weekday ?? -1);
 
   const rows = useMemo(() => {
     if (!data) return [];
-    const clock = { date: data.today, time: data.now };
+    const clock = { date: live?.date || data.today, time: now };
     return data.roster.map((m) => {
       const rec = data.records[m.id] || null;
       return { member: m, rec, status: dayStatus(rec, data.config, data.date, clock) };
     });
-  }, [data]);
+  }, [data, live, now]);
 
   const counts = useMemo(() => {
     const c = { present: 0, absent: 0, absent_justifie: 0, en_attente: 0 };
@@ -323,7 +372,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
               {!data.me?.arrival && (
                 <button
                   type="button"
-                  onClick={() => punch('arrive')}
+                  onClick={() => locate('arrive')}
                   disabled={!arrivalOpen || !!busy}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
@@ -340,7 +389,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
               {data.me?.arrival && !data.me?.departure && (
                 <button
                   type="button"
-                  onClick={() => punch('depart')}
+                  onClick={() => locate('depart')}
                   disabled={!departureOpen || !!busy}
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
@@ -369,7 +418,13 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
               )}
             </div>
           )}
-          {cfg!.enabled && !workDay && <p className="text-xs text-slate-500">Pas de pointage aujourd’hui (jour non travaillé).</p>}
+          {cfg!.enabled && !workDay && (
+            <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+              Aujourd’hui ({WEEKDAY_LABELS[live?.weekday ?? data.weekday]}) n’est pas un jour de pointage. La Direction doit cocher ce jour dans
+              « Jours de pointage » <span className="font-bold">puis cliquer sur « Enregistrer les horaires »</span> ; il s’ouvrira ici en quelques
+              secondes, sans rafraîchir.
+            </p>
+          )}
 
           {showAbsence && !data.me?.arrival && (
             <div className="space-y-2">
@@ -583,6 +638,103 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
         </div>
       )}
 
+      {/* ================= VALIDATION : HEURE + POSITION ================= */}
+      {confirm && (
+        <div className="fixed inset-0 z-[120] bg-slate-950/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirm(null)}>
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 font-heading">
+                  {confirm.action === 'arrive' ? 'Valider mon arrivée' : 'Valider mon départ'}
+                </h3>
+                <p className="text-xs text-slate-500 first-letter:uppercase">{frDate(data.today)}</p>
+              </div>
+              <button type="button" onClick={() => setConfirm(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Heure de l’établissement</p>
+              <p className="text-3xl font-extrabold font-heading text-slate-900">{now}</p>
+            </div>
+
+            {confirm.status === 'locating' && (
+              <p className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <MapPin className="w-4 h-4 shrink-0 text-amber-600 animate-pulse" />
+                <span>
+                  Vérification de votre position… Si le téléphone le demande, appuyez sur <span className="font-bold">« Autoriser »</span> la localisation (GPS).
+                </span>
+              </p>
+            )}
+
+            {confirm.status === 'error' && (
+              <div className="space-y-2">
+                <p className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-semibold">{confirm.error}</p>
+                <button
+                  type="button"
+                  onClick={() => locate(confirm.action)}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer"
+                >
+                  Réessayer la position
+                </button>
+              </div>
+            )}
+
+            {confirm.status === 'ready' && (
+              <>
+                {data.config.location ? (
+                  (() => {
+                    const d = confirm.distance ?? 0;
+                    const acc = confirm.pos?.accuracy ?? 0;
+                    const max = data.config.radiusMeters;
+                    const okDist = d <= max + Math.min(acc, 100) && acc <= 300;
+                    return (
+                      <p
+                        className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
+                          okDist ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
+                        }`}
+                      >
+                        <MapPin className="w-4 h-4 shrink-0" />
+                        <span>
+                          {acc > 300
+                            ? `Position trop imprécise (± ${Math.round(acc)} m). Activez le GPS « position précise », sortez dans la cour puis réessayez.`
+                            : okDist
+                            ? `Vous êtes à ${d} m de l’école (maximum ${max} m) : position validée.`
+                            : `Vous êtes à ${d} m de l’école (maximum ${max} m) : trop loin pour pointer.`}
+                        </span>
+                      </p>
+                    );
+                  })()
+                ) : (
+                  <p className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                    La Direction n’a pas encore enregistré la position de l’école : aucune distance n’est vérifiée.
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => locate(confirm.action)}
+                    disabled={!!busy}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer disabled:opacity-50"
+                  >
+                    Actualiser
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmPunch}
+                    disabled={!!busy}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    {busy ? 'Enregistrement…' : `Valider à ${now}`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ================= MOTIF SAISI PAR LA DIRECTION ================= */}
       {justifyFor && (
         <div className="fixed inset-0 z-[120] bg-slate-950/50 flex items-center justify-center p-4" onClick={() => setJustifyFor(null)}>
@@ -649,8 +801,20 @@ function ConfigCard({
     </div>
   );
 
+  const dirty =
+    (['arrivalStart', 'arrivalEnd', 'departureStart', 'departureEnd'] as const).some((f) => draft[f] !== saved[f]) ||
+    [...draft.workDays].sort().join(',') !== [...saved.workDays].sort().join(',');
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+      {dirty && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 font-semibold flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+          <span>
+            Modifications NON enregistrées : le personnel voit encore les anciens horaires / jours. Cliquez sur « Enregistrer les horaires » en bas de ce cadre.
+          </span>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Settings2 className="w-5 h-5 text-emerald-600" />

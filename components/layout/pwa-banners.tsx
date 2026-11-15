@@ -98,7 +98,7 @@ export function PwaBanners() {
               <Smartphone className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-extrabold leading-tight">Installez SchoolFlow sur votre écran d’accueil</p>
+              <p className="text-xs sm:text-sm font-extrabold leading-tight">Installez School Flow Africa sur votre écran d’accueil</p>
               <p className="text-[11px] text-emerald-50/90 leading-tight hidden sm:block">
                 Ouverture en un clic, plein écran, notifications — sans passer par le lien.
               </p>
@@ -129,7 +129,7 @@ export function PwaBanners() {
                 Choisissez <span className="font-bold text-slate-900">« Sur l’écran d’accueil »</span>.
               </li>
               <li>
-                Touchez <span className="font-bold text-slate-900">Ajouter</span>. SchoolFlow apparaît comme une application.
+                Touchez <span className="font-bold text-slate-900">Ajouter</span>. School Flow Africa apparaît comme une application.
               </li>
             </ol>
             <button
