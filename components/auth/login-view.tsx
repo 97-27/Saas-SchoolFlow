@@ -389,6 +389,27 @@ export function LoginView({
     };
   }, [activeSlug]);
 
+  // Personnel affiché sous « Personnel identifié » : calcul lourd (lecture du stockage local avec
+  // photos), donc mémorisé. currentSchool change à chaque mise à jour des données (événement).
+  const identifiedStaff = React.useMemo(() => {
+    try {
+      const localStaff = getLiveStaffUsers(activeSlug).filter(
+        (s) => s.id !== 'staff-founder' && s.id !== 'staff-001' && !/^(FND|DIR)-2026$/i.test(s.authCode || '')
+      );
+      const list: { id: string; fullName: string; roleId: string; avatarUrl?: string }[] =
+        directoryStaff !== null
+          ? directoryStaff.map((d) => ({
+              ...d,
+              avatarUrl: localStaff.find((l) => l.id === d.id)?.avatarUrl,
+            }))
+          : localStaff;
+      return list;
+    } catch (e) {
+      return [];
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSlug, directoryStaff, currentSchool, mounted]);
+
   // Liste globale de tous les établissements enregistrés (abonnés et par défaut)
   const allSchoolsList = React.useMemo(() => {
     if (!mounted) return [];
@@ -1370,16 +1391,10 @@ export function LoginView({
                         // Seulement les VRAIS comptes créés par la Direction (jamais les fiches de
                         // démonstration intégrées à l'application), et uniquement pour ce poste.
                         // Source : l'annuaire de la base (tous appareils) ; à défaut, la mémoire locale.
-                        const localStaff = getLiveStaffUsers(activeSlug).filter(
-                          (s) => s.id !== 'staff-founder' && s.id !== 'staff-001' && !/^(FND|DIR)-2026$/i.test(s.authCode || '')
-                        );
-                        const allStaff: { id: string; fullName: string; roleId: string; avatarUrl?: string }[] =
-                          directoryStaff !== null
-                            ? directoryStaff.map((d) => ({
-                                ...d,
-                                avatarUrl: localStaff.find((l) => l.id === d.id)?.avatarUrl,
-                              }))
-                            : localStaff;
+                        // (calculé une seule fois par changement de données — voir identifiedStaff —
+                        // et non à chaque lettre tapée : sur téléphone, relire tout le personnel avec
+                        // ses photos à chaque touche figeait la saisie.)
+                        const allStaff = identifiedStaff;
                         const matchedRoleStaff = allStaff.filter((s) => s.roleId === selectedRole);
 
                         if (matchedRoleStaff.length === 0) {
