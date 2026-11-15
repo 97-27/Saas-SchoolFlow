@@ -664,12 +664,12 @@ export function LoginView({
           slug: activeSlug,
           roleId: selectedRole,
           fullName: trimmedName,
-          code: isTeacherLogin ? teacherPin.trim() : authCodeInput.trim(),
+          code: isTeacherLogin ? teacherPin.trim() : authCodeInput.trim().toUpperCase(),
           phone: cleanPhone,
           email: cleanEmail,
           subject: isTeacherLogin ? teacherSubject.trim() : undefined,
           teachingClass: isTeacherLogin ? teacherClass : undefined,
-          matricule: isStudentLogin ? studentMatricule.trim() : selectedRole !== 'parent' ? staffMatricule.trim() : undefined,
+          matricule: isStudentLogin ? studentMatricule.trim().toUpperCase() : selectedRole !== 'parent' ? staffMatricule.trim().toUpperCase() : undefined,
           grade: isStudentLogin ? studentGrade : undefined,
         }),
       });
@@ -1488,8 +1488,11 @@ export function LoginView({
                       <input
                         type="text"
                         autoComplete="off"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={staffMatricule}
-                        onChange={(e) => setStaffMatricule(e.target.value.toUpperCase())}
+                        onChange={(e) => setStaffMatricule(e.target.value)}
                         placeholder={selectedRole === 'fondateur' ? 'Ex : FND-001' : selectedRole === 'fondateur_adjoint' ? 'Ex : DGA-001' : 'Ex : CPT-001'}
                         className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
@@ -1508,8 +1511,11 @@ export function LoginView({
                       <input
                         type="text"
                         autoComplete="off"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={studentMatricule}
-                        onChange={(e) => setStudentMatricule(e.target.value.toUpperCase())}
+                        onChange={(e) => setStudentMatricule(e.target.value)}
                         placeholder="Ex : 26014829K ou ID-045"
                         className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />
@@ -1659,8 +1665,11 @@ export function LoginView({
                         type={showAuthCode ? "text" : "password"}
                         required
                         autoComplete="off"
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={authCodeInput}
-                        onChange={(e) => setAuthCodeInput(e.target.value.toUpperCase())}
+                        onChange={(e) => setAuthCodeInput(e.target.value)}
                         placeholder="Entrer le code"
                         className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-mono font-black tracking-wider text-slate-900 transition-all placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal shadow-2xs uppercase"
                       />

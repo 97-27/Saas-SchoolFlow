@@ -948,34 +948,34 @@ function showAppUpdateBanner(): void {
   const bar = document.createElement('div');
   bar.setAttribute('role', 'alert');
   bar.style.cssText =
-    'position:fixed;left:12px;right:12px;bottom:16px;z-index:2147483647;max-width:620px;margin:0 auto;' +
-    'background:#0f172a;color:#fff;border-radius:18px;padding:14px 16px;display:flex;gap:14px;align-items:center;' +
-    'justify-content:space-between;flex-wrap:wrap;box-shadow:0 14px 40px rgba(15,23,42,.45);font-family:inherit;' +
+    'position:fixed;left:12px;right:12px;bottom:16px;z-index:2147483647;max-width:460px;margin:0 auto;' +
+    'background:#0f172a;color:#fff;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;align-items:stretch;' +
+    'box-shadow:0 14px 40px rgba(15,23,42,.45);font-family:inherit;' +
     'border:1px solid rgba(16,185,129,.35)';
 
   const left = document.createElement('div');
-  left.style.cssText = 'display:flex;gap:12px;align-items:flex-start;flex:1 1 300px;min-width:0';
+  left.style.cssText = 'display:flex;gap:10px;align-items:flex-start;min-width:0';
   const dot = document.createElement('span');
   dot.textContent = '↻';
   dot.style.cssText =
-    'flex:0 0 auto;width:34px;height:34px;border-radius:12px;background:#fbbf24;color:#0f172a;display:flex;' +
-    'align-items:center;justify-content:center;font:800 18px/1 inherit';
+    'flex:0 0 auto;width:28px;height:28px;border-radius:10px;background:#fbbf24;color:#0f172a;display:flex;' +
+    'align-items:center;justify-content:center;font:800 15px/1 inherit';
   const texts = document.createElement('div');
   const title = document.createElement('div');
   title.textContent = 'Mise à jour de SchoolFlow disponible';
-  title.style.cssText = 'font-weight:800;font-size:14px;line-height:1.3';
+  title.style.cssText = 'font-weight:800;font-size:13px;line-height:1.3';
   const sub = document.createElement('div');
   sub.textContent =
     'De nouvelles améliorations viennent d’être mises en ligne. Terminez la saisie en cours, puis rechargez la page pour en profiter (vos données enregistrées ne sont pas perdues).';
-  sub.style.cssText = 'font-weight:500;font-size:12px;line-height:1.45;color:#cbd5e1;margin-top:2px';
+  sub.style.cssText = 'font-weight:500;font-size:11px;line-height:1.4;color:#cbd5e1;margin-top:2px';
   texts.append(title, sub);
   left.append(dot, texts);
 
   const btn = document.createElement('button');
   btn.textContent = 'Recharger maintenant';
   btn.style.cssText =
-    'flex:0 0 auto;background:#059669;color:#fff;border:0;border-radius:12px;padding:10px 16px;' +
-    'font:700 13px/1 inherit;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.35)';
+    'width:100%;background:#059669;color:#fff;border:0;border-radius:10px;padding:8px 14px;' +
+    'font:700 12px/1.2 inherit;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.35)';
   btn.onmouseenter = () => (btn.style.background = '#047857');
   btn.onmouseleave = () => (btn.style.background = '#059669');
   btn.onclick = () => window.location.reload();
