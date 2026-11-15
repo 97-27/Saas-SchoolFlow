@@ -209,6 +209,14 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   }
 }
 
+/* Téléphones en « mode sombre » : sans cette déclaration, le navigateur (Chrome/Samsung Internet
+   « assombrir les pages ») peut rendre le texte tapé en BLANC sur les champs restés clairs → la
+   lettre est bien saisie mais reste invisible. L'application est conçue en clair : on le impose,
+   (pas de couleur forcée sur les champs : certains écrans ont des champs à fond sombre). */
+:root {
+  color-scheme: only light;
+}
+
 /* Animations */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; transform: scale(1); }
