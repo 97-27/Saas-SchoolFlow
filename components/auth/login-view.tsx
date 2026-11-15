@@ -246,6 +246,32 @@ const ROTATING_LOGIN_TEXTS = [
   'Appel en classe & SMS direct aux Familles',
 ];
 
+// Effet « machine à écrire » isolé : seul ce petit composant se re-rend à chaque lettre.
+const RotatingLoginText = React.memo(function RotatingLoginText() {
+  const [index, setIndex] = useState(0);
+  const [text, setText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const full = ROTATING_LOGIN_TEXTS[index];
+    let timer: ReturnType<typeof setTimeout>;
+    if (!deleting && text.length === full.length) {
+      timer = setTimeout(() => setDeleting(true), 2500);
+    } else if (deleting && text.length === 0) {
+      setDeleting(false);
+      setIndex((i) => (i + 1) % ROTATING_LOGIN_TEXTS.length);
+    } else {
+      timer = setTimeout(
+        () => setText(deleting ? full.slice(0, text.length - 1) : full.slice(0, text.length + 1)),
+        deleting ? 30 : 60
+      );
+    }
+    return () => clearTimeout(timer);
+  }, [text, deleting, index]);
+
+  return <>{text}</>;
+});
+
 const PLAN_DETAILS_MAP: Record<string, { name: string; price: number; period: string }> = {
   mensuel: { name: 'Plan Mensuel', price: 30000, period: '/ mois' },
   annuel: { name: 'Plan 1 An Scolaire', price: 250000, period: '/ an' },
@@ -451,31 +477,9 @@ export function LoginView({
   const [successToast, setSuccessToast] = useState<{ title: string; subtitle: string } | null>(null);
 
   // Texte animé volet gauche
-  const [loginTextIndex, setLoginTextIndex] = useState(0);
-  const [loginCurrentText, setLoginCurrentText] = useState('');
-  const [loginIsDeleting, setLoginIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const fullText = ROTATING_LOGIN_TEXTS[loginTextIndex];
-    const speed = loginIsDeleting ? 30 : 60;
-
-    const timer = setTimeout(() => {
-      if (!loginIsDeleting) {
-        setLoginCurrentText(fullText.slice(0, loginCurrentText.length + 1));
-        if (loginCurrentText.length + 1 === fullText.length) {
-          setTimeout(() => setLoginIsDeleting(true), 2500);
-        }
-      } else {
-        setLoginCurrentText(fullText.slice(0, loginCurrentText.length - 1));
-        if (loginCurrentText.length - 1 === 0) {
-          setLoginIsDeleting(false);
-          setLoginTextIndex((prev) => (prev + 1) % ROTATING_LOGIN_TEXTS.length);
-        }
-      }
-    }, speed);
-
-    return () => clearTimeout(timer);
-  }, [loginCurrentText, loginIsDeleting, loginTextIndex]);
+  // (L'animation de texte du volet gauche est dans <RotatingLoginText /> : son état ne doit JAMAIS
+  // vivre dans ce composant, sinon tout le formulaire est re-rendu toutes les 60 ms et les lettres
+  // tapées se perdent sur un poste lent.)
 
   useEffect(() => {
     setMounted(true);
@@ -1115,7 +1119,7 @@ export function LoginView({
               </div>
               <div className="text-xs sm:text-sm font-extrabold text-white font-heading min-h-[22px] flex items-center">
                 <span className="bg-gradient-to-r from-amber-300 via-amber-200 to-white bg-clip-text text-transparent">
-                  {loginCurrentText}
+                  <RotatingLoginText />
                 </span>
                 <span className="inline-block w-0.5 h-4 ml-1 bg-amber-400 animate-blink" />
               </div>
