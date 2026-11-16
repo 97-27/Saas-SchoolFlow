@@ -52,6 +52,11 @@ interface InvoiceTableProps {
 export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentLog }: InvoiceTableProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [students, setStudents] = useState<Student[]>([]);
+  // Journal mois par mois : une fois reçu, une lecture suivante qui arrive sans lui ne l'efface pas.
+  const [stableLog, setStableLog] = useState(serviceMonthPaymentLog);
+  useEffect(() => {
+    if (serviceMonthPaymentLog !== undefined) setStableLog(serviceMonthPaymentLog);
+  }, [serviceMonthPaymentLog]);
 
   useEffect(() => {
     setInvoices(getLiveInvoices(initialInvoices, schoolSlug));
@@ -120,10 +125,10 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       status: string;
       rawInvoice: Invoice;
       /** Coordonnées du parent (nom · téléphone), pour les règlements de services. */
-      contact?: string;
     }> = [];
 
     const seenTxKeys = new Set<string>();
+    const deferredFallbacks: Array<{ inv: Invoice; student?: Student; emit: () => void }> = [];
 
     invoices.forEach((inv) => {
       const matchedStudent = findStudentByRef(students, { id: inv.studentId, name: inv.studentName });
@@ -233,7 +238,8 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       // pour une école qui n'a pas encore la migration 004 (serviceMonthPaymentLog undefined) :
       // sinon ses vrais règlements mois par mois (ci-dessous) remplacent entièrement ce cumul.
       const isServiceFeeType = /internat|cantine|transport/.test((inv.feeType || '').toLowerCase());
-      if (!foundVersements && (isServiceInv || !inv.registrationFee || inv.registrationFee === 0) && !(serviceMonthPaymentLog !== undefined && isServiceFeeType)) {
+      if (!foundVersements && (isServiceInv || !inv.registrationFee || inv.registrationFee === 0)) {
+       const emitFallback = () => {
         const feeLower = (inv.feeType || '').toLowerCase();
         let prestation = '🎓 Scolarité';
         let motif = '1er Versement';
@@ -282,6 +288,13 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
             });
           }
         }
+       };
+       // Reçu de service : le journal mois par mois (base) prend le relais SEULEMENT pour les mois
+       // qu'il sait réellement afficher (voir plus bas). Avant, dès qu'il arrivait, il remplaçait
+       // ces lignes même quand il ne pouvait pas en produire (date inconnue) : les versements
+       // s'affichaient puis disparaissaient quelques secondes plus tard.
+       if (stableLog !== undefined && isServiceFeeType) deferredFallbacks.push({ inv, student: matchedStudent, emit: emitFallback });
+       else emitFallback();
       }
     });
 
@@ -317,7 +330,9 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
         });
     });
 
-    (serviceMonthPaymentLog || []).forEach((p) => {
+    // Mois (et élèves) que le journal a réellement affichés : ils ne sont pas repris par les reçus.
+    const coveredKeys = new Set<string>();
+    (stableLog || []).forEach((p) => {
       const cfg = serviceLabels[p.service];
       if (!cfg || !p.month) return;
       const txKey = `${p.studentId}-${p.service}-${p.month}`;
@@ -333,8 +348,12 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
       // mais n'apparaît pas dans le journal : on n'invente plus une date au jour de l'enregistrement.
       const payDate = p.paidAt || monthInv?.issueDate || '';
       if (!payDate) return;
-      const phone = p.phone || monthInv?.guardianPhone || matchedStudent?.whatsappPhone || matchedStudent?.guardianPhone || '';
-      const parentName = p.guardianName || monthInv?.guardianName || matchedStudent?.guardianName || '';
+      [p.studentId, matchedStudent?.id, matchedStudent?.studentNumber]
+        .filter((id): id is string => !!id)
+        .forEach((id) => {
+          coveredKeys.add(`${id}|${p.service}|${p.month}`);
+          coveredKeys.add(`${id}|${p.service}`);
+        });
       list.push({
         id: `svc-${txKey}`,
         invoiceId: txKey,
@@ -351,12 +370,22 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
         paymentMethod: p.paymentMethod || monthInv?.paymentMethod || 'Espèces',
         status: 'paid',
         rawInvoice: monthInv || ({ id: txKey, invoiceNumber: txKey } as Invoice),
-        contact: [parentName, phone].filter(Boolean).join(' · ') || undefined,
       });
     });
 
+    // Reçus de service que le journal n'a pas pu afficher (date inconnue, élève non retrouvé…) :
+    // on les montre quand même, plutôt que de les faire disparaître.
+    deferredFallbacks.forEach(({ inv, student, emit }) => {
+      const feeLower = (inv.feeType || '').toLowerCase();
+      const service = feeLower.includes('cantine') ? 'cantine' : feeLower.includes('transport') ? 'transport' : 'internat';
+      const month = monthFromServiceNote(inv.notes);
+      const ids = [inv.studentId, student?.id, student?.studentNumber].filter((id): id is string => !!id);
+      const covered = ids.some((id) => coveredKeys.has(month ? `${id}|${service}|${month}` : `${id}|${service}`));
+      if (!covered) emit();
+    });
+
     return list;
-  }, [invoices, students, serviceMonthPaymentLog]);
+  }, [invoices, students, stableLog]);
 
   // Transactions du jour actif sélectionné
   const dayTransactions = useMemo(() => {
@@ -857,9 +886,6 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
                         <span className="text-[10px] font-semibold text-slate-600 pl-0.5">
                           {tx.motif}
                         </span>
-                        {tx.contact && (
-                          <span className="text-[10px] font-mono text-slate-500 pl-0.5">📞 {tx.contact}</span>
-                        )}
                       </div>
                     </td>
 

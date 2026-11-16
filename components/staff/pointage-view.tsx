@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import {
+  AbsenceRequest,
   PointageConfig,
   PointageRecord,
   PointageStatus,
@@ -25,6 +26,7 @@ import {
   dayStatus,
   departureLabel,
   distanceMeters,
+  phaseState,
   schoolClock,
 } from '@/lib/data/pointage';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
@@ -46,6 +48,24 @@ type Payload = {
   exempt: boolean;
   roster: Member[];
   records: Record<string, PointageRecord>;
+  /** Ma demande de code d'absence du jour (sans le code). */
+  myRequest: { to: string; note?: string; at: string; status: AbsenceRequest['status']; attempts: number } | null;
+  /** Direction : toutes les demandes du jour, avec le code remis. */
+  requests: (AbsenceRequest & { id: string })[];
+};
+
+const RECIPIENTS: { id: string; label: string }[] = [
+  { id: 'fondateur', label: 'Fondateur' },
+  { id: 'fondateur_adjoint', label: 'DGA (Fondateur adjoint)' },
+  { id: 'directeur', label: 'Directeur' },
+];
+const recipientLabel = (id: string) => RECIPIENTS.find((r) => r.id === id)?.label || id;
+const hhmm = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
 };
 
 const STATUS_STYLES: Record<PointageStatus, string> = {
@@ -251,9 +271,18 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   const isToday = !!data && data.date === data.today;
   const cfg = data?.config;
   const now = live?.time || data?.now || '';
-  const arrivalOpen = !!cfg && cfg.enabled && now >= cfg.arrivalStart && now <= cfg.arrivalEnd;
-  const departureOpen = !!cfg && cfg.enabled && now >= cfg.departureStart && now <= cfg.departureEnd;
+  // Ouverture / fermeture : mêmes règles que le serveur (horaires, ou forçage de la Direction), et
+  // recalculées à chaque « tic » d'horloge : le bouton s'ouvre et se ferme tout seul, sans rafraîchir.
+  const clk = { date: live?.date || data?.today || '', time: now };
+  const arrivalSt = cfg ? phaseState(cfg, clk, 'arrival') : null;
+  const departureSt = cfg ? phaseState(cfg, clk, 'departure') : null;
+  const arrivalOpen = !!arrivalSt?.open;
+  const departureOpen = !!departureSt?.open;
   const workDay = !!cfg && cfg.workDays.includes(data?.weekday ?? -1);
+  const [codeTo, setCodeTo] = useState('');
+  const [codeNote, setCodeNote] = useState('');
+  const [absenceCode, setAbsenceCode] = useState('');
+  const [shownCode, setShownCode] = useState<{ id: string; code: string } | null>(null);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -379,7 +408,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
             </p>
           )}
 
-          {cfg!.enabled && workDay && (
+          {(arrivalOpen || departureOpen || (cfg!.enabled && workDay)) && (
             <div className="flex flex-col sm:flex-row gap-2.5">
               {!data.me?.arrival && (
                 <button
@@ -393,6 +422,8 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
                     ? 'Localisation…'
                     : arrivalOpen
                     ? 'Pointer mon arrivée'
+                    : arrivalSt?.forced
+                    ? 'Fermé par la Direction'
                     : now < cfg!.arrivalStart
                     ? `Ouvre à ${cfg!.arrivalStart}`
                     : `Fermé depuis ${cfg!.arrivalEnd}`}
@@ -410,22 +441,21 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
                     ? 'Localisation…'
                     : departureOpen
                     ? 'Pointer mon départ'
+                    : departureSt?.forced
+                    ? 'Fermé par la Direction'
                     : now < cfg!.departureStart
                     ? `Départ à partir de ${cfg!.departureStart}`
                     : `Fermé depuis ${cfg!.departureEnd}`}
                 </button>
               )}
-              {!data.me?.arrival && (
+              {!data.me?.arrival && !data.me?.absence && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setAbsenceReason(data.me?.absence?.reason || '');
-                    setShowAbsence((v) => !v);
-                  }}
+                  onClick={() => setShowAbsence((v) => !v)}
                   className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-amber-900 bg-amber-50 border border-amber-300 hover:bg-amber-100 cursor-pointer"
                 >
                   <FileText className="w-4 h-4" />
-                  {data.me?.absence ? 'Modifier le motif' : 'Je suis absent(e) : motif'}
+                  Je suis absent(e)
                 </button>
               )}
             </div>
@@ -438,29 +468,101 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
             </p>
           )}
 
-          {showAbsence && !data.me?.arrival && (
-            <div className="space-y-2">
-              <textarea
-                value={absenceReason}
-                onChange={(e) => setAbsenceReason(e.target.value)}
-                rows={3}
-                maxLength={300}
-                placeholder="Ex : malade (certificat médical), décès dans la famille, convocation officielle…"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
-              />
-              <button
-                type="button"
-                disabled={!!busy || absenceReason.trim().length < 3}
-                onClick={() =>
-                  run('absence', () => post({ action: 'absence', reason: absenceReason }), 'Motif d’absence enregistré.').then((ok) =>
-                    ok && setShowAbsence(false)
-                  )
-                }
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                {busy === 'absence' ? 'Enregistrement…' : 'Enregistrer le motif'}
-              </button>
+          {(showAbsence || data.myRequest) && !data.me?.arrival && !data.me?.absence && (
+            <div className="space-y-3 p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200">
+              {/* Étape 1 : message à la Direction pour obtenir un code */}
+              {(!data.myRequest || data.myRequest.status === 'locked') && (
+                <div className="space-y-2.5">
+                  <p className="text-xs font-bold text-amber-900">
+                    {data.myRequest?.status === 'locked'
+                      ? 'Trop d’essais : envoyez une nouvelle demande.'
+                      : 'Pour déclarer votre absence, demandez d’abord un code à la Direction.'}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {RECIPIENTS.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setCodeTo(r.id)}
+                        className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                          codeTo === r.id ? 'bg-amber-600 text-white border-amber-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={codeNote}
+                    onChange={(e) => setCodeNote(e.target.value)}
+                    maxLength={200}
+                    placeholder="Message (facultatif) : ex. je suis souffrant, puis-je avoir un code ?"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:border-amber-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={!!busy || !codeTo}
+                    onClick={() =>
+                      run('request_code', () => post({ action: 'request_code', to: codeTo, note: codeNote }), 'Demande envoyée à la Direction.').then(
+                        (ok) => ok && setCodeNote('')
+                      )
+                    }
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    {busy === 'request_code' ? 'Envoi…' : 'Envoyer la demande de code'}
+                  </button>
+                </div>
+              )}
+
+              {/* Étape 2 : en attente du code */}
+              {data.myRequest?.status === 'pending' && (
+                <p className="text-xs text-amber-900 flex items-start gap-2">
+                  <Clock className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>
+                    Demande envoyée à <span className="font-bold">{recipientLabel(data.myRequest.to)}</span> à {hhmm(data.myRequest.at)}. Dès qu’il vous remet le code,
+                    saisissez-le ci-dessous avec votre motif.
+                  </span>
+                </p>
+              )}
+
+              {/* Étape 3 : code reçu + motif */}
+              {(data.myRequest?.status === 'pending' || data.myRequest?.status === 'granted') && (
+                <div className="space-y-2">
+                  <input
+                    value={absenceCode}
+                    onChange={(e) => setAbsenceCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="Code remis par la Direction"
+                    className="w-full sm:w-64 px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono tracking-widest text-slate-900 bg-white focus:outline-none focus:border-emerald-600"
+                  />
+                  <textarea
+                    value={absenceReason}
+                    onChange={(e) => setAbsenceReason(e.target.value)}
+                    rows={3}
+                    maxLength={300}
+                    placeholder="Motif : ex. malade (certificat médical), décès dans la famille, convocation officielle…"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:border-emerald-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={!!busy || absenceReason.trim().length < 3 || absenceCode.length < 4}
+                    onClick={() =>
+                      run('absence', () => post({ action: 'absence', reason: absenceReason, code: absenceCode }), 'Motif d’absence enregistré.').then((ok) => {
+                        if (ok) {
+                          setShowAbsence(false);
+                          setAbsenceCode('');
+                          setAbsenceReason('');
+                        }
+                      })
+                    }
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {busy === 'absence' ? 'Enregistrement…' : 'Enregistrer mon absence'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -473,14 +575,75 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
         </div>
       )}
 
+      {/* ================= DEMANDES DE CODE D'ABSENCE (Direction) ================= */}
+      {data.canManage && data.requests.length > 0 && (
+        <div className="bg-white p-4 sm:p-6 rounded-3xl border border-amber-200 shadow-xs space-y-3">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-amber-600" />
+            <h2 className="text-base font-extrabold text-slate-900 font-heading">Demandes de code d’absence</h2>
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">
+              {data.requests.filter((r) => r.status === 'pending' || r.status === 'locked').length} en attente
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Appelez la personne, écoutez la raison, puis remettez-lui le code (valable aujourd’hui, à usage unique). Elle saisira son motif avec ce code.
+          </p>
+          <div className="space-y-2">
+            {data.requests.map((r) => {
+              const code = shownCode?.id === r.id ? shownCode.code : r.status === 'granted' ? r.code : undefined;
+              return (
+                <div key={r.id} className="p-3 rounded-2xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center gap-2.5 justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 break-words">
+                      {r.fullName} <span className="text-[11px] font-medium text-slate-500">• {ROLE_LABELS_SHORT[r.roleId] || 'Personnel'}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Envoyé à {recipientLabel(r.to)} à {hhmm(r.at)}
+                      {r.note ? ` — « ${r.note} »` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {r.status === 'used' ? (
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">Absence enregistrée</span>
+                    ) : (
+                      <>
+                        {code && (
+                          <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-mono text-lg font-extrabold tracking-[0.3em]">{code}</span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() =>
+                            run(
+                              'grant_' + r.id,
+                              () =>
+                                post({ action: 'grant_code', staffId: r.id, renew: r.status === 'locked' }).then((j) =>
+                                  setShownCode({ id: r.id, code: j.request.code })
+                                ),
+                              'Code prêt : communiquez-le à la personne.'
+                            )
+                          }
+                          className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 cursor-pointer"
+                        >
+                          {r.status === 'granted' ? 'Afficher le code' : r.status === 'locked' ? 'Nouveau code' : 'Donner le code'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ================= RÉGLAGES (Direction) ================= */}
       {data.canManage && draft && (
         <ConfigCard
           draft={draft}
           setDraft={setDraft}
-          // L'état « activé » tient compte de l'heure : passé l'heure de fin de départ, le bouton
-          // repasse tout seul à « Activer » (sans attendre le serveur ni cliquer pour désactiver).
-          saved={{ ...data.config, enabled: data.config.enabled && (!isToday || now <= data.config.departureEnd) }}
+          saved={data.config}
+          clock={clk}
           busy={busy}
           onSave={(c) => run('config', () => post({ action: 'config', config: c }).then((j) => setDraft(j.config)), 'Réglages du pointage enregistrés.')}
           onLocationSaved={(c) => {
@@ -793,10 +956,21 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   );
 }
 
+const ROLE_LABELS_SHORT: Record<string, string> = {
+  enseignant: 'Enseignant(e)',
+  educateur: 'Éducateur',
+  directeur: 'Directeur',
+  comptable: 'Comptable',
+  secretaire: 'Secrétaire',
+  assistant: 'Assistant(e)',
+  informaticien: 'Informaticien',
+};
+
 function ConfigCard({
   draft,
   setDraft,
   saved,
+  clock,
   busy,
   onSave,
   onLocationSaved,
@@ -804,6 +978,7 @@ function ConfigCard({
   draft: PointageConfig;
   setDraft: (c: PointageConfig) => void;
   saved: PointageConfig;
+  clock: { date: string; time: string };
   busy: string;
   onSave: (c: Partial<PointageConfig>) => void;
   onLocationSaved: (c: PointageConfig) => void;
@@ -862,6 +1037,72 @@ function ConfigCard({
           {saved.enabled ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
           {saved.enabled ? 'Désactiver le pointage' : 'Activer le pointage'}
         </button>
+      </div>
+      <p className="text-[11px] text-slate-500">
+        {saved.enabled
+          ? 'Pointage AUTOMATIQUE : il s’ouvre tout seul à l’heure de début de chaque plage, les jours cochés, et se ferme tout seul à l’heure de fin.'
+          : 'Pointage non activé : cliquez sur « Activer » une fois, puis il s’ouvre et se ferme tout seul chaque jour aux heures réglées.'}
+      </p>
+
+      {/* Forçage manuel : ouvrir plus tôt ou fermer tout de suite (valable aujourd'hui seulement) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {(['arrival', 'departure'] as const).map((phase) => {
+          const st = phaseState(saved, clock, phase);
+          const key = phase === 'arrival' ? 'arrivalForce' : 'departureForce';
+          const start = phase === 'arrival' ? saved.arrivalStart : saved.departureStart;
+          const end = phase === 'arrival' ? saved.arrivalEnd : saved.departureEnd;
+          return (
+            <div key={phase} className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-extrabold text-slate-900">{phase === 'arrival' ? 'Pointage d’arrivée' : 'Pointage de départ'}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {start} – {end} • {st.forced ? 'forcé à la main' : 'automatique'}
+                  </p>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold ${
+                    st.open ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-slate-100 text-slate-600 border-slate-300'
+                  }`}
+                >
+                  {st.open ? 'OUVERT' : 'FERMÉ'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {!st.open && (
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={() => onSave({ [key]: 'open' } as any)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    Ouvrir maintenant
+                  </button>
+                )}
+                {st.open && (
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={() => onSave({ [key]: 'closed' } as any)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    Fermer maintenant
+                  </button>
+                )}
+                {st.forced && (
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={() => onSave({ [key]: 'auto' } as any)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
+                  >
+                    Remettre en automatique
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">

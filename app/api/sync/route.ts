@@ -434,6 +434,14 @@ export async function POST(request: NextRequest) {
     const canWriteStudents = hasRole(session, STUDENT_WRITE_ROLES);
     const canDelete = hasRole(session, DELETE_ROLES);
     const canWriteServices = hasRole(session, SERVICES_WRITE_ROLES);
+    // Une demande de modification de la place limite faite par un poste sans ce droit était
+    // ignorée EN SILENCE (réponse « succès », rien d'enregistré) : on la refuse franchement.
+    if (!canWriteServices && body?.boardingCapacity !== undefined) {
+      return NextResponse.json(
+        { success: false, error: 'Votre poste ne peut pas modifier la place limite de l’internat.' },
+        { status: 403, headers: NO_CACHE_HEADERS }
+      );
+    }
 
     // Chaque collection n'est prise en compte que si le rôle connecté a le droit de l'écrire ;
     // les autres sont ignorées (jamais transmises à la base).

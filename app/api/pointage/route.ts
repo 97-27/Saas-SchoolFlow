@@ -10,13 +10,17 @@ import {
   ROLE_LABELS,
 } from '@/lib/auth/roles';
 import { sendPushToRoles } from '@/lib/server/push';
+import { randomInt } from 'crypto';
 import {
+  AbsenceRequest,
   DEFAULT_POINTAGE_CONFIG,
+  PhaseOverride,
   PointageConfig,
   PointageRecord,
   dayStatus,
   distanceMeters,
   isValidHHMM,
+  phaseState,
   schoolClock,
 } from '@/lib/data/pointage';
 
@@ -115,17 +119,30 @@ async function readConfig(schoolId: string): Promise<PointageConfig | null> {
   }
 }
 
-/**
- * Fermeture automatique : une fois l'heure de FIN DE DÉPART passée, le pointage se désactive tout
- * seul (la Direction n'a plus à cliquer sur « Désactiver »). Elle le réactive quand elle veut, avec
- * les horaires du moment — même une plage de rattrapage (ex. 8h–8h30) pour ceux qui n'ont pas pointé.
+/*
+ * Ouverture / fermeture AUTOMATIQUES : rien n'est écrit à l'heure H. À chaque lecture ou pointage,
+ * phaseState() (lib/data/pointage.ts) compare l'heure de l'école aux plages réglées : la plage
+ * d'arrivée ouvre à son heure de début et ferme à son heure de fin, idem pour le départ, chaque
+ * jour de pointage, sans que la Direction ne touche à rien. Elle peut forcer à la main (ouvrir plus
+ * tôt, fermer tout de suite) : le forçage ne vaut que pour la journée en cours.
  */
-async function autoCloseIfDayOver(schoolId: string, config: PointageConfig, time: string): Promise<PointageConfig> {
-  if (!config.enabled || time <= config.departureEnd) return config;
-  const next = { ...config, enabled: false };
-  await kvPut(schoolId, CONFIG_KEY, JSON.stringify(next), 'system|auto-close');
-  return next;
+
+const reqPrefix = (date: string) => `sf_private_pointage_req_${date}_`;
+const reqKey = (date: string, staffId: string) => `${reqPrefix(date)}${staffId}`;
+
+async function readRequest(schoolId: string, date: string, staffId: string): Promise<AbsenceRequest | null | undefined> {
+  const row = await kvGet(schoolId, reqKey(date, staffId));
+  if (row === undefined) return undefined;
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return null;
+  }
 }
+
+/** Ce que la personne qui a fait la demande a le droit de voir : jamais le code. */
+const publicRequest = (r: AbsenceRequest) => ({ to: r.to, note: r.note, at: r.at, status: r.status, attempts: r.attempts || 0 });
 
 async function readRecord(schoolId: string, date: string, staffId: string): Promise<PointageRecord | null | undefined> {
   const row = await kvGet(schoolId, recordKey(date, staffId));
@@ -156,8 +173,8 @@ export async function GET(request: NextRequest) {
   if (!storedConfig) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
 
   const clock = schoolClock(storedConfig.timezone);
-  const config = await autoCloseIfDayOver(schoolId, storedConfig, clock.time);
-  const requested = request.nextUrl.searchParams.get('date');
+  const config = storedConfig;
+  const requested =request.nextUrl.searchParams.get('date');
   const date = isDate(requested) ? requested : clock.date;
   const canViewAll = POINTAGE_VIEW_ALL_ROLES.includes(session.roleId);
 
@@ -175,6 +192,20 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Demandes de code d'absence du jour : la Direction voit tout (avec le code), les autres seulement la leur.
+  const canManage = POINTAGE_MANAGER_ROLES.includes(session.roleId);
+  const myReq = session.staffId ? await readRequest(schoolId, clock.date, session.staffId) : null;
+  let requests: (AbsenceRequest & { id: string })[] = [];
+  if (canManage) {
+    const rows = await kvListPrefix(schoolId, reqPrefix(clock.date));
+    for (const row of rows || []) {
+      try {
+        requests.push({ ...JSON.parse(row.value), id: row.key.slice(reqPrefix(clock.date).length) });
+      } catch {}
+    }
+    requests.sort((a, b) => (a.at < b.at ? 1 : -1));
+  }
+
   return NextResponse.json(
     {
       success: true,
@@ -188,11 +219,13 @@ export async function GET(request: NextRequest) {
       config,
       me: me || null,
       myStatus: dayStatus(me || null, config, date, clock),
-      canManage: POINTAGE_MANAGER_ROLES.includes(session.roleId),
+      canManage,
       canViewAll,
       exempt: POINTAGE_EXEMPT_ROLES.includes(session.roleId),
       roster,
       records,
+      myRequest: myReq ? publicRequest(myReq) : null,
+      requests,
     },
     { headers: NO_STORE }
   );
@@ -219,8 +252,7 @@ export async function POST(request: NextRequest) {
   const storedConfig = await readConfig(schoolId);
   if (!storedConfig) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
   const clock = schoolClock(storedConfig.timezone);
-  // Réglages : on part de la configuration brute (la Direction peut rouvrir avec de nouveaux horaires).
-  const config = action === 'config' ? storedConfig : await autoCloseIfDayOver(schoolId, storedConfig, clock.time);
+  const config = storedConfig;
 
   // ─── Réglages (Direction) ───
   if (action === 'config') {
@@ -249,11 +281,14 @@ export async function POST(request: NextRequest) {
     if (next.arrivalStart >= next.arrivalEnd) return jsonError("L'heure de fin d'arrivée doit être après l'heure de début.", 400);
     if (next.departureStart >= next.departureEnd) return jsonError("L'heure de fin de départ doit être après l'heure de début.", 400);
     if (next.arrivalEnd > next.departureStart) return jsonError('Le départ doit commencer après la fin des arrivées.', 400);
-    if (next.enabled && clock.time > next.departureEnd) {
-      return jsonError(
-        `Il est ${clock.time} : les horaires de départ (jusqu'à ${next.departureEnd}) sont déjà passés. Réglez des horaires encore à venir (ex. arrivée dans quelques minutes), puis activez.`,
-        400
-      );
+    // Forçage manuel, pour aujourd'hui seulement : « open » / « closed » ; « auto » rend la main aux horaires.
+    const force = (v: unknown): PhaseOverride | null => (v === 'open' || v === 'closed' ? { mode: v, date: clock.date } : null);
+    if (c.arrivalForce !== undefined) next.arrivalOverride = force(c.arrivalForce);
+    if (c.departureForce !== undefined) next.departureOverride = force(c.departureForce);
+    // Activer (avec ou sans nouveaux horaires) remet le pointage en mode automatique pour la journée.
+    if (c.enabled === true && c.arrivalForce === undefined && c.departureForce === undefined) {
+      next.arrivalOverride = null;
+      next.departureOverride = null;
     }
     if (Array.isArray(c.workDays)) {
       next.workDays = Array.from(new Set(c.workDays.map(Number).filter((d: number) => d >= 0 && d <= 6))).sort() as number[];
@@ -312,26 +347,125 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, record: rec }, { headers: NO_STORE });
   }
 
-  // ─── Pointage personnel : arrivée, départ, motif d'absence ───
-  if (!['arrive', 'depart', 'absence'].includes(action)) return jsonError('Action inconnue.', 400);
+  // ─── Code d'absence remis par la Direction à une personne qui l'a demandé ───
+  if (action === 'grant_code') {
+    if (!isManager) return jsonError("Seuls le Fondateur, le Fondateur adjoint et le Directeur remettent un code d'absence.", 403);
+    const staffId = String(body?.staffId || '');
+    if (!staffId) return jsonError('Membre manquant.', 400);
+    const req = await readRequest(schoolId, clock.date, staffId);
+    if (req === undefined) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
+    if (!req) return jsonError('Demande introuvable.', 404);
+    if (req.status === 'used') return jsonError("Ce code a déjà servi : l'absence est enregistrée.", 409);
+    // Code déjà remis : on le redonne tel quel (sauf demande explicite d'un nouveau, ou blocage).
+    const keep = req.status === 'granted' && req.code && body?.renew !== true;
+    const next: AbsenceRequest = {
+      ...req,
+      status: 'granted',
+      code: keep ? req.code : String(randomInt(1000, 10000)),
+      attempts: keep ? req.attempts || 0 : 0,
+      grantedAt: keep ? req.grantedAt : new Date().toISOString(),
+      grantedBy: keep ? req.grantedBy : actor,
+    };
+    const saved = await kvPut(schoolId, reqKey(clock.date, staffId), JSON.stringify(next), actor);
+    if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+    return NextResponse.json({ success: true, request: { ...next, id: staffId } }, { headers: NO_STORE });
+  }
+
+  // ─── Pointage personnel : arrivée, départ, demande de code, motif d'absence ───
+  if (!['arrive', 'depart', 'absence', 'request_code'].includes(action)) return jsonError('Action inconnue.', 400);
   if (POINTAGE_EXEMPT_ROLES.includes(session.roleId)) return jsonError('La direction générale ne pointe pas.', 403);
   if (!session.staffId) return jsonError('Reconnectez-vous pour pointer (session ancienne).', 401);
-  if (!config.enabled) return jsonError("Le pointage n'est pas encore activé par la Direction.", 409);
-  if (!config.workDays.includes(clock.weekday)) return jsonError("Pas de pointage aujourd'hui (jour non travaillé).", 409);
+  // Pointer exige que la phase soit ouverte (horaires ou forçage) ; le motif d'absence et la demande
+  // de code ne dépendent pas de l'heure : on peut les faire dès le matin, ou après la fermeture.
+  const isPunch = action === 'arrive' || action === 'depart';
+  if (isPunch) {
+    const st = phaseState(config, clock, action === 'arrive' ? 'arrival' : 'departure');
+    if (!st.open && st.forced) return jsonError('Le pointage a été fermé par la Direction.', 409);
+    if (!st.forced) {
+      if (!config.enabled) return jsonError("Le pointage n'est pas encore activé par la Direction.", 409);
+      if (!config.workDays.includes(clock.weekday)) return jsonError("Pas de pointage aujourd'hui (jour non travaillé).", 409);
+    }
+  } else {
+    if (!config.enabled && config.arrivalOverride?.date !== clock.date) {
+      return jsonError("Le pointage n'est pas encore activé par la Direction.", 409);
+    }
+    if (!config.workDays.includes(clock.weekday) && config.arrivalOverride?.date !== clock.date) {
+      return jsonError("Pas de pointage aujourd'hui (jour non travaillé).", 409);
+    }
+  }
 
   const roster = await staffRoster(slug);
   const member = roster.find((m) => m.id === session.staffId);
   if (!member) return jsonError("Votre fiche n'est pas active dans l'établissement.", 403);
 
   const date = clock.date;
+
+  // ─── Demande de code : message à la Direction ───
+  if (action === 'request_code') {
+    const to = String(body?.to || '');
+    if (!POINTAGE_MANAGER_ROLES.includes(to)) return jsonError('Choisissez à qui envoyer la demande (Fondateur, DGA ou Directeur).', 400);
+    const todayRec = await readRecord(schoolId, date, member.id);
+    if (todayRec === undefined) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
+    if (todayRec?.arrival) return jsonError('Vous avez déjà pointé votre arrivée aujourd’hui.', 409);
+    if (todayRec?.absence) return jsonError('Votre absence est déjà enregistrée aujourd’hui.', 409);
+    const existing = await readRequest(schoolId, date, member.id);
+    if (existing === undefined) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
+    // Demande déjà traitée (code remis ou déjà servi) : on la renvoie. Une demande en attente ou
+    // bloquée (trop d'essais) est refaite à neuf.
+    if (existing && (existing.status === 'granted' || existing.status === 'used')) {
+      return NextResponse.json({ success: true, request: publicRequest(existing) }, { headers: NO_STORE });
+    }
+    const req: AbsenceRequest = {
+      staffId: member.id,
+      fullName: member.fullName,
+      roleId: member.roleId,
+      to,
+      note: String(body?.note || '').trim().slice(0, 200) || undefined,
+      at: new Date().toISOString(),
+      status: 'pending',
+    };
+    const saved = await kvPut(schoolId, reqKey(date, member.id), JSON.stringify(req), actor);
+    if (!saved) return jsonError('Envoi impossible pour le moment. Réessayez.', 503);
+    sendPushToRoles(
+      schoolId,
+      [to],
+      {
+        title: '✉️ Demande de code d’absence',
+        body: `${member.fullName} (${ROLE_LABELS[member.roleId] || 'Personnel'}) demande un code pour déclarer son absence.${req.note ? ` « ${req.note} »` : ''}`,
+        url: `/${slug}/admin/pointage`,
+        tag: `pointage-code-${member.id}-${date}`,
+      },
+      { exceptStaffId: member.id }
+    ).catch(() => {});
+    return NextResponse.json({ success: true, request: publicRequest(req) }, { headers: NO_STORE });
+  }
+
   const current = await readRecord(schoolId, date, member.id);
   if (current === undefined) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
   const rec: PointageRecord = { ...(current || {}), staffId: member.id, fullName: member.fullName, roleId: member.roleId };
 
+  let usedRequest: AbsenceRequest | null = null;
   if (action === 'absence') {
     const reason = String(body?.reason || '').trim().slice(0, 300);
     if (reason.length < 3) return jsonError("Indiquez le motif de votre absence.", 400);
     if (rec.arrival) return jsonError('Vous avez déjà pointé votre arrivée aujourd’hui.', 409);
+    if (rec.absence) return jsonError('Votre absence est déjà enregistrée. Seule la Direction peut modifier le motif.', 409);
+    // Le motif ne s'enregistre qu'avec le code remis par la Direction après la demande.
+    const req = await readRequest(schoolId, date, member.id);
+    if (req === undefined) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
+    if (!req || req.status === 'pending') {
+      return jsonError("Demandez d'abord un code à la Direction (Fondateur, DGA ou Directeur) : elle vous le remettra.", 403);
+    }
+    if (req.status === 'locked') return jsonError('Trop d’essais : redemandez un code à la Direction.', 403);
+    if (req.status === 'used' || !req.code) return jsonError('Ce code a déjà servi. Redemandez-en un à la Direction.', 403);
+    const given = String(body?.code || '').replace(/\D/g, '');
+    if (given !== req.code) {
+      const attempts = (req.attempts || 0) + 1;
+      const locked = attempts >= 5;
+      await kvPut(schoolId, reqKey(date, member.id), JSON.stringify({ ...req, attempts, status: locked ? 'locked' : req.status }), actor);
+      return jsonError(locked ? 'Trop d’essais : redemandez un code à la Direction.' : `Code incorrect (${5 - attempts} essai(s) restant(s)).`, 403);
+    }
+    usedRequest = req;
     rec.absence = { reason, at: new Date().toISOString(), by: 'self' };
   } else {
     // Position : obligatoire si la Direction a enregistré celle de l'école.
@@ -367,10 +501,11 @@ export async function POST(request: NextRequest) {
 
     if (action === 'arrive') {
       if (rec.arrival) return jsonError(`Arrivée déjà pointée à ${rec.arrival.time}.`, 409);
-      if (clock.time < config.arrivalStart) return jsonError(`Le pointage d'arrivée ouvre à ${config.arrivalStart}.`, 409);
-      if (clock.time > config.arrivalEnd) {
+      const st = phaseState(config, clock, 'arrival');
+      if (!st.open) {
+        if (st.position === 'before') return jsonError(`Le pointage d'arrivée ouvre à ${config.arrivalStart}.`, 409);
         return jsonError(
-          `Pointage d'arrivée fermé depuis ${config.arrivalEnd}. Indiquez le motif de votre absence ou de votre retard.`,
+          `Pointage d'arrivée fermé depuis ${config.arrivalEnd}. Demandez un code à la Direction pour déclarer votre absence ou votre retard.`,
           409
         );
       }
@@ -379,14 +514,21 @@ export async function POST(request: NextRequest) {
     } else {
       if (!rec.arrival) return jsonError("Vous n'avez pas pointé votre arrivée aujourd'hui.", 409);
       if (rec.departure) return jsonError(`Départ déjà pointé à ${rec.departure.time}.`, 409);
-      if (clock.time < config.departureStart) return jsonError(`Le pointage de départ ouvre à ${config.departureStart}.`, 409);
-      if (clock.time > config.departureEnd) return jsonError(`Pointage de départ fermé depuis ${config.departureEnd}.`, 409);
+      const st = phaseState(config, clock, 'departure');
+      if (!st.open) {
+        return jsonError(
+          st.position === 'before' ? `Le pointage de départ ouvre à ${config.departureStart}.` : `Pointage de départ fermé depuis ${config.departureEnd}.`,
+          409
+        );
+      }
       rec.departure = stamp;
     }
   }
 
   const saved = await kvPut(schoolId, recordKey(date, member.id), JSON.stringify(rec), actor);
   if (!saved) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+  // Code à usage unique : brûlé seulement une fois l'absence bien enregistrée.
+  if (usedRequest) await kvPut(schoolId, reqKey(date, member.id), JSON.stringify({ ...usedRequest, status: 'used' }), actor);
 
   // Direction prévenue sur son téléphone (même application fermée) : qui, quoi, à quelle heure.
   const roleLabel = ROLE_LABELS[member.roleId] || 'Personnel';

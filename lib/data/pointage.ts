@@ -25,7 +25,40 @@ export type PointageConfig = {
   timezone: string;
   /** Premier jour (AAAA-MM-JJ) où le pointage a été activé : rien n'est compté avant. */
   enabledSince?: string;
+  /**
+   * Forçage manuel de la Direction, valable pour CE JOUR seulement (la date l'accompagne) :
+   * « open » ouvre tout de suite (même avant l'heure, même plage dépassée), « closed » ferme tout
+   * de suite. Sans forçage, les plages horaires ouvrent et ferment le pointage toutes seules.
+   */
+  arrivalOverride?: PhaseOverride | null;
+  departureOverride?: PhaseOverride | null;
 };
+
+export type PhaseOverride = { mode: 'open' | 'closed'; date: string };
+export type PointagePhase = 'arrival' | 'departure';
+
+export type PhaseState = {
+  open: boolean;
+  /** Pourquoi : forçage manuel, ou simple application des horaires. */
+  forced: boolean;
+  /** Avant l'ouverture, pendant, ou après la fermeture (selon les horaires). */
+  position: 'before' | 'inside' | 'after';
+};
+
+/**
+ * État d'une phase (arrivée / départ) à l'instant donné : ouverte ou fermée.
+ * Même règle côté serveur (qui décide) et côté écran (qui affiche le bouton).
+ */
+export function phaseState(config: PointageConfig, clock: { date: string; time: string }, phase: PointagePhase): PhaseState {
+  const start = phase === 'arrival' ? config.arrivalStart : config.departureStart;
+  const end = phase === 'arrival' ? config.arrivalEnd : config.departureEnd;
+  const position: PhaseState['position'] = clock.time < start ? 'before' : clock.time > end ? 'after' : 'inside';
+  const ov = phase === 'arrival' ? config.arrivalOverride : config.departureOverride;
+  if (ov && ov.date === clock.date) return { open: ov.mode === 'open', forced: true, position };
+  const workDay = config.workDays.includes(weekdayOf(clock.date));
+  const sinceOk = !config.enabledSince || clock.date >= config.enabledSince;
+  return { open: config.enabled && workDay && sinceOk && position === 'inside', forced: false, position };
+}
 
 export const DEFAULT_POINTAGE_CONFIG: PointageConfig = {
   enabled: false,
@@ -48,6 +81,26 @@ export type PointageRecord = {
   arrival?: PointageStamp;
   departure?: PointageStamp;
   absence?: { reason: string; at: string; by: 'self' | 'direction' };
+};
+
+/**
+ * Demande de code d'absence : avant de saisir un motif d'absence, la personne écrit à la Direction
+ * (Fondateur, Fondateur adjoint ou Directeur) ; celle-ci lui remet un code à usage unique, valable
+ * pour la journée. Le code n'est JAMAIS renvoyé à la personne qui le demande.
+ */
+export type AbsenceRequest = {
+  staffId: string;
+  fullName: string;
+  roleId: string;
+  /** Poste destinataire : fondateur | fondateur_adjoint | directeur. */
+  to: string;
+  note?: string;
+  at: string;
+  status: 'pending' | 'granted' | 'used' | 'locked';
+  code?: string;
+  grantedAt?: string;
+  grantedBy?: string;
+  attempts?: number;
 };
 
 export type PointageStatus = 'present' | 'parti' | 'absent_justifie' | 'absent' | 'en_attente' | 'non_travaille' | 'inactif';
@@ -121,6 +174,8 @@ export function dayStatus(
 ): PointageStatus {
   if (rec?.arrival) return rec.departure ? 'parti' : 'present';
   if (rec?.absence) return 'absent_justifie';
+  // Arrivée rouverte à la main aujourd'hui : personne n'est « absent » tant qu'elle est ouverte.
+  if (date === clock.date && config.arrivalOverride?.date === clock.date && config.arrivalOverride.mode === 'open') return 'en_attente';
   if (!config.enabled) return 'inactif';
   if (!config.workDays.includes(weekdayOf(date))) return 'non_travaille';
   if (config.enabledSince && date < config.enabledSince) return 'inactif';
@@ -133,6 +188,7 @@ export function dayStatus(
 export function departureLabel(rec: PointageRecord | null | undefined, config: PointageConfig, date: string, clock: { date: string; time: string }): string {
   if (!rec?.arrival) return '—';
   if (rec.departure) return rec.departure.time;
+  if (date === clock.date && phaseState(config, clock, 'departure').open) return 'Pas encore pointé';
   if (date < clock.date || (date === clock.date && clock.time > config.departureEnd)) return 'Non pointé';
   return 'Pas encore pointé';
 }
