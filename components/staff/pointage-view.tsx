@@ -823,9 +823,22 @@ function ConfigCard({
         <button
           type="button"
           onClick={() => {
-            const next = { ...draft, enabled: !draft.enabled };
+            // Les horaires affichés partent avec l'activation : on peut rouvrir le pointage avec une
+            // nouvelle plage (ex. 8h–8h30) en un seul clic, sans enregistrer d'abord.
+            const next = { ...draft, enabled: !saved.enabled };
             setDraft(next);
-            onSave({ enabled: next.enabled });
+            onSave(
+              next.enabled
+                ? {
+                    enabled: true,
+                    arrivalStart: draft.arrivalStart,
+                    arrivalEnd: draft.arrivalEnd,
+                    departureStart: draft.departureStart,
+                    departureEnd: draft.departureEnd,
+                    workDays: draft.workDays,
+                  }
+                : { enabled: false }
+            );
           }}
           disabled={!!busy}
           className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 ${

@@ -115,6 +115,18 @@ async function readConfig(schoolId: string): Promise<PointageConfig | null> {
   }
 }
 
+/**
+ * Fermeture automatique : une fois l'heure de FIN DE DÉPART passée, le pointage se désactive tout
+ * seul (la Direction n'a plus à cliquer sur « Désactiver »). Elle le réactive quand elle veut, avec
+ * les horaires du moment — même une plage de rattrapage (ex. 8h–8h30) pour ceux qui n'ont pas pointé.
+ */
+async function autoCloseIfDayOver(schoolId: string, config: PointageConfig, time: string): Promise<PointageConfig> {
+  if (!config.enabled || time <= config.departureEnd) return config;
+  const next = { ...config, enabled: false };
+  await kvPut(schoolId, CONFIG_KEY, JSON.stringify(next), 'system|auto-close');
+  return next;
+}
+
 async function readRecord(schoolId: string, date: string, staffId: string): Promise<PointageRecord | null | undefined> {
   const row = await kvGet(schoolId, recordKey(date, staffId));
   if (row === undefined) return undefined;
@@ -140,10 +152,11 @@ export async function GET(request: NextRequest) {
 
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
-  const config = await readConfig(schoolId);
-  if (!config) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
+  const storedConfig = await readConfig(schoolId);
+  if (!storedConfig) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
 
-  const clock = schoolClock(config.timezone);
+  const clock = schoolClock(storedConfig.timezone);
+  const config = await autoCloseIfDayOver(schoolId, storedConfig, clock.time);
   const requested = request.nextUrl.searchParams.get('date');
   const date = isDate(requested) ? requested : clock.date;
   const canViewAll = POINTAGE_VIEW_ALL_ROLES.includes(session.roleId);
@@ -203,9 +216,11 @@ export async function POST(request: NextRequest) {
 
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
-  const config = await readConfig(schoolId);
-  if (!config) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
-  const clock = schoolClock(config.timezone);
+  const storedConfig = await readConfig(schoolId);
+  if (!storedConfig) return jsonError('Enregistrement impossible pour le moment. Réessayez.', 503);
+  const clock = schoolClock(storedConfig.timezone);
+  // Réglages : on part de la configuration brute (la Direction peut rouvrir avec de nouveaux horaires).
+  const config = action === 'config' ? storedConfig : await autoCloseIfDayOver(schoolId, storedConfig, clock.time);
 
   // ─── Réglages (Direction) ───
   if (action === 'config') {
@@ -234,6 +249,12 @@ export async function POST(request: NextRequest) {
     if (next.arrivalStart >= next.arrivalEnd) return jsonError("L'heure de fin d'arrivée doit être après l'heure de début.", 400);
     if (next.departureStart >= next.departureEnd) return jsonError("L'heure de fin de départ doit être après l'heure de début.", 400);
     if (next.arrivalEnd > next.departureStart) return jsonError('Le départ doit commencer après la fin des arrivées.', 400);
+    if (next.enabled && clock.time > next.departureEnd) {
+      return jsonError(
+        `Il est ${clock.time} : les horaires de départ (jusqu'à ${next.departureEnd}) sont déjà passés. Réglez des horaires encore à venir (ex. arrivée dans quelques minutes), puis activez.`,
+        400
+      );
+    }
     if (Array.isArray(c.workDays)) {
       next.workDays = Array.from(new Set(c.workDays.map(Number).filter((d: number) => d >= 0 && d <= 6))).sort() as number[];
     }
