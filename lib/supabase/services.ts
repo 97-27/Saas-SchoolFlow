@@ -1825,7 +1825,43 @@ export async function saveServicesDataToSupabase(schoolSlug: string, servicesDat
     });
     if (error) {
       console.warn('saveServicesDataToSupabase rpc error:', error.message);
-      return false;
+      // Filet de sécurité : si la fonction upsert_services_data n'existe pas encore en base
+      // (migration 009 non exécutée), on écrit quand même — lecture + fusion + écriture de la
+      // ligne canonique SYS-SRV-DATA — au lieu de perdre silencieusement la donnée (place limite
+      // de l'internat qui s'affichait puis disparaissait).
+      try {
+        const { data: row } = await supabase
+          .from('staff_users')
+          .select('department')
+          .eq('school_id', schoolId)
+          .eq('role_id', 'system_services_data')
+          .eq('auth_code', 'SYS-SRV-DATA')
+          .maybeSingle();
+        let current: Record<string, any> = {};
+        try {
+          current = row?.department ? JSON.parse(row.department) : {};
+        } catch (e) {}
+        const merged = { ...current, ...servicesData };
+        const { error: upErr } = await supabase.from('staff_users').upsert(
+          {
+            school_id: schoolId,
+            role_id: 'system_services_data',
+            role_title: 'Services Data Sync',
+            full_name: 'SYSTEM SERVICES SYNC',
+            auth_code: 'SYS-SRV-DATA',
+            department: JSON.stringify(merged),
+            is_active: true,
+          },
+          { onConflict: 'school_id,auth_code' }
+        );
+        if (upErr) {
+          console.warn('saveServicesDataToSupabase fallback error:', upErr.message);
+          return false;
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
     return true;
   } catch (err) {
@@ -1987,7 +2023,16 @@ async function readServiceTables(schoolId: string): Promise<Record<string, any> 
       studentId: p.student_id,
       service: p.service,
       month: p.month,
-      paidAt: typeof p.payment_date === 'string' ? p.payment_date.slice(0, 10) : '',
+      // Date saisie : colonne payment_date (migration 014) ; à défaut (base sans 014), la date
+      // saisie était gardée dans paid_at à « T12:00:00 » pile — une heure d'insertion réelle n'est
+      // jamais prise pour une date de règlement. Sans ce repli, toutes les dates saisies
+      // « disparaissaient » sur les autres appareils.
+      paidAt:
+        typeof p.payment_date === 'string' && p.payment_date
+          ? p.payment_date.slice(0, 10)
+          : typeof p.paid_at === 'string' && /T12:00:00(\.0+)?(Z|\+00(:?00)?)?$/.test(p.paid_at)
+          ? p.paid_at.slice(0, 10)
+          : '',
       amount: p.amount != null ? Number(p.amount) : info?.rate || 0,
       studentName: info?.studentName || '',
       grade: info?.grade || '',

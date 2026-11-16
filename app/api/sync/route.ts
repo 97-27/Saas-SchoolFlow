@@ -654,7 +654,9 @@ export async function POST(request: NextRequest) {
       if (installments !== undefined) servicesPayload.installments = installments;
       if (canteenWeeklyMenu !== undefined) servicesPayload.canteenWeeklyMenu = canteenWeeklyMenu;
       if (boardingCapacity !== undefined) servicesPayload.boardingCapacity = boardingCapacity;
+      let servicesSaveIndex = -1;
       if (Object.keys(servicesPayload).length > 0) {
+        servicesSaveIndex = savePromises.length;
         savePromises.push(saveServicesDataToSupabase(slug, servicesPayload));
       }
 
@@ -671,6 +673,19 @@ export async function POST(request: NextRequest) {
           console.warn('Erreur sauvegarde Supabase dans /api/sync POST:', r.reason);
         }
       });
+      // saveServicesDataToSupabase ne lève pas d'exception : elle répond false quand la base n'a
+      // rien enregistré. Avant, ce cas passait pour un succès → la place limite de l'internat
+      // « s'affichait » puis disparaissait à la relecture, sans la moindre alerte.
+      if (servicesSaveIndex >= 0) {
+        const r = results[servicesSaveIndex];
+        if (r.status === 'rejected' || r.value === false) {
+          console.error('[SchoolFlow][sync] services NON enregistrés en base', slug, Object.keys(servicesPayload));
+          return NextResponse.json(
+            { success: false, error: 'La base de données n’a pas confirmé l’enregistrement.' },
+            { status: 502, headers: NO_CACHE_HEADERS }
+          );
+        }
+      }
     } catch (sbSaveErr) {
       console.warn('Erreur sauvegarde Supabase dans /api/sync POST:', sbSaveErr);
     }

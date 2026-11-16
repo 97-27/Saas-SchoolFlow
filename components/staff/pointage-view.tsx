@@ -84,17 +84,29 @@ function getPosition(): Promise<{ lat: number; lng: number; accuracy: number }> 
       reject(new Error('La localisation n’est pas disponible sur cet appareil.'));
       return;
     }
+    const ok = (p: GeolocationPosition) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy });
+    const denied = () =>
+      reject(
+        new Error(
+          'Localisation bloquée pour ce site. Pour la débloquer : touchez le cadenas (ou les deux petits curseurs) à gauche de l’adresse en haut de Chrome → « Autorisations » / « Paramètres du site » → Position → « Autoriser », puis revenez ici et touchez « Réessayer ». ' +
+            'Si le problème continue : activez la Localisation du téléphone (menu du haut), et ouvrez le lien dans Chrome (pas dans WhatsApp ou Facebook).'
+        )
+      );
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
-      (err) =>
-        reject(
-          new Error(
-            err.code === err.PERMISSION_DENIED
-              ? 'Localisation refusée : autorisez-la pour ce site dans le navigateur, puis réessayez.'
-              : 'Position introuvable. Activez le GPS (localisation) du téléphone et réessayez.'
-          )
-        ),
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      ok,
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) return denied();
+        // GPS lent ou indisponible : deuxième essai avec la position réseau (moins précise).
+        navigator.geolocation.getCurrentPosition(
+          ok,
+          (err2) =>
+            err2.code === err2.PERMISSION_DENIED
+              ? denied()
+              : reject(new Error('Position introuvable. Activez la Localisation (GPS) du téléphone, sortez dans la cour et réessayez.')),
+          { enableHighAccuracy: false, timeout: 12000, maximumAge: 0 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   });
 }
@@ -466,7 +478,9 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
         <ConfigCard
           draft={draft}
           setDraft={setDraft}
-          saved={data.config}
+          // L'état « activé » tient compte de l'heure : passé l'heure de fin de départ, le bouton
+          // repasse tout seul à « Activer » (sans attendre le serveur ni cliquer pour désactiver).
+          saved={{ ...data.config, enabled: data.config.enabled && (!isToday || now <= data.config.departureEnd) }}
           busy={busy}
           onSave={(c) => run('config', () => post({ action: 'config', config: c }).then((j) => setDraft(j.config)), 'Réglages du pointage enregistrés.')}
           onLocationSaved={(c) => {
