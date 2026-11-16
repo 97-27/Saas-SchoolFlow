@@ -141,7 +141,15 @@ export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur'
 /** Règlent les horaires / la position de l'école et justifient les absences. */
 export const POINTAGE_MANAGER_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur'];
 /** Voient le tableau de tout le personnel (les autres ne voient que leur propre pointage). */
-export const POINTAGE_VIEW_ALL_ROLES = [...POINTAGE_MANAGER_ROLES, 'comptable', 'informaticien'];
+// DÉCISION UTILISATEUR (2026-11-16) : + Secrétaire et Assistant(e) de Direction. Enseignants et
+// Éducateurs ne voient que leur propre pointage.
+export const POINTAGE_VIEW_ALL_ROLES = [
+  ...POINTAGE_MANAGER_ROLES,
+  'comptable',
+  'informaticien',
+  'secretaire',
+  'assistant_direction',
+];
 /** Ne pointent pas (direction générale). */
 export const POINTAGE_EXEMPT_ROLES = FOUNDER_ROLES;
 
