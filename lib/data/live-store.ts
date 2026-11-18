@@ -1591,6 +1591,13 @@ function applyServerData(slug: string, result: any): void {
           localStorage.setItem(isPilot ? 'schoolflow_boarding_monthly_payments_v3' : `schoolflow_boarding_monthly_payments_v3_${slug}`, JSON.stringify(data.boardingPayments));
           hasChanges = true;
         }
+        // Journal mois par mois de la base (date / montant / moyen de chaque mois réglé) : lu par les pages Internat, Cantine et Transport.
+        if (Array.isArray(data.serviceMonthPaymentLog)) {
+          try {
+            localStorage.setItem(`schoolflow_service_month_log_v1_${slug}`, JSON.stringify(data.serviceMonthPaymentLog));
+          } catch (e) {}
+          hasChanges = true;
+        }
         if (data.boardingCapacity !== undefined) {
           localStorage.setItem(`schoolflow_boarding_capacity_${slug}`, data.boardingCapacity.toString());
           hasChanges = true;

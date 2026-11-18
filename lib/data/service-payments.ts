@@ -135,8 +135,40 @@ export function serviceMonthDetails(
       method: inv.paymentMethod || '',
     };
   });
+
+  // Journal mois par mois venu de la BASE (partagé par tous les appareils). La date saisie y est
+  // enregistrée pour chaque mois ; le reçu, lui, n'existe que sur l'appareil qui l'a créé (ou garde
+  // l'ancienne date). Sans cette lecture, un autre téléphone / ordinateur voyait les mois cochés
+  // mais « aucune date ». La base fait foi pour la date, le montant et le moyen de paiement.
+  // Sans reçu local pour ce mois, `invoice.invoiceNumber` est vide (voir isPlaceholderInvoice).
+  try {
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(SERVICE_LOG_KEY_PREFIX)) continue;
+        const log = JSON.parse(localStorage.getItem(k) || '[]');
+        if (!Array.isArray(log)) continue;
+        for (const p of log) {
+          if (!p || p.service !== service || !p.month || !idSet.has(p.studentId)) continue;
+          const prev = out[p.month];
+          out[p.month] = {
+            invoice: prev?.invoice || ({ id: `svc-${p.studentId}-${service}-${p.month}`, invoiceNumber: '', studentId: p.studentId } as Invoice),
+            date: p.paidAt || prev?.date || '',
+            amount: p.amount || prev?.amount || 0,
+            method: p.paymentMethod || prev?.method || '',
+          };
+        }
+      }
+    }
+  } catch {}
   return out;
 }
+
+/** Copie locale du journal mois par mois renvoyé par la base (rafraîchie à chaque synchronisation). */
+export const SERVICE_LOG_KEY_PREFIX = 'schoolflow_service_month_log_v1_';
+
+/** Vrai si le « reçu » du mois n'est qu'un repère créé depuis la base (aucun vrai reçu sur cet appareil). */
+export const isPlaceholderInvoice = (inv?: Invoice | null) => !inv || !inv.invoiceNumber;
 
 /** Convertit JJ/MM/AAAA ou AAAA-MM-JJ en AAAA-MM-JJ (date du jour si vide). */
 export function toIsoPayDate(d: string): string {

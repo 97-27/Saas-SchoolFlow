@@ -85,6 +85,7 @@ const STUDENT_SCOPED_SERVICE_KEYS = [
   'transportSubscriptions',
   'transportPayments',
   'installments',
+  'serviceMonthPaymentLog',
 ];
 
 const digitsOnly = (v: unknown) => String(v || '').replace(/\D/g, '');
@@ -201,6 +202,7 @@ export async function GET(request: NextRequest) {
           if (sbServices.transportSubscriptions) schoolData.transportSubscriptions = sbServices.transportSubscriptions;
           if (sbServices.transportPayments) schoolData.transportPayments = sbServices.transportPayments;
           if (sbServices.installments) schoolData.installments = sbServices.installments;
+          if (sbServices.serviceMonthPaymentLog) schoolData.serviceMonthPaymentLog = (sbServices.serviceMonthPaymentLog as any[]).map(({ phone, guardianName, ...rest }: any) => rest); // sans coordonnées du parent
           if (sbServices.canteenWeeklyMenu) schoolData.canteenWeeklyMenu = sbServices.canteenWeeklyMenu;
           if (sbServices.boardingCapacity !== undefined) schoolData.boardingCapacity = sbServices.boardingCapacity;
         }

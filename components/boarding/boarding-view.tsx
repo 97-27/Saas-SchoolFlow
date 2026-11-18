@@ -10,7 +10,7 @@ import { resolveBoarders } from '@/lib/data/boarding';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
-import { buildServiceMonthInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
+import { buildServiceMonthInvoice, isPlaceholderInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import {
   BedDouble,
   Building2,
@@ -886,7 +886,7 @@ export function BoardingView({
     // Mois déjà réglé et date corrigée : on réécrit SA facture (même numéro), sans en créer une autre.
     editedMonths.forEach((month) => {
       const detail = boarderMonthInfo[month];
-      if (detail) {
+      if (detail && !isPlaceholderInvoice(detail.invoice)) {
         saveLivePaymentInvoice({ ...detail.invoice, issueDate: dateOfMonth(month), dueDate: dateOfMonth(month) }, schoolSlug);
       }
     });

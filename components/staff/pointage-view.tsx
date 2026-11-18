@@ -990,6 +990,10 @@ function ConfigCard({
     </div>
   );
 
+  const arrivalNow = phaseState(saved, clock, 'arrival');
+  const departureNow = phaseState(saved, clock, 'departure');
+  const anyOpen = arrivalNow.open || departureNow.open;
+
   const dirty =
     (['arrivalStart', 'arrivalEnd', 'departureStart', 'departureEnd'] as const).some((f) => draft[f] !== saved[f]) ||
     [...draft.workDays].sort().join(',') !== [...saved.workDays].sort().join(',');
@@ -1012,35 +1016,43 @@ function ConfigCard({
         <button
           type="button"
           onClick={() => {
-            // Les horaires affichés partent avec l'activation : on peut rouvrir le pointage avec une
-            // nouvelle plage (ex. 8h–8h30) en un seul clic, sans enregistrer d'abord.
-            const next = { ...draft, enabled: !saved.enabled };
-            setDraft(next);
-            onSave(
-              next.enabled
-                ? {
-                    enabled: true,
-                    arrivalStart: draft.arrivalStart,
-                    arrivalEnd: draft.arrivalEnd,
-                    departureStart: draft.departureStart,
-                    departureEnd: draft.departureEnd,
-                    workDays: draft.workDays,
-                  }
-                : { enabled: false }
-            );
+            // Le bouton reflète l'état RÉEL à cet instant (ouvert ou fermé), pas un simple réglage :
+            // - ouvert (rouge)  → « Désactiver » ferme tout de suite ce qui est ouvert ;
+            // - fermé (vert)    → « Activer » enregistre les horaires affichés, remet le mode
+            //   automatique et ouvre tout de suite (arrivée avant la plage de départ, sinon départ).
+            if (anyOpen) {
+              onSave({
+                ...(arrivalNow.open ? { arrivalForce: 'closed' } : {}),
+                ...(departureNow.open ? { departureForce: 'closed' } : {}),
+              } as any);
+            } else {
+              const phase = clock.time < draft.departureStart ? 'arrivalForce' : 'departureForce';
+              setDraft({ ...draft, enabled: true });
+              onSave({
+                enabled: true,
+                arrivalStart: draft.arrivalStart,
+                arrivalEnd: draft.arrivalEnd,
+                departureStart: draft.departureStart,
+                departureEnd: draft.departureEnd,
+                workDays: draft.workDays,
+                [phase]: 'open',
+              } as any);
+            }
           }}
           disabled={!!busy}
           className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white cursor-pointer disabled:opacity-50 ${
-            saved.enabled ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+            anyOpen ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
           }`}
         >
-          {saved.enabled ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-          {saved.enabled ? 'Désactiver le pointage' : 'Activer le pointage'}
+          {anyOpen ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          {anyOpen ? 'Désactiver le pointage' : 'Activer le pointage'}
         </button>
       </div>
       <p className="text-[11px] text-slate-500">
-        {saved.enabled
-          ? 'Pointage AUTOMATIQUE : il s’ouvre tout seul à l’heure de début de chaque plage, les jours cochés, et se ferme tout seul à l’heure de fin.'
+        {anyOpen
+          ? 'Pointage OUVERT. Il se ferme tout seul à l’heure de fin de la plage (ou cliquez sur « Désactiver »).'
+          : saved.enabled
+          ? 'Pointage FERMÉ pour le moment : il s’ouvrira tout seul à l’heure de début de la prochaine plage, les jours cochés.'
           : 'Pointage non activé : cliquez sur « Activer » une fois, puis il s’ouvre et se ferme tout seul chaque jour aux heures réglées.'}
       </p>
 

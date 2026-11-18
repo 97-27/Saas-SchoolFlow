@@ -40,7 +40,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
-import { SCHOOL_MONTHS, buildServiceMonthInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
+import { SCHOOL_MONTHS, buildServiceMonthInvoice, isPlaceholderInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import type { ServicePaymentMeta } from '@/lib/data/live-store';
 import { captureReceiptPng, copyPngToClipboard, downloadPng } from '@/lib/client/receipt-share';
 import { ReceiptShareModal, type ReceiptShareData } from '@/components/services/receipt-share-modal';
@@ -524,7 +524,7 @@ export function TransportView({
     // Mois déjà réglé et date corrigée : on réécrit SA facture (même numéro), sans en créer une autre.
     editedMonths.forEach((month) => {
       const detail = modalDetails[month];
-      if (detail) {
+      if (detail && !isPlaceholderInvoice(detail.invoice)) {
         saveLivePaymentInvoice({ ...detail.invoice, issueDate: payDateOf(month), dueDate: payDateOf(month) }, schoolSlug);
       }
     });
