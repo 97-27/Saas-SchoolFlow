@@ -697,7 +697,7 @@ export function CommunicationView({
 
       {/* Toast de confirmation */}
       {toastMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-sm animate-in fade-in">
+        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 p-4 rounded-2xl flex items-center justify-between text-xs font-semibold animate-in fade-in">
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <span>{toastMessage}</span>

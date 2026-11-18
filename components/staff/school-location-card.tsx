@@ -122,7 +122,7 @@ export function SchoolLocationCard({
 
       {message && (
         <div
-          className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
+          className={`fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
             message.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}
         >

@@ -22,6 +22,7 @@ import { checkPhoneMatchesStudent, areNamesMatching } from '@/lib/utils/auth-mat
 import { isLegacyDemoStudent } from '@/lib/data/legacy-ids';
 import { normalizePhone, isStudentTombstoneId, normalizePersonName, studentDisplayName } from '@/lib/data/student-match';
 import { reportClientError } from '@/lib/client/error-report';
+import { syncClassCatalog } from '@/lib/data/school-structure';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1627,6 +1628,15 @@ function schoolBase(slug: string, defaultSchool?: School): School {
  * Récupère la configuration personnalisée de l'école (nom, slogan, devise, logos, ville, fondateur, etc.)
  */
 export function getLiveSchool(slug: string, defaultSchool?: School): School {
+  const s = getLiveSchoolRaw(slug, defaultSchool);
+  // Les listes de classes de tout le logiciel suivent les cycles activés dans Paramètres.
+  try {
+    syncClassCatalog(s);
+  } catch {}
+  return s;
+}
+
+function getLiveSchoolRaw(slug: string, defaultSchool?: School): School {
   const base = schoolBase(slug, defaultSchool);
   const isPilot = slug === 'epc-manoi' || slug === 'college-excellence';
   if (typeof window === 'undefined') return base;
@@ -1747,6 +1757,7 @@ export function saveLiveSchool(school: School, targetSlug?: string): void {
   if (typeof window === 'undefined') return;
 
   try {
+    syncClassCatalog(school);
     const json = JSON.stringify(school);
     const activeSlug = targetSlug || school.slug;
     // Sauvegarder sur le slug spécifique

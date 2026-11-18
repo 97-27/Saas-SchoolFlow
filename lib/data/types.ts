@@ -167,8 +167,12 @@ export interface School {
   // Cycles & Services
   hasMaternelle?: boolean;
   hasPrimaire?: boolean;
-  hasCollege?: boolean;
-  hasLycee?: boolean;
+  hasCollege?: boolean; // (ancien) remplacé par hasSecondaire, gardé synchronisé
+  hasLycee?: boolean; // (ancien) remplacé par hasSecondaire, gardé synchronisé
+  hasSecondaire?: boolean; // Cycle secondaire : de la 6ème à la Terminale
+  registrationFeeByCycle?: { maternelle?: number; primaire?: number; secondaire?: number }; // Frais d'inscription par cycle (FCFA)
+  tuitionByClass?: Record<string, number>; // Scolarité annuelle par classe (FCFA)
+  sectionCounts?: Record<string, number>; // Nombre de classes par niveau du secondaire (6ème → 3ème), jusqu'à 10
   hasBoarding?: boolean;
   boardingCapacity?: number;
   hasCanteen?: boolean;
@@ -187,7 +191,7 @@ export interface School {
   receiptFooterNote?: string;
 
   // Orientation de l'école & Formule de Salutation WhatsApp
-  schoolType?: 'islamique' | 'non_confessionnelle' | 'laique';
+  schoolType?: 'islamique' | 'catholique' | 'non_confessionnelle' | 'laique';
   customGreeting?: string;
 
   // Subscription & Account Status

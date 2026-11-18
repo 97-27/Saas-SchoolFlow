@@ -1185,7 +1185,7 @@ export function BulletinsView({
             
             {/* 🔴 BANNIÈRE DE CONFIRMATION EN TOUT PREMIER EN HAUT */}
             {copiedSuccess && (
-              <div className="p-3.5 bg-emerald-600 border-2 border-emerald-400 text-white rounded-xl flex items-center justify-between text-xs sm:text-sm font-black shadow-lg animate-in slide-in-from-top-2 shrink-0">
+              <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl p-3.5 bg-emerald-600 border-2 border-emerald-400 text-white rounded-xl flex items-center justify-between text-xs sm:text-sm font-black shadow-lg animate-in slide-in-from-top-2 shrink-0">
                 <div className="flex items-center gap-2.5">
                   <CheckCircle2 className="w-5 h-5 text-amber-300 shrink-0" />
                   <span>

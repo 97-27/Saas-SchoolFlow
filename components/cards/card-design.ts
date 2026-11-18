@@ -6,6 +6,7 @@
  */
 import type { School, Student } from '@/lib/data/types';
 import { schoolPhones } from '@/lib/data/school-phones';
+import { CYCLE_LABELS, activeCycles, confessionLabel } from '@/lib/data/school-structure';
 
 export const CARDS_PER_PAGE = 5;
 
@@ -52,12 +53,7 @@ export const parentPhone = (s: Student) => s.whatsappPhone || s.guardianPhone ||
 
 /** Cycles enseignés (mêmes valeurs par défaut que les Paramètres). */
 export function schoolCycles(school: School): string[] {
-  const out: string[] = [];
-  if (school.hasMaternelle ?? true) out.push('Maternelle');
-  if (school.hasPrimaire ?? true) out.push('Primaire');
-  if (school.hasCollege ?? true) out.push('Collège');
-  if (school.hasLycee ?? false) out.push('Lycée');
-  return out;
+  return activeCycles(school).map((c) => CYCLE_LABELS[c]);
 }
 
 export const CARD_CSS = `
@@ -66,16 +62,18 @@ export const CARD_CSS = `
 .sfc-row{display:flex;justify-content:center;gap:3mm;margin-bottom:2.4mm;page-break-inside:avoid;break-inside:avoid}
 .sfc{width:85.6mm;height:54mm;border:.25mm solid #0f172a;border-radius:3mm;overflow:hidden;position:relative;background:#fff;color:#0f172a;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;flex:none}
 .sfc *{box-sizing:border-box}
-.sfc-head{background:#047857;color:#fff;height:11.5mm;display:flex;align-items:center;gap:1.6mm;padding:0 2mm}
+.sfc-head{background:#047857;color:#fff;height:14.5mm;display:flex;align-items:center;gap:1.6mm;padding:0 2mm}
 .sfc-logo{width:9mm;height:9mm;object-fit:contain;background:#fff;border-radius:50%;padding:.35mm;flex:none}
 .sfc-logo-empty{width:9mm;height:9mm;flex:none}
-.sfc-school{flex:1;text-align:center;line-height:1.15;min-width:0;overflow:hidden}
+.sfc-school{flex:1;text-align:center;line-height:1.22;min-width:0;overflow:hidden}
 .sfc-school b{display:block;white-space:nowrap;font-weight:800;letter-spacing:.05mm}
-.sfc-school span{display:block;white-space:nowrap;font-size:2mm;color:#fde68a;font-weight:700;margin-top:.35mm;overflow:hidden;text-overflow:ellipsis}
+.sfc-school span{display:block;white-space:nowrap;font-size:1.9mm;color:#fff;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.sfc-school span.y{color:#fde68a;font-weight:800}
+.sfc-school span.i{font-style:italic}
 .sfc-stripe{height:1mm;background:#f59e0b}
 .sfc-band{background:#ecfdf5;color:#047857;font-size:1.9mm;font-weight:800;text-align:center;padding:.6mm 2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:.2mm solid #a7f3d0}
-.sfc-body{display:flex;gap:2.5mm;padding:1.6mm 2.5mm 0}
-.sfc-photo{width:22mm;height:29mm;border:.3mm solid #047857;border-radius:1.5mm;background:#ecfdf5;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;color:#047857;font-weight:800;font-size:7mm}
+.sfc-body{display:flex;gap:2.5mm;padding:1.4mm 2.5mm 0}
+.sfc-photo{width:22mm;height:28mm;border:.3mm solid #047857;border-radius:1.5mm;background:#ecfdf5;overflow:hidden;flex:none;display:flex;align-items:center;justify-content:center;color:#047857;font-weight:800;font-size:7mm}
 .sfc-photo img{width:100%;height:100%;object-fit:cover}
 .sfc-info{flex:1;min-width:0}
 .sfc-title{font-size:2.5mm;font-weight:800;color:#047857;letter-spacing:.2mm;margin-bottom:1mm;text-align:center;white-space:nowrap;border-bottom:.3mm solid #f59e0b;padding-bottom:.5mm}
@@ -85,15 +83,16 @@ export const CARD_CSS = `
 .sfc-foot{position:absolute;left:0;right:0;bottom:0;background:#0f172a;color:#fff;font-size:2mm;padding:1mm 2.5mm;display:flex;justify-content:space-between;gap:2mm;white-space:nowrap}
 .sfc-foot span{overflow:hidden;text-overflow:ellipsis}
 .sfc-foot span:last-child{color:#fde68a;font-weight:700}
-.sfc-vhead{background:#047857;color:#fff;text-align:center;font-weight:800;padding:1.3mm 2mm;letter-spacing:.2mm;white-space:nowrap;overflow:hidden}
+.sfc-vhead{background:#047857;color:#fff;text-align:center;font-weight:800;padding:1mm 2mm;letter-spacing:.2mm;white-space:nowrap;overflow:hidden}
 .sfc-vbody{display:flex;gap:2.5mm;padding:1.6mm 2.5mm 0;align-items:flex-start}
-.sfc-qr{width:37mm;height:37mm;flex:none;border:.3mm solid #0f172a;border-radius:1.5mm;padding:.6mm;background:#fff}
+.sfc-qr{width:36mm;height:36mm;flex:none;border:.3mm solid #0f172a;border-radius:1.5mm;padding:.6mm;background:#fff}
 .sfc-qr img{width:100%;height:100%;display:block}
 .sfc-vinfo{flex:1;min-width:0;font-size:2.5mm;line-height:1.35}
 .sfc-vinfo b{display:block;color:#047857;font-size:2.2mm;letter-spacing:.15mm;margin-top:1.2mm}
 .sfc-vinfo b:first-child{margin-top:0}
 .sfc-vinfo div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sfc-vinfo .n{font-weight:800}
+.sfc-conf{background:#fde68a;color:#0f172a;text-align:center;font-size:2.2mm;font-weight:800;padding:.7mm 2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sfc-lost{position:absolute;left:0;right:0;bottom:0;background:#f59e0b;color:#0f172a;font-size:2.1mm;font-weight:800;text-align:center;padding:1mm 2mm;line-height:1.25}
 `;
 
@@ -112,21 +111,28 @@ export function cardRectoHtml(s: Student, school: School): string {
   const last = s.lastName || (s.fullName || '').replace(first, '').trim() || s.fullName || '';
   const born = hasRealBirthDate(s) ? frDate(s.dateOfBirth) : '';
   const dots = '.......';
-  const fullName = (school.receiptHeaderFullName || school.name || '').toUpperCase();
-  const sigle = school.shortName && school.shortName.toUpperCase() !== fullName ? school.shortName : '';
-  const slogan = school.receiptHeaderSlogan || school.slogan || '';
+  const baseName = (school.receiptHeaderFullName || school.name || '').toUpperCase();
+  const sigle = school.shortName && school.shortName.toUpperCase() !== baseName ? school.shortName.toUpperCase() : '';
+  // Nom entier sur UNE ligne (avec le sigle s'il reste de la place).
+  const fullName = sigle && baseName.length + sigle.length + 3 <= 44 ? `${baseName} (${sigle})` : baseName;
+  const slogan = (school.receiptHeaderSlogan || school.slogan || '').trim();
   const approval = (school.approvalNumber || '').trim();
+  const devise = (school.receiptHeaderMotto || school.motto || '').trim();
   const cycles = schoolCycles(school).join(' • ');
   const logo = school.logoUrl ? `<img class="sfc-logo" src="${esc(school.logoUrl)}" alt="">` : '<div class="sfc-logo-empty"></div>';
   const emblem = school.countryEmblemUrl ? `<img class="sfc-logo" src="${esc(school.countryEmblemUrl)}" alt="">` : '<div class="sfc-logo-empty"></div>';
   const photo = s.avatar ? `<img src="${esc(s.avatar)}" alt="">` : esc(initials(s));
-  const sub = [sigle, slogan].filter(Boolean).join(' — ');
-  const band = [approval ? `Agrément : ${approval}` : '', cycles].filter(Boolean).join('  |  ');
   const year = school.academicYear || '';
+  // Une information par ligne : nom, slogan, agrément (s'il existe), devise, cycles enseignés.
+  const lines = [
+    slogan ? `<span class="y">${esc(slogan)}</span>` : '',
+    approval ? `<span>Agrément : ${esc(approval)}</span>` : '',
+    devise ? `<span class="i">${esc(devise)}</span>` : '',
+    cycles ? `<span class="y">${esc(cycles)}</span>` : '',
+  ].join('');
   return `<div class="sfc">
-  <div class="sfc-head">${logo}<div class="sfc-school"><b style="font-size:${nameFontMm(fullName).toFixed(2)}mm">${esc(fullName)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</div>${emblem}</div>
+  <div class="sfc-head">${logo}<div class="sfc-school"><b style="font-size:${nameFontMm(fullName).toFixed(2)}mm">${esc(fullName)}</b>${lines}</div>${emblem}</div>
   <div class="sfc-stripe"></div>
-  ${band ? `<div class="sfc-band">${esc(band)}</div>` : ''}
   <div class="sfc-body">
     <div class="sfc-photo">${photo}</div>
     <div class="sfc-info">
@@ -149,6 +155,7 @@ export function cardVersoHtml(s: Student, school: School, qrDataUrl: string): st
   const phones = schoolContacts(school);
   return `<div class="sfc">
   <div class="sfc-vhead" style="font-size:${Math.max(1.6, Math.min(2.5, 78 / (Math.max(title.length, 1) * 0.66))).toFixed(2)}mm">${esc(title)}</div>
+  <div class="sfc-conf">${esc(confessionLabel(school))}</div>
   <div class="sfc-vbody">
     <div class="sfc-qr">${qr}</div>
     <div class="sfc-vinfo">

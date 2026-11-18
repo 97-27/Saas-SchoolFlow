@@ -234,6 +234,14 @@ export const availableClasses = [
   'Terminale',
 ];
 
+/**
+ * Remplace (sur place) la liste des classes selon les cycles activés dans Paramètres.
+ * La liste est modifiée « en place » pour que tous les écrans qui l'importent la voient.
+ */
+export function setAvailableClasses(classes: string[]): void {
+  availableClasses.splice(0, availableClasses.length, 'Toutes les classes', ...classes);
+}
+
 // Vidé volontairement : ces « élèves de démonstration » portaient les identifiants réels de 15
 // élèves d'EPC MANOI et étaient réinjectés à chaque synchronisation, ce qui a créé 15 doublons en
 // base (et exposait noms et téléphones réels dans un dépôt public). Les données viennent de Supabase.

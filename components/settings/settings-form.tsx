@@ -3,6 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import { School } from '@/lib/data/types';
 import {
+  CYCLE_LABELS,
+  MAX_SECTIONS,
+  SECONDAIRE_LEVELS,
+  activeCycles,
+  classesOfCycle,
+  cycleActive,
+  sectionCount,
+  type CycleId,
+} from '@/lib/data/school-structure';
+import {
   getLiveSchool,
   saveLiveSchool,
   registerSchoolWithSubscription,
@@ -173,6 +183,28 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     setSchool((prev) => ({
       ...prev,
       [field]: value,
+    }));
+    setIsSaved(false);
+  };
+
+  // Active / désactive un cycle (le secondaire remplace Collège + Lycée ; les anciens champs restent alignés).
+  const setCycleActive = (id: CycleId, on: boolean) => {
+    setSchool((prev) => ({
+      ...prev,
+      ...(id === 'maternelle'
+        ? { hasMaternelle: on }
+        : id === 'primaire'
+        ? { hasPrimaire: on }
+        : { hasSecondaire: on, hasCollege: on, hasLycee: on }),
+    }));
+    setIsSaved(false);
+  };
+
+  // Modifie une valeur d'un tableau de tarifs (frais par cycle, scolarité par classe, nombre de classes).
+  const setMapValue = (field: 'registrationFeeByCycle' | 'tuitionByClass' | 'sectionCounts', key: string, value: number) => {
+    setSchool((prev) => ({
+      ...prev,
+      [field]: { ...((prev[field] as Record<string, number> | undefined) || {}), [key]: value },
     }));
     setIsSaved(false);
   };
@@ -400,21 +432,19 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     <div className="space-y-6">
       {/* Toast Notification upon Save */}
       {isSaved && (
-        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between shadow-xs animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <Check className="w-5 h-5 text-emerald-600 shrink-0" />
-            <div>
-              <p className="font-bold text-xs sm:text-sm">
-                Paramètres enregistrés avec succès !
-              </p>
-              <p className="text-[11px] text-emerald-700">
-                Les modifications ont été prises en compte sur l&apos;ensemble de la plateforme.
-              </p>
-            </div>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
-            Sauvegardé
+        <div
+          role="status"
+          className="fixed z-[100] bottom-4 right-4 left-4 sm:left-auto sm:w-[380px] p-4 rounded-2xl bg-emerald-700 text-white flex items-start gap-3 shadow-2xl shadow-emerald-900/30 border border-emerald-500 animate-fadeIn"
+        >
+          <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+            <Check className="w-4 h-4" />
           </span>
+          <div className="min-w-0">
+            <p className="font-extrabold text-sm leading-tight">Paramètres enregistrés</p>
+            <p className="text-xs text-emerald-50 mt-0.5 leading-snug">
+              Les modifications sont prises en compte sur toute la plateforme.
+            </p>
+          </div>
         </div>
       )}
 
@@ -783,22 +813,22 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
                   {/* Option 2 : Non-confessionnelle / Standard */}
                   <label
-                    onClick={() => handleInputChange('schoolType', 'non_confessionnelle')}
+                    onClick={() => handleInputChange('schoolType', 'catholique')}
                     className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
-                      school.schoolType === 'non_confessionnelle'
+                      school.schoolType === 'catholique'
                         ? 'bg-emerald-50/90 border-emerald-600 shadow-sm shadow-emerald-600/10 ring-2 ring-emerald-500/20'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 font-heading">
-                        <span>🏫</span> Non-confessionnelle (Standard)
+                        <span>✝️</span> Confessionnelle Catholique
                       </span>
                       <input
                         type="radio"
                         name="schoolType"
-                        checked={school.schoolType === 'non_confessionnelle'}
-                        onChange={() => handleInputChange('schoolType', 'non_confessionnelle')}
+                        checked={school.schoolType === 'catholique'}
+                        onChange={() => handleInputChange('schoolType', 'catholique')}
                         className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
                       />
                     </div>
@@ -807,7 +837,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         Salutation : « Bonjour »
                       </div>
                       <p className="text-[10px] text-slate-500 leading-snug">
-                        Formule courtoise et professionnelle universelle pour tous les collèges et lycées.
+                        Pour les écoles confessionnelles catholiques : formule courtoise et professionnelle.
                       </p>
                     </div>
                   </label>
@@ -816,19 +846,19 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                   <label
                     onClick={() => handleInputChange('schoolType', 'laique')}
                     className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-2 ${
-                      school.schoolType === 'laique'
+                      (school.schoolType === 'laique' || school.schoolType === 'non_confessionnelle')
                         ? 'bg-emerald-50/90 border-emerald-600 shadow-sm shadow-emerald-600/10 ring-2 ring-emerald-500/20'
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 font-heading">
-                        <span>🎓</span> École Laïque
+                        <span>🎓</span> École Laïque (non confessionnelle)
                       </span>
                       <input
                         type="radio"
                         name="schoolType"
-                        checked={school.schoolType === 'laique'}
+                        checked={school.schoolType === 'laique' || school.schoolType === 'non_confessionnelle'}
                         onChange={() => handleInputChange('schoolType', 'laique')}
                         className="text-emerald-600 focus:ring-emerald-500 h-4 w-4"
                       />
@@ -854,9 +884,9 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                       Aperçu du message WhatsApp reçu par le parent :
                     </span>
                     <strong className="text-emerald-950 font-medium">
-                      {(school.schoolType || 'islamique') === 'laique'
+                      {((school.schoolType || 'islamique') === 'laique' || school.schoolType === 'non_confessionnelle')
                         ? 'Salut'
-                        : (school.schoolType || 'islamique') === 'non_confessionnelle'
+                        : ((school.schoolType || 'islamique') === 'catholique')
                         ? 'Bonjour'
                         : 'Salam anlaekoum'}
                       , voici le reçu officiel de paiement (ID-001) pour KONATE MOHAMED — {school.name || 'Votre Établissement'}.
@@ -1141,89 +1171,74 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                   Cycles Scolaires Accueillis
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {/* Maternelle */}
-                  <label className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={school.hasMaternelle ?? true}
-                        onChange={(e) => handleInputChange('hasMaternelle', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Cycle Maternelle</p>
-                        <p className="text-[11px] text-slate-500">P.S., M.S., G.S.</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                      Actif
-                    </span>
-                  </label>
-
-                  {/* Primaire */}
-                  <label className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={school.hasPrimaire ?? true}
-                        onChange={(e) => handleInputChange('hasPrimaire', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Cycle Primaire</p>
-                        <p className="text-[11px] text-slate-500">Du CP1 au CM2</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                      Actif
-                    </span>
-                  </label>
-
-                  {/* Collège */}
-                  <label className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40 flex items-center justify-between cursor-pointer">
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={school.hasCollege ?? true}
-                        onChange={(e) => handleInputChange('hasCollege', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Cycle Collège</p>
-                        <p className="text-[11px] text-slate-500">De la 6ème à la 3ème</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                      Actif
-                    </span>
-                  </label>
-
-                  {/* Lycée */}
-                  <label className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer ${
-                    (school.hasLycee ?? false) ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/60'
-                  }`}>
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={school.hasLycee ?? false}
-                        onChange={(e) => handleInputChange('hasLycee', e.target.checked)}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
-                      />
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">Cycle Lycée</p>
-                        <p className="text-[11px] text-slate-500">2nde, 1ère, Tle (Optionnel)</p>
-                      </div>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                      (school.hasLycee ?? false)
-                        ? 'text-emerald-700 bg-white border-emerald-200'
-                        : 'text-slate-500 bg-slate-100 border-slate-200'
-                    }`}>
-                      {(school.hasLycee ?? false) ? 'Actif' : 'Non actif'}
-                    </span>
-                  </label>
+                <p className="text-[11px] text-slate-500">
+                  Seuls les cycles activés apparaissent dans les classes, les inscriptions, les reçus, les notes et les bulletins.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(
+                    [
+                      { id: 'maternelle', title: 'Cycle Maternelle', sub: 'P.S., M.S., G.S.' },
+                      { id: 'primaire', title: 'Cycle Primaire', sub: 'Du CP1 au CM2' },
+                      { id: 'secondaire', title: 'Cycle Secondaire', sub: 'De la 6ème à la Terminale' },
+                    ] as const
+                  ).map((c) => {
+                    const on = cycleActive(school, c.id);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer ${
+                          on ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={(e) => setCycleActive(c.id, e.target.checked)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{c.title}</p>
+                            <p className="text-[11px] text-slate-500">{c.sub}</p>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            on ? 'text-emerald-700 bg-white border-emerald-200' : 'text-slate-500 bg-slate-100 border-slate-200'
+                          }`}
+                        >
+                          {on ? 'Actif' : 'Non actif'}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
+
+                {cycleActive(school, 'secondaire') && (
+                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
+                    <p className="text-xs font-bold text-slate-900">Nombre de classes par niveau du secondaire</p>
+                    <p className="text-[11px] text-slate-500">
+                      Ex : 3 classes en 6ème donne « 6ème 1 », « 6ème 2 », « 6ème 3 » (jusqu’à {MAX_SECTIONS}). Le second cycle compte 2nde A et C, 1ère A, C et D, Terminale A, C et D.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {SECONDAIRE_LEVELS.map((lv) => (
+                        <label key={lv} className="space-y-1 block">
+                          <span className="text-[11px] font-bold text-slate-700">{lv}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={MAX_SECTIONS}
+                            value={sectionCount(school, lv)}
+                            onChange={(e) =>
+                              setMapValue('sectionCounts', lv, Math.min(MAX_SECTIONS, Math.max(1, parseInt(e.target.value, 10) || 1)))
+                            }
+                            className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Services & Prestations (Cantine, Transport, Internat) */}
@@ -1315,46 +1330,73 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     <span>Grille Tarifaire de l&apos;Établissement (FCFA)</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Chaque établissement configure librement ses tarifs qui s&apos;appliqueront sur les interfaces de la secrétaire, du comptable et des parents
+                    Les frais d&apos;inscription (par cycle) et la scolarité (par classe) se remplissent automatiquement à l&apos;inscription d&apos;un élève.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 space-y-2">
-                    <label className="text-xs font-bold text-slate-900 block">
-                      Frais d&apos;inscription par défaut (FCFA) :
-                    </label>
-                    <p className="text-[11px] text-slate-500">
-                      Montant pré-rempli lors d&apos;une nouvelle inscription par la secrétaire ou le comptable.
-                    </p>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={school.defaultRegistrationFee ?? ''}
-                      onChange={(e) => handleInputChange('defaultRegistrationFee', parseInt(e.target.value, 10) || 0)}
-                      placeholder="Ex: 25000"
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-emerald-300 text-emerald-950 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
+                <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 space-y-3">
+                  <label className="text-xs font-bold text-slate-900 block">Frais d&apos;inscription par cycle (FCFA)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {activeCycles(school).map((cy) => (
+                      <label key={cy} className="space-y-1 block">
+                        <span className="text-[11px] font-bold text-slate-700">{CYCLE_LABELS[cy]}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={school.registrationFeeByCycle?.[cy] ?? ''}
+                          onChange={(e) => setMapValue('registrationFeeByCycle', cy, Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          placeholder="Ex: 25000"
+                          className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-white border border-emerald-300 text-emerald-950 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                        />
+                      </label>
+                    ))}
                   </div>
+                </div>
 
-                  <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2">
-                    <label className="text-xs font-bold text-slate-900 block">
-                      Scolarité annuelle indicative (FCFA) :
-                    </label>
-                    <p className="text-[11px] text-slate-500">
-                      Montant de référence appliqué pour les frais de scolarité de l&apos;année scolaire.
-                    </p>
-                    <input
-                      type="number"
-                      min="0"
-                      step="5000"
-                      value={school.defaultTuitionAmount ?? ''}
-                      onChange={(e) => handleInputChange('defaultTuitionAmount', parseInt(e.target.value, 10) || 0)}
-                      placeholder="Ex: 250000"
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                  </div>
+                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-4">
+                  <label className="text-xs font-bold text-slate-900 block">Scolarité annuelle par classe (FCFA)</label>
+                  {activeCycles(school).map((cy) => (
+                    <div key={cy} className="space-y-2">
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">{CYCLE_LABELS[cy]}</p>
+                      {cy === 'secondaire' &&
+                        SECONDAIRE_LEVELS.filter((lv) => sectionCount(school, lv) > 1).length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            {SECONDAIRE_LEVELS.filter((lv) => sectionCount(school, lv) > 1).map((lv) => (
+                              <label key={lv} className="space-y-1 block">
+                                <span className="text-[10px] font-bold text-amber-700">Toutes les {lv}</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="5000"
+                                  value={school.tuitionByClass?.[lv] ?? ''}
+                                  onChange={(e) => setMapValue('tuitionByClass', lv, Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                  placeholder="Tarif du niveau"
+                                  className="w-full px-3 py-2 text-xs rounded-xl bg-amber-50/50 border border-amber-200 text-slate-900 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                        {classesOfCycle(school, cy).map((cls) => (
+                          <label key={cls} className="space-y-1 block">
+                            <span className="text-[11px] font-bold text-slate-700">{cls}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="5000"
+                              value={school.tuitionByClass?.[cls] ?? ''}
+                              onChange={(e) => setMapValue('tuitionByClass', cls, Math.max(0, parseInt(e.target.value, 10) || 0))}
+                              placeholder="Ex: 250000"
+                              className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {activeCycles(school).length === 0 && <p className="text-xs text-slate-500">Activez au moins un cycle ci-dessus.</p>}
                 </div>
               </div>
             </div>
@@ -1518,7 +1560,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
 
               {/* Action Feedback Toast */}
               {actionFeedback && (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center justify-between text-xs font-semibold shadow-xs animate-in fade-in">
+                <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center justify-between text-xs font-semibold animate-in fade-in">
                   <div className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <span>{actionFeedback}</span>

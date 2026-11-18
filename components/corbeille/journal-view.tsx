@@ -514,7 +514,7 @@ export function JournalView({ schoolSlug }: { schoolSlug: string }) {
       {toast && (
         <div
           role="status"
-          className={`flex items-start gap-2 rounded-2xl border px-4 py-3 text-xs font-semibold ${
+          className={`fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl flex items-start gap-2 rounded-2xl border px-4 py-3 text-xs font-semibold ${
             toast.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}
         >

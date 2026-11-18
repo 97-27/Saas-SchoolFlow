@@ -42,6 +42,11 @@ export const TEACHER_CLASSES = [
   'Terminale',
 ];
 
+/** Remplace (sur place) la liste des classes proposées aux enseignants selon les cycles activés. */
+export function setTeacherClasses(classes: string[]): void {
+  TEACHER_CLASSES.splice(0, TEACHER_CLASSES.length, ...classes);
+}
+
 const norm = (s: string) =>
   String(s || '')
     .toLowerCase()

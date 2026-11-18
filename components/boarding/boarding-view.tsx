@@ -1546,7 +1546,7 @@ export function BoardingView({
 
     const schoolGreeting = (currentSchool.schoolType === 'laique')
       ? 'Salut'
-      : (currentSchool.schoolType === 'non_confessionnelle')
+      : (currentSchool.schoolType === 'non_confessionnelle' || currentSchool.schoolType === 'catholique')
       ? 'Bonjour'
       : 'Salam anlaekoum';
 

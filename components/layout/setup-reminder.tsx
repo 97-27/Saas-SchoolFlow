@@ -1,5 +1,6 @@
 'use client';
 
+import { activeCycles } from '@/lib/data/school-structure';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Settings, X, ClipboardList, CheckCircle2 } from 'lucide-react';
@@ -42,7 +43,7 @@ export function SetupReminder({ schoolSlug }: { schoolSlug: string }) {
       if (!String(s.city || '').trim() && !String(s.address || '').trim()) m.push('Adresse');
       if (!String(s.founderName || '').trim()) m.push('Nom du Fondateur');
       if (!/^\d{4}-\d{4}$/.test(String(s.academicYear || ''))) m.push('Année scolaire');
-      if (!s.hasMaternelle && !s.hasPrimaire && !s.hasCollege && !s.hasLycee) m.push('Cycles enseignés');
+      if (activeCycles(s).length === 0) m.push('Cycles enseignés');
       setMissing(m);
     };
     compute();

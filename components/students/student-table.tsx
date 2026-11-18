@@ -346,7 +346,7 @@ export function StudentTable({
       {/* Bannière discrète de confirmation — le grand message centré à 3 secondes est réservé
           à la page Inscriptions, qui n'a pas déjà de modale de confirmation. */}
       {successMessage && (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
+        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:max-w-sm z-[100] shadow-2xl flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold animate-in fade-in slide-in-from-top-1 duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span className="flex-1">{successMessage}</span>
           <button

@@ -1,6 +1,7 @@
 'use client';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
+import { registrationFeeForGrade, tuitionForGrade } from '@/lib/data/school-structure';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice, StudentInstallments } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
@@ -1727,7 +1728,7 @@ export function InscriptionsView({
 
     const schoolGreeting = (schoolState.schoolType === 'laique')
       ? 'Salut'
-      : (schoolState.schoolType === 'non_confessionnelle')
+      : (schoolState.schoolType === 'non_confessionnelle' || schoolState.schoolType === 'catholique')
       ? 'Bonjour'
       : 'Salam anlaekoum';
 
@@ -2724,7 +2725,21 @@ export function InscriptionsView({
                 </label>
                 <select
                   value={grade}
-                  onChange={(e) => setGrade(e.target.value)}
+                  onChange={(e) => {
+                    const g = e.target.value;
+                    setGrade(g);
+                    // Frais d'inscription (par cycle) et scolarité (par classe) : remplis d'après Paramètres.
+                    const reg = registrationFeeForGrade(schoolState, g);
+                    if (reg > 0) setRegistrationFee(reg);
+                    const tui = tuitionForGrade(schoolState, g);
+                    if (tui > 0) {
+                      setTuitionAmount(tui);
+                      const net = Math.max(0, tui - discountAmount);
+                      const totalPaid = versement1Amount + versement2Amount + versement3Amount + versement4Amount + versement5Amount;
+                      setPaidAmount(totalPaid);
+                      setRemainingAmount(Math.max(0, net - totalPaid));
+                    }
+                  }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-semibold cursor-pointer transition-all"
                 >
                   <option value="">-- Sélectionner la classe * --</option>
@@ -2925,7 +2940,11 @@ export function InscriptionsView({
                   <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
                     <span>Frais d&apos;inscription (FCFA)</span>
                     <span className="text-[10px] text-slate-500 font-medium">
-                      {schoolState.defaultRegistrationFee ? `Tarif école : ${formatFCFA(schoolState.defaultRegistrationFee)}` : 'Tarif libre école'}
+                      {registrationFeeForGrade(schoolState, grade)
+                        ? `Tarif ${grade} : ${formatFCFA(registrationFeeForGrade(schoolState, grade))}`
+                        : schoolState.defaultRegistrationFee
+                        ? `Tarif école : ${formatFCFA(schoolState.defaultRegistrationFee)}`
+                        : 'Tarif libre école'}
                     </span>
                   </label>
                   <input
@@ -3661,7 +3680,7 @@ export function InscriptionsView({
               <div className="space-y-1">
                 <a
                   href={`https://wa.me/${formatCleanWhatsApp(successModalData.whatsappPhone || successModalData.guardianPhone)}?text=${encodeURIComponent(
-                    `${(schoolState.schoolType === 'laique') ? 'Salut' : (schoolState.schoolType === 'non_confessionnelle') ? 'Bonjour' : 'Salam anlaekoum'}, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
+                    `${(schoolState.schoolType === 'laique') ? 'Salut' : (schoolState.schoolType === 'non_confessionnelle' || schoolState.schoolType === 'catholique') ? 'Bonjour' : 'Salam anlaekoum'}, voici le reçu officiel de paiement (${successModalData.studentNumber}) pour ${successModalData.fullName} — ${schoolState.name}.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

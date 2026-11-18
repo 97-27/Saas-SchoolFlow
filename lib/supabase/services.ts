@@ -107,6 +107,7 @@ export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolea
       ...(typeof schoolExtra.hasPrimaire === 'boolean' ? { hasPrimaire: schoolExtra.hasPrimaire } : {}),
       ...(typeof schoolExtra.hasCollege === 'boolean' ? { hasCollege: schoolExtra.hasCollege } : {}),
       ...(typeof schoolExtra.hasLycee === 'boolean' ? { hasLycee: schoolExtra.hasLycee } : {}),
+      ...(typeof schoolExtra.hasSecondaire === 'boolean' ? { hasSecondaire: schoolExtra.hasSecondaire } : {}),
       whatsappPhone: data.whatsapp_phone || '',
       email: data.email || '',
       website: data.website || '',
@@ -236,6 +237,7 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
           hasPrimaire: school.hasPrimaire ?? true,
           hasCollege: school.hasCollege ?? true,
           hasLycee: school.hasLycee ?? false,
+          hasSecondaire: school.hasSecondaire ?? ((school.hasCollege ?? true) || (school.hasLycee ?? false)),
         });
 
         const { data: existingStamp } = await supabase
