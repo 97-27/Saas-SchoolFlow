@@ -45,7 +45,8 @@ const ago = (iso?: string | null) => {
   return `il y a ${Math.floor(mins / 1440)} j`;
 };
 
-type Overview = { schools: PlatformSchoolRow[]; generatedAt: string };
+type ServiceRevenue = Record<string, Record<string, { internat: number; cantine: number; transport: number }>>;
+type Overview = { schools: PlatformSchoolRow[]; serviceRevenue: ServiceRevenue; generatedAt: string };
 type Toast = { type: 'ok' | 'err'; text: string } | null;
 
 export function PlatformDashboard() {
@@ -58,6 +59,7 @@ export function PlatformDashboard() {
   const [open, setOpen] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [payFor, setPayFor] = useState<PlatformSchoolRow | null>(null);
+  const [svcSchool, setSvcSchool] = useState<string>('all');
 
   const showToast = (t: Toast) => {
     setToast(t);
@@ -74,7 +76,7 @@ export function PlatformDashboard() {
       }
       const json = await res.json();
       if (json?.success) {
-        setData({ schools: json.schools, generatedAt: json.generatedAt });
+        setData({ schools: json.schools, serviceRevenue: json.serviceRevenue || {}, generatedAt: json.generatedAt });
         setPhase('ready');
       }
     } catch (e) {
@@ -133,9 +135,9 @@ export function PlatformDashboard() {
       return `${d.getFullYear()}-${d.getMonth()}` === monthKey;
     };
     const pending = events.filter((p) => p.status === 'en_attente' && !confirmed.some((c) => c.school.slug === p.school.slug && c.kind === 'inscription'));
-    // Revenus des 6 derniers mois
+    // Revenus des 9 derniers mois
     const months: { label: string; total: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 8; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const total = confirmed
         .filter((p) => {
@@ -147,7 +149,8 @@ export function PlatformDashboard() {
     }
     return {
       schools: schools.length,
-      active: schools.filter((s) => !s.isExpired && s.status === 'active').length,
+      active: schools.filter((s) => !s.isExpired && !s.access.blocked).length,
+      blocked: schools.filter((s) => s.access.blocked).length,
       expired: schools.filter((s) => s.isExpired).length,
       students: schools.reduce((s, x) => s + x.studentCount, 0),
       collectedAll: confirmed.reduce((s, p) => s + p.amount, 0),
@@ -241,7 +244,7 @@ export function PlatformDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
         {/* Indicateurs */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi icon={<Building2 className="w-4 h-4" />} label="Écoles" value={String(stats.schools)} sub={`${stats.active} actives • ${stats.expired} expirées • ${stats.online} en ligne`} tone="emerald" />
+          <Kpi icon={<Building2 className="w-4 h-4" />} label="Écoles" value={String(stats.schools)} sub={`${stats.active} actives • ${stats.expired} expirées • ${stats.blocked} bloquées • ${stats.online} en ligne`} tone="emerald" />
           <Kpi icon={<Users className="w-4 h-4" />} label="Élèves au total" value={stats.students.toLocaleString('fr-FR')} sub="toutes écoles confondues" tone="sky" />
           <Kpi icon={<Wallet className="w-4 h-4" />} label="Encaissé ce mois" value={formatFCFA(stats.collectedMonth)} sub={`Total cumulé : ${formatFCFA(stats.collectedAll)}`} tone="amber" />
           <Kpi icon={<Clock className="w-4 h-4" />} label="Règlements en attente" value={String(stats.pendingCount)} sub={`${formatFCFA(stats.pendingAmount)} à confirmer`} tone={stats.pendingCount ? 'rose' : 'slate'} />
@@ -250,7 +253,7 @@ export function PlatformDashboard() {
         <div className="grid lg:grid-cols-3 gap-5">
           {/* Revenus par mois */}
           <section className="lg:col-span-1 rounded-2xl bg-white border border-slate-200 p-4">
-            <h2 className="font-extrabold text-sm mb-3">Encaissements — 6 derniers mois</h2>
+            <h2 className="font-extrabold text-sm mb-3">Abonnements encaissés — 9 derniers mois</h2>
             <div className="flex items-end gap-2 h-36">
               {stats.months.map((m) => (
                 <div key={m.label + m.total} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
@@ -290,6 +293,9 @@ export function PlatformDashboard() {
           </section>
         </div>
 
+        {/* Encaissements des services par mois */}
+        <ServicesChart schools={schools} revenue={data?.serviceRevenue || {}} selected={svcSchool} onSelect={setSvcSchool} />
+
         {/* Liste des écoles */}
         <section className="rounded-2xl bg-white border border-slate-200">
           <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100">
@@ -312,7 +318,11 @@ export function PlatformDashboard() {
                 const isOpen = open === s.slug;
                 const tier = tierById(s.studentTier);
                 const over = exceedsTier(s.studentCount, s.studentTier);
-                const statusBadge = s.isExpired
+                const statusBadge = s.access.blocked
+                  ? { t: 'Bloqué', c: 'bg-slate-900 text-white' }
+                  : s.access.unlimited
+                    ? { t: 'Illimité ∞', c: 'bg-violet-100 text-violet-800' }
+                  : s.isExpired
                   ? { t: 'Expiré', c: 'bg-red-100 text-red-800' }
                   : s.daysRemaining !== null && s.daysRemaining <= 15
                     ? { t: `Expire dans ${s.daysRemaining} j`, c: 'bg-amber-100 text-amber-800' }
@@ -386,6 +396,7 @@ export function PlatformDashboard() {
                               ))}
                             </ul>
                           )}
+                          <AccessPanel school={s} onChanged={(msg) => { showToast({ type: 'ok', text: msg }); load(); }} onError={(msg) => showToast({ type: 'err', text: msg })} />
                           <button
                             onClick={() => setPayFor(s)}
                             className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer"
@@ -471,7 +482,9 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
   const hasPending = school.payments.some((p) => p.status === 'en_attente' && p.kind === 'inscription') && !school.payments.some((p) => p.status === 'confirme' && p.kind === 'inscription');
   const [kind, setKind] = useState<'inscription' | 'renouvellement'>(hasPending ? 'inscription' : 'renouvellement');
   const [plan, setPlan] = useState(school.plan in PLAN_PRICE ? school.plan : 'annuel');
-  const [amount, setAmount] = useState(String(PLAN_PRICE[plan] || 250000));
+  const promo = school.access.promo && (!school.access.promo.expiresAt || new Date(school.access.promo.expiresAt).getTime() > Date.now()) ? school.access.promo : null;
+  const discounted = (pl: string) => Math.round(((PLAN_PRICE[pl] || 0) * (100 - (promo?.percent || 0))) / 100);
+  const [amount, setAmount] = useState(String(discounted(plan) || 250000));
   const [method, setMethod] = useState('wave');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -483,7 +496,7 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
       const res = await fetch('/api/platform/overview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: school.slug, plan, amount: Number(amount), method, kind, note }),
+        body: JSON.stringify({ slug: school.slug, plan, amount: Number(amount), method, kind, note: promo ? (note ? note + ' • ' : '') + 'Promo ' + promo.code + ' -' + promo.percent + '%' : note }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
@@ -526,7 +539,7 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
             value={plan}
             onChange={(e) => {
               setPlan(e.target.value);
-              setAmount(String(PLAN_PRICE[e.target.value] || ''));
+              setAmount(String(discounted(e.target.value) || ''));
             }}
             className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
           >
@@ -537,6 +550,11 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
             ))}
           </select>
         </label>
+        {promo && (
+          <p className="text-xs font-bold text-violet-800 bg-violet-50 border border-violet-200 rounded-xl p-2.5">
+            Code promo {promo.code} : -{promo.percent} % appliqué au montant ci-dessous.
+          </p>
+        )}
         <label className="block text-xs font-bold">
           Montant reçu (FCFA)
           <input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
@@ -560,6 +578,145 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
           {busy ? 'Enregistrement…' : 'Enregistrer'}
         </button>
       </form>
+    </div>
+  );
+}
+
+function ServicesChart({ schools, revenue, selected, onSelect }: { schools: PlatformSchoolRow[]; revenue: ServiceRevenue; selected: string; onSelect: (id: string) => void }) {
+  const now = new Date();
+  const months = Array.from({ length: 9 }, (_, k) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (8 - k), 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    let internat = 0, cantine = 0, transport = 0;
+    for (const [sid, byMonth] of Object.entries(revenue)) {
+      if (selected !== 'all' && sid !== selected) continue;
+      const c = byMonth[ym];
+      if (c) { internat += c.internat; cantine += c.cantine; transport += c.transport; }
+    }
+    return { ym, label: d.toLocaleDateString('fr-FR', { month: 'short' }), internat, cantine, transport, total: internat + cantine + transport };
+  });
+  const max = Math.max(1, ...months.map((m) => m.total));
+  const sum = (k: 'internat' | 'cantine' | 'transport') => months.reduce((s, m) => s + m[k], 0);
+  const series: { key: 'internat' | 'cantine' | 'transport'; label: string; color: string }[] = [
+    { key: 'internat', label: 'Internat', color: 'bg-indigo-500' },
+    { key: 'cantine', label: 'Cantine', color: 'bg-amber-500' },
+    { key: 'transport', label: 'Transport', color: 'bg-sky-500' },
+  ];
+  return (
+    <section className="rounded-2xl bg-white border border-slate-200 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <h2 className="font-extrabold text-sm">Encaissements des services — 9 derniers mois</h2>
+        <select value={selected} onChange={(e) => onSelect(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs sm:w-64">
+          <option value="all">Toutes les écoles</option>
+          {schools.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-wrap gap-3 mb-3 text-[11px]">
+        {series.map((s) => (
+          <span key={s.key} className="inline-flex items-center gap-1.5 font-bold text-slate-700">
+            <span className={`w-2.5 h-2.5 rounded-sm ${s.color}`} /> {s.label} : {formatFCFA(sum(s.key))}
+          </span>
+        ))}
+      </div>
+      {max === 1 && months.every((m) => m.total === 0) ? (
+        <p className="text-xs text-slate-500">Aucun encaissement de service enregistré sur cette période (les écoles n’utilisent pas encore ces services, ou n’ont pas saisi de montants).</p>
+      ) : (
+        <div className="flex items-end gap-2 h-44">
+          {months.map((m) => (
+            <div key={m.ym} className="flex-1 flex flex-col items-center justify-end h-full gap-1" title={`${m.label} — Internat ${formatFCFA(m.internat)} • Cantine ${formatFCFA(m.cantine)} • Transport ${formatFCFA(m.transport)}`}>
+              <span className="text-[9px] font-bold text-slate-500">{m.total ? Math.round(m.total / 1000) + ' k' : ''}</span>
+              <div className="w-full flex flex-col-reverse rounded-t-lg overflow-hidden" style={{ height: `${Math.max(2, (m.total / max) * 100)}%` }}>
+                {series.map((s) => (m[s.key] > 0 ? <div key={s.key} className={s.color} style={{ height: `${(m[s.key] / m.total) * 100}%` }} /> : null))}
+              </div>
+              <span className="text-[10px] text-slate-500 capitalize">{m.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow; onChanged: (msg: string) => void; onError: (msg: string) => void }) {
+  const a = school.access;
+  const protectedSchool = school.slug === 'epc-manoi';
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(a.blockMessage || '');
+  const [code, setCode] = useState(a.promo?.code || '');
+  const [percent, setPercent] = useState(String(a.promo?.percent || 10));
+  const [expires, setExpires] = useState(a.promo?.expiresAt ? a.promo.expiresAt.slice(0, 10) : '');
+
+  const send = async (payload: Record<string, unknown>, okMsg: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'access', slug: school.slug, ...payload }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        onError(json?.error || 'Modification impossible.');
+        return;
+      }
+      onChanged(okMsg);
+    } catch (e) {
+      onError('Serveur injoignable.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (protectedSchool) {
+    return <p className="text-[11px] text-slate-500 bg-slate-100 rounded-lg p-2">École pilote : protégée (jamais bloquée, jamais expirée).</p>;
+  }
+
+  return (
+    <div className="space-y-2 border-t border-slate-200 pt-2">
+      <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Contrôle de l’accès</h3>
+
+      <label className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 cursor-pointer">
+        <span className="font-bold">Accès illimité (pour toujours)</span>
+        <input type="checkbox" checked={a.unlimited} disabled={busy} onChange={(e) => send({ unlimited: e.target.checked }, e.target.checked ? 'Accès illimité accordé.' : 'Accès illimité retiré.')} className="w-4 h-4 accent-violet-600" />
+      </label>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-1.5">
+        <p className="font-bold">{a.blocked ? '🔒 Accès bloqué' : 'Bloquer l’accès'}</p>
+        <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={300} placeholder="Message affiché à l’école (facultatif)" className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+        <button
+          disabled={busy}
+          onClick={() => {
+            if (!a.blocked && !window.confirm(`Bloquer l’accès de « ${school.name} » ? Les utilisateurs connectés seront coupés en moins d’une minute.`)) return;
+            send({ blocked: !a.blocked, blockMessage: message }, a.blocked ? 'Accès rétabli.' : 'Accès bloqué.');
+          }}
+          className={`w-full py-1.5 rounded-lg font-extrabold text-white cursor-pointer ${a.blocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
+        >
+          {a.blocked ? 'Débloquer l’école' : 'Bloquer l’école'}
+        </button>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-1.5">
+        <p className="font-bold">Code promo {a.promo ? `: ${a.promo.code} (-${a.promo.percent} %)` : ''}</p>
+        <div className="grid grid-cols-5 gap-1.5">
+          <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={24} placeholder="CODE" className="col-span-3 rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono" />
+          <div className="col-span-2 relative">
+            <input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)} className="w-full rounded-lg border border-slate-200 pl-2 pr-6 py-1.5 text-xs" />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+          </div>
+        </div>
+        <label className="block text-[10px] text-slate-500">
+          Valable jusqu’au (facultatif)
+          <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+        </label>
+        <div className="flex gap-1.5">
+          <button disabled={busy || !code.trim()} onClick={() => send({ promo: { code, percent: Number(percent), expiresAt: expires || undefined } }, 'Code promo enregistré.')} className="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-extrabold cursor-pointer">
+            Enregistrer le code
+          </button>
+          {a.promo && (
+            <button disabled={busy} onClick={() => send({ promo: null }, 'Code promo retiré.')} className="px-3 py-1.5 rounded-lg border border-slate-300 font-bold cursor-pointer">
+              Retirer
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

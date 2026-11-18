@@ -69,6 +69,11 @@ async function verifySession(slug: string): Promise<boolean> {
     if (res.status === 401 || res.status === 403) {
       // Nouvelle année scolaire : la copie locale de l'année passée est effacée tout de suite.
       if (json?.yearChanged) wipeLocalSchoolData();
+      if (json?.blocked) {
+        try {
+          sessionStorage.setItem('sf_blocked_msg', String(json.error || ''));
+        } catch (e) {}
+      }
       kickToLogin(slug);
       return false;
     }

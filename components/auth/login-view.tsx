@@ -525,6 +525,14 @@ export function LoginView({
       const isDeleted = params.get('deleted') === 'true' || isSchoolDeleted(schoolSlug);
       setIsDeletedSchool(isDeleted);
 
+      try {
+        const blockedMsg = sessionStorage.getItem('sf_blocked_msg');
+        if (blockedMsg) {
+          sessionStorage.removeItem('sf_blocked_msg');
+          setErrorMessage('❌ ' + blockedMsg);
+        }
+      } catch (e) {}
+
       if (params.get('expired') === 'true') {
         setIsExpiredSchool(true);
         setErrorMessage(

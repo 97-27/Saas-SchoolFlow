@@ -30,6 +30,7 @@ import { ROLE_LABELS } from '@/lib/auth/roles';
 import { kvGet, kvPut, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 import { getYearEpoch } from '@/lib/server/year-epoch';
+import { getBlockState } from '@/lib/server/access-control';
 import { splitTeachingList, teachingMismatches } from '@/lib/data/teaching';
 
 const stripTitle = (name: string) =>
@@ -104,7 +105,8 @@ async function handleLogin(
   const school = await schoolP;
   if (!school) return refuse('❌ Établissement introuvable. Vérifiez le lien de connexion de votre école.', 404);
   if (school.status === 'suspended') {
-    return refuse("❌ L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow.");
+    const b = await getBlockState(slug);
+    return refuse('❌ ' + (b.message || "L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow."));
   }
 
   // Échéance réelle d'abonnement (jamais pour l'établissement pilote).

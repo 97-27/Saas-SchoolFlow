@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jsonError } from '@/lib/server/auth';
 import { isPlatformRequest } from '@/lib/server/platform-auth';
-import { getPlatformOverview, recordSchoolPayment, renewSchoolSubscription } from '@/lib/supabase/services';
+import { getPlatformOverview, recordSchoolPayment, renewSchoolSubscription, setAccessControl } from '@/lib/supabase/services';
+import { forgetBlockState } from '@/lib/server/access-control';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,8 +10,8 @@ const PLAN_MONTHS: Record<string, number> = { mensuel: 1, annuel: 12, triennal: 
 
 export async function GET(request: NextRequest) {
   if (!(await isPlatformRequest(request))) return jsonError('Accès refusé.', 401);
-  const schools = await getPlatformOverview();
-  return NextResponse.json({ success: true, schools, generatedAt: new Date().toISOString() }, { headers: { 'Cache-Control': 'no-store' } });
+  const { schools, serviceRevenue } = await getPlatformOverview();
+  return NextResponse.json({ success: true, schools, serviceRevenue, generatedAt: new Date().toISOString() }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 /**
@@ -24,6 +25,31 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch (e) {}
   const slug = String(body?.slug || '').trim();
+
+  // Contrôle d'accès : blocage, accès illimité, code promo.
+  if (body?.action === 'access') {
+    if (!slug) return jsonError('École manquante.', 400);
+    const patch: Record<string, any> = {};
+    if (typeof body.blocked === 'boolean') patch.blocked = body.blocked;
+    if (typeof body.blockMessage === 'string') patch.blockMessage = body.blockMessage.trim().slice(0, 300);
+    if (typeof body.unlimited === 'boolean') patch.unlimited = body.unlimited;
+    if ('promo' in body) {
+      const pr = body.promo;
+      if (pr === null) patch.promo = null;
+      else {
+        const code = String(pr?.code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24);
+        const percent = Math.round(Number(pr?.percent) || 0);
+        if (!code || percent < 1 || percent > 100) return jsonError('Code promo : code et pourcentage (1 à 100) requis.', 400);
+        const exp = pr?.expiresAt ? new Date(pr.expiresAt) : null;
+        patch.promo = { code, percent, note: String(pr?.note || '').slice(0, 120), ...(exp && !isNaN(exp.getTime()) ? { expiresAt: exp.toISOString() } : {}) };
+      }
+    }
+    const res = await setAccessControl(slug, patch);
+    if (!res.success) return jsonError('Modification impossible (école introuvable ou protégée).', 400);
+    forgetBlockState(slug);
+    return NextResponse.json({ success: true, access: res.access });
+  }
+
   const plan = String(body?.plan || '');
   const amount = Math.round(Number(body?.amount) || 0);
   const method = String(body?.method || 'autre').slice(0, 20);

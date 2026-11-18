@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, SessionPayload, verifySessionToken } from './session';
 import { getYearEpoch } from './year-epoch';
+import { getBlockState } from './access-control';
 import {
   FOUNDER_ROLES,
   ALL_STAFF_ROLES,
@@ -61,6 +62,11 @@ export async function requireSession(
   const sessionSlug = canonicalSlug(session.slug);
   if (requestedSlug && canonicalSlug(requestedSlug) !== sessionSlug) {
     return { error: jsonError('Accès refusé : cet établissement ne correspond pas à votre session.', 403) };
+  }
+
+  const block = await getBlockState(sessionSlug);
+  if (block.blocked) {
+    return { error: NextResponse.json({ success: false, blocked: true, error: block.message }, { status: 403 }) };
   }
 
   if (sessionSlug !== 'epc-manoi' && session.subscriptionEndDate) {

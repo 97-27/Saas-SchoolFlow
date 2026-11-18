@@ -406,6 +406,12 @@ export async function getSchoolSubscriptionInfo(slug: string): Promise<SchoolSub
       } catch (e) {}
     }
 
+    // Accès illimité accordé par la plateforme : jamais d'échéance.
+    const control = (await readSystemRow(school.id, 'system_access_control'))?.data as AccessControl | null;
+    if (control?.unlimited) {
+      return { isExpired: false, endDate: '2099-12-31T00:00:00.000Z', plan: school.subscription_plan || 'annuel', daysRemaining: 36500 };
+    }
+
     const effectiveEnd = overrideEnd && overrideEnd.getTime() > baseEnd.getTime() ? overrideEnd : baseEnd;
     const now = new Date();
     const daysRemaining = Math.ceil((effectiveEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -2750,6 +2756,7 @@ export interface PlatformSchoolRow {
   signup: SignupInfo | null;
   payments: PaymentEvent[];
   totalPaid: number;
+  access: AccessControl;
 }
 
 function countOf(v: any): number {
@@ -2759,11 +2766,12 @@ function countOf(v: any): number {
 }
 
 /** Vue d'ensemble de toutes les écoles abonnées (réservée à l'espace plateforme). */
-export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
-  if (!isSupabaseConfigured) return [];
+export async function getPlatformOverview(): Promise<{ schools: PlatformSchoolRow[]; serviceRevenue: ServiceRevenueMap }> {
+  if (!isSupabaseConfigured) return { schools: [], serviceRevenue: {} };
   const { data: schools, error } = await supabase.from('schools').select('*').order('created_at', { ascending: false });
-  if (error || !schools) return [];
+  if (error || !schools) return { schools: [], serviceRevenue: {} };
 
+  const serviceRevenue = await readServiceRevenue();
   const rows = await Promise.all(
     schools.map(async (s: any): Promise<PlatformSchoolRow> => {
       const safe = async <T,>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
@@ -2773,7 +2781,7 @@ export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
           return fallback;
         }
       };
-      const [studentsRes, staffRes, kvRes, sub, signupRow, payRow, services] = await Promise.all([
+      const [studentsRes, staffRes, kvRes, sub, signupRow, payRow, services, accessSys] = await Promise.all([
         safe(() => supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', s.id), { count: 0 } as any),
         safe(
           () => supabase.from('staff_users').select('id', { count: 'exact', head: true }).eq('school_id', s.id).not('role_id', 'like', 'system_%').neq('role_id', 'school_stamp'),
@@ -2787,6 +2795,7 @@ export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
         safe(() => readSystemRow(s.id, 'system_signup_info'), null),
         safe(() => readSystemRow(s.id, 'system_payments'), null),
         safe(() => getServicesDataFromSupabase(s.slug), null),
+        safe(() => readSystemRow(s.id, 'system_access_control'), null),
       ]);
 
       const payments: PaymentEvent[] = Array.isArray(payRow?.data?.events) ? payRow!.data.events : [];
@@ -2794,6 +2803,7 @@ export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
       const lastKv = (kvRes as any)?.data?.updated_at || null;
       const lastActivity = [lastKv, s.updated_at].filter(Boolean).sort().pop() || null;
       const signup = (signupRow?.data as SignupInfo) || null;
+      const accessRow: AccessControl = { ...DEFAULT_ACCESS, ...((accessSys as any)?.data || {}), blocked: s.status === 'suspended' };
 
       return {
         id: s.id,
@@ -2825,8 +2835,90 @@ export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
         signup,
         payments,
         totalPaid,
+        access: accessRow,
       };
     })
   );
-  return rows;
+  return { schools: rows, serviceRevenue };
+}
+
+/* ---------- Contrôle d'accès par la plateforme : blocage, accès illimité, code promo ---------- */
+
+export interface PromoInfo {
+  code: string;
+  percent: number; // 1 à 100
+  note?: string;
+  expiresAt?: string; // ISO, facultatif
+}
+
+export interface AccessControl {
+  blocked: boolean;
+  blockMessage: string;
+  unlimited: boolean;
+  promo: PromoInfo | null;
+}
+
+export const DEFAULT_ACCESS: AccessControl = { blocked: false, blockMessage: '', unlimited: false, promo: null };
+export const DEFAULT_BLOCK_MESSAGE = 'L’accès de votre établissement a été suspendu par SchoolFlow. Veuillez contacter le support.';
+
+/** Lit l'état d'accès d'une école (jamais bloquée : l'école pilote epc-manoi). */
+export async function getAccessControl(slug: string): Promise<AccessControl> {
+  const clean = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  if (!isSupabaseConfigured || !clean || clean === 'epc-manoi') return { ...DEFAULT_ACCESS };
+  try {
+    const { data: school } = await supabase.from('schools').select('id, status').eq('slug', clean).maybeSingle();
+    if (!school?.id) return { ...DEFAULT_ACCESS };
+    const row = (await readSystemRow(school.id, 'system_access_control'))?.data || {};
+    return { ...DEFAULT_ACCESS, ...row, blocked: school.status === 'suspended' };
+  } catch (e) {
+    return { ...DEFAULT_ACCESS };
+  }
+}
+
+/** Modifie l'état d'accès. Le blocage passe aussi par schools.status = 'suspended' (refus à la connexion). */
+export async function setAccessControl(slug: string, patch: Partial<AccessControl>): Promise<{ success: boolean; access?: AccessControl }> {
+  const clean = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  if (!isSupabaseConfigured || !clean || clean === 'epc-manoi') return { success: false };
+  try {
+    const schoolId = await getSchoolId(clean);
+    if (!schoolId) return { success: false };
+    const current = (await readSystemRow(schoolId, 'system_access_control'))?.data || {};
+    const next: AccessControl = { ...DEFAULT_ACCESS, ...current, ...patch };
+    if (typeof patch.blocked === 'boolean') {
+      const { error } = await supabase.from('schools').update({ status: patch.blocked ? 'suspended' : 'active', updated_at: new Date().toISOString() }).eq('id', schoolId);
+      if (error) return { success: false };
+    }
+    const { blocked, ...persist } = next;
+    const ok = await writeSystemRow(schoolId, 'system_access_control', 'Contrôle Accès (Système)', 'SYS-ACCESS', persist);
+    return ok ? { success: true, access: { ...next, blocked: typeof patch.blocked === 'boolean' ? patch.blocked : blocked } } : { success: false };
+  } catch (e) {
+    console.error('Erreur setAccessControl:', e);
+    return { success: false };
+  }
+}
+
+/* ---------- Encaissements des services (internat / cantine / transport) par école et par mois ---------- */
+
+export type ServiceRevenueMap = Record<string, Record<string, { internat: number; cantine: number; transport: number }>>;
+
+async function readServiceRevenue(): Promise<ServiceRevenueMap> {
+  const out: ServiceRevenueMap = {};
+  try {
+    if (!(await serviceTablesAvailable())) return out;
+    const res = await supabase.from('service_month_payments').select('school_id, service, amount, paid_at, payment_date').limit(200000);
+    if (res.error || !res.data) return out;
+    for (const p of res.data as any[]) {
+      const amount = Number(p.amount);
+      if (!amount || amount < 0) continue;
+      const raw = (typeof p.payment_date === 'string' && p.payment_date) || (typeof p.paid_at === 'string' && p.paid_at) || '';
+      const ym = raw.slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(ym)) continue;
+      const svc = p.service === 'internat' ? 'internat' : p.service === 'cantine' ? 'cantine' : p.service === 'transport' ? 'transport' : null;
+      if (!svc) continue;
+      const bySchool = (out[p.school_id] ||= {});
+      const cell = (bySchool[ym] ||= { internat: 0, cantine: 0, transport: 0 });
+      cell[svc] += amount;
+    }
+  } catch (e) {}
+  return out;
 }
