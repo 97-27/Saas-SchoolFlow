@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
@@ -204,7 +205,7 @@ function OfficialLandscapeBulletin({
 
           {/* Ligne 5 : Contact & Code Établissement */}
           <p className="text-[9px] font-semibold text-slate-400 font-mono">
-            Code Établissement : {school.ministryCode || 'Non renseigné'} • Tél : {school.phone || 'Non renseigné'} • {school.city || 'Non renseigné'}
+            Code Établissement : {school.ministryCode || 'Non renseigné'} • Tél : {schoolPhonesText(school)} • {school.city || 'Non renseigné'}
           </p>
 
           {/* Ligne 6 : Bandeau officiel du titre et Année Scolaire Centrés */}

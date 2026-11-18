@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { mockSchools, availableClasses } from '@/lib/data/mock-data';
@@ -501,7 +502,7 @@ export function NewStudentModal({
                     </p>
                   )}
                   <p className="text-[9px] sm:text-[10px] text-slate-600 font-medium leading-tight">
-                    {school.district || `${school.city} — ${school.country}`} • Tél : {school.phone || 'Non renseigné'}
+                    {school.district || `${school.city} — ${school.country}`} • Tél : {schoolPhonesText(school)}
                   </p>
                   <div className="inline-flex items-center gap-1.5 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[8px] sm:text-[9px] font-mono font-bold text-slate-700">
                     <span>{school.approvalNumber || 'Arrêté N° 0452/MENA/DES'}</span>

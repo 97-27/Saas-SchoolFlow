@@ -36,6 +36,7 @@ export function SetupReminder({ schoolSlug }: { schoolSlug: string }) {
       if (!s.logoUrl) m.push('Logo de l’école');
       if (!s.stampUrl) m.push('Cachet officiel');
       if (!String(s.phone || '').trim()) m.push('Téléphone');
+      else if ([s.phone, s.phone2, s.phone3].filter((p) => String(p || '').trim()).length < 3) m.push('3 numéros de l’école');
       if (!String(s.email || '').trim()) m.push('Email');
       // L'adresse physique se saisit dans Paramètres → Localisation (enregistrée dans « city »).
       if (!String(s.city || '').trim() && !String(s.address || '').trim()) m.push('Adresse');

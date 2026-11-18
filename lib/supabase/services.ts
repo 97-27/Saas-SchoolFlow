@@ -61,6 +61,7 @@ export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolea
     let stampUrl = '';
     let ministryCode = '';
     let approvalNumber = '';
+    let schoolExtra: Record<string, any> = {};
     if (withStamp) try {
       const { data: stampRow } = await supabase
         .from('staff_users')
@@ -78,6 +79,7 @@ export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolea
           const extra = JSON.parse(stampRow.department);
           ministryCode = extra.ministryCode || '';
           approvalNumber = extra.approvalNumber || '';
+          schoolExtra = extra || {};
         } catch (e) {}
       }
     } catch (e) {}
@@ -99,6 +101,12 @@ export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolea
       country: data.country || 'Côte d’Ivoire',
       district: data.district || '',
       phone: data.phone || '',
+      phone2: schoolExtra.phone2 || '',
+      phone3: schoolExtra.phone3 || '',
+      ...(typeof schoolExtra.hasMaternelle === 'boolean' ? { hasMaternelle: schoolExtra.hasMaternelle } : {}),
+      ...(typeof schoolExtra.hasPrimaire === 'boolean' ? { hasPrimaire: schoolExtra.hasPrimaire } : {}),
+      ...(typeof schoolExtra.hasCollege === 'boolean' ? { hasCollege: schoolExtra.hasCollege } : {}),
+      ...(typeof schoolExtra.hasLycee === 'boolean' ? { hasLycee: schoolExtra.hasLycee } : {}),
       whatsappPhone: data.whatsapp_phone || '',
       email: data.email || '',
       website: data.website || '',
@@ -216,11 +224,18 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
     const hasStamp = school.stampUrl && school.stampUrl.trim() !== '';
     const hasMinistryCode = school.ministryCode && school.ministryCode.trim() !== '';
     const hasApprovalNumber = school.approvalNumber && school.approvalNumber.trim() !== '';
-    if (schoolId && (hasStamp || hasMinistryCode || hasApprovalNumber)) {
+    const hasExtraPhones = !!((school.phone2 && school.phone2.trim()) || (school.phone3 && school.phone3.trim()));
+    if (schoolId && (hasStamp || hasMinistryCode || hasApprovalNumber || hasExtraPhones)) {
       try {
         const extraInfo = JSON.stringify({
           ministryCode: school.ministryCode || '',
           approvalNumber: school.approvalNumber || '',
+          phone2: school.phone2 || '',
+          phone3: school.phone3 || '',
+          hasMaternelle: school.hasMaternelle ?? true,
+          hasPrimaire: school.hasPrimaire ?? true,
+          hasCollege: school.hasCollege ?? true,
+          hasLycee: school.hasLycee ?? false,
         });
 
         const { data: existingStamp } = await supabase

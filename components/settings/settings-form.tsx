@@ -946,7 +946,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Téléphone Secrétariat / Accueil</span>
+                    <span>Numéro 1 — principal (Secrétariat / Accueil)</span>
                   </label>
                   <input
                     type="tel"
@@ -955,6 +955,39 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     placeholder="Ex: +225 27 22 44 11 00"
                     className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Numéro 2</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={school.phone2 || ''}
+                    onChange={(e) => handleInputChange('phone2', e.target.value)}
+                    placeholder="Ex: +225 05 00 00 00 00"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Numéro 3</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={school.phone3 || ''}
+                    onChange={(e) => handleInputChange('phone3', e.target.value)}
+                    placeholder="Ex: +225 01 00 00 00 00"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+                  />
+                  {[school.phone, school.phone2, school.phone3].filter((p) => String(p || '').trim()).length < 3 && (
+                    <p className="text-[11px] text-amber-600 font-semibold">
+                      Renseignez au moins 3 numéros : ils s’affichent sur les reçus et sur la carte scolaire. Le numéro 1 est le numéro principal.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">

@@ -282,6 +282,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   const arrivalOpen = !!arrivalSt?.open;
   const departureOpen = !!departureSt?.open;
   const workDay = !!cfg && cfg.workDays.includes(data?.weekday ?? -1);
+  const toDeparture = !!cfg && isToday && !arrivalOpen && now > cfg.arrivalEnd;
   const [codeTo, setCodeTo] = useState('');
   const [codeNote, setCodeNote] = useState('');
   const [absenceCode, setAbsenceCode] = useState('');
@@ -297,8 +298,9 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
   }, [data, live, now]);
 
   const counts = useMemo(() => {
-    const c = { present: 0, absent: 0, absent_justifie: 0, en_attente: 0 };
+    const c = { present: 0, present_only: 0, absent: 0, absent_justifie: 0, en_attente: 0 };
     for (const r of rows) {
+      if (r.status === 'present') c.present_only++;
       if (r.status === 'present' || r.status === 'parti') c.present++;
       else if (r.status === 'absent') c.absent++;
       else if (r.status === 'absent_justifie') c.absent_justifie++;
@@ -694,7 +696,15 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
               { label: 'Présents', value: counts.present, cls: 'text-emerald-700' },
               { label: 'Total absents', value: counts.absent + counts.absent_justifie, cls: 'text-rose-600' },
               { label: 'Dont avec motif', value: counts.absent_justifie, cls: 'text-amber-700' },
-              { label: 'Pas encore pointé', value: counts.en_attente, cls: 'text-slate-700' },
+              // Après l'heure d'arrivée : on suit le DÉPART — les présents qui n'ont pas encore pointé leur départ
+              // (le nombre baisse à chaque départ pointé). Avant : ceux qui n'ont pas encore pointé l'arrivée.
+              toDeparture
+                ? {
+                    label: now > cfg!.departureEnd ? 'Départ non pointé' : 'Départ pas encore pointé',
+                    value: counts.present_only,
+                    cls: 'text-slate-700',
+                  }
+                : { label: 'Pas encore pointé', value: counts.en_attente, cls: 'text-slate-700' },
             ].map((k) => (
               <div key={k.label} className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{k.label}</p>

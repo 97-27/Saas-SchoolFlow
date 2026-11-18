@@ -123,7 +123,11 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
     );
   }, [students, grade, query]);
 
-  const preview = list.slice(0, CARDS_PER_PAGE);
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(list.length / CARDS_PER_PAGE));
+  const curPage = Math.min(page, pageCount - 1);
+  const preview = list.slice(curPage * CARDS_PER_PAGE, (curPage + 1) * CARDS_PER_PAGE);
+  useEffect(() => setPage(0), [grade, query]);
   const missingPlace = list.filter((s) => !s.placeOfBirth).length;
   const missingBirth = list.filter((s) => !hasRealBirthDate(s)).length;
 
@@ -145,7 +149,7 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
   useEffect(() => {
     void ensureQrs(preview);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grade, query, students.length]);
+  }, [grade, query, students.length, curPage]);
 
   const handlePrint = async () => {
     if (list.length === 0) return;
@@ -279,7 +283,43 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
       </div>
 
       <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
-        <h2 className="text-sm font-extrabold text-slate-900 font-heading">Aperçu (première page : {preview.length} élève{preview.length > 1 ? 's' : ''})</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-extrabold text-slate-900 font-heading">
+            Aperçu — page {curPage + 1} / {pageCount} ({list.length} carte{list.length > 1 ? 's' : ''} au total)
+          </h2>
+          {pageCount > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                disabled={curPage === 0}
+                onClick={() => setPage(curPage - 1)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+              >
+                ← Précédent
+              </button>
+              {Array.from({ length: pageCount }, (_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setPage(i)}
+                  className={`w-8 h-8 rounded-lg text-xs font-bold border ${
+                    i === curPage ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-slate-200 text-slate-700'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={curPage >= pageCount - 1}
+                onClick={() => setPage(curPage + 1)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 disabled:opacity-40"
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </div>
         {preview.length === 0 ? (
           <p className="text-xs text-slate-500 py-6 text-center">Aucun élève ne correspond.</p>
         ) : (

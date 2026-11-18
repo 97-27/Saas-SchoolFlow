@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, Invoice, School } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -243,7 +244,7 @@ export function ReportsView({
               {schoolState.name}
             </h1>
             <p className="text-xs text-slate-600 font-medium">
-              {schoolState.shortName || 'Établissement'} • {schoolState.city || 'Non renseigné'} — Contact : {schoolState.phone || 'Non renseigné'}
+              {schoolState.shortName || 'Établissement'} • {schoolState.city || 'Non renseigné'} — Contact : {schoolPhonesText(schoolState)}
             </p>
           </div>
           <div className="text-right">

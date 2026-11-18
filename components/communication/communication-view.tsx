@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Student, School } from '@/lib/data/types';
@@ -580,7 +581,7 @@ export function CommunicationView({
       `${composeBody}\n\n` +
       `─────────────────────────\n` +
       `✍️ *La Direction de l'Établissement*\n` +
-      `📞 Contact : ${currentSchool.phone || 'Non renseigné'}`
+      `📞 Contact : ${schoolPhonesText(currentSchool)}`
     );
   };
 
@@ -1600,7 +1601,7 @@ export function CommunicationView({
                     </p>
                   )}
                   <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px] truncate">
-                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
+                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {schoolPhonesText(currentSchool)}
                   </p>
                   <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[9px] sm:text-[10px]">
                     <span>Code Établissement : {currentSchool.ministryCode || 'Non renseigné'}</span>

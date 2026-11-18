@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Invoice, School, Student } from '@/lib/data/types';
 import { findStudentByRef } from '@/lib/data/student-match';
@@ -677,7 +678,7 @@ export function CaisseView({
                     « {currentSchool.motto || 'Discipline • Rigueur • Réussite'} »
                   </p>
                   <p className="text-[9px] text-slate-600 mt-0.5 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
-                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • {currentSchool.phone || 'Non renseigné'}
+                    {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • {schoolPhonesText(currentSchool)}
                   </p>
                 </div>
 

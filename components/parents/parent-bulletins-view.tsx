@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { noteValues } from '@/lib/data/grades-config';
@@ -1069,7 +1070,7 @@ export function ParentBulletinsView({
                 « {currentSchool.motto || 'Excellence Académique • Rigueur • Éducation de Référence'} »
               </p>
               <p className="text-slate-700 font-medium leading-tight text-[8px] sm:text-[9px] truncate">
-                {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
+                {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {schoolPhonesText(currentSchool)}
               </p>
               <div className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[8px] sm:text-[8.5px]">
                 <span>Code MENA : {currentSchool.ministryCode || 'Non renseigné'}</span>

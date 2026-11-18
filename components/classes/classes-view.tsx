@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -256,7 +257,7 @@ export function ClassesView({
                 {currentSchool.name}{currentSchool.shortName ? ` (${currentSchool.shortName})` : ''}
               </h1>
               <p className="text-[9.5px] text-slate-600 font-medium">
-                Code Établissement : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'} • {currentSchool.city || 'Non renseigné'}
+                Code Établissement : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {schoolPhonesText(currentSchool)} • {currentSchool.city || 'Non renseigné'}
               </p>
             </div>
           </div>

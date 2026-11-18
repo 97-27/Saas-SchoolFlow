@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice, StudentInstallments } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
@@ -1392,7 +1393,7 @@ export function InscriptionsView({
     // Ligne 4 : Contacts & Situation
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Non renseigné'} • Tél : ${schoolState.receiptHeaderPhone || schoolState.phone || 'Non renseigné'}`, 600, 170);
+    ctx.fillText(`Situation : ${schoolState.receiptHeaderAddress || schoolState.district || 'Non renseigné'} • Tél : ${schoolPhonesText(schoolState)}`, 600, 170);
 
     // Ligne 5 : Badge Code Établissement
     drawRoundRect(380, 186, 440, 30, 8);
@@ -1875,7 +1876,7 @@ export function InscriptionsView({
                 </p>
               )}
               <p className="text-slate-700 font-medium leading-tight text-[9.5px] sm:text-[10.5px]">
-                {schoolState.district || `${schoolState.city} — ${schoolState.country}`} • Tél : {schoolState.phone || 'Non renseigné'}
+                {schoolState.district || `${schoolState.city} — ${schoolState.country}`} • Tél : {schoolPhonesText(schoolState)}
               </p>
               <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-900 text-[9px] sm:text-[10px]">
                 <span>Code Établissement : {schoolState.ministryCode || 'Non renseigné'}</span>

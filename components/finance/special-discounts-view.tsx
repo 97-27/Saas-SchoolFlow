@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { School, Student, Invoice } from '@/lib/data/types';
 import { findStudentByRef } from '@/lib/data/student-match';
@@ -833,7 +834,7 @@ export function SpecialDiscountsView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`Situation : ${currentSchool.district || 'Non renseigné'} • Tél : ${currentSchool.phone || 'Non renseigné'}`, 600, 170);
+    ctx.fillText(`Situation : ${currentSchool.district || 'Non renseigné'} • Tél : ${schoolPhonesText(currentSchool)}`, 600, 170);
 
     drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
@@ -1134,7 +1135,7 @@ export function SpecialDiscountsView({
             </p>
 
             <p className="text-[10px] text-slate-600 font-medium">
-              Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {currentSchool.receiptHeaderPhone || currentSchool.phone || 'Non renseigné'}
+              Situation : {currentSchool.receiptHeaderAddress || currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {schoolPhonesText(currentSchool)}
             </p>
 
             {/* Code Établissement / Code MENA */}

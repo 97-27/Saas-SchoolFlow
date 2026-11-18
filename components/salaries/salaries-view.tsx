@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { School } from '@/lib/data/types';
 import { defaultSchool } from '@/lib/data/mock-data';
@@ -463,7 +464,7 @@ export function SalariesView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 20px sans-serif';
-    ctx.fillText(`${currentSchool.receiptHeaderAddress || currentSchool.city || 'Non renseigné'} • Tél : ${currentSchool.receiptHeaderPhone || currentSchool.phone || 'Non renseigné'}`, 600, 175);
+    ctx.fillText(`${currentSchool.receiptHeaderAddress || currentSchool.city || 'Non renseigné'} • Tél : ${schoolPhonesText(currentSchool)}`, 600, 175);
 
     ctx.font = 'bold 19px monospace';
     ctx.fillStyle = '#475569';
@@ -732,7 +733,7 @@ export function SalariesView({
             </p>
 
             <p suppressHydrationWarning className="text-[9.5px] sm:text-[10px] text-slate-600">
-              Situation : {currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'}
+              Situation : {currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : {schoolPhonesText(currentSchool)}
             </p>
 
             <div className="inline-block bg-slate-900 text-white text-[9.5px] sm:text-[10px] font-mono font-bold px-3 py-0.5 rounded-md shadow-2xs">

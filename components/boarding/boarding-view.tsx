@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
@@ -1234,7 +1235,7 @@ export function BoardingView({
 
     ctx.fillStyle = '#334155';
     ctx.font = 'bold 14px Inter, sans-serif';
-    ctx.fillText(`${currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : ${currentSchool.phone || 'Non renseigné'}`, 600, 170);
+    ctx.fillText(`${currentSchool.district || currentSchool.city || 'Non renseigné'} • Tél : ${schoolPhonesText(currentSchool)}`, 600, 170);
 
     drawRoundRect(380, 186, 440, 30, 8);
     ctx.fillStyle = '#0f172a';
@@ -2972,7 +2973,7 @@ export function BoardingView({
                   </p>
                 )}
                 <p className="text-[9.5px] sm:text-[10px] font-medium text-slate-600 leading-tight">
-                  {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {currentSchool.phone || 'Non renseigné'}
+                  {currentSchool.district || `${currentSchool.city} — ${currentSchool.country}`} • Tél : {schoolPhonesText(currentSchool)}
                 </p>
                 <div className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-300 text-[9px] font-mono font-bold text-slate-700">
                   <span>Code Établissement : {currentSchool.ministryCode || 'Non renseigné'}</span>

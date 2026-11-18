@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatDate } from '@/lib/utils/formatters';
@@ -309,7 +310,7 @@ export function AttendanceView({
           customReason ? ` — Détail / Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de sensibiliser votre enfant sur l'importance du respect des horaires et de la ponctualité aux cours.\n` +
-        `Vie Scolaire : ${currentSchool.phone || 'Non renseigné'}.\n\n` +
+        `Vie Scolaire : ${schoolPhonesText(currentSchool)}.\n\n` +
         `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
     } else {
       text =
@@ -319,7 +320,7 @@ export function AttendanceView({
           customReason ? ` — Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de contacter immédiatement la Vie Scolaire au ${
-          currentSchool.phone || 'Non renseigné'
+          schoolPhonesText(currentSchool)
         } afin de justifier cette absence.\n\n` +
         `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
     }

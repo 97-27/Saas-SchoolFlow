@@ -150,7 +150,9 @@ export interface School {
   country: string;
   district?: string;
   postalBox?: string;
-  phone?: string;
+  phone?: string; // Numéro principal de l'école
+  phone2?: string; // 2e numéro (affiché sur reçus et cartes)
+  phone3?: string; // 3e numéro (affiché sur reçus et cartes)
   whatsappPhone?: string;
   email?: string;
   website?: string;

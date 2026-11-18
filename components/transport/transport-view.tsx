@@ -1,5 +1,6 @@
 'use client';
 
+import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice } from '@/lib/data/types';
 import { GenderBadge } from '@/components/ui/badge';
@@ -1479,7 +1480,7 @@ export function TransportView({
                     </p>
                   )}
                   <p className="text-[8.5px] text-slate-500 font-mono leading-tight">
-                    Code : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {currentSchool.phone || 'Non renseigné'}
+                    Code : {currentSchool.ministryCode || 'Non renseigné'} • Tél : {schoolPhonesText(currentSchool)}
                   </p>
                 </div>
 
