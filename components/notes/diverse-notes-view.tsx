@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { School, Student } from '@/lib/data/types';
@@ -537,7 +538,7 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
               Notes Diverses & Mémos
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">

@@ -1,3 +1,4 @@
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 // Module SERVEUR uniquement : utilise la clé service_role (lib/supabase/admin.ts). Les composants
 // navigateur doivent importer lib/supabase/remote.ts, qui passe par les routes API protégées.
 import { supabaseAdmin as supabase } from './admin';
@@ -111,7 +112,7 @@ export async function getSchoolFromSupabase(slug: string, opts: { stamp?: boolea
       whatsappPhone: data.whatsapp_phone || '',
       email: data.email || '',
       website: data.website || '',
-      academicYear: data.academic_year || '2026-2027',
+      academicYear: data.academic_year || currentAcademicYear(),
       currentTerm: data.current_term || 'Trimestre 1',
       founderName: data.founder_name || '',
       directorName: data.director_name || '',
@@ -142,7 +143,7 @@ export async function getAllSchoolsFromSupabase(): Promise<School[]> {
       name: d.name,
       shortName: d.short_name || d.name.slice(0, 8).toUpperCase(),
       logoColor: d.logo_color || '#059669',
-      academicYear: d.academic_year || '2026-2027',
+      academicYear: d.academic_year || currentAcademicYear(),
       currentTerm: d.current_term || 'Trimestre 1',
       termType: 'trimestriel',
       phone: d.phone || '',
@@ -189,7 +190,7 @@ export async function saveSchoolToSupabase(school: School): Promise<boolean> {
       whatsapp_phone: school.whatsappPhone,
       email: school.email,
       website: school.website,
-      academic_year: school.academicYear || '2026-2027',
+      academic_year: school.academicYear || currentAcademicYear(),
       current_term: school.currentTerm || 'Trimestre 1',
       founder_name: school.founderName,
       director_name: school.directorName,
@@ -313,7 +314,7 @@ export async function createNewSchoolInSupabase(
       whatsapp_phone: school.whatsappPhone,
       email: school.email,
       website: school.website,
-      academic_year: school.academicYear || '2026-2027',
+      academic_year: school.academicYear || currentAcademicYear(),
       current_term: school.currentTerm || 'Trimestre 1',
       founder_name: school.founderName,
       director_name: school.directorName,
@@ -2631,4 +2632,201 @@ export async function updateStaffContactInSupabase(
     console.warn('updateStaffContactInSupabase catch:', err);
     return false;
   }
+}
+
+/* ==========================================================================
+   ESPACE PLATEFORME (propriétaire de SchoolFlow) : abonnements & paiements
+   Les infos d'abonnement sont gardées dans des fiches staff_users « système »
+   (même procédé que le cachet et les services : aucune colonne dédiée).
+   ========================================================================== */
+
+export interface PaymentEvent {
+  at: string; // ISO
+  amount: number;
+  plan: string;
+  method: string; // wave | orange | card | code | autre
+  phone?: string;
+  kind: 'inscription' | 'renouvellement';
+  status: 'confirme' | 'en_attente';
+  note?: string;
+}
+
+export interface SignupInfo {
+  studentTier?: string;
+  paymentMethod?: string;
+  paymentPhone?: string;
+  activationCodeGiven?: boolean;
+  signedUpAt?: string;
+}
+
+async function readSystemRow(schoolId: string, roleId: string): Promise<{ id: string; data: any } | null> {
+  const { data } = await supabase
+    .from('staff_users')
+    .select('id, department')
+    .eq('school_id', schoolId)
+    .eq('role_id', roleId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data?.id) return null;
+  let parsed: any = null;
+  try {
+    parsed = data.department ? JSON.parse(data.department) : null;
+  } catch (e) {}
+  return { id: data.id, data: parsed };
+}
+
+async function writeSystemRow(schoolId: string, roleId: string, title: string, authCode: string, payload: any): Promise<boolean> {
+  const existing = await readSystemRow(schoolId, roleId);
+  if (existing) {
+    const { error } = await supabase.from('staff_users').update({ department: JSON.stringify(payload) }).eq('id', existing.id);
+    return !error;
+  }
+  const { error } = await supabase.from('staff_users').insert({
+    school_id: schoolId,
+    role_id: roleId,
+    role_title: title,
+    full_name: title.toUpperCase(),
+    auth_code: authCode,
+    is_active: true,
+    department: JSON.stringify(payload),
+  });
+  return !error;
+}
+
+/** Enregistre la tranche d'effectif et le moyen de règlement choisis à l'inscription. */
+export async function saveSignupInfo(slug: string, info: SignupInfo): Promise<boolean> {
+  if (!isSupabaseConfigured || !slug) return false;
+  try {
+    const schoolId = await getSchoolId(slug);
+    if (!schoolId) return false;
+    const current = (await readSystemRow(schoolId, 'system_signup_info'))?.data || {};
+    return await writeSystemRow(schoolId, 'system_signup_info', 'Inscription Abonnement (Système)', 'SYS-SIGNUP-INFO', { ...current, ...info });
+  } catch (e) {
+    console.error('Erreur saveSignupInfo:', e);
+    return false;
+  }
+}
+
+/** Ajoute un paiement d'abonnement au journal de l'école (visible dans l'espace plateforme). */
+export async function recordSchoolPayment(slug: string, event: PaymentEvent): Promise<boolean> {
+  if (!isSupabaseConfigured || !slug) return false;
+  try {
+    const schoolId = await getSchoolId(slug);
+    if (!schoolId) return false;
+    const current = (await readSystemRow(schoolId, 'system_payments'))?.data;
+    const events: PaymentEvent[] = Array.isArray(current?.events) ? current.events : [];
+    events.push(event);
+    return await writeSystemRow(schoolId, 'system_payments', 'Paiements Abonnement (Système)', 'SYS-PAYMENTS', { events });
+  } catch (e) {
+    console.error('Erreur recordSchoolPayment:', e);
+    return false;
+  }
+}
+
+export interface PlatformSchoolRow {
+  id: string;
+  slug: string;
+  name: string;
+  shortName: string;
+  city: string;
+  phone: string;
+  email: string;
+  directorName: string;
+  founderName: string;
+  status: string;
+  plan: string;
+  planPrice: number;
+  createdAt: string;
+  endDate: string | null;
+  daysRemaining: number | null;
+  isExpired: boolean;
+  academicYear: string;
+  studentTier: string | null;
+  studentCount: number;
+  staffCount: number;
+  lastActivityAt: string | null;
+  services: { boarding: number; canteen: number; transport: number };
+  signup: SignupInfo | null;
+  payments: PaymentEvent[];
+  totalPaid: number;
+}
+
+function countOf(v: any): number {
+  if (Array.isArray(v)) return v.length;
+  if (v && typeof v === 'object') return Object.keys(v).length;
+  return 0;
+}
+
+/** Vue d'ensemble de toutes les écoles abonnées (réservée à l'espace plateforme). */
+export async function getPlatformOverview(): Promise<PlatformSchoolRow[]> {
+  if (!isSupabaseConfigured) return [];
+  const { data: schools, error } = await supabase.from('schools').select('*').order('created_at', { ascending: false });
+  if (error || !schools) return [];
+
+  const rows = await Promise.all(
+    schools.map(async (s: any): Promise<PlatformSchoolRow> => {
+      const safe = async <T,>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
+        try {
+          return await fn();
+        } catch (e) {
+          return fallback;
+        }
+      };
+      const [studentsRes, staffRes, kvRes, sub, signupRow, payRow, services] = await Promise.all([
+        safe(() => supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', s.id), { count: 0 } as any),
+        safe(
+          () => supabase.from('staff_users').select('id', { count: 'exact', head: true }).eq('school_id', s.id).not('role_id', 'like', 'system_%').neq('role_id', 'school_stamp'),
+          { count: 0 } as any
+        ),
+        safe(
+          () => supabase.from('school_kv').select('updated_at').eq('school_id', s.id).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+          { data: null } as any
+        ),
+        safe(() => getSchoolSubscriptionInfo(s.slug), null),
+        safe(() => readSystemRow(s.id, 'system_signup_info'), null),
+        safe(() => readSystemRow(s.id, 'system_payments'), null),
+        safe(() => getServicesDataFromSupabase(s.slug), null),
+      ]);
+
+      const payments: PaymentEvent[] = Array.isArray(payRow?.data?.events) ? payRow!.data.events : [];
+      const totalPaid = payments.filter((p) => p.status === 'confirme').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const lastKv = (kvRes as any)?.data?.updated_at || null;
+      const lastActivity = [lastKv, s.updated_at].filter(Boolean).sort().pop() || null;
+      const signup = (signupRow?.data as SignupInfo) || null;
+
+      return {
+        id: s.id,
+        slug: s.slug,
+        name: s.name,
+        shortName: s.short_name || '',
+        city: s.city || '',
+        phone: s.phone || '',
+        email: s.email || '',
+        directorName: s.director_name || '',
+        founderName: s.founder_name || '',
+        status: s.status || 'active',
+        plan: s.subscription_plan || 'annuel',
+        planPrice: Number(s.subscription_price) || 0,
+        createdAt: s.created_at,
+        endDate: (sub as any)?.endDate || null,
+        daysRemaining: typeof (sub as any)?.daysRemaining === 'number' ? (sub as any).daysRemaining : null,
+        isExpired: !!(sub as any)?.isExpired,
+        academicYear: s.academic_year || '',
+        studentTier: signup?.studentTier || null,
+        studentCount: Number((studentsRes as any)?.count) || 0,
+        staffCount: Number((staffRes as any)?.count) || 0,
+        lastActivityAt: lastActivity,
+        services: {
+          boarding: countOf((services as any)?.boardingSubscriptions),
+          canteen: countOf((services as any)?.canteenSubscriptions),
+          transport: countOf((services as any)?.transportSubscriptions),
+        },
+        signup,
+        payments,
+        totalPaid,
+      };
+    })
+  );
+  return rows;
 }

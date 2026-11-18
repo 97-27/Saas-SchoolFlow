@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -1425,7 +1426,7 @@ export function BoardingView({
     // Cachet à droite
     if (stampImg) {
       try {
-        ctx.drawImage(stampImg, 960, y - 20, 160, 80);
+        ctx.drawImage(stampImg, 940, y - 45, ...((): [number, number] => { const r = Math.min(220 / (stampImg.width || 1), 130 / (stampImg.height || 1)); return [(stampImg.width || 1) * r, (stampImg.height || 1) * r]; })());
       } catch (e) {}
     } else {
       drawRoundRect(920, y - 10, 230, 50, 10);
@@ -2081,7 +2082,7 @@ export function BoardingView({
               Internat & Hébergement
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
@@ -2104,7 +2105,7 @@ export function BoardingView({
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sans">
                 Pensionnaires Inscrits
               </h3>
-              <p className="text-[11px] text-slate-400">Année scolaire 2026-2027 (9 mois)</p>
+              <p className="text-[11px] text-slate-400">Année scolaire {currentSchool.academicYear || currentAcademicYear()} (9 mois)</p>
             </div>
           </div>
           <div className="flex items-baseline gap-2">
@@ -3154,7 +3155,7 @@ export function BoardingView({
                 </div>
 
                 {/* Emplacement Cachet / Tampon */}
-                <div className="h-16 flex items-center justify-end">
+                <div className="h-28 flex items-center justify-end">
                   {currentSchool.stampUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

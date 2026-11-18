@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -36,6 +37,7 @@ import {
 import { School, Student } from '@/lib/data/types';
 import { defaultSchool, mockStudents, mockSchools, availableClasses } from '@/lib/data/mock-data';
 import { formatFCFA } from '@/lib/utils/formatters';
+import { STUDENT_TIERS } from '@/lib/data/subscription-tiers';
 import {
   getLiveSchool,
   getLiveStaffUsers,
@@ -484,6 +486,7 @@ export function LoginView({
   const [signupPhone, setSignupPhone] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<'mensuel' | 'annuel' | 'triennal'>('annuel');
   const [isSelectingPlan, setIsSelectingPlan] = useState(false);
+  const [studentTier, setStudentTier] = useState<string>('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'wave' | 'orange' | 'card'>('wave');
   const [paymentPhone, setPaymentPhone] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -927,6 +930,11 @@ export function LoginView({
       return;
     }
 
+    if (!studentTier) {
+      setErrorMessage('Veuillez choisir le nombre d’élèves de votre établissement (tranche d’effectif).');
+      return;
+    }
+
     const cleanSignupPhone = signupPhone.trim();
     if (!cleanSignupPhone || cleanSignupPhone.replace(/\D/g, '').length < 8) {
       setErrorMessage('Veuillez renseigner un numéro de téléphone / WhatsApp valide.');
@@ -960,6 +968,10 @@ export function LoginView({
           responsableName: signupResponsableName,
           founderName: signupFounderName,
           plan: selectedPlan,
+          studentTier,
+          paymentMethod: selectedPaymentMethod,
+          paymentPhone: selectedPaymentMethod === 'card' ? '' : paymentPhone,
+          activationCode: activationCode.trim(),
         }),
       });
       result = await res.json().catch(() => null);
@@ -1184,7 +1196,7 @@ export function LoginView({
           <div className="relative z-10 pt-4 mt-4 lg:mt-0 border-t border-white/15 flex items-center justify-between text-xs">
             <div>
               <span className="text-[10px] uppercase font-bold text-emerald-300/90 block">Année Active</span>
-              <span className="font-extrabold text-white text-xs">2026-2027</span>
+              <span suppressHydrationWarning className="font-extrabold text-white text-xs">{currentAcademicYear()}</span>
             </div>
             <span className="text-[10px] font-bold text-emerald-200 bg-white/10 px-2.5 py-1 rounded-lg border border-white/20">
               Devise FCFA
@@ -1878,6 +1890,39 @@ export function LoginView({
                       placeholder="Ex : Cocody Angré 8ème Tranche, Abidjan"
                       className="w-full pl-10 pr-3 py-2.5 rounded-2xl bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white text-xs font-medium text-slate-900 transition-all placeholder:text-slate-400 shadow-2xs"
                     />
+                  </div>
+                </div>
+
+                {/* 4 bis. Effectif de l'établissement (tranche d'élèves) */}
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Nombre d&apos;élèves de l&apos;établissement *
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {STUDENT_TIERS.map((tier) => {
+                      const on = studentTier === tier.id;
+                      return (
+                        <button
+                          key={tier.id}
+                          type="button"
+                          onClick={() => setStudentTier(tier.id)}
+                          aria-pressed={on}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            on
+                              ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500 shadow-xs'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className={`text-[11px] font-extrabold leading-tight ${on ? 'text-emerald-900' : 'text-slate-800'}`}>
+                              {tier.label}
+                            </span>
+                            {on && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                          </div>
+                          <span className="text-[10px] text-slate-500 block mt-0.5">{tier.hint}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

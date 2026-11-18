@@ -1,5 +1,7 @@
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 import { NextRequest, NextResponse } from 'next/server';
-import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo, getAllSchoolsFromSupabase } from '@/lib/supabase/services';
+import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo, getAllSchoolsFromSupabase, saveSignupInfo, recordSchoolPayment } from '@/lib/supabase/services';
+import { isStudentTierId } from '@/lib/data/subscription-tiers';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
 import { clientIp, isRateLimited, jsonError } from '@/lib/server/auth';
 import { School } from '@/lib/data/types';
@@ -52,7 +54,14 @@ export async function POST(request: NextRequest) {
   const responsableName = String(body?.responsableName || '').trim();
   const founderName = String(body?.founderName || '').trim() || responsableName;
   const plan = PLAN_PRICES[body?.plan] ? String(body.plan) : 'annuel';
+  const studentTier = isStudentTierId(body?.studentTier) ? String(body.studentTier) : '';
+  const paymentMethod = ['wave', 'orange', 'card'].includes(body?.paymentMethod) ? String(body.paymentMethod) : 'autre';
+  const paymentPhone = String(body?.paymentPhone || '').trim().slice(0, 30);
+  const activationCodeGiven = String(body?.activationCode || '').trim().length > 0;
 
+  if (!studentTier) {
+    return jsonError('Veuillez indiquer le nombre d’élèves de votre établissement (tranche d’effectif).', 400);
+  }
   if (!schoolName || !shortName || !address || !email || !responsableName) {
     return jsonError('Veuillez renseigner tous les champs obligatoires (*) incluant le sigle et l’adresse de l’établissement.', 400);
   }
@@ -89,7 +98,7 @@ export async function POST(request: NextRequest) {
     name: schoolName.toUpperCase(),
     shortName,
     logoColor: '#059669',
-    academicYear: '2026-2027',
+    academicYear: currentAcademicYear(),
     currentTerm: 'Trimestre 1',
     termType: 'trimestriel',
     phone,
@@ -142,6 +151,23 @@ export async function POST(request: NextRequest) {
       { fullName: founderName, role: 'Fondateur (Contrôle Total)', roleId: 'fondateur', email, phone, authCode: founderAuthCode, status: 'Actif', matricule: 'FND-001' },
       newSchool.slug
     ),
+  ]);
+
+  // Mode découverte : le règlement n'est pas encore relié à Wave / Orange Money / carte. Le choix
+  // est enregistré « en attente » (jamais les numéros de carte) pour le suivi dans l'espace plateforme.
+  const nowIso = new Date().toISOString();
+  await Promise.all([
+    saveSignupInfo(newSchool.slug, { studentTier, paymentMethod, paymentPhone, activationCodeGiven, signedUpAt: nowIso }),
+    recordSchoolPayment(newSchool.slug, {
+      at: nowIso,
+      amount: PLAN_PRICES[plan],
+      plan,
+      method: activationCodeGiven ? 'code' : paymentMethod,
+      phone: paymentPhone,
+      kind: 'inscription',
+      status: 'en_attente',
+      note: activationCodeGiven ? 'Code d’activation saisi' : 'Règlement à confirmer',
+    }),
   ]);
 
   const sub = await getSchoolSubscriptionInfo(newSchool.slug);

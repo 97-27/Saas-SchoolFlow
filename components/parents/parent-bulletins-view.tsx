@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -785,12 +786,12 @@ export function ParentBulletinsView({
             {activeViewTab === 'scolarite' ? (
               <>
                 <Wallet className="w-3.5 h-3.5" />
-                <span>Portail Scolarité & Prestations • Année {currentSchool.academicYear || '2026-2027'}</span>
+                <span>Portail Scolarité & Prestations • Année {currentSchool.academicYear || currentAcademicYear()}</span>
               </>
             ) : (
               <>
                 <GraduationCap className="w-3.5 h-3.5" />
-                <span>Portail Pédagogique & Bulletins • Année {currentSchool.academicYear || '2026-2027'}</span>
+                <span>Portail Pédagogique & Bulletins • Année {currentSchool.academicYear || currentAcademicYear()}</span>
               </>
             )}
           </div>
@@ -1100,7 +1101,7 @@ export function ParentBulletinsView({
             RÉPUBLIQUE DE CÔTE D&apos;IVOIRE • MINISTÈRE DE L&apos;ÉDUCATION NATIONALE
           </p>
           <h3 className="text-xs sm:text-xs font-black font-heading tracking-wide uppercase text-amber-400">
-            BULLETIN TRIMESTRIEL DE NOTES — {selectedTerm.toUpperCase()} • {currentSchool.academicYear || '2026-2027'}
+            BULLETIN TRIMESTRIEL DE NOTES — {selectedTerm.toUpperCase()} • {currentSchool.academicYear || currentAcademicYear()}
           </h3>
         </div>
 
@@ -1245,13 +1246,13 @@ export function ParentBulletinsView({
             </div>
 
             {/* Cachet officiel scanné */}
-            <div className="h-9 flex items-center justify-center relative">
+            <div className="h-24 flex items-center justify-center relative">
               {currentSchool.stampUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentSchool.stampUrl}
                   alt="Cachet officiel de l'école"
-                  className="max-h-9 max-w-24 object-contain transform rotate-[-3deg] opacity-90"
+                  className="max-h-24 max-w-40 object-contain transform rotate-[-3deg] opacity-90"
                 />
               ) : (
                 <div className="px-2 py-0.2 rounded border border-dashed border-emerald-700 bg-emerald-50 text-emerald-900 font-mono text-[8px] font-bold uppercase">

@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect } from 'react';
 import { School } from '@/lib/data/types';
@@ -1148,7 +1149,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
               <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p>
-                  <strong>Prise d&apos;effet immédiate :</strong> La modification de l&apos;année scolaire active ({school.academicYear || '2026-2027'}) actualise instantanément les tableaux de bord, les grilles de scolarité FCFA et les fiches d&apos;inscription.
+                  <strong>Prise d&apos;effet immédiate :</strong> La modification de l&apos;année scolaire active ({school.academicYear || currentAcademicYear()}) actualise instantanément les tableaux de bord, les grilles de scolarité FCFA et les fiches d&apos;inscription.
                 </p>
               </div>
             </div>
@@ -1661,7 +1662,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                         )}
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Formule Annuelle (Recommandée)</span>
-                          <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Année Scolaire {school.academicYear || '2026-2027'}</h5>
+                          <h5 className="text-sm font-extrabold text-slate-900 font-heading mt-1">Année Scolaire {school.academicYear || currentAcademicYear()}</h5>
                           <div className="mt-2 text-xl font-extrabold text-emerald-800 font-heading">
                             250 000 <span className="text-xs font-normal text-slate-600">FCFA / an</span>
                           </div>

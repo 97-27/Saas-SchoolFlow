@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -157,7 +158,7 @@ export function ReportsView({
       v5Total += p5;
     });
 
-    const periodLabel = 'Bilan Financier Annuel (2026-2027)';
+    const periodLabel = `Bilan Financier Annuel (${school.academicYear || currentAcademicYear()})`;
     const periodSub = 'Recouvrement cumulé de toutes les échéances sur toute l’année scolaire (Septembre à Juin)';
 
     // Montant exigible/encaissé = droits d'inscription + scolarité UNIQUEMENT (jamais les
@@ -442,7 +443,7 @@ export function ReportsView({
 
         <div className="flex items-center gap-2">
           <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-            Année Scolaire Complète (2026-2027)
+            Année Scolaire Complète ({school.academicYear || currentAcademicYear()})
           </span>
         </div>
       </div>

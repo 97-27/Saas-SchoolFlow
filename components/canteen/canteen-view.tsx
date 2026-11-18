@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -778,7 +779,7 @@ export function CanteenView({
     const rawPhone = sub.whatsappPhone || sub.guardianPhone || '';
     const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
     const monthsLabel = sub.paidMonths.length > 1 ? 'Mois réglés' : 'Mois réglé';
-    const message = `Bonjour,\nVoici le reçu officiel de restauration (Cantine Scolaire) pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année 2026-2027.\n• Régime : ${sub.dietaryRestrictions}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
+    const message = `Bonjour,\nVoici le reçu officiel de restauration (Cantine Scolaire) pour votre enfant *${sub.fullName}* (${sub.grade}) pour l'année ${currentSchool.academicYear || currentAcademicYear()}.\n• Régime : ${sub.dietaryRestrictions}\n• Total encaissé : ${formatFCFA(sub.totalPaidAmount)}\n• ${monthsLabel} : ${sub.paidMonths.length > 0 ? sub.paidMonths.join(', ') : 'Aucun'}\n• Établissement : ${currentSchool.name}.`;
     const waUrl = cleanPhone
       ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
@@ -1539,7 +1540,7 @@ export function CanteenView({
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-amber-400 font-bold text-xs">2026-2027</span>
+                  <span className="text-amber-400 font-bold text-xs">{currentSchool.academicYear || currentAcademicYear()}</span>
                 </div>
               </div>
 
@@ -1700,10 +1701,15 @@ export function CanteenView({
                 <div className="text-[9px] text-slate-400 italic">
                   Reçu officiel numéroté émis par l&apos;Économe.
                 </div>
+                {currentSchool.stampUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={currentSchool.stampUrl} alt="Cachet officiel" className="max-h-28 print:max-h-36 max-w-[190px] print:max-w-[240px] object-contain opacity-90 rotate-[-4deg]" />
+                ) : (
                 <div className="p-2 rounded-xl border border-dashed border-emerald-400 bg-emerald-50 flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
                   <span>Cachet Électronique Certifié</span>
                 </div>
+                )}
               </div>
             </div>
 

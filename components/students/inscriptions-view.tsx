@@ -2267,13 +2267,13 @@ export function InscriptionsView({
             <span className="text-[9.5px] text-slate-600 font-black uppercase block">
               La Caisse & Le Comptable :
             </span>
-            <div className="flex items-center justify-center h-10">
+            <div className="flex items-center justify-center h-28 print:h-36">
               {schoolState.stampUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={schoolState.stampUrl}
                   alt="Cachet Officiel"
-                  className="object-contain opacity-85 rotate-[-5deg] max-h-10"
+                  className="object-contain opacity-90 rotate-[-5deg] max-h-28 print:max-h-36 max-w-[190px] print:max-w-[240px]"
                 />
               ) : (
                 <div className="border-2 border-dashed border-emerald-500 rounded-lg px-3 py-1 bg-emerald-50 text-[10px] font-black text-emerald-900 uppercase tracking-wider">

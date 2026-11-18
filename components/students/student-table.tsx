@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
@@ -77,7 +78,7 @@ export function StudentTable({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
 
-  const effectiveAcademicYear = currentSchool.academicYear || propAcademicYear || '2026-2027';
+  const effectiveAcademicYear = currentSchool.academicYear || propAcademicYear || currentAcademicYear();
   const effectiveSchoolName = currentSchool.name || propSchoolName || "Groupe Scolaire";
 
   const [searchQuery, setSearchQuery] = useState('');

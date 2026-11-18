@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools, mockStudents, mockInvoices, schoolForSlug } from '@/lib/data/mock-data';
@@ -3695,7 +3696,7 @@ export function registerSchoolWithSubscription(school: School): void {
       subscriptionEndDate: school.subscriptionEndDate || endDateStr,
       openingDate: school.openingDate || '2026-09-07',
       closingDate: school.closingDate || '2027-06-30',
-      academicYear: school.academicYear || '2026-2027',
+      academicYear: school.academicYear || currentAcademicYear(),
     };
 
     const current = getRegisteredSchools();

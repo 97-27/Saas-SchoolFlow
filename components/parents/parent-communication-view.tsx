@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
@@ -237,7 +238,7 @@ export function ParentCommunicationView({ schoolSlug = 'epc-manoi', initialSchoo
       <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl space-y-1.5">
         <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
           <MessageSquare className="w-3.5 h-3.5" />
-          <span>Espace Famille • Année {currentSchool?.academicYear || '2026-2027'}</span>
+          <span>Espace Famille • Année {currentSchool?.academicYear || currentAcademicYear()}</span>
         </div>
         <h1 className="text-xl sm:text-2xl font-black font-heading tracking-tight">Écrire à la Direction</h1>
         <p className="text-xs text-emerald-100 max-w-2xl leading-relaxed">

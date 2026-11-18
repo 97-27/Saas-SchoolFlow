@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -1631,7 +1632,7 @@ export function CommunicationView({
                 RÉPUBLIQUE DE CÔTE D&apos;IVOIRE • MINISTÈRE DE L&apos;ÉDUCATION NATIONALE
               </p>
               <h3 className="text-xs sm:text-sm font-black font-heading tracking-wide uppercase text-amber-400">
-                BULLETIN TRIMESTRIEL DE NOTES — {selectedParentTerm.toUpperCase()} • {currentSchool.academicYear || '2026-2027'}
+                BULLETIN TRIMESTRIEL DE NOTES — {selectedParentTerm.toUpperCase()} • {currentSchool.academicYear || currentAcademicYear()}
               </h3>
             </div>
 
@@ -1761,13 +1762,13 @@ export function CommunicationView({
                   </p>
                 </div>
 
-                <div className="h-12 flex items-center justify-center">
+                <div className="h-28 flex items-center justify-center">
                   {currentSchool.stampUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={currentSchool.stampUrl}
                       alt="Cachet officiel"
-                      className="max-h-12 max-w-24 object-contain opacity-90 transform rotate-[-3deg]"
+                      className="max-h-28 max-w-44 object-contain opacity-90 transform rotate-[-3deg]"
                     />
                   ) : (
                     <span className="px-2 py-0.5 rounded border border-dashed border-emerald-700 text-emerald-800 font-mono text-[9px] font-bold">

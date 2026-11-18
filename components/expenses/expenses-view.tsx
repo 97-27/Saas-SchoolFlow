@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { School, Invoice } from '@/lib/data/types';
@@ -425,7 +426,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
               Dépenses & Charges de l&apos;Établissement
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
@@ -478,7 +479,7 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
           </div>
           <div className="mt-3.5 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
             <span>Exercice en cours</span>
-            <span className="font-semibold text-slate-700">2026-2027</span>
+            <span className="font-semibold text-slate-700">{currentSchool.academicYear || currentAcademicYear()}</span>
           </div>
         </div>
 

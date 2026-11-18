@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { formatFCFA } from '@/lib/utils/formatters';
@@ -18,7 +19,7 @@ interface RevenueSummaryProps {
 }
 
 export function RevenueSummary({
-  academicYear = '2026-2027',
+  academicYear = currentAcademicYear(),
   invoices = [],
   students = [],
   servicesData,

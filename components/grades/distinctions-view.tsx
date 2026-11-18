@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
@@ -161,7 +162,7 @@ export function DistinctionsView({
     const schoolMotto = currentSchool.motto || 'Discipline • Rigueur • Réussite';
     const schoolDistrict = currentSchool.district || 'Non renseigné';
     const ministryCode = currentSchool.ministryCode || 'Non renseigné';
-    const academicYear = currentSchool.academicYear || '2026-2027';
+    const academicYear = currentSchool.academicYear || currentAcademicYear();
     const currentDateFormatted = formatDate(new Date());
 
     const isBlank = Boolean(laureate.isBlank);
@@ -271,7 +272,7 @@ export function DistinctionsView({
             <div style="height: 44px; display: flex; align-items: center; justify-content: flex-end;">
               ${
                 currentSchool.stampUrl
-                  ? `<img src="${currentSchool.stampUrl}" alt="Cachet" style="max-height: 44px; max-width: 115px; object-fit: contain; transform: rotate(-2deg);" />`
+                  ? `<img src="${currentSchool.stampUrl}" alt="Cachet" style="max-height: 110px; max-width: 220px; object-fit: contain; transform: rotate(-2deg);" />`
                   : `<div style="display: flex; align-items: center; justify-content: center; height: 38px; padding: 0 10px; border-radius: 6px; border: 1.5px dashed #059669; background: #ecfdf5; color: #065f46; font-size: 9.5px; font-weight: 800;">[ Cachet Officiel Direction ]</div>`
               }
             </div>
@@ -352,7 +353,7 @@ export function DistinctionsView({
     const schoolMotto = currentSchool.motto || 'Discipline • Rigueur • Réussite';
     const schoolDistrict = currentSchool.district || 'Non renseigné';
     const ministryCode = currentSchool.ministryCode || 'Non renseigné';
-    const academicYear = currentSchool.academicYear || '2026-2027';
+    const academicYear = currentSchool.academicYear || currentAcademicYear();
     const currentDateFormatted = formatDate(new Date());
 
     const content = `
@@ -470,7 +471,7 @@ export function DistinctionsView({
               Tableaux d&apos;Honneur & Diplômes d&apos;Excellence
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs font-mono">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">

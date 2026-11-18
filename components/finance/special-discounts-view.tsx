@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -1023,7 +1024,7 @@ export function SpecialDiscountsView({
     // Cachet à droite
     if (stampImg) {
       try {
-        ctx.drawImage(stampImg, 960, y - 20, 160, 80);
+        ctx.drawImage(stampImg, 940, y - 45, ...((): [number, number] => { const r = Math.min(220 / (stampImg.width || 1), 130 / (stampImg.height || 1)); return [(stampImg.width || 1) * r, (stampImg.height || 1) * r]; })());
       } catch (e) {}
     } else {
       drawRoundRect(920, y - 10, 230, 50, 10);
@@ -1197,7 +1198,7 @@ export function SpecialDiscountsView({
               {discountType}
             </span>
             <p className="text-[10px] text-slate-500 mt-1">
-              Année Scolaire active : <strong className="text-emerald-800">{currentSchool.academicYear || '2026-2027'}</strong>
+              Année Scolaire active : <strong className="text-emerald-800">{currentSchool.academicYear || currentAcademicYear()}</strong>
             </p>
           </div>
         </div>
@@ -1375,7 +1376,7 @@ export function SpecialDiscountsView({
               Réductions Spéciales & Reçus Automatiques
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">

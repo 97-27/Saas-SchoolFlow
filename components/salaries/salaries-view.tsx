@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -468,7 +469,7 @@ export function SalariesView({
 
     ctx.font = 'bold 19px monospace';
     ctx.fillStyle = '#475569';
-    ctx.fillText(`Code MENA : ${currentSchool.menaCode || '014829K'} • Année Scolaire : ${currentSchool.academicYear || '2026-2027'}`, 600, 215);
+    ctx.fillText(`Code MENA : ${currentSchool.menaCode || '014829K'} • Année Scolaire : ${currentSchool.academicYear || currentAcademicYear()}`, 600, 215);
 
     // Titre Reçu
     drawRoundRect(200, 310, 800, 75, 38);
@@ -633,7 +634,7 @@ export function SalariesView({
     ctx.fillText('✓ CERTIFIÉ CONFORME & PAYÉ', 885, sigY + 75);
 
     if (stampImg) {
-      ctx.drawImage(stampImg, 805, sigY + 80, 160, 130);
+      ctx.drawImage(stampImg, 790, sigY + 70, ...((): [number, number] => { const r = Math.min(200 / (stampImg.width || 1), 150 / (stampImg.height || 1)); return [(stampImg.width || 1) * r, (stampImg.height || 1) * r]; })());
     }
 
     // Bas de page légal
@@ -926,7 +927,7 @@ export function SalariesView({
               Salaires du Personnel & Reçus
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
-              {currentSchool.academicYear || '2026-2027'}
+              {currentSchool.academicYear || currentAcademicYear()}
             </span>
           </div>
           <p className="text-xs text-slate-500 font-sans">

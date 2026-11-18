@@ -1,3 +1,4 @@
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 import { Invoice, InvoiceStatus, Student, DashboardKPIs, School, CanteenSubscription, TransportSubscription, BoardingStudent, SpecialDiscount, StudentInstallments } from './types';
 
 export const mockSchools: Record<string, School> = {
@@ -23,7 +24,7 @@ export const mockSchools: Record<string, School> = {
     email: 'contact@saint-joseph-dakar.sn',
     website: 'https://saint-joseph-dakar.sn',
 
-    academicYear: '2026-2027',
+    academicYear: currentAcademicYear(),
     currentTerm: 'Semestre 1',
     termType: 'semestriel',
     openingDate: '2026-10-05',
@@ -67,7 +68,7 @@ export const mockSchools: Record<string, School> = {
     email: 'direction@epc-manoi.ci',
     website: 'https://epc-manoi.ci',
 
-    academicYear: '2026-2027',
+    academicYear: currentAcademicYear(),
     currentTerm: 'Trimestre 1',
     termType: 'trimestriel',
     openingDate: '2026-09-07',
@@ -111,7 +112,7 @@ export const mockSchools: Record<string, School> = {
     email: 'direction@epc-markaz.ci',
     website: 'https://epc-markaz.ci',
 
-    academicYear: '2026-2027',
+    academicYear: currentAcademicYear(),
     currentTerm: 'Trimestre 1',
     termType: 'trimestriel',
     openingDate: '2026-09-07',
@@ -151,7 +152,7 @@ export function neutralSchool(slug: string): School {
     logoUrl: '',
     countryEmblemUrl: '',
     stampUrl: '',
-    academicYear: '2026-2027',
+    academicYear: currentAcademicYear(),
     currentTerm: 'Trimestre 1',
     termType: 'trimestriel',
     phone: '',

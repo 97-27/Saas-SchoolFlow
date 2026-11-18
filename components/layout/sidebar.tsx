@@ -1,4 +1,5 @@
 'use client';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -286,7 +287,7 @@ export function Sidebar({
                       {currentSchool.shortName}
                     </p>
                     <p suppressHydrationWarning className="text-[10px] text-slate-500 font-medium">
-                      {currentSchool.city || 'Ville à renseigner'} • {currentSchool.academicYear || '2026-2027'}
+                      {currentSchool.city || 'Ville à renseigner'} • {currentSchool.academicYear || currentAcademicYear()}
                     </p>
                   </>
                 ) : (

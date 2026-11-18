@@ -1299,7 +1299,7 @@ export function LandingView() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-          <p>© 2026-2027 SchoolFlow. Tous droits réservés.</p>
+          <p>© {new Date().getFullYear()} SchoolFlow. Tous droits réservés.</p>
           <p className="text-emerald-400 font-medium">Fait avec 💚 pour l'excellence de l'éducation en Afrique</p>
         </div>
       </footer>
