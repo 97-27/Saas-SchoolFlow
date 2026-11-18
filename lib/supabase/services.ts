@@ -552,6 +552,7 @@ export async function getStudentsFromSupabase(schoolSlug: string): Promise<Stude
         grade: d.grade,
         gender: d.gender,
         dateOfBirth: d.date_of_birth || '',
+        placeOfBirth: meta.placeOfBirth || '',
         address: cleanAddress,
         guardianName: d.guardian_name,
         guardianPhone: d.guardian_phone,
@@ -616,6 +617,7 @@ export async function saveStudentToSupabase(
       installments: student.installments || {},
       updatedAt: student.updatedAt || new Date().toISOString(),
       secondaryPhones: student.secondaryPhones || [],
+      placeOfBirth: student.placeOfBirth || '',
       notes: student.notes || '',
       isBoarding: Boolean(student.isBoarding || (student.notes && student.notes.toLowerCase().includes('internat (oui)'))),
     };
@@ -792,6 +794,7 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
         installments: student.installments || {},
         updatedAt: student.updatedAt || new Date().toISOString(),
         secondaryPhones: student.secondaryPhones || [],
+        placeOfBirth: student.placeOfBirth || '',
         notes: student.notes || '',
         isBoarding: Boolean(student.isBoarding || (student.notes && student.notes.toLowerCase().includes('internat (oui)'))),
       };

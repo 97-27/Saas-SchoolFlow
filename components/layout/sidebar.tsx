@@ -30,6 +30,7 @@ import {
   Trash2,
   Clock,
   Archive,
+  CreditCard,
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
@@ -210,6 +211,7 @@ export function Sidebar({
     },
     { key: 'personnel', page: 'personnel', title: 'Enseignants & Personnel', href: `${baseUrl}/personnel`, icon: UserCheck, active: pathname.includes('/personnel') },
     { key: 'pointage', page: 'pointage', title: 'Pointage du personnel', href: `${baseUrl}/pointage`, icon: Clock, active: pathname.includes('/pointage') },
+    { key: 'cartes', page: 'cartes', title: 'Cartes scolaires & Scan', href: `${baseUrl}/cartes`, icon: CreditCard, active: pathname.includes('/cartes') },
     { key: 'sante', page: 'sante', title: 'Santé & Suivi Médical', href: `${baseUrl}/sante`, icon: HeartPulse, active: pathname.includes('/sante') },
     { key: 'notes_diverses', page: 'notes-diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     { key: 'corbeille', page: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },

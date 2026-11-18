@@ -33,6 +33,7 @@ export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_grades_portal_status_v1', label: 'Portail des notes', read: [...ALL_STAFF, 'parent', 'eleve'], write: DIRECTION },
   { base: 'schoolflow_validated_class_bulletins_v1', label: 'Bulletins validés', read: [...ALL_STAFF, 'parent', 'eleve'], write: PEDAGOGIE },
   { base: 'schoolflow_attendance_records_v1', label: 'Appel de présence', read: ALL_STAFF, write: [...PEDAGOGIE, 'educateur'] },
+  { base: 'schoolflow_arrival_scans_v1', label: 'Arrivées scannées (carte scolaire)', read: ALL_STAFF, write: ['fondateur', 'fondateur_adjoint', 'directeur', 'secretaire', 'assistant_direction', 'educateur'] },
   { base: 'schoolflow_attendance_locked', label: 'Verrous d’appel', read: ALL_STAFF, write: [...PEDAGOGIE, 'educateur'] },
   { base: 'schoolflow_school_expenses_v1', label: 'Dépenses', read: [...FINANCE, 'informaticien'], write: FINANCE },
   { base: 'schoolflow_staff_salaries_v1', label: 'Salaires', read: [...FINANCE, 'informaticien'], write: FINANCE },

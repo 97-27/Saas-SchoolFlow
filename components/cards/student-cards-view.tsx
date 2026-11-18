@@ -1,0 +1,605 @@
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CreditCard, Printer, ScanLine, Search, Camera, CameraOff, MessageCircle, CheckCircle2, AlertTriangle, Users, X } from 'lucide-react';
+import type { School, Student } from '@/lib/data/types';
+import { DATA_UPDATED_EVENT, getLiveSchool, getLiveStudents, updateRegisteredStudent } from '@/lib/data/live-store';
+import { STUDENT_WRITE_ROLES } from '@/lib/auth/roles';
+import {
+  CARD_CSS,
+  CARDS_PER_PAGE,
+  frDate,
+  hasRealBirthDate,
+  parentPhone,
+  parseQrPayload,
+  printDocumentHtml,
+  qrPayload,
+  schoolContact,
+  sheetsHtml,
+  whatsappNumber,
+} from '@/components/cards/card-design';
+
+type ScanRecord = { at: string; by?: string; notifiedAt?: string };
+type ScanMap = Record<string, ScanRecord>;
+
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+async function makeQr(text: string): Promise<string> {
+  const mod: any = await import('qrcode');
+  const toDataURL = mod.toDataURL || mod.default?.toDataURL;
+  return toDataURL(text, { errorCorrectionLevel: 'M', margin: 1, width: 360, color: { dark: '#0f172a', light: '#ffffff' } });
+}
+
+export function StudentCardsView({ initialStudents, school, schoolSlug }: { initialStudents: Student[]; school: School; schoolSlug: string }) {
+  const slug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
+  const [tab, setTab] = useState<'cartes' | 'scan'>('cartes');
+  const [students, setStudents] = useState<Student[]>(initialStudents);
+  const [currentSchool, setCurrentSchool] = useState<School>(school);
+  const [roleId, setRoleId] = useState('');
+
+  useEffect(() => {
+    const load = () => {
+      setStudents(getLiveStudents(initialStudents, slug));
+      setCurrentSchool(getLiveSchool(slug, school));
+    };
+    load();
+    try {
+      setRoleId(JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}').roleId || '');
+    } catch {}
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [initialStudents, slug, school]);
+
+  const sorted = useMemo(
+    () => [...students].sort((a, b) => (a.grade || '').localeCompare(b.grade || '', 'fr') || (a.lastName || a.fullName).localeCompare(b.lastName || b.fullName, 'fr')),
+    [students]
+  );
+
+  return (
+    <div className="space-y-6 pb-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <CreditCard className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">Cartes scolaires & Scan</h1>
+            <p className="text-xs text-slate-500">
+              {sorted.length} élèves • une carte (recto + verso avec QR) est prête pour chaque élève inscrit
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center bg-white p-0.5 rounded-xl border border-slate-200 shadow-2xs self-start">
+          {(
+            [
+              ['cartes', 'Cartes', CreditCard],
+              ['scan', 'Scanner les arrivées', ScanLine],
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                tab === id ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'cartes' ? (
+        <CardsTab students={sorted} school={currentSchool} slug={slug} canEdit={STUDENT_WRITE_ROLES.includes(roleId)} />
+      ) : (
+        <ScanTab students={sorted} school={currentSchool} slug={slug} />
+      )}
+    </div>
+  );
+}
+
+/* ═════════════════════════ ONGLET CARTES ═════════════════════════ */
+
+function CardsTab({ students, school, slug, canEdit }: { students: Student[]; school: School; slug: string; canEdit: boolean }) {
+  const [grade, setGrade] = useState('Toutes les classes');
+  const [query, setQuery] = useState('');
+  const [qrs, setQrs] = useState<Record<string, string>>({});
+  const [showFix, setShowFix] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  const grades = useMemo(() => ['Toutes les classes', ...Array.from(new Set(students.map((s) => s.grade).filter(Boolean)))], [students]);
+  const list = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return students.filter(
+      (s) =>
+        (grade === 'Toutes les classes' || s.grade === grade) &&
+        (!q || s.fullName.toLowerCase().includes(q) || (s.studentNumber || '').toLowerCase().includes(q) || (s.matricule || '').toLowerCase().includes(q))
+    );
+  }, [students, grade, query]);
+
+  const preview = list.slice(0, CARDS_PER_PAGE);
+  const missingPlace = list.filter((s) => !s.placeOfBirth).length;
+  const missingBirth = list.filter((s) => !hasRealBirthDate(s)).length;
+
+  const ensureQrs = useCallback(
+    async (items: Student[]) => {
+      const next: Record<string, string> = {};
+      for (const s of items) {
+        if (qrs[s.id]) continue;
+        try {
+          next[s.id] = await makeQr(qrPayload(slug, s.id));
+        } catch {}
+      }
+      if (Object.keys(next).length) setQrs((prev) => ({ ...prev, ...next }));
+      return { ...qrs, ...next };
+    },
+    [qrs, slug]
+  );
+
+  useEffect(() => {
+    void ensureQrs(preview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grade, query, students.length]);
+
+  const handlePrint = async () => {
+    if (list.length === 0) return;
+    // La fenêtre s'ouvre tout de suite (clic de l'utilisateur) ; les QR sont préparés ensuite.
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Le navigateur a bloqué la fenêtre d’impression : autorisez les fenêtres pop-up pour ce site, puis réessayez.');
+      return;
+    }
+    setPrinting(true);
+    w.document.write('<p style="font-family:Arial;padding:20px">Préparation des cartes…</p>');
+    try {
+      const all = await ensureQrs(list);
+      const html = printDocumentHtml(sheetsHtml(list, school, all), `Cartes scolaires — ${school.shortName || school.name}`);
+      w.document.open();
+      w.document.write(html.replace('<head>', `<head><base href="${location.origin}/">`));
+      w.document.close();
+      // Laisse les logos / photos se charger avant d'ouvrir l'impression.
+      const imgs = Array.from(w.document.images);
+      await Promise.race([
+        Promise.all(imgs.map((im) => (im.complete ? Promise.resolve() : new Promise((r) => { im.onload = im.onerror = () => r(null); })))),
+        new Promise((r) => setTimeout(r, 6000)),
+      ]);
+      w.focus();
+      w.print();
+    } catch {
+      w.close();
+      alert('Impossible de préparer les cartes. Réessayez.');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const saveIdentity = (s: Student, patch: Partial<Student>) => {
+    const updated: Student = { ...s, ...patch, updatedAt: new Date().toISOString() };
+    updateRegisteredStudent(updated, slug);
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-2.5 flex-1">
+            <div className="relative sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Nom, numéro ou matricule…"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+            <select
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+              className="px-3 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 cursor-pointer"
+            >
+              {grades.map((g) => (
+                <option key={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={printing || list.length === 0}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-sm shadow-emerald-600/30 disabled:opacity-50 cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            {printing ? 'Préparation…' : `Imprimer ${list.length} carte${list.length > 1 ? 's' : ''} (A4, ${CARDS_PER_PAGE} par page)`}
+          </button>
+        </div>
+
+        {(missingPlace > 0 || missingBirth > 0) && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+            <span className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+              <span>
+                {missingPlace} élève(s) sans lieu de naissance, {missingBirth} sans date de naissance réelle : ces informations restent en pointillés sur la carte.
+              </span>
+            </span>
+            <button type="button" onClick={() => setShowFix((v) => !v)} className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-bold cursor-pointer whitespace-nowrap">
+              {showFix ? 'Masquer' : 'Compléter les fiches'}
+            </button>
+          </div>
+        )}
+
+        {showFix && (
+          <div className="max-h-[420px] overflow-y-auto border border-slate-200 rounded-2xl">
+            {!canEdit && <p className="p-3 text-xs text-slate-500">Seuls le Fondateur, le DGA, le Directeur et le Comptable peuvent modifier les fiches.</p>}
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500">
+                  <th className="py-2 px-3">Élève</th>
+                  <th className="py-2 px-3">Classe</th>
+                  <th className="py-2 px-3">Date de naissance</th>
+                  <th className="py-2 px-3">Lieu de naissance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {list.map((s) => (
+                  <tr key={s.id}>
+                    <td className="py-2 px-3 font-bold text-slate-900">{s.fullName}</td>
+                    <td className="py-2 px-3 text-slate-600">{s.grade}</td>
+                    <td className="py-2 px-3">
+                      <input
+                        type="date"
+                        disabled={!canEdit}
+                        defaultValue={hasRealBirthDate(s) ? s.dateOfBirth : ''}
+                        onBlur={(e) => e.target.value && e.target.value !== s.dateOfBirth && saveIdentity(s, { dateOfBirth: e.target.value })}
+                        className="px-2 py-1 rounded-lg border border-slate-300 text-xs disabled:bg-slate-50"
+                      />
+                    </td>
+                    <td className="py-2 px-3">
+                      <input
+                        type="text"
+                        disabled={!canEdit}
+                        defaultValue={s.placeOfBirth || ''}
+                        placeholder="Ville / village"
+                        maxLength={60}
+                        onBlur={(e) => e.target.value.trim() !== (s.placeOfBirth || '') && saveIdentity(s, { placeOfBirth: e.target.value.trim() })}
+                        className="w-full min-w-[150px] px-2 py-1 rounded-lg border border-slate-300 text-xs disabled:bg-slate-50"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+        <h2 className="text-sm font-extrabold text-slate-900 font-heading">Aperçu (première page : {preview.length} élève{preview.length > 1 ? 's' : ''})</h2>
+        {preview.length === 0 ? (
+          <p className="text-xs text-slate-500 py-6 text-center">Aucun élève ne correspond.</p>
+        ) : (
+          <div className="overflow-x-auto bg-slate-100 rounded-2xl p-3">
+            <style>{CARD_CSS}</style>
+            <div style={{ minWidth: '178mm' }} dangerouslySetInnerHTML={{ __html: sheetsHtml(preview, school, qrs) }} />
+          </div>
+        )}
+        <p className="text-[11px] text-slate-500">
+          Au moment d’imprimer, choisissez « Enregistrer en PDF » ou votre imprimante, format A4, marges « Aucune » ou « Par défaut », échelle 100 %.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════ ONGLET SCAN ═════════════════════════ */
+
+function ScanTab({ students, school, slug }: { students: Student[]; school: School; slug: string }) {
+  const scansKey = `schoolflow_arrival_scans_v1_${slug}`;
+  const [scans, setScans] = useState<ScanMap>({});
+  const [active, setActive] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ student: Student; at: string; already: boolean } | null>(null);
+  const [manual, setManual] = useState('');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const lastRef = useRef<{ text: string; t: number }>({ text: '', t: 0 });
+  const studentsRef = useRef(students);
+  studentsRef.current = students;
+
+  const readScans = useCallback((): ScanMap => {
+    try {
+      return JSON.parse(localStorage.getItem(scansKey) || '{}') || {};
+    } catch {
+      return {};
+    }
+  }, [scansKey]);
+
+  useEffect(() => {
+    setScans(readScans());
+    const reload = () => setScans(readScans());
+    window.addEventListener(DATA_UPDATED_EVENT, reload);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, reload);
+  }, [readScans]);
+
+  const day = todayIso();
+  const mine = (id: string) => scans[`${day}_${id}`];
+  const arrivedCount = students.filter((s) => mine(s.id)).length;
+  const absentees = students.filter((s) => !mine(s.id));
+
+  const sessionName = () => {
+    try {
+      const s = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}');
+      return s.fullName || s.name || s.roleId || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const register = useCallback(
+    (student: Student) => {
+      const fresh = readScans();
+      const key = `${todayIso()}_${student.id}`;
+      const existing = fresh[key];
+      if (existing) {
+        setResult({ student, at: existing.at, already: true });
+        return;
+      }
+      const rec: ScanRecord = { at: new Date().toISOString(), by: sessionName() };
+      const next = { ...fresh, [key]: rec };
+      try {
+        localStorage.setItem(scansKey, JSON.stringify(next));
+      } catch {}
+      setScans(next);
+      setResult({ student, at: rec.at, already: false });
+    },
+    [readScans, scansKey]
+  );
+
+  const handleText = useCallback(
+    (text: string) => {
+      const now = Date.now();
+      if (lastRef.current.text === text && now - lastRef.current.t < 4000) return;
+      lastRef.current = { text, t: now };
+      const parsed = parseQrPayload(text);
+      if (!parsed) {
+        setError('Ce QR code n’est pas une carte scolaire SchoolFlow.');
+        return;
+      }
+      const student = studentsRef.current.find((s) => s.id === parsed.studentId);
+      if (!student) {
+        setError('Élève introuvable : la carte est peut-être d’une autre école ou d’un élève supprimé.');
+        return;
+      }
+      setError('');
+      register(student);
+    },
+    [register]
+  );
+
+  const stop = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setActive(false);
+  }, []);
+
+  useEffect(() => stop, [stop]);
+
+  const start = async () => {
+    setError('');
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('La caméra n’est pas disponible sur cet appareil / ce navigateur (ouvrez le site en HTTPS dans Chrome).');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      streamRef.current = stream;
+      setActive(true);
+      const video = videoRef.current!;
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      await video.play();
+
+      const Detector = (window as any).BarcodeDetector;
+      const detector = Detector ? new Detector({ formats: ['qr_code'] }) : null;
+      let jsQR: any = null;
+      if (!detector) jsQR = (await import('jsqr')).default;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
+      const loop = async () => {
+        if (!streamRef.current) return;
+        try {
+          if (video.readyState >= 2) {
+            if (detector) {
+              const found = await detector.detect(video);
+              if (found?.[0]?.rawValue) handleText(found[0].rawValue);
+            } else if (ctx && video.videoWidth) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              ctx.drawImage(video, 0, 0);
+              const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+              if (code?.data) handleText(code.data);
+            }
+          }
+        } catch {}
+        setTimeout(loop, 200);
+      };
+      loop();
+    } catch (e: any) {
+      stop();
+      setError(
+        e?.name === 'NotAllowedError'
+          ? 'Caméra refusée. Touchez le cadenas à gauche de l’adresse → Autorisations → Caméra → Autoriser, puis réessayez.'
+          : e?.message || 'Impossible d’ouvrir la caméra.'
+      );
+    }
+  };
+
+  const manualMatches = useMemo(() => {
+    const q = manual.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return students.filter((s) => s.fullName.toLowerCase().includes(q) || (s.studentNumber || '').toLowerCase() === q || (s.matricule || '').toLowerCase() === q).slice(0, 6);
+  }, [manual, students]);
+
+  const waArrival = (s: Student, at: string) => {
+    const phone = whatsappNumber(parentPhone(s));
+    const text =
+      `Bonjour ${s.guardianName ? `Cher parent (${s.guardianName})` : 'Cher parent'},\n\n` +
+      `Votre enfant *${s.fullName}* (${s.grade}) est bien arrivé(e) à l'école ce ${frDate(todayIso())} à *${hhmm(at)}*.\n\n` +
+      `Merci pour votre compréhension.\n_${school.name}_${schoolContact(school) ? ` — ${schoolContact(school)}` : ''}`;
+    return phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : '';
+  };
+  const waAbsent = (s: Student) => {
+    const phone = whatsappNumber(parentPhone(s));
+    const text =
+      `Bonjour ${s.guardianName ? `Cher parent (${s.guardianName})` : 'Cher parent'},\n\n` +
+      `Nous vous informons que votre enfant *${s.fullName}* (${s.grade}) n'est pas arrivé(e) à l'école ce ${frDate(todayIso())}.\n\n` +
+      `Merci de nous en indiquer la raison${schoolContact(school) ? ` au ${schoolContact(school)}` : ''}.\n_${school.name}_`;
+    return phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : '';
+  };
+
+  const markNotified = (s: Student) => {
+    const fresh = readScans();
+    const key = `${todayIso()}_${s.id}`;
+    if (!fresh[key]) return;
+    const next = { ...fresh, [key]: { ...fresh[key], notifiedAt: new Date().toISOString() } };
+    try {
+      localStorage.setItem(scansKey, JSON.stringify(next));
+    } catch {}
+    setScans(next);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-extrabold text-slate-900 font-heading flex items-center gap-2">
+            <ScanLine className="w-4 h-4 text-emerald-600" /> Arrivées du {frDate(day)}
+          </h2>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+            {arrivedCount} / {students.length} arrivés
+          </span>
+        </div>
+
+        <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-[4/3] flex items-center justify-center">
+          <video ref={videoRef} muted playsInline className={`w-full h-full object-cover ${active ? '' : 'hidden'}`} />
+          {!active && <p className="text-xs text-slate-300 px-6 text-center">Appuyez sur « Démarrer la caméra » puis présentez le QR de la carte de l’élève.</p>}
+          {active && <div className="absolute inset-[18%] border-2 border-amber-400 rounded-2xl pointer-events-none" />}
+        </div>
+
+        <div className="flex gap-2">
+          {!active ? (
+            <button type="button" onClick={start} className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer">
+              <Camera className="w-4 h-4" /> Démarrer la caméra
+            </button>
+          ) : (
+            <button type="button" onClick={stop} className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer">
+              <CameraOff className="w-4 h-4" /> Arrêter la caméra
+            </button>
+          )}
+        </div>
+
+        {error && <p className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-semibold">{error}</p>}
+
+        <div className="space-y-2">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Sans caméra : chercher l’élève</p>
+          <input
+            value={manual}
+            onChange={(e) => setManual(e.target.value)}
+            placeholder="Nom, numéro (ID-014) ou matricule…"
+            className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          />
+          {manualMatches.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => {
+                register(s);
+                setManual('');
+              }}
+              className="w-full text-left px-3 py-2 rounded-xl border border-slate-200 hover:bg-emerald-50 text-xs cursor-pointer"
+            >
+              <span className="font-bold text-slate-900">{s.fullName}</span> <span className="text-slate-500">• {s.grade}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        {result && (
+          <div className={`p-4 sm:p-5 rounded-3xl border shadow-xs space-y-3 ${result.already ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-14 h-16 rounded-xl overflow-hidden bg-white border border-emerald-200 flex items-center justify-center text-emerald-700 font-extrabold shrink-0">
+                  {result.student.avatar ? <img src={result.student.avatar} alt="" className="w-full h-full object-cover" /> : (result.student.firstName || '?')[0]}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold text-slate-900 break-words">{result.student.fullName}</p>
+                  <p className="text-xs text-slate-600">{result.student.grade} • {result.student.studentNumber}</p>
+                  <p className={`text-xs font-bold mt-0.5 flex items-center gap-1 ${result.already ? 'text-amber-800' : 'text-emerald-700'}`}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {result.already ? `Déjà scanné à ${hhmm(result.at)}` : `Arrivé(e) à ${hhmm(result.at)}`}
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setResult(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 rounded-2xl bg-white border border-slate-200 text-xs space-y-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Parent / tuteur</p>
+              <p className="font-bold text-slate-900">{result.student.guardianName || '—'}</p>
+              <p className="font-mono text-slate-700">{parentPhone(result.student) || 'Aucun numéro enregistré'}</p>
+            </div>
+            {waArrival(result.student, result.at) ? (
+              <a
+                href={waArrival(result.student, result.at)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => markNotified(result.student)}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white bg-[#25D366] hover:bg-[#1ebe5b] cursor-pointer"
+              >
+                <MessageCircle className="w-4 h-4" /> Prévenir le parent sur WhatsApp
+              </a>
+            ) : (
+              <p className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-600">Aucun numéro WhatsApp pour ce parent : renseignez-le dans la fiche de l’élève.</p>
+            )}
+            {mine(result.student.id)?.notifiedAt && (
+              <p className="text-[11px] text-emerald-800">Parent averti à {hhmm(mine(result.student.id)!.notifiedAt!)}.</p>
+            )}
+          </div>
+        )}
+
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-3">
+          <h2 className="text-sm font-extrabold text-slate-900 font-heading flex items-center gap-2">
+            <Users className="w-4 h-4 text-amber-600" /> Pas encore arrivés ({absentees.length})
+          </h2>
+          <p className="text-[11px] text-slate-500">Après le contrôle du matin, prévenez les parents des élèves non scannés.</p>
+          <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-100">
+            {absentees.length === 0 && <p className="py-4 text-xs text-slate-500 text-center">Tous les élèves ont été scannés.</p>}
+            {absentees.map((s) => {
+              const url = waAbsent(s);
+              return (
+                <div key={s.id} className="py-2 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 break-words">{s.fullName}</p>
+                    <p className="text-[11px] text-slate-500">{s.grade}</p>
+                  </div>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white bg-[#25D366] hover:bg-[#1ebe5b]">
+                      <MessageCircle className="w-3.5 h-3.5" /> Absent
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 shrink-0">Pas de numéro</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

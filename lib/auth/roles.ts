@@ -67,6 +67,7 @@ export const ALL_PAGES = [
   'bulletins-parents',
   'personnel',
   'pointage',
+  'cartes',
   'sante',
   'notes-diverses',
   'corbeille',
@@ -83,12 +84,12 @@ const ROLE_PAGES: Record<string, string[]> = {
   fondateur_adjoint: ALL_PAGES,
   informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille', 'archives'].includes(p)),
   // « pointage » : chaque membre du personnel pointe son arrivée / son départ (page commune).
-  directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'pointage', 'sante', 'notes-diverses'],
+  directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'cartes', 'pointage', 'sante', 'notes-diverses'],
   // « archives » : le Comptable n'y entre qu'avec le code des chiffres (vérifié par /api/archives).
   comptable: ['dashboard', 'inscriptions', 'eleves', ...SERVICES, ...FINANCE, 'reductions', 'salaires', 'personnel', 'pointage', 'sante', 'notes-diverses', 'archives'],
-  secretaire: ['eleves', 'documents', ...PEDAGOGY, ...SERVICES, 'pointage'],
-  assistant_direction: ['eleves', 'documents', 'classes', 'personnel', 'pointage', 'sante', 'notes-diverses'],
-  educateur: ['eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'pointage', 'sante', 'notes-diverses'],
+  secretaire: ['eleves', 'documents', ...PEDAGOGY, ...SERVICES, 'cartes', 'pointage'],
+  assistant_direction: ['eleves', 'documents', 'classes', 'personnel', 'cartes', 'pointage', 'sante', 'notes-diverses'],
+  educateur: ['eleves', 'classes', 'presences', 'bulletins', 'distinctions', 'cartes', 'pointage', 'sante', 'notes-diverses'],
   enseignant: [...PEDAGOGY, 'pointage', 'notes-diverses'],
   // « communication » est la boîte de réception de la Direction : les parents ont leur page.
   parent: ['bulletins-parents', 'messagerie-parent', 'notes-diverses'],

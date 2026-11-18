@@ -176,8 +176,10 @@ export function dayStatus(
   if (rec?.absence) return 'absent_justifie';
   // Arrivée rouverte à la main aujourd'hui : personne n'est « absent » tant qu'elle est ouverte.
   if (date === clock.date && config.arrivalOverride?.date === clock.date && config.arrivalOverride.mode === 'open') return 'en_attente';
-  if (!config.enabled) return 'inactif';
-  if (!config.workDays.includes(weekdayOf(date))) return 'non_travaille';
+  // Pointage rouvert / fermé à la main aujourd'hui : il compte comme actif même si l'automatique n'est pas activé.
+  const forcedToday = date === clock.date && [config.arrivalOverride, config.departureOverride].some((o) => o && o.date === clock.date);
+  if (!config.enabled && !forcedToday) return 'inactif';
+  if (!forcedToday && !config.workDays.includes(weekdayOf(date))) return 'non_travaille';
   if (config.enabledSince && date < config.enabledSince) return 'inactif';
   if (date < clock.date) return 'absent';
   if (date === clock.date && clock.time > config.arrivalEnd) return 'absent';

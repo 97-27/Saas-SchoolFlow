@@ -49,6 +49,9 @@ type Payload = {
   roster: Member[];
   records: Record<string, PointageRecord>;
   /** Ma demande de code d'absence du jour (sans le code). */
+  /** Numéros WhatsApp de la Direction par poste (fiches de Administration & Codes). */
+  contacts: Record<string, { name: string; phone: string }>;
+  meName: string;
   myRequest: { to: string; note?: string; at: string; status: AbsenceRequest['status']; attempts: number } | null;
   /** Direction : toutes les demandes du jour, avec le code remis. */
   requests: (AbsenceRequest & { id: string })[];
@@ -361,7 +364,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
         </div>
       )}
 
-      {!cfg!.enabled && (
+      {!cfg!.enabled && !arrivalOpen && !departureOpen && (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
           <span>
@@ -502,14 +505,24 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
                   <button
                     type="button"
                     disabled={!!busy || !codeTo}
-                    onClick={() =>
-                      run('request_code', () => post({ action: 'request_code', to: codeTo, note: codeNote }), 'Demande envoyée à la Direction.').then(
+                    onClick={() => {
+                      // WhatsApp de la personne choisie (numéro de « Administration & Codes ») : la fenêtre
+                      // s'ouvre tout de suite, message déjà écrit ; la demande est aussi enregistrée dans l'application.
+                      const phone = (data.contacts?.[codeTo]?.phone || '').replace(/\D/g, '');
+                      if (phone) {
+                        const wa = phone.startsWith('225') || phone.length > 10 ? phone : `225${phone}`;
+                        const text =
+                          `Bonjour, je suis ${data.meName || 'un membre du personnel'}. Je ne peux pas pointer aujourd'hui (${frDate(data.today)}). ` +
+                          `Pouvez-vous me donner le code d'absence pour enregistrer mon motif ?${codeNote.trim() ? ` Motif : ${codeNote.trim()}` : ''}`;
+                        window.open(`https://wa.me/${wa}?text=${encodeURIComponent(text)}`, '_blank');
+                      }
+                      run('request_code', () => post({ action: 'request_code', to: codeTo, note: codeNote }), phone ? 'Demande enregistrée et WhatsApp ouvert.' : 'Demande envoyée à la Direction.').then(
                         (ok) => ok && setCodeNote('')
-                      )
-                    }
+                      );
+                    }}
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 cursor-pointer"
                   >
-                    {busy === 'request_code' ? 'Envoi…' : 'Envoyer la demande de code'}
+                    {busy === 'request_code' ? 'Envoi…' : data.contacts?.[codeTo]?.phone ? 'Demander le code sur WhatsApp' : 'Envoyer la demande de code'}
                   </button>
                 </div>
               )}
@@ -679,8 +692,8 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             {[
               { label: 'Présents', value: counts.present, cls: 'text-emerald-700' },
-              { label: 'Absents', value: counts.absent, cls: 'text-rose-600' },
-              { label: 'Absents (motif)', value: counts.absent_justifie, cls: 'text-amber-700' },
+              { label: 'Total absents', value: counts.absent + counts.absent_justifie, cls: 'text-rose-600' },
+              { label: 'Dont avec motif', value: counts.absent_justifie, cls: 'text-amber-700' },
               { label: 'Pas encore pointé', value: counts.en_attente, cls: 'text-slate-700' },
             ].map((k) => (
               <div key={k.label} className="p-3 rounded-2xl bg-slate-50 border border-slate-200">

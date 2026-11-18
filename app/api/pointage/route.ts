@@ -192,6 +192,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Numéros WhatsApp de la Direction (fiches de « Administration & Codes ») : la demande de code
+  // d'absence s'ouvre directement dans leur WhatsApp.
+  const contacts: Record<string, { name: string; phone: string }> = {};
+  const staffAll = await getStaffAuthRecords(slug);
+  const meName = staffAll.find((s) => s.id === session.staffId)?.fullName || '';
+  for (const s of staffAll) {
+    if (!POINTAGE_MANAGER_ROLES.includes(s.roleId) || s.status === 'Verrouillé' || !s.phone || contacts[s.roleId]) continue;
+    contacts[s.roleId] = { name: s.fullName, phone: s.phone };
+  }
+
   // Demandes de code d'absence du jour : la Direction voit tout (avec le code), les autres seulement la leur.
   const canManage = POINTAGE_MANAGER_ROLES.includes(session.roleId);
   const myReq = session.staffId ? await readRequest(schoolId, clock.date, session.staffId) : null;
@@ -224,6 +234,8 @@ export async function GET(request: NextRequest) {
       exempt: POINTAGE_EXEMPT_ROLES.includes(session.roleId),
       roster,
       records,
+      contacts,
+      meName,
       myRequest: myReq ? publicRequest(myReq) : null,
       requests,
     },

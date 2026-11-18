@@ -71,6 +71,7 @@ export interface Student {
   enrollmentDate?: string;
   attendanceRate: number;
   dateOfBirth?: string;
+  placeOfBirth?: string; // Lieu de naissance (carte scolaire), gardé dans le bloc [SF_META] de la fiche
   status: 'active' | 'on_leave' | 'transferred';
   tuitionStatus: 'paid' | 'partial' | 'unpaid';
   enrollmentType?: 'ancien' | 'nouveau';
