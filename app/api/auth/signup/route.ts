@@ -1,6 +1,6 @@
 import { currentAcademicYear } from '@/lib/data/school-calendar';
 import { NextRequest, NextResponse } from 'next/server';
-import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo, getAllSchoolsFromSupabase, saveSignupInfo, recordSchoolPayment } from '@/lib/supabase/services';
+import { createNewSchoolInSupabase, saveStaffUserToSupabase, getSchoolSubscriptionInfo, getAllSchoolsFromSupabase, saveSignupInfo, recordSchoolPayment, findUnusedGoldenCard, consumeGoldenCard, findPromoCode, recordPromoUse, setAccessControl } from '@/lib/supabase/services';
 import { isStudentTierId } from '@/lib/data/subscription-tiers';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
 import { clientIp, isRateLimited, jsonError } from '@/lib/server/auth';
@@ -57,7 +57,19 @@ export async function POST(request: NextRequest) {
   const studentTier = isStudentTierId(body?.studentTier) ? String(body.studentTier) : '';
   const paymentMethod = ['wave', 'orange', 'card'].includes(body?.paymentMethod) ? String(body.paymentMethod) : 'autre';
   const paymentPhone = String(body?.paymentPhone || '').trim().slice(0, 30);
-  const activationCodeGiven = String(body?.activationCode || '').trim().length > 0;
+  const goldenDigits = String(body?.goldenCode || '').replace(/\D/g, '');
+  const promoInput = String(body?.promoCode || '').trim();
+
+  // Carte dorée et code promo sont vérifiés AVANT toute création : un mauvais code ne crée rien.
+  const goldenCard = goldenDigits ? await findUnusedGoldenCard(goldenDigits) : null;
+  if (goldenDigits && !goldenCard) {
+    return jsonError('❌ Carte d’accès dorée invalide ou déjà utilisée. Vérifiez les 12 chiffres ou contactez SchoolFlow Africa.', 400);
+  }
+  const promo = promoInput && !goldenCard ? await findPromoCode(promoInput) : null;
+  if (promoInput && !goldenCard && !promo) {
+    return jsonError('❌ Ce code promo est invalide ou expiré. Corrigez-le ou laissez le champ vide.', 400);
+  }
+  const activationCodeGiven = !!goldenCard;
 
   if (!studentTier) {
     return jsonError('Veuillez indiquer le nombre d’élèves de votre établissement (tranche d’effectif).', 400);
@@ -156,19 +168,46 @@ export async function POST(request: NextRequest) {
   // Mode découverte : le règlement n'est pas encore relié à Wave / Orange Money / carte. Le choix
   // est enregistré « en attente » (jamais les numéros de carte) pour le suivi dans l'espace plateforme.
   const nowIso = new Date().toISOString();
-  await Promise.all([
-    saveSignupInfo(newSchool.slug, { studentTier, paymentMethod, paymentPhone, activationCodeGiven, signedUpAt: nowIso }),
-    recordSchoolPayment(newSchool.slug, {
+  const basePrice = PLAN_PRICES[plan];
+  const dueAmount = promo ? Math.max(0, Math.round(basePrice * (1 - promo.percent / 100))) : basePrice;
+  await saveSignupInfo(newSchool.slug, {
+    studentTier,
+    paymentMethod,
+    paymentPhone,
+    activationCodeGiven,
+    signedUpAt: nowIso,
+    ...(promo ? { promoCode: promo.code, promoPercent: promo.percent } : {}),
+    ...(goldenCard ? { goldenCard: true } : {}),
+  });
+  if (goldenCard) {
+    // Carte dorée : accès sans paiement, pour la durée de la carte (ou sans limite).
+    const consumed = await consumeGoldenCard(goldenCard.code, newSchool.slug);
+    if (consumed) {
+      const until = goldenCard.months ? new Date(new Date().setMonth(new Date().getMonth() + goldenCard.months)).toISOString() : null;
+      await setAccessControl(newSchool.slug, { unlimited: goldenCard.months === null, goldUntil: until, goldOnly: true });
+      await recordSchoolPayment(newSchool.slug, {
+        at: nowIso,
+        amount: 0,
+        plan,
+        method: 'code',
+        kind: 'inscription',
+        status: 'confirme',
+        note: `Carte dorée ${goldenCard.months ? goldenCard.months + ' mois' : 'illimitée'}`,
+      });
+    }
+  } else {
+    await recordSchoolPayment(newSchool.slug, {
       at: nowIso,
-      amount: PLAN_PRICES[plan],
+      amount: dueAmount,
       plan,
-      method: activationCodeGiven ? 'code' : paymentMethod,
+      method: paymentMethod,
       phone: paymentPhone,
       kind: 'inscription',
       status: 'en_attente',
-      note: activationCodeGiven ? 'Code d’activation saisi' : 'Règlement à confirmer',
-    }),
-  ]);
+      note: promo ? `Règlement à confirmer — code promo ${promo.code} (−${promo.percent} %)` : 'Règlement à confirmer',
+    });
+    if (promo) await recordPromoUse(promo.code, newSchool.slug);
+  }
 
   const sub = await getSchoolSubscriptionInfo(newSchool.slug);
   const fallbackEnd = new Date();

@@ -107,7 +107,7 @@ export function DashboardView({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `SchoolFlow - ${schoolState.name}`,
+          title: `SchoolFlow Africa - ${schoolState.name}`,
           text: `Accès direct au tableau de bord de ${schoolState.name}`,
           url: shareUrl,
         });

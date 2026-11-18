@@ -106,7 +106,17 @@ async function handleLogin(
   if (!school) return refuse('❌ Établissement introuvable. Vérifiez le lien de connexion de votre école.', 404);
   if (school.status === 'suspended') {
     const b = await getBlockState(slug);
-    return refuse('❌ ' + (b.message || "L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow."));
+    await new Promise((r) => setTimeout(r, 400));
+    return NextResponse.json(
+      { success: false, blocked: true, error: b.message || "L'accès à cet établissement est suspendu. Veuillez contacter le support SchoolFlow Africa." },
+      { status: 403 }
+    );
+  }
+  if (slug !== 'epc-manoi') {
+    const b = await getBlockState(slug);
+    if (b.deleteAt) {
+      return refuse('❌ Cet établissement est en cours de suppression par SchoolFlow Africa.');
+    }
   }
 
   // Échéance réelle d'abonnement (jamais pour l'établissement pilote).

@@ -45,7 +45,7 @@ export function ReportsView({
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [schoolState, setSchoolState] = useState<School>(school);
-  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('all');
+  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'secondaire'>('all');
 
   useEffect(() => {
     setStudents(getLiveStudents(initialStudents, schoolSlug));
@@ -114,13 +114,21 @@ export function ReportsView({
     );
   };
 
+  // Secondaire = collège + lycée réunis (de la 6ème à la Terminale)
+  const isSecondaire = (grade: string) => isCollege(grade) || isLycee(grade);
+
+  // Montants alignés sur la caisse : exigible = inscription + scolarité nette ; encaissé = inscription
+  // + versements ; reste = exigible − encaissé (jamais négatif) ; taux = encaissé / exigible (max 100 %).
+  const exigibleOf = (s: Student) => (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount || 0);
+  const collectedOf = (s: Student) => (s.registrationFee || 0) + (s.paidAmount || 0);
+  const rateOf = (collected: number, exigible: number) => (exigible > 0 ? Math.min(100, (collected / exigible) * 100).toFixed(1) : '100');
+
   // Filtrage des données
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
       if (selectedCycle === 'maternelle') return isMaternelle(s.grade);
       if (selectedCycle === 'primaire') return isPrimaire(s.grade);
-      if (selectedCycle === 'college') return isCollege(s.grade);
-      if (selectedCycle === 'lycee') return isLycee(s.grade);
+      if (selectedCycle === 'secondaire') return isSecondaire(s.grade);
       return true;
     });
   }, [students, selectedCycle]);
@@ -166,14 +174,10 @@ export function ReportsView({
     // Le montant exigible omettait jusqu'ici les droits d'inscription (toujours réglés dès
     // l'inscription, cf. registrationFee), ne comptant que la scolarité — ce qui sous-évaluait
     // le budget exigible réel par cycle.
-    const totalExigible = filteredStudents.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
-    const totalCollected = filteredStudents.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.paidAmount || 0), 0);
-    const totalOverdue = filteredStudents.reduce((acc, s) => {
-      const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
-      const paid = s.paidAmount || 0;
-      return acc + (s.balanceRemaining !== undefined ? s.balanceRemaining : Math.max(0, net - paid));
-    }, 0);
-    const rate = totalExigible > 0 ? ((totalCollected / totalExigible) * 100).toFixed(1) : '100';
+    const totalExigible = filteredStudents.reduce((acc, s) => acc + exigibleOf(s), 0);
+    const totalCollected = filteredStudents.reduce((acc, s) => acc + collectedOf(s), 0);
+    const totalOverdue = filteredStudents.reduce((acc, s) => acc + Math.max(0, exigibleOf(s) - collectedOf(s)), 0);
+    const rate = rateOf(totalCollected, totalExigible);
 
     const girlsCount = filteredStudents.filter((s) => s.gender === 'female').length;
     const boysCount = filteredStudents.filter((s) => s.gender === 'male').length;
@@ -184,19 +188,14 @@ export function ReportsView({
     const cyclesData = [
       { name: 'Maternelle (P.S. à G.S.)', check: isMaternelle, icon: Sparkles, color: 'emerald' },
       { name: 'Primaire (CP1 à CM2)', check: isPrimaire, icon: GraduationCap, color: 'blue' },
-      { name: 'Collège (6ème à 3ème)', check: isCollege, icon: Building2, color: 'amber' },
-      { name: 'Lycée (2nde à Tle)', check: isLycee, icon: GraduationCap, color: 'purple' },
+      { name: 'Secondaire (6ème à Tle)', check: isSecondaire, icon: Building2, color: 'amber' },
     ].map((c) => {
       const cycStus = students.filter((s) => c.check(s.grade));
-      
-      const cycExigible = cycStus.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount), 0);
-      const cycCollected = cycStus.reduce((acc, s) => acc + (s.registrationFee || 0) + (s.paidAmount || 0), 0);
-      const cycRemaining = cycStus.reduce((acc, s) => {
-        const net = s.netAmount !== undefined ? s.netAmount : s.tuitionAmount;
-        const paid = s.paidAmount || 0;
-        return acc + (s.balanceRemaining !== undefined ? s.balanceRemaining : Math.max(0, net - paid));
-      }, 0);
-      const cycRate = cycExigible > 0 ? ((cycCollected / cycExigible) * 100).toFixed(1) : '100';
+
+      const cycExigible = cycStus.reduce((acc, s) => acc + exigibleOf(s), 0);
+      const cycCollected = cycStus.reduce((acc, s) => acc + collectedOf(s), 0);
+      const cycRemaining = cycStus.reduce((acc, s) => acc + Math.max(0, exigibleOf(s) - collectedOf(s)), 0);
+      const cycRate = rateOf(cycCollected, cycExigible);
 
       return {
         ...c,
@@ -423,8 +422,7 @@ export function ReportsView({
             { id: 'all', label: 'Tous les Cycles' },
             { id: 'maternelle', label: 'Maternelle' },
             { id: 'primaire', label: 'Primaire' },
-            { id: 'college', label: 'Collège' },
-            { id: 'lycee', label: 'Lycée' },
+            { id: 'secondaire', label: 'Secondaire (6ème à Tle)' },
           ].map((c) => (
             <button
               key={c.id}
@@ -497,6 +495,12 @@ export function ReportsView({
               <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300">
                 {stats.rate}%
               </span>
+            </div>
+            <div className="h-2 rounded-full bg-emerald-100 overflow-hidden">
+              <div className="h-full bg-emerald-600 transition-all duration-500" style={{ width: `${Math.min(100, Number(stats.rate))}%` }} />
+            </div>
+            <div className="text-[11px] font-bold text-slate-600">
+              Reste à encaisser : <span className={stats.totalOverdue > 0 ? 'text-red-600' : 'text-emerald-700'}>{formatFCFA(stats.totalOverdue)}</span>
             </div>
           </div>
         </div>

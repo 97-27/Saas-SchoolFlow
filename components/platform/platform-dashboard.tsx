@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Building2,
   Users,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { formatFCFA } from '@/lib/utils/formatters';
 import { tierById, exceedsTier } from '@/lib/data/subscription-tiers';
-import type { PlatformSchoolRow, PaymentEvent } from '@/lib/supabase/services';
+import type { PlatformSchoolRow, PaymentEvent, PlatformCodes } from '@/lib/supabase/services';
 
 const PLAN_LABEL: Record<string, string> = { mensuel: 'Mensuel', annuel: '1 an', triennal: '3 ans' };
 const PLAN_PRICE: Record<string, number> = { mensuel: 30000, annuel: 250000, triennal: 750000 };
@@ -46,7 +46,7 @@ const ago = (iso?: string | null) => {
 };
 
 type ServiceRevenue = Record<string, Record<string, { internat: number; cantine: number; transport: number }>>;
-type Overview = { schools: PlatformSchoolRow[]; serviceRevenue: ServiceRevenue; generatedAt: string };
+type Overview = { schools: PlatformSchoolRow[]; serviceRevenue: ServiceRevenue; codes: PlatformCodes; generatedAt: string };
 type Toast = { type: 'ok' | 'err'; text: string } | null;
 
 export function PlatformDashboard() {
@@ -60,6 +60,8 @@ export function PlatformDashboard() {
   const [toast, setToast] = useState<Toast>(null);
   const [payFor, setPayFor] = useState<PlatformSchoolRow | null>(null);
   const [svcSchool, setSvcSchool] = useState<string>('all');
+
+  const versionRef = useRef<string>('');
 
   const showToast = (t: Toast) => {
     setToast(t);
@@ -76,8 +78,16 @@ export function PlatformDashboard() {
       }
       const json = await res.json();
       if (json?.success) {
-        setData({ schools: json.schools, serviceRevenue: json.serviceRevenue || {}, generatedAt: json.generatedAt });
+        setData({ schools: json.schools, serviceRevenue: json.serviceRevenue || {}, codes: json.codes || { cards: [], promos: [] }, generatedAt: json.generatedAt });
         setPhase('ready');
+        // Nouvelle version déployée (après un « push ») : la page se recharge toute seule.
+        if (json.version && json.version !== 'dev') {
+          if (versionRef.current && versionRef.current !== json.version) {
+            window.location.reload();
+            return;
+          }
+          versionRef.current = json.version;
+        }
       }
     } catch (e) {
       showToast({ type: 'err', text: 'Impossible de charger les données.' });
@@ -181,7 +191,7 @@ export function PlatformDashboard() {
             </div>
             <div>
               <h1 className="font-extrabold text-base leading-tight">Espace plateforme</h1>
-              <p className="text-xs text-slate-400">SchoolFlow — accès propriétaire</p>
+              <p className="text-xs text-slate-400">SchoolFlow Africa - accès propriétaire</p>
             </div>
           </div>
           {phase === 'checking' ? (
@@ -227,7 +237,7 @@ export function PlatformDashboard() {
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-extrabold text-sm sm:text-base leading-tight truncate">SchoolFlow — Tableau de bord plateforme</h1>
+            <h1 className="font-extrabold text-sm sm:text-base leading-tight truncate">SchoolFlow Africa — Tableau de bord plateforme</h1>
             <p className="text-[11px] text-slate-400 truncate">Mis à jour {data ? fmtDateTime(data.generatedAt) : '…'} • actualisation auto 60 s</p>
           </div>
         </div>
@@ -295,6 +305,9 @@ export function PlatformDashboard() {
 
         {/* Encaissements des services par mois */}
         <ServicesChart schools={schools} revenue={data?.serviceRevenue || {}} selected={svcSchool} onSelect={setSvcSchool} />
+
+        {/* Cartes dorées & codes promo */}
+        <CodesPanel codes={data?.codes || { cards: [], promos: [] }} onChanged={(msg) => { showToast({ type: 'ok', text: msg }); load(); }} onError={(msg) => showToast({ type: 'err', text: msg })} schools={schools} />
 
         {/* Liste des écoles */}
         <section className="rounded-2xl bg-white border border-slate-200">
@@ -375,7 +388,8 @@ export function PlatformDashboard() {
                           <h3 className="font-extrabold text-[11px] uppercase text-slate-500 pt-2">Règlement choisi</h3>
                           <Line k="Moyen" v={s.signup?.paymentMethod ? METHOD_LABEL[s.signup.paymentMethod] || s.signup.paymentMethod : '—'} />
                           <Line k="Numéro" v={s.signup?.paymentPhone || '—'} />
-                          <Line k="Code d’activation" v={s.signup?.activationCodeGiven ? 'Saisi par l’école' : 'Non'} />
+                          <Line k="Carte dorée" v={s.signup?.goldenCard || s.signup?.activationCodeGiven ? 'Utilisée à l’inscription' : 'Non'} />
+                          <Line k="Code promo utilisé" v={s.signup?.promoCode ? `${s.signup.promoCode} (−${s.signup.promoPercent || 0} %)` : s.access.promo ? `${s.access.promo.code} (attribué)` : 'Aucun'} />
                         </div>
                         <div className="space-y-2">
                           <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Paiements</h3>
@@ -643,6 +657,8 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
   const a = school.access;
   const protectedSchool = school.slug === 'epc-manoi';
   const [busy, setBusy] = useState(false);
+  const [goldOpen, setGoldOpen] = useState(false);
+  const [goldDate, setGoldDate] = useState('');
   const [message, setMessage] = useState(a.blockMessage || '');
   const [code, setCode] = useState(a.promo?.code || '');
   const [percent, setPercent] = useState(String(a.promo?.percent || 10));
@@ -673,25 +689,81 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
     <div className="space-y-2 border-t border-slate-200 pt-2">
       <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Contrôle de l’accès</h3>
 
-      <label className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 cursor-pointer">
-        <span className="font-bold">Accès illimité (pour toujours)</span>
-        <input type="checkbox" checked={a.unlimited} disabled={busy} onChange={(e) => send({ unlimited: e.target.checked }, e.target.checked ? 'Accès illimité accordé.' : 'Accès illimité retiré.')} className="w-4 h-4 accent-violet-600" />
-      </label>
-
-      <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-1.5">
-        <p className="font-bold">{a.blocked ? '🔒 Accès bloqué' : 'Bloquer l’accès'}</p>
-        <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={300} placeholder="Message affiché à l’école (facultatif)" className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+      {/* Les trois actions réunies : suspendre • bannir (supprimer) • carte dorée */}
+      <div className="grid grid-cols-3 gap-1.5">
         <button
           disabled={busy}
           onClick={() => {
-            if (!a.blocked && !window.confirm(`Bloquer l’accès de « ${school.name} » ? Les utilisateurs connectés seront coupés en moins d’une minute.`)) return;
-            send({ blocked: !a.blocked, blockMessage: message }, a.blocked ? 'Accès rétabli.' : 'Accès bloqué.');
+            if (!a.blocked && !window.confirm(`Suspendre l’accès de « ${school.name} » ? Les utilisateurs connectés seront coupés en moins d’une minute.`)) return;
+            send({ blocked: !a.blocked, blockMessage: message }, a.blocked ? 'Accès rétabli.' : 'Accès suspendu.');
           }}
-          className={`w-full py-1.5 rounded-lg font-extrabold text-white cursor-pointer ${a.blocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}`}
+          className={`py-2 rounded-lg font-extrabold text-white text-[11px] cursor-pointer ${a.blocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'}`}
         >
-          {a.blocked ? 'Débloquer l’école' : 'Bloquer l’école'}
+          {a.blocked ? 'Rétablir' : 'Suspendre'}
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => {
+            if (a.deleteAt) {
+              void fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete-cancel', slug: school.slug }) }).then(() => onChanged('Suppression annulée.'));
+              return;
+            }
+            if (!window.confirm(`BANNIR « ${school.name} » ?\n\nL’école verra un compte à rebours de 60 secondes puis TOUTES ses données seront supprimées définitivement.`)) return;
+            setBusy(true);
+            fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', slug: school.slug }) })
+              .then((r) => r.json().catch(() => null))
+              .then((j) => (j?.success ? onChanged('Suppression programmée dans 60 secondes.') : onError(j?.error || 'Modification impossible.')))
+              .catch(() => onError('Serveur injoignable.'))
+              .finally(() => setBusy(false));
+          }}
+          className="py-2 rounded-lg font-extrabold text-white text-[11px] cursor-pointer bg-red-600 hover:bg-red-700"
+        >
+          {a.deleteAt ? 'Annuler la suppression' : 'Bannir (supprimer)'}
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => setGoldOpen((v) => !v)}
+          className="py-2 rounded-lg font-extrabold text-[11px] cursor-pointer text-amber-950 bg-gradient-to-r from-amber-300 to-yellow-400 hover:from-amber-400 hover:to-yellow-500"
+        >
+          Carte dorée
         </button>
       </div>
+
+      {a.deleteAt && <p className="text-[11px] font-bold text-red-700 bg-red-50 rounded-lg p-2">⚠ Suppression prévue le {new Date(a.deleteAt).toLocaleTimeString('fr-FR')} — l’école voit le compte à rebours.</p>}
+      {a.blocked && <p className="text-[11px] font-bold text-orange-700 bg-orange-50 rounded-lg p-2">🔒 Accès suspendu : l’école voit le message ci-dessous.</p>}
+
+      <input value={message} onChange={(e) => setMessage(e.target.value)} maxLength={300} placeholder="Message affiché à l’école lors de la suspension (facultatif)" className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs" />
+
+      {(goldOpen || a.unlimited || a.goldUntil) && (
+        <div className="rounded-lg p-2 space-y-1.5 border border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100">
+          <p className="font-extrabold text-amber-900">
+            Carte dorée —{' '}
+            {a.unlimited ? 'accès illimité actif' : a.goldUntil ? `accès offert jusqu’au ${new Date(a.goldUntil).toLocaleDateString('fr-FR')}` : 'aucune carte active'}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[1, 3, 6, 12].map((m) => (
+              <button key={m} disabled={busy} onClick={() => send({ gold: m }, `Carte dorée : ${m} mois offerts.`)} className="py-1.5 rounded-lg bg-white border border-amber-300 font-bold text-amber-900 hover:bg-amber-100 cursor-pointer">
+                {m === 12 ? '1 an' : `${m} mois`}
+              </button>
+            ))}
+            <button disabled={busy} onClick={() => send({ gold: 'unlimited' }, 'Carte dorée : accès illimité.')} className="col-span-2 py-1.5 rounded-lg bg-amber-500 text-white font-extrabold hover:bg-amber-600 cursor-pointer">
+              Illimité ∞
+            </button>
+          </div>
+          <div className="flex gap-1.5">
+            <input type="date" value={goldDate} onChange={(e) => setGoldDate(e.target.value)} className="flex-1 rounded-lg border border-amber-300 px-2 py-1 text-xs bg-white" />
+            <button disabled={busy || !goldDate} onClick={() => send({ gold: 'until', goldUntil: new Date(goldDate + 'T23:59:59').toISOString() }, 'Carte dorée : date enregistrée.')} className="px-3 rounded-lg bg-amber-500 text-white font-extrabold disabled:opacity-50 cursor-pointer">
+              Jusqu’à cette date
+            </button>
+          </div>
+          {(a.unlimited || a.goldUntil) && (
+            <button disabled={busy} onClick={() => send({ gold: 'off' }, 'Carte dorée retirée.')} className="w-full py-1.5 rounded-lg border border-amber-400 text-amber-900 font-bold cursor-pointer">
+              Retirer la carte dorée
+            </button>
+          )}
+          <p className="text-[10px] text-amber-900/70">À la fin de la période, l’accès se coupe tout seul (sauf abonnement payé plus long).</p>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-lg p-2 space-y-1.5">
         <p className="font-bold">Code promo {a.promo ? `: ${a.promo.code} (-${a.promo.percent} %)` : ''}</p>
@@ -718,5 +790,102 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
         </div>
       </div>
     </div>
+  );
+}
+/* ---------- Cartes dorées & codes promo (globaux) ---------- */
+function CodesPanel({ codes, schools, onChanged, onError }: { codes: PlatformCodes; schools: PlatformSchoolRow[]; onChanged: (msg: string) => void; onError: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [months, setMonths] = useState('1');
+  const [count, setCount] = useState('1');
+  const [label, setLabel] = useState('');
+  const [pCode, setPCode] = useState('');
+  const [pPercent, setPPercent] = useState('10');
+  const [pExp, setPExp] = useState('');
+  const nameOf = (slug?: string) => schools.find((s) => s.slug === slug)?.shortName || slug || '';
+
+  const post = async (payload: Record<string, unknown>, okMsg: string) => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) return onError(json?.error || 'Enregistrement impossible.');
+      onChanged(okMsg);
+    } catch (e) {
+      onError('Serveur injoignable.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl bg-white border border-slate-200 p-4 space-y-4">
+      <h2 className="font-extrabold text-sm text-slate-800">Cartes d’accès dorées & codes promo</h2>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="rounded-xl p-3 space-y-2 border border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100">
+          <h3 className="font-extrabold text-xs text-amber-900">Carte dorée (code de 12 chiffres, entrée sans paiement)</h3>
+          <div className="grid grid-cols-3 gap-1.5 text-xs">
+            <select value={months} onChange={(e) => setMonths(e.target.value)} className="rounded-lg border border-amber-300 px-2 py-1.5 bg-white col-span-2">
+              <option value="1">1 mois offert</option>
+              <option value="3">3 mois</option>
+              <option value="6">6 mois</option>
+              <option value="12">1 an</option>
+              <option value="36">3 ans</option>
+              <option value="unlimited">Illimité</option>
+            </select>
+            <input type="number" min={1} max={20} value={count} onChange={(e) => setCount(e.target.value)} className="rounded-lg border border-amber-300 px-2 py-1.5 bg-white" title="Nombre de cartes" />
+          </div>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={60} placeholder="Pour qui ? (ex : École partenaire X)" className="w-full rounded-lg border border-amber-300 px-2 py-1.5 text-xs bg-white" />
+          <button disabled={busy} onClick={() => post({ action: 'golden-create', months: months === 'unlimited' ? null : Number(months), count: Number(count) || 1, label }, 'Carte dorée créée.')} className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs cursor-pointer disabled:opacity-50">
+            Générer la carte dorée
+          </button>
+          <ul className="space-y-1 max-h-56 overflow-y-auto text-xs">
+            {codes.cards.length === 0 && <li className="text-amber-900/70">Aucune carte créée.</li>}
+            {codes.cards.map((c) => (
+              <li key={c.code} className="flex items-center justify-between gap-2 bg-white border border-amber-200 rounded-lg px-2 py-1.5">
+                <span className="min-w-0">
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(c.code)} title="Copier" className="font-mono font-extrabold tracking-wider text-slate-900 cursor-pointer">{c.code.replace(/(\d{4})(?=\d)/g, '$1 ')}</button>
+                  <span className="block text-[10px] text-slate-500 truncate">
+                    {c.months ? `${c.months} mois` : 'Illimitée'}{c.label ? ` • ${c.label}` : ''} • {c.usedBy ? `utilisée par ${nameOf(c.usedBy)} le ${fmtDate(c.usedAt)}` : 'disponible'}
+                  </span>
+                </span>
+                {!c.usedBy && (
+                  <button disabled={busy} onClick={() => post({ action: 'golden-remove', code: c.code }, 'Carte supprimée.')} className="text-red-600 font-bold cursor-pointer shrink-0">Supprimer</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-xl p-3 space-y-2 border border-violet-200 bg-violet-50/50">
+          <h3 className="font-extrabold text-xs text-violet-900">Codes promo (saisis à l’inscription)</h3>
+          <div className="grid grid-cols-5 gap-1.5 text-xs">
+            <input value={pCode} onChange={(e) => setPCode(e.target.value.toUpperCase())} maxLength={24} placeholder="CODE" className="col-span-3 rounded-lg border border-violet-200 px-2 py-1.5 font-mono bg-white" />
+            <div className="col-span-2 relative">
+              <input type="number" min={1} max={100} value={pPercent} onChange={(e) => setPPercent(e.target.value)} className="w-full rounded-lg border border-violet-200 pl-2 pr-6 py-1.5 bg-white" />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+            </div>
+          </div>
+          <input type="date" value={pExp} onChange={(e) => setPExp(e.target.value)} className="w-full rounded-lg border border-violet-200 px-2 py-1.5 text-xs bg-white" title="Valable jusqu’au (facultatif)" />
+          <button disabled={busy || !pCode.trim()} onClick={() => post({ action: 'promo-create', code: pCode, percent: Number(pPercent), expiresAt: pExp || undefined }, 'Code promo créé.')} className="w-full py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs cursor-pointer disabled:opacity-50">
+            Créer le code promo
+          </button>
+          <ul className="space-y-1 max-h-56 overflow-y-auto text-xs">
+            {codes.promos.length === 0 && <li className="text-slate-500">Aucun code promo.</li>}
+            {codes.promos.map((p) => (
+              <li key={p.code} className="bg-white border border-violet-200 rounded-lg px-2 py-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono font-extrabold">{p.code} <span className="font-sans text-violet-700">−{p.percent} %</span></span>
+                  <button disabled={busy} onClick={() => post({ action: 'promo-remove', code: p.code }, 'Code promo supprimé.')} className="text-red-600 font-bold cursor-pointer">Supprimer</button>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {p.expiresAt ? `jusqu’au ${fmtDate(p.expiresAt)} • ` : ''}{p.uses.length} utilisation{p.uses.length > 1 ? 's' : ''}
+                  {p.uses.length > 0 && ` : ${p.uses.map((u) => `${nameOf(u.slug)} (${fmtDate(u.at)})`).join(', ')}`}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -412,7 +412,12 @@ export async function getSchoolSubscriptionInfo(slug: string): Promise<SchoolSub
       return { isExpired: false, endDate: '2099-12-31T00:00:00.000Z', plan: school.subscription_plan || 'annuel', daysRemaining: 36500 };
     }
 
-    const effectiveEnd = overrideEnd && overrideEnd.getTime() > baseEnd.getTime() ? overrideEnd : baseEnd;
+    let effectiveEnd = overrideEnd && overrideEnd.getTime() > baseEnd.getTime() ? overrideEnd : baseEnd;
+    // Carte dorée à durée limitée : offerte par la plateforme (ou seul accès pour une inscription par carte).
+    if (control?.goldUntil) {
+      const g = new Date(control.goldUntil);
+      if (!isNaN(g.getTime())) effectiveEnd = control.goldOnly ? g : g.getTime() > effectiveEnd.getTime() ? g : effectiveEnd;
+    }
     const now = new Date();
     const daysRemaining = Math.ceil((effectiveEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -2663,6 +2668,9 @@ export interface SignupInfo {
   paymentPhone?: string;
   activationCodeGiven?: boolean;
   signedUpAt?: string;
+  promoCode?: string;
+  promoPercent?: number;
+  goldenCard?: boolean;
 }
 
 async function readSystemRow(schoolId: string, roleId: string): Promise<{ id: string; data: any } | null> {
@@ -2856,10 +2864,118 @@ export interface AccessControl {
   blockMessage: string;
   unlimited: boolean;
   promo: PromoInfo | null;
+  /** Carte dorée à durée limitée : accès offert jusqu'à cette date (ISO). */
+  goldUntil?: string | null;
+  /** Carte dorée utilisée à l'inscription : seule cette date compte (pas de forfait payé). */
+  goldOnly?: boolean;
+  /** Bannissement : l'école sera supprimée à cette date (ISO). */
+  deleteAt?: string | null;
 }
 
-export const DEFAULT_ACCESS: AccessControl = { blocked: false, blockMessage: '', unlimited: false, promo: null };
-export const DEFAULT_BLOCK_MESSAGE = 'L’accès de votre établissement a été suspendu par SchoolFlow. Veuillez contacter le support.';
+export const DEFAULT_ACCESS: AccessControl = { blocked: false, blockMessage: '', unlimited: false, promo: null, goldUntil: null, goldOnly: false, deleteAt: null };
+export const DEFAULT_BLOCK_MESSAGE = 'L’accès de votre établissement a été suspendu par SchoolFlow Africa. Veuillez contacter le support.';
+export const SUPPORT_PHONE = '01 70 36 36 56';
+
+/** Supprime définitivement une école (toutes ses données partent en cascade). Jamais l'école pilote. */
+export async function deleteSchoolCompletely(slug: string): Promise<boolean> {
+  const clean = slug === 'college-excellence' ? 'epc-manoi' : slug;
+  if (!isSupabaseConfigured || !clean || clean === 'epc-manoi') return false;
+  try {
+    const schoolId = await getSchoolId(clean);
+    if (!schoolId) return true;
+    const { error } = await supabase.from('schools').delete().eq('id', schoolId);
+    return !error;
+  } catch (e) {
+    console.error('Erreur deleteSchoolCompletely:', e);
+    return false;
+  }
+}
+
+/* ---------- Cartes d'accès dorées & codes promo (globaux, créés par la plateforme) ---------- */
+
+export interface GoldenCard {
+  code: string; // 12 chiffres
+  months: number | null; // null = illimité
+  label?: string;
+  createdAt: string;
+  usedBy?: string; // slug
+  usedAt?: string;
+}
+export interface PromoCode {
+  code: string;
+  percent: number;
+  expiresAt?: string;
+  uses: { slug: string; at: string }[];
+}
+export interface PlatformCodes {
+  cards: GoldenCard[];
+  promos: PromoCode[];
+}
+
+const CODES_ROLE = 'system_platform_codes';
+
+export async function readPlatformCodes(): Promise<PlatformCodes> {
+  try {
+    const id = await getSchoolId('epc-manoi');
+    if (!id) return { cards: [], promos: [] };
+    const d = (await readSystemRow(id, CODES_ROLE))?.data;
+    return { cards: Array.isArray(d?.cards) ? d.cards : [], promos: Array.isArray(d?.promos) ? d.promos : [] };
+  } catch (e) {
+    return { cards: [], promos: [] };
+  }
+}
+
+export async function writePlatformCodes(codes: PlatformCodes): Promise<boolean> {
+  try {
+    const id = await getSchoolId('epc-manoi');
+    if (!id) return false;
+    return await writeSystemRow(id, CODES_ROLE, 'Codes Plateforme (Système)', 'SYS-PLATFORM-CODES', codes);
+  } catch (e) {
+    return false;
+  }
+}
+
+export function generateGoldenCode(): string {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => String(b % 10)).join('');
+}
+
+/** Valide une carte dorée sans la consommer (null si inconnue ou déjà utilisée). */
+export async function findUnusedGoldenCard(code: string): Promise<GoldenCard | null> {
+  const clean = String(code || '').replace(/\D/g, '');
+  if (clean.length < 12) return null;
+  const { cards } = await readPlatformCodes();
+  return cards.find((c) => c.code === clean && !c.usedBy) || null;
+}
+
+export async function consumeGoldenCard(code: string, slug: string): Promise<boolean> {
+  const codes = await readPlatformCodes();
+  const card = codes.cards.find((c) => c.code === code && !c.usedBy);
+  if (!card) return false;
+  card.usedBy = slug;
+  card.usedAt = new Date().toISOString();
+  return writePlatformCodes(codes);
+}
+
+/** Code promo valide (non expiré), sinon null. */
+export async function findPromoCode(code: string): Promise<PromoCode | null> {
+  const clean = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  if (!clean) return null;
+  const { promos } = await readPlatformCodes();
+  const p = promos.find((x) => x.code === clean);
+  if (!p) return null;
+  if (p.expiresAt && new Date(p.expiresAt).getTime() < Date.now()) return null;
+  return p;
+}
+
+export async function recordPromoUse(code: string, slug: string): Promise<void> {
+  const codes = await readPlatformCodes();
+  const p = codes.promos.find((x) => x.code === code);
+  if (!p) return;
+  p.uses = [...(p.uses || []), { slug, at: new Date().toISOString() }];
+  await writePlatformCodes(codes);
+}
 
 /** Lit l'état d'accès d'une école (jamais bloquée : l'école pilote epc-manoi). */
 export async function getAccessControl(slug: string): Promise<AccessControl> {

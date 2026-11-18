@@ -3,6 +3,7 @@ import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { NoticeModal } from '@/components/ui/notice-modal';
 import { useRouter } from 'next/navigation';
 import {
   GraduationCap,
@@ -492,7 +493,9 @@ export function LoginView({
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
-  const [activationCode, setActivationCode] = useState('');
+  const [activationCode, setActivationCode] = useState(''); // carte d'accès dorée (12 chiffres)
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [blockModal, setBlockModal] = useState<{ title: string; message: string } | null>(null);
 
   // Feedback UI
   const [errorMessage, setErrorMessage] = useState('');
@@ -529,14 +532,14 @@ export function LoginView({
         const blockedMsg = sessionStorage.getItem('sf_blocked_msg');
         if (blockedMsg) {
           sessionStorage.removeItem('sf_blocked_msg');
-          setErrorMessage('❌ ' + blockedMsg);
+          setBlockModal({ title: 'Accès suspendu', message: blockedMsg });
         }
       } catch (e) {}
 
       if (params.get('expired') === 'true') {
         setIsExpiredSchool(true);
         setErrorMessage(
-          "❌ Abonnement expiré. L'accès à l'espace de gestion est suspendu. Veuillez renouveler votre abonnement pour continuer à utiliser SchoolFlow."
+          "❌ Abonnement expiré. L'accès à l'espace de gestion est suspendu. Veuillez renouveler votre abonnement pour continuer à utiliser SchoolFlow Africa."
         );
       }
     }
@@ -708,6 +711,11 @@ export function LoginView({
       loginResult = await res.json().catch(() => null);
       if (!res.ok || !loginResult?.success) {
         if (res.status === 403 && /expir/i.test(loginResult?.error || '')) setIsExpiredSchool(true);
+        if (loginResult?.blocked) {
+          setBlockModal({ title: 'Accès suspendu', message: String(loginResult.error || '') });
+          setIsLoading(false);
+          return;
+        }
         setErrorMessage(
           loginResult?.error || '❌ Connexion impossible pour le moment. Vérifiez votre connexion internet et réessayez.'
         );
@@ -979,7 +987,8 @@ export function LoginView({
           studentTier,
           paymentMethod: selectedPaymentMethod,
           paymentPhone: selectedPaymentMethod === 'card' ? '' : paymentPhone,
-          activationCode: activationCode.trim(),
+          goldenCode: activationCode.replace(/\D/g, ''),
+          promoCode: promoCodeInput.trim().toUpperCase(),
         }),
       });
       result = await res.json().catch(() => null);
@@ -1055,7 +1064,7 @@ export function LoginView({
 
     const cloudWarning = result.staffSaved
       ? ''
-      : ' ⚠️ Votre code d’accès n’a pas pu être confirmé en ligne — s’il ne fonctionne pas depuis un autre appareil, contactez le support SchoolFlow.';
+      : ' ⚠️ Votre code d’accès n’a pas pu être confirmé en ligne — s’il ne fonctionne pas depuis un autre appareil, contactez le support SchoolFlow Africa.';
 
     setSuccessToast({
       title: cloudWarning ? 'Abonnement activé — vérification requise' : 'Abonnement activé avec succès !',
@@ -1084,6 +1093,7 @@ export function LoginView({
       suppressHydrationWarning
       className="min-h-screen w-full bg-gradient-to-br from-[#064e3b] via-[#0f172a] to-[#062c1d] flex flex-col justify-start items-center p-2.5 sm:p-5 md:p-6 lg:p-8 py-5 sm:py-8 lg:py-10 overflow-x-hidden overflow-y-auto font-sans"
     >
+      {blockModal && <NoticeModal title={blockModal.title} message={blockModal.message} onClose={() => setBlockModal(null)} closeLabel="Fermer" />}
       {/* Toast de succès */}
       {successToast && (
         <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-600 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-emerald-400">
@@ -1136,7 +1146,7 @@ export function LoginView({
                 {authMode === 'signup' ? 'Souscription d\'Abonnement' : 'Session de Connexion Officielle'}
               </span>
               <h1 className="text-xl sm:text-2xl font-extrabold font-heading text-white leading-tight">
-                {authMode === 'signup' ? 'Rejoignez le Réseau SchoolFlow' : 'Connexion de Tous les Personnels'}
+                {authMode === 'signup' ? 'Rejoignez le Réseau SchoolFlow Africa' : 'Connexion de Tous les Personnels'}
               </h1>
               <p className="text-xs text-slate-200 leading-relaxed">
                 {authMode === 'signup'
@@ -2107,26 +2117,39 @@ export function LoginView({
                     </div>
                   )}
 
-                  {/* Code d'activation / Dérogation Commerciale */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
-                    <label className="font-bold text-slate-800 block text-[11px] flex items-center justify-between">
-                      <span>Code d'activation / Bon de commande (Optionnel)</span>
-                      <span className="text-[10px] text-emerald-700 font-bold font-mono">+225 01 70 36 36 56</span>
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        autoComplete="off"
-                        value={activationCode}
-                        onChange={(e) => setActivationCode(e.target.value)}
-                        placeholder="Code d'activation"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 uppercase"
-                      />
+                  {/* Code promo + carte d'accès dorée (côte à côte) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-1">
+                      <label className="font-bold text-slate-800 block text-[11px]">Code promo (optionnel)</label>
+                      <div className="relative">
+                        <Sparkles className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={promoCodeInput}
+                          onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 24))}
+                          placeholder="Ex : RENTREE10"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 uppercase"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500">Une réduction est appliquée sur votre premier règlement.</p>
                     </div>
-                    <p className="text-[10px] text-slate-500">
-                      Saisissez votre code d'activation pour un déblocage immédiat de l'établissement.
-                    </p>
+                    <div className="p-3 rounded-2xl space-y-1 border border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-100">
+                      <label className="font-bold text-amber-900 block text-[11px]">Carte d’accès dorée (optionnel)</label>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-amber-600 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          value={activationCode}
+                          onChange={(e) => setActivationCode(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                          placeholder="12 chiffres"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-amber-300 text-xs font-mono font-bold text-slate-900 tracking-widest placeholder:font-sans placeholder:font-normal placeholder:tracking-normal placeholder:text-slate-400"
+                        />
+                      </div>
+                      <p className="text-[10px] text-amber-900/80">Avec une carte dorée, l’accès s’ouvre sans paiement. Contact : +225 01 70 36 36 56</p>
+                    </div>
                   </div>
                 </div>
 
@@ -2152,7 +2175,7 @@ export function LoginView({
 
           {/* Pied Droit */}
           <div className="pt-2 text-center text-[11px] text-slate-400">
-            SchoolFlow Platform • Protection des données certifiée SSL 256-bit • UEMOA
+            SchoolFlow Africa Platform • Protection des données certifiée SSL 256-bit • UEMOA
           </div>
         </div>
       </div>

@@ -16,6 +16,7 @@ import { SetupReminder } from './setup-reminder';
 import { BrandLoader } from '@/components/ui/brand-loader';
 import { useSingleTab } from '@/lib/client/single-tab';
 import { AppWindow } from 'lucide-react';
+import { NoticeModal } from '@/components/ui/notice-modal';
 
 /**
  * Les écrans lisent d'abord la copie gardée dans le navigateur : à l'ouverture, on voyait donc
@@ -134,6 +135,66 @@ function useSessionGuard(slug: string): boolean {
   return ok;
 }
 
+/**
+ * Alertes de la plateforme : échéance d'abonnement dans 3 jours ou moins, suppression
+ * programmée (compte à rebours). Le serveur est interrogé toutes les 30 s ; un blocage
+ * décidé par la plateforme déconnecte l'école et affiche le motif à la reconnexion.
+ */
+function usePlatformNotices(slug: string, enabled: boolean) {
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
+  const [deleteAtMs, setDeleteAtMs] = useState<number | null>(null);
+  const [skew, setSkew] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || slug === 'epc-manoi') return;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/auth/session?slug=${encodeURIComponent(slug)}&t=${Date.now()}`, { cache: 'no-store' });
+        const json = await res.json().catch(() => null);
+        if (!alive) return;
+        if (res.status === 401 || res.status === 403 || res.status === 402) {
+          if (json?.blocked) {
+            try {
+              sessionStorage.setItem('sf_blocked_msg', String(json.error || ''));
+            } catch (e) {}
+          }
+          kickToLogin(slug);
+          return;
+        }
+        if (res.ok && json?.success) {
+          setDaysLeft(typeof json.daysRemaining === 'number' ? json.daysRemaining : null);
+          setEndDate(json.endDate || null);
+          setDeleteAtMs(json.deleteAt ? new Date(json.deleteAt).getTime() : null);
+          if (typeof json.serverNow === 'number') setSkew(json.serverNow - Date.now());
+        }
+      } catch (e) {}
+    };
+    poll();
+    const t = setInterval(poll, 30_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [slug, enabled]);
+
+  useEffect(() => {
+    if (deleteAtMs === null) return;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [deleteAtMs]);
+
+  const remainingMs = deleteAtMs === null ? null : deleteAtMs - (now + skew);
+  useEffect(() => {
+    if (remainingMs !== null && remainingMs <= -1500) kickToLogin(slug);
+  }, [remainingMs, slug]);
+
+  return { daysLeft, endDate, remainingMs, dismissed, dismiss: () => setDismissed(true) };
+}
+
 interface DashboardShellProps {
   children: React.ReactNode;
   schoolSlug?: string;
@@ -148,6 +209,7 @@ export function DashboardShell({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const sessionOk = useSessionGuard(schoolSlug);
   const tab = useSingleTab();
+  const notices = usePlatformNotices(schoolSlug, sessionOk);
 
   // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
   // La lecture des données démarre tout de suite, en même temps que la vérification de session.
@@ -225,6 +287,29 @@ export function DashboardShell({
             </DataReadyGate>
           </main>
         </div>
+
+        {/* Suppression programmée par la plateforme : compte à rebours impossible à fermer */}
+        {notices.remainingMs !== null && (
+          <NoticeModal
+            title="Établissement supprimé par SchoolFlow Africa"
+            message={'Cet établissement va être supprimé de la plateforme.\nVous allez être déconnecté et les données vont disparaître dans :'}
+            countdown={`${Math.max(0, Math.ceil(notices.remainingMs / 1000))} s`}
+          />
+        )}
+        {/* Échéance d'abonnement dans 3 jours ou moins */}
+        {notices.remainingMs === null && !notices.dismissed && notices.daysLeft !== null && notices.daysLeft <= 3 && notices.daysLeft >= 0 && (
+          <NoticeModal
+            title="Abonnement bientôt expiré"
+            message={
+              notices.daysLeft === 0
+                ? 'Votre abonnement SchoolFlow Africa expire AUJOURD’HUI.\nRenouvelez-le pour ne pas perdre l’accès.'
+                : `Votre abonnement SchoolFlow Africa expire dans ${notices.daysLeft} jour${notices.daysLeft > 1 ? 's' : ''}${
+                    notices.endDate ? ` (le ${new Date(notices.endDate).toLocaleDateString('fr-FR')})` : ''
+                  }.\nRenouvelez-le pour ne pas perdre l’accès.`
+            }
+            onClose={notices.dismiss}
+          />
+        )}
 
         {/* Notificateur Universel Temps Réel Multi-Appareils */}
         <RealtimeNotifier schoolSlug={schoolSlug} />

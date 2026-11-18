@@ -140,6 +140,11 @@ export function SchoolFlowLogo({
             >
               Flow
             </span>
+            <span
+              className={`font-black font-heading tracking-tight ${titleSizes} ${isLight ? 'text-amber-300' : 'text-amber-500'} ml-1`}
+            >
+              Africa
+            </span>
             {/* Point d'accent Ambre / Or */}
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block ml-0.5 align-top animate-pulse" />
           </div>

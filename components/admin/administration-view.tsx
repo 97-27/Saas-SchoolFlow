@@ -320,7 +320,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const school = getLiveSchool(schoolSlug);
     const cleanPhone = (staff.phone || '').replace(/[^0-9]/g, '');
     const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/${schoolSlug}/login` : `https://saas-school-flow-12xh.vercel.app/${schoolSlug}/login`;
-    const message = `👋 *Bonjour ${staff.fullName}*,\n\nVoici vos accès officiels sur la plateforme *SchoolFlow* de l’établissement *${school.shortName || school.name}* :\n\n👤 *Poste / Rôle* : ${staff.role}\n🆔 *Matricule* : ${staff.matricule || 'Attribué'}\n🔑 *Code d'Authentification* : *${staff.authCode}*\n🌐 *Lien de Connexion Direct* : ${loginUrl}\n\n_(Gardez ce code strictement personnel et confidentiel pour accéder à votre espace de travail)._`;
+    const message = `👋 *Bonjour ${staff.fullName}*,\n\nVoici vos accès officiels sur la plateforme *SchoolFlow Africa* de l’établissement *${school.shortName || school.name}* :\n\n👤 *Poste / Rôle* : ${staff.role}\n🆔 *Matricule* : ${staff.matricule || 'Attribué'}\n🔑 *Code d'Authentification* : *${staff.authCode}*\n🌐 *Lien de Connexion Direct* : ${loginUrl}\n\n_(Gardez ce code strictement personnel et confidentiel pour accéder à votre espace de travail)._`;
 
     const waUrl = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`

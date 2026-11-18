@@ -3547,6 +3547,48 @@ export function InscriptionsView({
               )}
             </div>
 
+            {/* Contrôle des montants saisis : détail des versements en grand + alerte de faute de frappe */}
+            {(() => {
+              const lines = [
+                { label: 'Frais d’inscription', v: registrationFee || 0 },
+                { label: 'Scolarité annuelle', v: tuitionAmount || 0 },
+                { label: 'Réduction', v: discountAmount || 0 },
+                { label: '1er versement', v: versement1Amount || 0 },
+                { label: '2e versement', v: versement2Amount || 0 },
+                { label: '3e versement', v: versement3Amount || 0 },
+                { label: '4e versement', v: versement4Amount || 0 },
+                { label: '5e versement', v: versement5Amount || 0 },
+              ];
+              // Les montants en francs CFA se terminent par 0 ou 5 : 20 003 ou 21 007 sont presque toujours une faute de frappe.
+              const odd = lines.filter((l) => l.v > 0 && l.v % 5 !== 0);
+              return (
+                <div className="space-y-2">
+                  <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-3 text-center">
+                    <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wide">Total des versements à enregistrer</p>
+                    <p className="text-2xl sm:text-3xl font-black font-mono text-emerald-900">{formatFCFA(paidAmount)}</p>
+                    {lines.filter((l) => l.label.includes('versement') && l.v > 0).length > 0 && (
+                      <p className="text-[11px] text-emerald-800 mt-1">
+                        {lines.filter((l) => l.label.includes('versement') && l.v > 0).map((l) => `${l.label} : ${formatFCFA(l.v)}`).join(' • ')}
+                      </p>
+                    )}
+                  </div>
+                  {odd.length > 0 && (
+                    <div className="rounded-2xl border-2 border-red-400 bg-red-50 p-3 text-xs text-red-800 font-bold space-y-1">
+                      <p>⚠ Attention : montant inhabituel — vérifiez qu’il n’y a pas de faute de frappe :</p>
+                      <ul className="list-disc pl-5 font-mono">
+                        {odd.map((l) => (
+                          <li key={l.label}>
+                            {l.label} : {formatFCFA(l.v)}
+                          </li>
+                        ))}
+                      </ul>
+                      <p>Êtes-vous sûr de vouloir valider ce montant ?</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Actions Modal */}
             <div className="flex items-center gap-3 pt-2">
               <button

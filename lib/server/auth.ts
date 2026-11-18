@@ -69,8 +69,11 @@ export async function requireSession(
     return { error: NextResponse.json({ success: false, blocked: true, error: block.message }, { status: 403 }) };
   }
 
-  if (sessionSlug !== 'epc-manoi' && session.subscriptionEndDate) {
-    const end = new Date(session.subscriptionEndDate).getTime();
+  // Échéance : la valeur lue en base fait foi (une carte dorée, un renouvellement ou une
+  // expiration prennent effet sans reconnexion) ; à défaut, celle gardée dans le cookie.
+  const endIso = block.endDate || session.subscriptionEndDate;
+  if (sessionSlug !== 'epc-manoi' && endIso) {
+    const end = new Date(endIso).getTime();
     if (!isNaN(end) && Date.now() > end) {
       return { error: jsonError('Abonnement expiré. Veuillez renouveler votre abonnement.', 402) };
     }
