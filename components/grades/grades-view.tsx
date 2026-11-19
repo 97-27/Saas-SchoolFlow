@@ -283,8 +283,8 @@ export function GradesView({
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
 
-  // 3 Blocs : 'college' | 'lycee' | 'pedagogie'
-  const [activeTab, setActiveTab] = useState<'college' | 'lycee' | 'pedagogie'>('college');
+  // 2 Blocs : 'secondaire' (collège + lycée fusionnés) | 'pedagogie'
+  const [activeTab, setActiveTab] = useState<'secondaire' | 'pedagogie'>('secondaire');
   const [selectedClass, setSelectedClass] = useState<string>('6ème');
   const [selectedSubject, setSelectedSubject] = useState<string>('Français');
   const [selectedTerm, setSelectedTerm] = useState<'Trimestre 1' | 'Trimestre 2' | 'Trimestre 3'>('Trimestre 1');
@@ -336,17 +336,11 @@ export function GradesView({
   // Config des cycles
   const cyclesConfig = useMemo(() => {
     return {
-      college: {
-        label: 'Cycle Collège (6ème à 3ème)',
-        sub: 'Saisie & gestion des notes trimestrielles',
-        icon: Building2,
-        classes: ['6ème', '5ème', '4ème', '3ème'],
-      },
-      lycee: {
-        label: 'Cycle Lycée (2nde à Tle)',
+      secondaire: {
+        label: 'Secondaire (6ème à Terminale)',
         sub: 'Saisie & gestion des notes trimestrielles',
         icon: GraduationCap,
-        classes: ['2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'],
+        classes: ['6ème', '5ème', '4ème', '3ème', '2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'],
       },
       pedagogie: {
         label: 'Pédagogie & Fiches de Cours',
@@ -370,14 +364,11 @@ export function GradesView({
     }
   }, [selectedClass, currentSubjects, selectedSubject, activeTab]);
 
-  const handleTabChange = (tab: 'college' | 'lycee' | 'pedagogie') => {
+  const handleTabChange = (tab: 'secondaire' | 'pedagogie') => {
     setActiveTab(tab);
-    if (tab === 'college') {
+    if (tab === 'secondaire') {
       setSelectedClass('6ème');
       setSelectedSubject(getSubjectsForClass('6ème')[0].name);
-    } else if (tab === 'lycee') {
-      setSelectedClass('2nde A');
-      setSelectedSubject(getSubjectsForClass('2nde A')[0].name);
     } else {
       setSelectedClass('6ème');
       setSelectedSubject('Toutes les matières');
@@ -788,7 +779,7 @@ export function GradesView({
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
             {activeTab === 'pedagogie'
               ? 'Fiches de préparation, plans de cours et ressources pédagogiques officielles MENA pour toutes les classes'
-              : `Saisie des 5 interrogations, 2 devoirs et compositions du Secondaire (Collège : 6ème à 3ème) — ${currentSchool.name}`}
+              : `Saisie des 5 interrogations, 2 devoirs et compositions du Secondaire (6ème à Terminale) — ${currentSchool.name}`}
           </p>
         </div>
 
@@ -849,30 +840,31 @@ export function GradesView({
       </div>
 
       {/* BANDEAU DE GESTION DU PORTAIL DE SAISIE DES NOTES (CONTRÔLE ADMINISTRATEUR) */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-          <div className="flex items-start md:items-center gap-3">
+      <div className="bg-white rounded-xl border border-slate-200/90 px-3 py-2 shadow-xs">
+        <div className="flex flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                 portalStatus.isOpen
                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                   : 'bg-rose-50 text-rose-600 border border-rose-200'
               }`}
             >
               {portalStatus.isOpen ? (
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
               ) : (
-                <Lock className="w-5 h-5 text-rose-600" />
+                <Lock className="w-4 h-4 text-rose-600" />
               )}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading">
-                  Portail Pédagogique de Saisie des Notes :
+                <span className="text-[11px] font-extrabold text-slate-800 font-heading">
+                  Saisie des notes :
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shadow-2xs ${
+                  title={portalStatus.isOpen ? 'Les enseignants peuvent renseigner et modifier les notes.' : `Verrouillé par la Direction (${portalStatus.updatedBy}).`}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                     portalStatus.isOpen
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : 'bg-rose-50 text-rose-700 border-rose-200'
@@ -883,14 +875,9 @@ export function GradesView({
                       portalStatus.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
                     }`}
                   />
-                  {portalStatus.isOpen ? 'PORTAIL OUVERT (Saisie autorisée)' : 'PORTAIL FERMÉ (Saisie verrouillée)'}
+                  {portalStatus.isOpen ? 'OUVERT' : 'FERMÉ'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {portalStatus.isOpen
-                  ? 'Les enseignants et professeurs ont actuellement l’autorisation de renseigner et modifier les notes d’interrogations et devoirs.'
-                  : `Accès verrouillé par la Direction (${portalStatus.updatedBy}). Les enseignants ne peuvent plus modifier les notes.`}
-              </p>
             </div>
           </div>
 
@@ -898,7 +885,7 @@ export function GradesView({
             <button
               type="button"
               onClick={handleTogglePortal}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                 portalStatus.isOpen
                   ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
                   : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
@@ -906,13 +893,13 @@ export function GradesView({
             >
               {portalStatus.isOpen ? (
                 <>
-                  <Lock className="w-4 h-4" />
-                  <span>Fermer les Portails</span>
+                  <Lock className="w-3 h-3" />
+                  <span>Fermer</span>
                 </>
               ) : (
                 <>
-                  <Unlock className="w-4 h-4" />
-                  <span>Ouvrir l’Accès aux Notes</span>
+                  <Unlock className="w-3 h-3" />
+                  <span>Ouvrir</span>
                 </>
               )}
             </button>
@@ -953,7 +940,7 @@ export function GradesView({
       )}
 
       {/* 2. LES 3 BLOCS DU HAUT (Collège, Lycée & Pédagogie Fiches de Cours) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {(Object.keys(cyclesConfig) as Array<keyof typeof cyclesConfig>).map((tabKey) => {
           const cfg = cyclesConfig[tabKey];
           const Icon = cfg.icon;

@@ -500,6 +500,9 @@ export function LoginView({
   // Feedback UI
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [emailChallenge, setEmailChallenge] = useState<{ challenge: string; email: string } | null>(null);
+  const [emailCodeInput, setEmailCodeInput] = useState('');
+  const [emailCodeError, setEmailCodeError] = useState('');
   const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'done'>('form');
   const [successToast, setSuccessToast] = useState<{ title: string; subtitle: string } | null>(null);
 
@@ -927,8 +930,8 @@ export function LoginView({
   // ═══════════════════════════════════════════════════════════════
   // 2. GESTION DU NOUVEAU COMPTE & PRISE D'ABONNEMENT ÉTABLISSEMENT
   // ═══════════════════════════════════════════════════════════════
-  const handleSignupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSignupSubmit = async (e: React.FormEvent | null, confirm?: { challenge: string; code: string }) => {
+    e?.preventDefault();
     setErrorMessage('');
 
     // 1. Validation des champs d'identité — le nom du Fondateur n'est PAS exigé séparément : dans
@@ -975,7 +978,7 @@ export function LoginView({
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(confirm ? { challenge: confirm.challenge, emailCode: confirm.code } : {
           schoolName: signupSchoolName,
           shortName: signupSchoolShortName,
           address: signupSchoolAddress,
@@ -993,13 +996,23 @@ export function LoginView({
       });
       result = await res.json().catch(() => null);
       if (!res.ok || !result?.success) {
-        setErrorMessage(
+        const msg =
           result?.error ||
-            '❌ Impossible de créer votre espace pour le moment (problème de connexion au serveur). Veuillez réessayer dans quelques instants.'
-        );
+          '❌ Impossible de créer votre espace pour le moment (problème de connexion au serveur). Veuillez réessayer dans quelques instants.';
+        if (confirm) setEmailCodeError(msg);
+        else setErrorMessage(msg);
         setIsLoading(false);
         return;
       }
+      // Étape 1 terminée : un code a été envoyé par e-mail. Aucun compte n'est ouvert avant confirmation.
+      if (result.needsEmailCode) {
+        setEmailChallenge({ challenge: result.challenge, email: result.email });
+        setEmailCodeInput('');
+        setEmailCodeError('');
+        setIsLoading(false);
+        return;
+      }
+      setEmailChallenge(null);
     } catch (err) {
       setErrorMessage('❌ Impossible de créer votre espace pour le moment : le serveur est injoignable. Veuillez réessayer dans quelques instants.');
       setIsLoading(false);
@@ -1094,6 +1107,54 @@ export function LoginView({
       className="min-h-screen w-full bg-gradient-to-br from-[#064e3b] via-[#0f172a] to-[#062c1d] flex flex-col justify-start items-center p-2.5 sm:p-5 md:p-6 lg:p-8 py-5 sm:py-8 lg:py-10 overflow-x-hidden overflow-y-auto font-sans"
     >
       {blockModal && <NoticeModal title={blockModal.title} message={blockModal.message} onClose={() => setBlockModal(null)} closeLabel="Fermer" />}
+      {emailChallenge && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 space-y-4">
+            <h3 className="text-lg font-extrabold text-slate-900 text-center">Confirmez votre e-mail</h3>
+            <p className="text-xs text-slate-600 text-center">
+              Un code à 6 chiffres vient d’être envoyé à <b>{emailChallenge.email}</b>. Votre espace ne sera créé qu’après confirmation. Pensez à vérifier les courriers indésirables.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              maxLength={6}
+              value={emailCodeInput}
+              onChange={(e) => setEmailCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              className="w-full text-center text-3xl tracking-[0.4em] font-extrabold py-3 rounded-2xl border-2 border-emerald-200 focus:border-emerald-500 outline-none"
+            />
+            {emailCodeError && <p className="text-xs font-bold text-red-600 text-center">{emailCodeError}</p>}
+            <button
+              type="button"
+              disabled={isLoading || emailCodeInput.length !== 6}
+              onClick={() => {
+                setEmailCodeError('');
+                handleSignupSubmit(null, { challenge: emailChallenge.challenge, code: emailCodeInput });
+              }}
+              className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm cursor-pointer"
+            >
+              {isLoading ? 'Vérification…' : 'Confirmer et créer mon espace'}
+            </button>
+            <div className="flex items-center justify-between text-xs">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => {
+                  setEmailCodeError('');
+                  handleSignupSubmit(null);
+                }}
+                className="font-bold text-emerald-700 hover:underline cursor-pointer"
+              >
+                Renvoyer le code
+              </button>
+              <button type="button" onClick={() => setEmailChallenge(null)} className="font-bold text-slate-500 hover:underline cursor-pointer">
+                Modifier l’e-mail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Toast de succès */}
       {successToast && (
         <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-600 text-white shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-emerald-400">

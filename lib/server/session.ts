@@ -35,7 +35,7 @@ export interface SessionPayload {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function getSecret(): string {
+export function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (secret && secret.length >= 32) return secret;
   if (process.env.NODE_ENV !== 'production') {

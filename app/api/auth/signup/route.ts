@@ -5,6 +5,7 @@ import { isStudentTierId } from '@/lib/data/subscription-tiers';
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from '@/lib/server/session';
 import { clientIp, isRateLimited, jsonError } from '@/lib/server/auth';
 import { School } from '@/lib/data/types';
+import { createChallenge, generateEmailCode, sendVerificationEmail, verifyChallenge } from '@/lib/server/email-verification';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +36,35 @@ function randomSuffix(): string {
  * créateur, pour lui être affichés.
  */
 export async function POST(request: NextRequest) {
-  if (isRateLimited(`signup:${clientIp(request)}`, 5, 60 * 60 * 1000)) {
-    return jsonError('Trop de créations d’établissement depuis cette connexion. Réessayez dans une heure.', 429);
-  }
-
   let body: any;
   try {
     body = await request.json();
   } catch (e) {
     return jsonError('Requête invalide.', 400);
+  }
+
+  // Étape 2 : le navigateur renvoie le défi signé + le code reçu par e-mail. Sans code exact,
+  // AUCUN compte n'est ouvert. Les données d'inscription sont celles figées dans le défi.
+  let emailVerified = false;
+  if (body?.challenge) {
+    const sigPart = String(body.challenge).split('.')[1] || 'x';
+    if (isRateLimited(`signupcode:${sigPart}`, 6, 15 * 60 * 1000) || isRateLimited(`signupcodeip:${clientIp(request)}`, 20, 15 * 60 * 1000)) {
+      return jsonError('Trop d’essais. Redemandez un nouveau code de confirmation.', 429);
+    }
+    const check = await verifyChallenge(String(body.challenge), String(body.emailCode || ''));
+    if (!check.ok) {
+      const msg =
+        check.reason === 'expired'
+          ? '⌛ Ce code a expiré (15 minutes). Cliquez sur « Renvoyer le code ».'
+          : check.reason === 'wrong-code'
+            ? '❌ Code incorrect. Vérifiez le code à 6 chiffres reçu par e-mail.'
+            : 'Demande de confirmation invalide. Recommencez l’inscription.';
+      return jsonError(msg, 400);
+    }
+    body = check.data;
+    emailVerified = true;
+  } else if (isRateLimited(`signup:${clientIp(request)}`, 8, 60 * 60 * 1000)) {
+    return jsonError('Trop de demandes depuis cette connexion. Réessayez dans une heure.', 429);
   }
 
   const schoolName = String(body?.schoolName || '').trim();
@@ -92,6 +113,34 @@ export async function POST(request: NextRequest) {
     if (taken) {
       return jsonError(`❌ Le sigle « ${shortName} » est déjà utilisé par un autre établissement. Choisissez un sigle différent (ex : ajoutez la ville).`, 409);
     }
+  }
+
+  // Étape 1 : tout est valide, mais rien n'est créé tant que l'e-mail n'est pas confirmé.
+  if (!emailVerified) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return jsonError('Adresse e-mail invalide. Vérifiez-la : le code de confirmation y sera envoyé.', 400);
+    }
+    if (isRateLimited(`signupmail:${email.toLowerCase()}`, 4, 15 * 60 * 1000)) {
+      return jsonError('Un code vient déjà d’être envoyé à cette adresse. Patientez quelques minutes avant d’en redemander un.', 429);
+    }
+    const code = generateEmailCode();
+    const sent = await sendVerificationEmail(email, code, schoolName);
+    if (!sent.ok) {
+      return jsonError(
+        sent.error === 'not-configured'
+          ? '❌ L’envoi du code de confirmation n’est pas encore activé sur le serveur. Contactez SchoolFlow Africa.'
+          : '❌ Impossible d’envoyer le code à cette adresse. Vérifiez l’e-mail saisi puis réessayez.',
+        sent.error === 'not-configured' ? 503 : 502
+      );
+    }
+    const challenge = await createChallenge(
+      { schoolName, shortName, address, email, phone, responsableName, founderName, plan, studentTier, paymentMethod, paymentPhone, goldenCode: goldenDigits, promoCode: promoInput },
+      code
+    );
+    return NextResponse.json(
+      { success: true, needsEmailCode: true, challenge, email },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
   const baseSlug =
