@@ -549,6 +549,7 @@ export function GradesView({
   const devoirCols = Math.max(gradesConfig.devoirs, highestFilledIndex(Object.values(gradesMap), 'dev'));
   const interroFields = Array.from({ length: interroCols }, (_, i) => `int${i + 1}`);
   const devoirFields = Array.from({ length: devoirCols }, (_, i) => `dev${i + 1}`);
+  const [sendWhat, setSendWhat] = useState<string>('all');
   // Message WhatsApp aux parents : notes de la matière affichée + demande de signature de la feuille.
   const whatsappNotesUrl = (studentId: string, grades: GradeEntry, fullName: string, grade: string): string | null => {
     const stu = classStudents.find((s) => s.id === studentId);
@@ -557,13 +558,31 @@ export function GradesView({
     const phone = digits.startsWith('225') ? digits : `225${digits}`;
     const fmt = (xs: number[]) => (xs.length ? xs.map((n) => String(n).replace('.', ',')).join(' • ') : '—');
     const comp = grades.comp && !isNaN(parseFloat(grades.comp)) ? String(parseFloat(grades.comp)).replace('.', ',') : '—';
+    // Choix de l'envoi : tout, une interrogation précise, un devoir précis ou la composition.
+    const one = (f: string) => {
+      const v = parseFloat(String(grades[f] ?? ''));
+      return isNaN(v) ? null : String(v).replace('.', ',');
+    };
+    let body: string;
+    if (sendWhat === 'all') {
+      body =
+        `📝 Interrogations : ${fmt(noteValues(grades, 'int'))}\n` +
+        `📚 Devoirs : ${fmt(noteValues(grades, 'dev'))}\n` +
+        `🎯 Composition : ${comp}`;
+    } else if (sendWhat === 'comp') {
+      body = `🎯 Composition : ${comp}`;
+    } else {
+      const isInt = sendWhat.startsWith('int');
+      const n = sendWhat.replace(/\D/g, '');
+      const val = one(sendWhat);
+      if (val === null) return null; // pas de note pour cet élève : rien à envoyer
+      body = `${isInt ? '📝' : '📚'} ${isInt ? `Interrogation ${n}` : `Devoir ${n}`} : *${val}/20*`;
+    }
     const text =
       `*${String(currentSchool.name || '').toUpperCase()}*\n\n` +
       `Chers parents,\n\n` +
-      `Votre enfant *${fullName}* (classe de *${grade}*) a obtenu les notes suivantes en *${selectedSubject}* (${selectedTerm}) :\n\n` +
-      `📝 Interrogations : ${fmt(noteValues(grades, 'int'))}\n` +
-      `📚 Devoirs : ${fmt(noteValues(grades, 'dev'))}\n` +
-      `🎯 Composition : ${comp}\n\n` +
+      `Votre enfant *${fullName}* (classe de *${grade}*) a obtenu en *${selectedSubject}* (${selectedTerm}) :\n\n` +
+      `${body}\n\n` +
       `Merci de regarder la feuille d’interrogation, de la *signer* et de la faire revenir à l’école avec votre enfant.\n\n` +
       `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
@@ -1315,6 +1334,26 @@ export function GradesView({
                 </p>
               </div>
             )}
+
+            {/* Choix des notes envoyées aux parents (bouton WhatsApp de chaque élève) */}
+            <div className="flex flex-wrap items-center gap-2 px-1 pb-2 text-xs">
+              <label className="font-bold text-slate-700" htmlFor="send-what">Notes à envoyer aux parents :</label>
+              <select
+                id="send-what"
+                value={sendWhat}
+                onChange={(e) => setSendWhat(e.target.value)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 cursor-pointer"
+              >
+                <option value="all">Toutes les notes de la matière</option>
+                {interroFields.map((f, i) => (
+                  <option key={f} value={f}>Interrogation {i + 1} seulement</option>
+                ))}
+                {devoirFields.map((f, i) => (
+                  <option key={f} value={f}>Devoir {i + 1} seulement</option>
+                ))}
+                <option value="comp">Composition seulement</option>
+              </select>
+            </div>
 
             {/* Tableau */}
             <div className="overflow-x-auto scrollbar-top">
