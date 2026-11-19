@@ -90,17 +90,51 @@ export async function sendVerificationEmail(to: string, code: string, schoolName
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, error: 'not-configured' };
   const from = process.env.EMAIL_FROM || 'SchoolFlow Africa <onboarding@resend.dev>';
-  const html = `<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px">
-    <h2 style="margin:0 0 8px;color:#047857">SchoolFlow Africa</h2>
-    <p style="color:#334155;font-size:14px">Bonjour, vous créez l’espace de l’établissement <b>${escapeHtml(schoolName)}</b>.<br/>Voici votre code de confirmation :</p>
-    <p style="font-size:34px;letter-spacing:8px;font-weight:800;text-align:center;background:#ecfdf5;color:#065f46;padding:16px;border-radius:12px;margin:16px 0">${code}</p>
-    <p style="color:#64748b;font-size:12px">Ce code est valable 15 minutes. Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : aucun compte ne sera créé.</p>
-  </div>`;
+  const digitCells = code
+    .split('')
+    .map(
+      (d) =>
+        `<td style="padding:0 4px"><div style="width:44px;height:56px;line-height:56px;text-align:center;font-size:30px;font-weight:800;color:#065f46;background:#ecfdf5;border:2px solid #34d399;border-radius:12px;font-family:Arial,Helvetica,sans-serif">${d}</div></td>`
+    )
+    .join('');
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:0;background:#f1f5f9">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px">
+ <tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e2e8f0;font-family:Arial,Helvetica,sans-serif">
+   <tr><td style="background:#047857;background-image:linear-gradient(135deg,#064e3b,#059669);padding:28px 24px;text-align:center">
+     <div style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">School<span style="color:#fcd34d">Flow</span> <span style="font-weight:600;color:#a7f3d0">Africa</span></div>
+     <div style="margin-top:6px;font-size:12px;color:#a7f3d0;letter-spacing:2px;text-transform:uppercase">Confirmation de votre e-mail</div>
+   </td></tr>
+   <tr><td style="padding:30px 26px 8px;color:#334155;font-size:15px;line-height:1.6">
+     <p style="margin:0 0 10px;font-size:18px;font-weight:700;color:#0f172a">Bonjour 👋</p>
+     <p style="margin:0">Vous êtes sur le point de créer l’espace de l’établissement <b style="color:#047857">${escapeHtml(schoolName)}</b> sur SchoolFlow Africa.</p>
+     <p style="margin:14px 0 0">Saisissez ce code de confirmation dans la fenêtre d’inscription :</p>
+   </td></tr>
+   <tr><td align="center" style="padding:18px 26px 6px">
+     <table role="presentation" cellpadding="0" cellspacing="0"><tr>${digitCells}</tr></table>
+   </td></tr>
+   <tr><td style="padding:14px 26px 26px;text-align:center;color:#64748b;font-size:13px;line-height:1.6">
+     ⏱ Ce code est valable <b>15 minutes</b>.<br/>
+     Votre espace ne sera créé qu’après cette confirmation.
+   </td></tr>
+   <tr><td style="padding:0 26px 26px">
+     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;color:#92400e;font-size:12px;line-height:1.5">
+       🔒 <b>Sécurité :</b> ne communiquez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement ce message : aucun compte ne sera créé.
+     </div>
+   </td></tr>
+   <tr><td style="background:#f8fafc;padding:16px 24px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0">
+     SchoolFlow Africa — La gestion scolaire simple pour les établissements africains<br/>
+     Besoin d’aide ? WhatsApp +225 01 70 36 36 56
+   </td></tr>
+  </table>
+ </td></tr>
+</table></body></html>`;
+  const text = `SchoolFlow Africa — Votre code de confirmation : ${code}\n\nÉtablissement : ${schoolName}\nCode valable 15 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.`;
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject: `Votre code de confirmation SchoolFlow Africa : ${code}`, html }),
+      body: JSON.stringify({ from, to: [to], subject: `Votre code de confirmation SchoolFlow Africa : ${code}`, html, text }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');

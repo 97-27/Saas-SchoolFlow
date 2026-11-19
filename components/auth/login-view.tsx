@@ -3,6 +3,7 @@ import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { OtpInput } from '@/components/auth/otp-input';
 import { NoticeModal } from '@/components/ui/notice-modal';
 import { useRouter } from 'next/navigation';
 import {
@@ -1114,15 +1115,14 @@ export function LoginView({
             <p className="text-xs text-slate-600 text-center">
               Un code à 6 chiffres vient d’être envoyé à <b>{emailChallenge.email}</b>. Votre espace ne sera créé qu’après confirmation. Pensez à vérifier les courriers indésirables.
             </p>
-            <input
-              type="text"
-              inputMode="numeric"
-              autoFocus
-              maxLength={6}
+            <OtpInput
               value={emailCodeInput}
-              onChange={(e) => setEmailCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
-              className="w-full text-center text-3xl tracking-[0.4em] font-extrabold py-3 rounded-2xl border-2 border-emerald-200 focus:border-emerald-500 outline-none"
+              onChange={(v) => {
+                setEmailCodeInput(v);
+                if (emailCodeError) setEmailCodeError('');
+              }}
+              autoFocus
+              hasError={!!emailCodeError}
             />
             {emailCodeError && <p className="text-xs font-bold text-red-600 text-center">{emailCodeError}</p>}
             <button
