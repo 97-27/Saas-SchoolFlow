@@ -2765,6 +2765,8 @@ export interface PlatformSchoolRow {
   payments: PaymentEvent[];
   totalPaid: number;
   access: AccessControl;
+  /** Codes d'accès des responsables (Fondateur, DGA, Directeur, Comptable) — visibles par la plateforme seulement. */
+  leaders: { roleId: string; fullName: string; matricule: string; authCode: string }[];
 }
 
 function countOf(v: any): number {
@@ -2789,7 +2791,7 @@ export async function getPlatformOverview(): Promise<{ schools: PlatformSchoolRo
           return fallback;
         }
       };
-      const [studentsRes, staffRes, kvRes, sub, signupRow, payRow, services, accessSys] = await Promise.all([
+      const [studentsRes, staffRes, kvRes, sub, signupRow, payRow, services, accessSys, leadersRes] = await Promise.all([
         safe(() => supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', s.id), { count: 0 } as any),
         safe(
           () => supabase.from('staff_users').select('id', { count: 'exact', head: true }).eq('school_id', s.id).not('role_id', 'like', 'system_%').neq('role_id', 'school_stamp'),
@@ -2804,7 +2806,15 @@ export async function getPlatformOverview(): Promise<{ schools: PlatformSchoolRo
         safe(() => readSystemRow(s.id, 'system_payments'), null),
         safe(() => getServicesDataFromSupabase(s.slug), null),
         safe(() => readSystemRow(s.id, 'system_access_control'), null),
+        safe(
+          () => supabase.from('staff_users').select('full_name, role_id, auth_code, matricule').eq('school_id', s.id).in('role_id', ['fondateur', 'fondateur_adjoint', 'directeur', 'comptable']),
+          { data: null } as any
+        ),
       ]);
+      const roleOrder = ['fondateur', 'fondateur_adjoint', 'directeur', 'comptable'];
+      const leaders = (((leadersRes as any)?.data as any[]) || [])
+        .map((d) => ({ roleId: String(d.role_id), fullName: d.full_name || '', matricule: String(d.matricule || '').trim(), authCode: String(d.auth_code || '') }))
+        .sort((a, b) => roleOrder.indexOf(a.roleId) - roleOrder.indexOf(b.roleId));
 
       const payments: PaymentEvent[] = Array.isArray(payRow?.data?.events) ? payRow!.data.events : [];
       const totalPaid = payments.filter((p) => p.status === 'confirme').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -2845,6 +2855,7 @@ export async function getPlatformOverview(): Promise<{ schools: PlatformSchoolRo
         payments,
         totalPaid,
         access: accessRow,
+        leaders,
       };
     })
   );

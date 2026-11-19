@@ -70,7 +70,9 @@ export function PlatformDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/platform/overview', { cache: 'no-store' });
+      const ctrl = new AbortController();
+      const timer = window.setTimeout(() => ctrl.abort(), 30000);
+      const res = await fetch('/api/platform/overview', { cache: 'no-store', signal: ctrl.signal }).finally(() => window.clearTimeout(timer));
       if (res.status === 401) {
         setPhase('login');
         return;
@@ -81,10 +83,18 @@ export function PlatformDashboard() {
         setPhase('ready');
         // Nouvelle version déployée (après un « push ») : la page se recharge toute seule.
         // On compare la version de CE navigateur (figée à la compilation) à celle du serveur.
+        // Un seul rechargement par version : jamais de boucle infinie si le navigateur garde l'ancien fichier.
         const mine = process.env.NEXT_PUBLIC_BUILD_ID || 'local';
         if (json.version && json.version !== 'local' && mine !== json.version) {
-          window.location.reload();
-          return;
+          let already = false;
+          try {
+            already = sessionStorage.getItem('sf_platform_reloaded') === json.version;
+            if (!already) sessionStorage.setItem('sf_platform_reloaded', json.version);
+          } catch (e) {}
+          if (!already) {
+            window.location.reload();
+            return;
+          }
         }
       }
     } catch (e) {
@@ -342,7 +352,7 @@ export function PlatformDashboard() {
                     : { t: 'Actif', c: 'bg-emerald-100 text-emerald-800' };
                 return (
                   <li key={s.slug}>
-                    <button onClick={() => setOpen(isOpen ? null : s.slug)} className="w-full text-left p-4 hover:bg-slate-50 cursor-pointer">
+                    <button onClick={() => setOpen(s.slug)} className="w-full text-left p-4 hover:bg-slate-50 cursor-pointer">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-extrabold text-sm truncate">{s.name}</p>
@@ -352,7 +362,7 @@ export function PlatformDashboard() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg ${statusBadge.c}`}>{statusBadge.t}</span>
-                          {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                          <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">Ouvrir</span>
                         </div>
                       </div>
                       <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
@@ -364,62 +374,6 @@ export function PlatformDashboard() {
                       </div>
                     </button>
 
-                    {isOpen && (
-                      <div className="px-4 pb-4 grid md:grid-cols-3 gap-4 text-xs bg-slate-50/60">
-                        <div className="space-y-1.5">
-                          <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Établissement</h3>
-                          <Line k="Lien" v={`/${s.slug}`} />
-                          <Line k="Email" v={s.email || '—'} />
-                          <Line k="Fondateur" v={s.founderName || '—'} />
-                          <Line k="Année scolaire" v={s.academicYear || '—'} />
-                          <Line k="Créée le" v={fmtDateTime(s.createdAt)} />
-                          <Line k="Personnel" v={String(s.staffCount)} />
-                          {over && (
-                            <p className="flex items-center gap-1.5 text-amber-800 bg-amber-100 rounded-lg p-2 font-bold">
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> L’effectif dépasse la tranche souscrite.
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-1.5">
-                          <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Services utilisés (élèves inscrits)</h3>
-                          <Line k="Cantine" v={s.services.canteen ? `${s.services.canteen} élèves` : 'Non utilisée'} />
-                          <Line k="Transport" v={s.services.transport ? `${s.services.transport} élèves` : 'Non utilisé'} />
-                          <Line k="Internat" v={s.services.boarding ? `${s.services.boarding} élèves` : 'Non utilisé'} />
-                          <h3 className="font-extrabold text-[11px] uppercase text-slate-500 pt-2">Règlement choisi</h3>
-                          <Line k="Moyen" v={s.signup?.paymentMethod ? METHOD_LABEL[s.signup.paymentMethod] || s.signup.paymentMethod : '—'} />
-                          <Line k="Numéro" v={s.signup?.paymentPhone || '—'} />
-                          <Line k="Carte dorée" v={s.signup?.goldenCard || s.signup?.activationCodeGiven ? 'Utilisée à l’inscription' : 'Non'} />
-                          <Line k="Code promo utilisé" v={s.signup?.promoCode ? `${s.signup.promoCode} (−${s.signup.promoPercent || 0} %)` : s.access.promo ? `${s.access.promo.code} (attribué)` : 'Aucun'} />
-                        </div>
-                        <div className="space-y-2">
-                          <h3 className="font-extrabold text-[11px] uppercase text-slate-500">Paiements</h3>
-                          {s.payments.length === 0 ? (
-                            <p className="text-slate-500">Aucun paiement enregistré.</p>
-                          ) : (
-                            <ul className="space-y-1 max-h-36 overflow-y-auto">
-                              {[...s.payments].reverse().map((p, i) => (
-                                <li key={p.at + i} className="flex justify-between gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5">
-                                  <span>
-                                    {fmtDateTime(p.at)}
-                                    <span className="block text-[10px] text-slate-500">
-                                      {METHOD_LABEL[p.method] || p.method} • {PLAN_LABEL[p.plan] || p.plan} • {p.status === 'confirme' ? 'confirmé' : 'à confirmer'}
-                                    </span>
-                                  </span>
-                                  <b>{formatFCFA(p.amount)}</b>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          <AccessPanel school={s} onChanged={(msg) => { showToast({ type: 'ok', text: msg }); load(); }} onError={(msg) => showToast({ type: 'err', text: msg })} />
-                          <button
-                            onClick={() => setPayFor(s)}
-                            className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer"
-                          >
-                            Confirmer un paiement / renouveler
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </li>
                 );
               })}
@@ -427,6 +381,19 @@ export function PlatformDashboard() {
           )}
         </section>
       </div>
+
+      {(() => {
+        const sel = schools.find((x) => x.slug === open);
+        return sel ? (
+          <SchoolDetailModal
+            school={sel}
+            onClose={() => setOpen(null)}
+            onPay={() => setPayFor(sel)}
+            onChanged={(msg) => { showToast({ type: 'ok', text: msg }); load(); }}
+            onError={(msg) => showToast({ type: 'err', text: msg })}
+          />
+        ) : null;
+      })()}
 
       {payFor && (
         <PayModal
@@ -654,12 +621,166 @@ function ServicesChart({ schools, revenue, selected, onSelect }: { schools: Plat
   );
 }
 
+function CopyChip({ value }: { value: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        try {
+          void navigator.clipboard.writeText(value);
+          setDone(true);
+          window.setTimeout(() => setDone(false), 1500);
+        } catch (e) {}
+      }}
+      className="text-[10px] font-extrabold px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+    >
+      {done ? 'Copié ✓' : 'Copier'}
+    </button>
+  );
+}
+
+const ROLE_TITLE: Record<string, string> = { fondateur: 'Fondateur', fondateur_adjoint: 'DGA (Fondateur adjoint)', directeur: 'Directeur', comptable: 'Comptable' };
+
+function Section({ title, children, tone = 'slate' }: { title: string; children: React.ReactNode; tone?: 'slate' | 'emerald' | 'amber' | 'violet' }) {
+  const bar: Record<string, string> = { slate: 'bg-slate-400', emerald: 'bg-emerald-500', amber: 'bg-amber-400', violet: 'bg-violet-500' };
+  return (
+    <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-xs">
+      <h3 className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-3">
+        <span className={`w-1.5 h-4 rounded-full ${bar[tone]}`} /> {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Fenêtre détaillée d'une école : informations, codes d'accès des responsables, services, paiements, contrôle d'accès. */
+function SchoolDetailModal({ school: s, onClose, onPay, onChanged, onError }: { school: PlatformSchoolRow; onClose: () => void; onPay: () => void; onChanged: (msg: string) => void; onError: (msg: string) => void }) {
+  const tier = tierById(s.studentTier);
+  const over = exceedsTier(s.studentCount, s.studentTier);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-start sm:items-center justify-center p-2 sm:p-6 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-6xl bg-slate-50 rounded-3xl shadow-2xl overflow-hidden my-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-emerald-800 to-emerald-600 text-white px-5 py-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-emerald-200 font-bold">Établissement</p>
+            <h2 className="text-lg sm:text-xl font-extrabold truncate">{s.name}</h2>
+            <p className="text-xs text-emerald-100 truncate">{s.city || '—'} • {s.phone || '—'} • /{s.slug}</p>
+          </div>
+          <button onClick={onClose} aria-label="Fermer" className="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-3 sm:p-5 grid lg:grid-cols-12 gap-4 max-h-[calc(100vh-7rem)] overflow-y-auto">
+          <div className="lg:col-span-7 space-y-4">
+            <Section title="Codes d’accès des responsables" tone="amber">
+              {s.leaders.length === 0 ? (
+                <p className="text-xs text-slate-500">Aucun code trouvé.</p>
+              ) : (
+                <ul className="grid sm:grid-cols-2 gap-2">
+                  {s.leaders.map((l) => (
+                    <li key={l.roleId + l.authCode} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                      <p className="text-[10px] uppercase font-bold text-amber-800">{ROLE_TITLE[l.roleId] || l.roleId}</p>
+                      <p className="text-xs font-bold text-slate-800 truncate">{l.fullName || '—'}</p>
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <code className="text-sm font-extrabold tracking-wider text-slate-900 break-all">{l.authCode || '—'}</code>
+                        {l.authCode && <CopyChip value={l.authCode} />}
+                      </div>
+                      {l.matricule && <p className="text-[10px] text-slate-500 mt-1">Matricule : {l.matricule}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Informations" tone="emerald">
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                <Line k="E-mail" v={s.email || '—'} />
+                <Line k="Directeur" v={s.directorName || '—'} />
+                <Line k="Fondateur" v={s.founderName || '—'} />
+                <Line k="Année scolaire" v={s.academicYear || '—'} />
+                <Line k="Créée le" v={fmtDateTime(s.createdAt)} />
+                <Line k="Personnel" v={String(s.staffCount)} />
+                <Line k="Élèves" v={`${s.studentCount.toLocaleString('fr-FR')}${tier ? ` / ${tier.label}` : ''}`} />
+                <Line k="Forfait" v={`${PLAN_LABEL[s.plan] || s.plan} • ${formatFCFA(s.planPrice)}`} />
+                <Line k="Échéance" v={fmtDate(s.endDate)} />
+                <Line k="Dernière activité" v={ago(s.lastActivityAt)} />
+              </div>
+              {over && (
+                <p className="mt-3 flex items-center gap-1.5 text-amber-800 bg-amber-100 rounded-lg p-2 text-xs font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> L’effectif dépasse la tranche souscrite.
+                </p>
+              )}
+            </Section>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Section title="Services utilisés">
+                <div className="space-y-1.5 text-xs">
+                  <Line k="Cantine" v={s.services.canteen ? `${s.services.canteen} élèves` : 'Non utilisée'} />
+                  <Line k="Transport" v={s.services.transport ? `${s.services.transport} élèves` : 'Non utilisé'} />
+                  <Line k="Internat" v={s.services.boarding ? `${s.services.boarding} élèves` : 'Non utilisé'} />
+                </div>
+              </Section>
+              <Section title="Règlement choisi">
+                <div className="space-y-1.5 text-xs">
+                  <Line k="Moyen" v={s.signup?.paymentMethod ? METHOD_LABEL[s.signup.paymentMethod] || s.signup.paymentMethod : '—'} />
+                  <Line k="Numéro" v={s.signup?.paymentPhone || '—'} />
+                  <Line k="Carte dorée" v={s.signup?.goldenCard || s.signup?.activationCodeGiven ? 'Utilisée à l’inscription' : 'Non'} />
+                  <Line k="Code promo" v={s.signup?.promoCode ? `${s.signup.promoCode} (−${s.signup.promoPercent || 0} %)` : s.access.promo ? `${s.access.promo.code} (attribué)` : 'Aucun'} />
+                </div>
+              </Section>
+            </div>
+
+            <Section title={`Paiements (${s.payments.length}) — total ${formatFCFA(s.totalPaid)}`}>
+              {s.payments.length === 0 ? (
+                <p className="text-xs text-slate-500">Aucun paiement enregistré.</p>
+              ) : (
+                <ul className="space-y-1.5 max-h-56 overflow-y-auto text-xs">
+                  {[...s.payments].reverse().map((p, i) => (
+                    <li key={p.at + i} className="flex justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <span>
+                        {fmtDateTime(p.at)}
+                        <span className="block text-[10px] text-slate-500">
+                          {METHOD_LABEL[p.method] || p.method} • {PLAN_LABEL[p.plan] || p.plan} • {p.status === 'confirme' ? 'confirmé' : 'à confirmer'}
+                        </span>
+                      </span>
+                      <b>{formatFCFA(p.amount)}</b>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button onClick={onPay} className="mt-3 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer">
+                Confirmer un paiement / renouveler
+              </button>
+            </Section>
+          </div>
+
+          <div className="lg:col-span-5 space-y-4">
+            <Section title="Contrôle de l’accès & carte dorée" tone="violet">
+              <div className="text-xs">
+                <AccessPanel school={s} onChanged={onChanged} onError={onError} />
+              </div>
+            </Section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow; onChanged: (msg: string) => void; onError: (msg: string) => void }) {
   const a = school.access;
   const protectedSchool = school.slug === 'epc-manoi';
   const [busy, setBusy] = useState(false);
-  const [goldOpen, setGoldOpen] = useState(false);
+  const [goldOpen, setGoldOpen] = useState(true);
   const [goldDate, setGoldDate] = useState('');
+  const [applyCode, setApplyCode] = useState('');
   const [message, setMessage] = useState(a.blockMessage || '');
   const [code, setCode] = useState(a.promo?.code || '');
   const [percent, setPercent] = useState(String(a.promo?.percent || 10));
@@ -749,6 +870,37 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
             ))}
             <button disabled={busy} onClick={() => send({ gold: 'unlimited' }, 'Carte dorée : accès illimité.')} className="col-span-2 py-1.5 rounded-lg bg-amber-500 text-white font-extrabold hover:bg-amber-600 cursor-pointer">
               Illimité ∞
+            </button>
+          </div>
+          <div className="flex gap-1.5">
+            <input
+              inputMode="numeric"
+              value={applyCode}
+              onChange={(e) => setApplyCode(e.target.value.replace(/\D/g, '').slice(0, 12))}
+              placeholder="Code carte dorée (12 chiffres)"
+              className="flex-1 min-w-0 rounded-lg border border-amber-300 px-2 py-1 text-xs bg-white font-mono"
+            />
+            <button
+              disabled={busy || applyCode.length !== 12}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const res = await fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'golden-apply', slug: school.slug, code: applyCode }) });
+                  const json = await res.json().catch(() => null);
+                  if (!res.ok || !json?.success) onError(json?.error || 'Carte refusée.');
+                  else {
+                    setApplyCode('');
+                    onChanged(json.message || 'Carte dorée appliquée.');
+                  }
+                } catch (e) {
+                  onError('Serveur injoignable.');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              className="px-3 rounded-lg bg-amber-600 text-white font-extrabold disabled:opacity-50 cursor-pointer"
+            >
+              Appliquer
             </button>
           </div>
           <div className="flex gap-1.5">

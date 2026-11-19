@@ -10,6 +10,8 @@ import {
   readPlatformCodes,
   writePlatformCodes,
   generateGoldenCode,
+  findUnusedGoldenCard,
+  consumeGoldenCard,
   type PlatformSchoolRow,
 } from '@/lib/supabase/services';
 import { forgetBlockState } from '@/lib/server/access-control';
@@ -89,6 +91,19 @@ export async function POST(request: NextRequest) {
     }
     if (!(await writePlatformCodes(codes))) return jsonError('Enregistrement impossible.', 500);
     return NextResponse.json({ success: true, codes });
+  }
+
+  // Applique à une école existante une carte dorée (12 chiffres) du stock : accès illimité ou durée de la carte.
+  if (body?.action === 'golden-apply') {
+    if (!slug) return jsonError('École manquante.', 400);
+    const card = await findUnusedGoldenCard(String(body.code || ''));
+    if (!card) return jsonError('Carte dorée invalide ou déjà utilisée (12 chiffres).', 400);
+    const until = card.months ? new Date(new Date().setMonth(new Date().getMonth() + card.months)).toISOString() : null;
+    const res = await setAccessControl(slug, { unlimited: card.months === null, goldUntil: until, goldOnly: false });
+    if (!res.success) return jsonError('Modification impossible (école introuvable ou protégée).', 400);
+    await consumeGoldenCard(card.code, slug);
+    forgetBlockState(slug);
+    return NextResponse.json({ success: true, access: res.access, message: card.months ? `Carte dorée appliquée : ${card.months} mois.` : 'Carte dorée appliquée : accès illimité.' });
   }
 
   // Bannissement : suppression de l'école après un compte à rebours de 60 secondes (annulable).
