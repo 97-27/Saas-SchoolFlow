@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 
 import { SchoolFlowLogo } from '@/components/ui/schoolflow-logo';
-import { canAccessPage, homePage } from '@/lib/auth/roles';
+import { effectivePages, homePage, type PageOverrides } from '@/lib/auth/roles';
+import { readPageOverrides } from '@/lib/data/page-access';
 
 interface SidebarProps {
   schoolSlug?: string;
@@ -73,6 +74,7 @@ export function Sidebar({
     getLiveSchool(schoolSlug, mockSchools[schoolSlug] || defaultSchool)
   );
   const [currentSearch, setCurrentSearch] = useState('');
+  const [pageOverrides, setPageOverrides] = useState<PageOverrides>({});
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setCurrentSearch(window.location.search);
@@ -103,10 +105,12 @@ export function Sidebar({
     };
 
     loadSession();
+    setPageOverrides(readPageOverrides(schoolSlug));
 
     const handleUpdate = () => {
       setCurrentSchool(getLiveSchool(schoolSlug, mockSchools[schoolSlug] || defaultSchool));
       loadSession();
+      setPageOverrides(readPageOverrides(schoolSlug));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -151,7 +155,7 @@ export function Sidebar({
 
   // Menu construit à partir des pages autorisées du poste (lib/auth/roles.ts) : le menu et la
   // protection des pages (proxy.ts) lisent la même liste et ne peuvent plus se contredire.
-  const can = (page: string) => canAccessPage(roleId, page);
+  const can = (page: string) => effectivePages(roleId, pageOverrides).includes(page);
   let navItems: any[] = [];
   const communicationGroupItem = {
     key: 'communication',
@@ -217,6 +221,7 @@ export function Sidebar({
     { key: 'notes_diverses', page: 'notes-diverses', title: 'Notes Diverses', href: `${baseUrl}/notes-diverses`, icon: NotebookPen, active: pathname.includes('/notes-diverses') },
     { key: 'corbeille', page: 'corbeille', title: 'Corbeille & Journal', href: `${baseUrl}/corbeille`, icon: Trash2, active: pathname.includes('/corbeille') },
     { key: 'archives', page: 'archives', title: 'Archives des années', href: `${baseUrl}/archives`, icon: Archive, active: pathname.includes('/archives') },
+    { key: 'acces', page: 'acces', title: 'Accès par poste', href: `${baseUrl}/acces`, icon: KeyRound, active: pathname.includes('/acces') },
     { key: 'parametres', page: 'parametres', title: 'Paramètres', href: `${baseUrl}/parametres`, icon: Settings, active: pathname.includes('/parametres') },
   ];
 

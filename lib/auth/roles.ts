@@ -73,7 +73,30 @@ export const ALL_PAGES = [
   'corbeille',
   'archives',
   'parametres',
+  'acces',
 ];
+
+/** Pages jamais accordables à un autre poste (réservées au Fondateur et au DGA). */
+export const FOUNDER_ONLY_PAGES = ['administration', 'parametres', 'corbeille', 'acces'];
+/** Postes dont le Fondateur peut régler les pages (jamais les Fondateurs, les parents ni les élèves). */
+export const ASSIGNABLE_ROLES = ['directeur', 'informaticien', 'assistant_direction', 'secretaire', 'comptable', 'educateur', 'enseignant'];
+
+/** Réglages de l'école : pages ajoutées / retirées par poste, par rapport aux droits par défaut. */
+export type PageOverrides = Record<string, { add?: string[]; remove?: string[] }>;
+export const PAGE_ACCESS_KEY = 'schoolflow_page_access_v1';
+
+/** Pages d'un poste = droits par défaut + réglages de l'école (clair : Fondateurs inchangés). */
+export function effectivePages(roleId: string | undefined | null, overrides?: PageOverrides | null): string[] {
+  const role = String(roleId || '');
+  const base = allowedPages(role);
+  if (!overrides || !ASSIGNABLE_ROLES.includes(role)) return base;
+  const o = overrides[role];
+  if (!o) return base;
+  const set = new Set(base);
+  for (const p of o.add || []) if (ALL_PAGES.includes(p) && !FOUNDER_ONLY_PAGES.includes(p)) set.add(p);
+  for (const p of o.remove || []) set.delete(p);
+  return Array.from(set);
+}
 
 const PEDAGOGY = ['classes', 'presences', 'notes', 'bulletins', 'distinctions'];
 const SERVICES = ['cantine', 'transport', 'internat'];
@@ -82,7 +105,7 @@ const FINANCE = ['versements', 'depenses', 'rapports'];
 const ROLE_PAGES: Record<string, string[]> = {
   fondateur: ALL_PAGES,
   fondateur_adjoint: ALL_PAGES,
-  informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille', 'archives'].includes(p)),
+  informaticien: ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille', 'archives', 'acces'].includes(p)),
   // « pointage » : chaque membre du personnel pointe son arrivée / son départ (page commune).
   directeur: ['eleves', 'documents', ...PEDAGOGY, 'communication', 'bulletins-parents', 'personnel', 'cartes', 'pointage', 'sante', 'notes-diverses'],
   // « archives » : le Comptable n'y entre qu'avec le code des chiffres (vérifié par /api/archives).

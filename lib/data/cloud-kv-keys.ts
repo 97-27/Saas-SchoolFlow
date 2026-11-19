@@ -46,6 +46,7 @@ export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_teachers_data_v3', label: 'Fiches du personnel', read: ALL_STAFF, write: GESTION },
   { base: 'schoolflow_transport_lines', label: 'Lignes de transport', read: ALL_STAFF, write: FINANCE },
   { base: 'schoolflow_canteen_meals_history_v2', label: 'Historique cantine', read: ALL_STAFF, write: FINANCE },
+  { base: 'schoolflow_page_access_v1', label: 'Pages accessibles par poste', read: ALL_STAFF, write: ['fondateur', 'fondateur_adjoint'] },
   { base: 'schoolflow_broadcast_records_v1', label: 'Annonces envoyées', read: [...DIRECTION, 'informaticien', 'secretaire', 'assistant_direction'], write: DIRECTION },
 ];
 

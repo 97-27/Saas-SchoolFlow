@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/server/session';
 
-import { allowedPages, homePage } from '@/lib/auth/roles';
+import { effectivePages, homePage } from '@/lib/auth/roles';
+import { getPageOverrides } from '@/lib/server/page-access';
 
 /**
  * Pages /admin/<segment> autorisées par poste : lib/auth/roles.ts (même source que le menu).
@@ -54,7 +55,9 @@ export async function proxy(request: NextRequest) {
     }
 
     const roleId = session.roleId;
-    const allowedPaths = allowedPages(roleId);
+    // Droits par défaut du poste + réglages de l'école (page « Accès par poste »).
+    const overrides = await getPageOverrides(normalizedEcole);
+    const allowedPaths = effectivePages(roleId, overrides);
     // Poste inconnu : refusé (jamais d'accès total par défaut).
     if (allowedPaths.length === 0) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
