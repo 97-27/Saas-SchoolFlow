@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatFCFA } from '@/lib/utils/formatters';
+import { currentAcademicYear } from '@/lib/data/school-calendar';
 import { tierById, exceedsTier } from '@/lib/data/subscription-tiers';
 import type { PlatformSchoolRow, PaymentEvent, PlatformCodes } from '@/lib/supabase/services';
 
@@ -61,8 +62,6 @@ export function PlatformDashboard() {
   const [payFor, setPayFor] = useState<PlatformSchoolRow | null>(null);
   const [svcSchool, setSvcSchool] = useState<string>('all');
 
-  const versionRef = useRef<string>('');
-
   const showToast = (t: Toast) => {
     setToast(t);
     window.setTimeout(() => setToast(null), 4500);
@@ -81,12 +80,11 @@ export function PlatformDashboard() {
         setData({ schools: json.schools, serviceRevenue: json.serviceRevenue || {}, codes: json.codes || { cards: [], promos: [] }, generatedAt: json.generatedAt });
         setPhase('ready');
         // Nouvelle version déployée (après un « push ») : la page se recharge toute seule.
-        if (json.version && json.version !== 'dev') {
-          if (versionRef.current && versionRef.current !== json.version) {
-            window.location.reload();
-            return;
-          }
-          versionRef.current = json.version;
+        // On compare la version de CE navigateur (figée à la compilation) à celle du serveur.
+        const mine = process.env.NEXT_PUBLIC_BUILD_ID || 'local';
+        if (json.version && json.version !== 'local' && mine !== json.version) {
+          window.location.reload();
+          return;
         }
       }
     } catch (e) {
@@ -334,7 +332,9 @@ export function PlatformDashboard() {
                 const statusBadge = s.access.blocked
                   ? { t: 'Bloqué', c: 'bg-slate-900 text-white' }
                   : s.access.unlimited
-                    ? { t: 'Illimité ∞', c: 'bg-violet-100 text-violet-800' }
+                    ? { t: '★ Carte dorée — illimité à vie', c: 'bg-amber-200 text-amber-950' }
+                  : s.access.goldUntil && !s.isExpired
+                    ? { t: `★ Carte dorée jusqu’au ${fmtDate(s.access.goldUntil)}`, c: 'bg-amber-100 text-amber-900' }
                   : s.isExpired
                   ? { t: 'Expiré', c: 'bg-red-100 text-red-800' }
                   : s.daysRemaining !== null && s.daysRemaining <= 15
@@ -597,9 +597,10 @@ function PayModal({ school, onClose, onDone, onError }: { school: PlatformSchool
 }
 
 function ServicesChart({ schools, revenue, selected, onSelect }: { schools: PlatformSchoolRow[]; revenue: ServiceRevenue; selected: string; onSelect: (id: string) => void }) {
-  const now = new Date();
+  // Année scolaire en cours : de septembre à mai, dans l'ordre.
+  const startYear = Number(currentAcademicYear().slice(0, 4)) || new Date().getFullYear();
   const months = Array.from({ length: 9 }, (_, k) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (8 - k), 1);
+    const d = new Date(startYear, 8 + k, 1);
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     let internat = 0, cantine = 0, transport = 0;
     for (const [sid, byMonth] of Object.entries(revenue)) {
@@ -619,7 +620,7 @@ function ServicesChart({ schools, revenue, selected, onSelect }: { schools: Plat
   return (
     <section className="rounded-2xl bg-white border border-slate-200 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-        <h2 className="font-extrabold text-sm">Encaissements des services — 9 derniers mois</h2>
+        <h2 className="font-extrabold text-sm">Encaissements des services — année scolaire ({currentAcademicYear()}), de septembre à mai</h2>
         <select value={selected} onChange={(e) => onSelect(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs sm:w-64">
           <option value="all">Toutes les écoles</option>
           {schools.map((s) => (
@@ -682,7 +683,7 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
   };
 
   if (protectedSchool) {
-    return <p className="text-[11px] text-slate-500 bg-slate-100 rounded-lg p-2">École pilote : protégée (jamais bloquée, jamais expirée).</p>;
+    return <p className="text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg p-2">★ Carte dorée à vie : cette école reste active pour toujours (elle ne peut être ni suspendue ni supprimée).</p>;
   }
 
   return (

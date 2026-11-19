@@ -25,7 +25,8 @@ const GESTION = ['fondateur', 'fondateur_adjoint', 'directeur', 'comptable'];
 /** Dépenses, salaires, réductions, rappels de versement : Comptable et Fondateurs seulement. */
 const FINANCE = ['fondateur', 'fondateur_adjoint', 'comptable'];
 const ALL_STAFF = ['fondateur', 'fondateur_adjoint', 'directeur', 'informaticien', 'comptable', 'secretaire', 'assistant_direction', 'enseignant', 'educateur'];
-const PEDAGOGIE = ['fondateur', 'fondateur_adjoint', 'directeur', 'enseignant'];
+// La Secrétaire modifie la partie pédagogique (appel, absences, notes, bulletins) ; le reste lui est en lecture seule.
+const PEDAGOGIE = ['fondateur', 'fondateur_adjoint', 'directeur', 'enseignant', 'secretaire'];
 
 export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_grades', label: 'Notes', read: [...ALL_STAFF, 'parent', 'eleve'], write: PEDAGOGIE },

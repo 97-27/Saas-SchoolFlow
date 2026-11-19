@@ -36,7 +36,7 @@ async function makeQr(text: string): Promise<string> {
 
 export function StudentCardsView({ initialStudents, school, schoolSlug }: { initialStudents: Student[]; school: School; schoolSlug: string }) {
   const slug = (schoolSlug === 'college-excellence' ? 'epc-manoi' : schoolSlug) || 'epc-manoi';
-  const [tab, setTab] = useState<'cartes' | 'scan'>('cartes');
+  const [tab, setTab] = useState<'cartes' | 'photos' | 'scan'>('cartes');
   const [students, setStudents] = useState<Student[]>(initialStudents);
   const [currentSchool, setCurrentSchool] = useState<School>(school);
   const [roleId, setRoleId] = useState('');
@@ -77,6 +77,7 @@ export function StudentCardsView({ initialStudents, school, schoolSlug }: { init
           {(
             [
               ['cartes', 'Cartes', CreditCard],
+              ['photos', 'Photos', Camera],
               ['scan', 'Scanner les arrivées', ScanLine],
             ] as const
           ).map(([id, label, Icon]) => (
@@ -97,6 +98,8 @@ export function StudentCardsView({ initialStudents, school, schoolSlug }: { init
 
       {tab === 'cartes' ? (
         <CardsTab students={sorted} school={currentSchool} slug={slug} canEdit={STUDENT_WRITE_ROLES.includes(roleId)} />
+      ) : tab === 'photos' ? (
+        <PhotosTab students={sorted} slug={slug} canEdit={STUDENT_WRITE_ROLES.includes(roleId)} />
       ) : (
         <ScanTab students={sorted} school={currentSchool} slug={slug} />
       )}
@@ -336,6 +339,117 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
   );
 }
 
+/* ═════════════════════════ ONGLET PHOTOS ═════════════════════════ */
+
+/** Réduit la photo choisie (appareil local) à 360 px de large max, en JPEG : légère pour la base et la carte. */
+function resizePhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture impossible'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image illisible'));
+      img.onload = () => {
+        const max = 360;
+        const ratio = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: string; canEdit: boolean }) {
+  const [grade, setGrade] = useState('Toutes les classes');
+  const [query, setQuery] = useState('');
+  const [onlyMissing, setOnlyMissing] = useState(false);
+  const [busyId, setBusyId] = useState('');
+  const [msg, setMsg] = useState('');
+  const grades = useMemo(() => ['Toutes les classes', ...Array.from(new Set(students.map((s) => s.grade).filter(Boolean)))], [students]);
+  const list = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return students.filter(
+      (s) =>
+        (grade === 'Toutes les classes' || s.grade === grade) &&
+        (!onlyMissing || !s.avatar) &&
+        (!q || s.fullName.toLowerCase().includes(q) || (s.studentNumber || '').toLowerCase().includes(q) || (s.matricule || '').toLowerCase().includes(q))
+    );
+  }, [students, grade, query, onlyMissing]);
+  const withPhoto = students.filter((s) => s.avatar).length;
+
+  const pick = async (s: Student, file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMsg('Choisissez un fichier image (JPG ou PNG).');
+      return;
+    }
+    setBusyId(s.id);
+    try {
+      const avatar = await resizePhoto(file);
+      updateRegisteredStudent({ ...s, avatar, updatedAt: new Date().toISOString() }, slug);
+      setMsg(`Photo enregistrée pour ${s.fullName}. Elle apparaît sur sa carte.`);
+    } catch {
+      setMsg('Impossible de lire cette photo. Essayez un autre fichier.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  return (
+    <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-2.5 flex-1">
+          <div className="relative sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nom, numéro ou matricule…" className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
+          </div>
+          <select value={grade} onChange={(e) => setGrade(e.target.value)} className="px-3 py-2 text-xs font-medium rounded-xl bg-white border border-slate-200 text-slate-700 cursor-pointer">
+            {grades.map((g) => (
+              <option key={g}>{g}</option>
+            ))}
+          </select>
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+            <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} className="w-4 h-4 accent-emerald-600" />
+            Sans photo seulement
+          </label>
+        </div>
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold self-start">
+          {withPhoto} / {students.length} photos
+        </span>
+      </div>
+      {!canEdit && <p className="text-xs text-slate-500">Seuls le Fondateur, le DGA, le Directeur et le Comptable peuvent ajouter des photos.</p>}
+      {msg && <p className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">{msg}</p>}
+      {list.length === 0 ? (
+        <p className="text-xs text-slate-500 py-6 text-center">Aucun élève ne correspond.</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
+          {list.map((s) => (
+            <div key={s.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5 flex flex-col items-center gap-2 text-center">
+              <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center text-slate-300 text-2xl font-extrabold">
+                {s.avatar ? <img src={s.avatar} alt={s.fullName} className="w-full h-full object-cover" /> : (s.firstName || '?')[0]}
+              </div>
+              <p className="text-[11px] font-bold text-slate-900 leading-tight break-words">{s.fullName}</p>
+              <p className="text-[10px] text-slate-500">{s.grade}</p>
+              {canEdit && (
+                <label className={`w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white cursor-pointer ${s.avatar ? 'bg-slate-700 hover:bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-700'} ${busyId === s.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Camera className="w-3.5 h-3.5" />
+                  {busyId === s.id ? 'Envoi…' : s.avatar ? 'Changer la photo' : 'Ajouter la photo'}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { void pick(s, e.target.files?.[0]); e.target.value = ''; }} />
+                </label>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═════════════════════════ ONGLET SCAN ═════════════════════════ */
 
 function ScanTab({ students, school, slug }: { students: Student[]; school: School; slug: string }) {
@@ -345,6 +459,8 @@ function ScanTab({ students, school, slug }: { students: Student[]; school: Scho
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ student: Student; at: string; already: boolean } | null>(null);
   const [manual, setManual] = useState('');
+  const [pending, setPending] = useState<Student | null>(null);
+  const [pendingPresent, setPendingPresent] = useState(false); // par défaut : ABSENT, à cocher présent à la main
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const lastRef = useRef<{ text: string; t: number }>({ text: '', t: 0 });
@@ -416,9 +532,12 @@ function ScanTab({ students, school, slug }: { students: Student[]; school: Scho
         return;
       }
       setError('');
-      register(student);
+      // On affiche d'abord la fiche de l'élève : rien n'est enregistré tant qu'on n'a pas validé.
+      setPending(student);
+      setPendingPresent(false);
+      setResult(null);
     },
-    [register]
+    []
   );
 
   const stop = useCallback(() => {
@@ -556,7 +675,9 @@ function ScanTab({ students, school, slug }: { students: Student[]; school: Scho
               key={s.id}
               type="button"
               onClick={() => {
-                register(s);
+                setPending(s);
+                setPendingPresent(false);
+                setResult(null);
                 setManual('');
               }}
               className="w-full text-left px-3 py-2 rounded-xl border border-slate-200 hover:bg-emerald-50 text-xs cursor-pointer"
@@ -568,6 +689,54 @@ function ScanTab({ students, school, slug }: { students: Student[]; school: Scho
       </div>
 
       <div className="space-y-5">
+        {pending && (
+          <div className="p-4 sm:p-5 rounded-3xl border-2 border-slate-300 bg-white shadow-xs space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-16 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-extrabold shrink-0">
+                  {pending.avatar ? <img src={pending.avatar} alt="" className="w-full h-full object-cover" /> : (pending.firstName || '?')[0]}
+                </div>
+                <div className="min-w-0 text-xs space-y-0.5">
+                  <p className="text-sm font-extrabold text-slate-900 break-words">{pending.fullName}</p>
+                  <p className="text-slate-700">Classe : <b>{pending.grade}</b></p>
+                  <p className="text-slate-700">N° : <b>{pending.studentNumber || '—'}</b> • Matricule : <b>{pending.matricule || '—'}</b></p>
+                  <p className="text-slate-700">Parent : <b>{pending.guardianName || '—'}</b> • {parentPhone(pending) || 'aucun numéro'}</p>
+                  {mine(pending.id) && <p className="font-bold text-amber-800">Déjà pointé à {hhmm(mine(pending.id)!.at)} aujourd’hui.</p>}
+                </div>
+              </div>
+              <button type="button" onClick={() => setPending(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setPendingPresent(false)} className={`py-2.5 rounded-xl text-xs font-extrabold border-2 cursor-pointer ${!pendingPresent ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                Absent
+              </button>
+              <button type="button" onClick={() => setPendingPresent(true)} className={`py-2.5 rounded-xl text-xs font-extrabold border-2 cursor-pointer ${pendingPresent ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>
+                Présent
+              </button>
+            </div>
+            {pendingPresent ? (
+              <button
+                type="button"
+                onClick={() => {
+                  register(pending);
+                  setPending(null);
+                }}
+                className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+              >
+                Valider la présence puis prévenir le parent
+              </button>
+            ) : waAbsent(pending) ? (
+              <a href={waAbsent(pending)} target="_blank" rel="noopener noreferrer" className="block w-full text-center py-2.5 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-700">
+                Envoyer l’absence au parent (WhatsApp)
+              </a>
+            ) : (
+              <p className="text-[11px] text-slate-500">Aucun numéro WhatsApp enregistré pour le parent.</p>
+            )}
+            <p className="text-[10px] text-slate-400">Carte perdue ? Cherchez l’élève par nom ou matricule, vérifiez sa fiche, puis cochez « Présent ».</p>
+          </div>
+        )}
         {result && (
           <div className={`p-4 sm:p-5 rounded-3xl border shadow-xs space-y-3 ${result.already ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
             <div className="flex items-start justify-between gap-2">

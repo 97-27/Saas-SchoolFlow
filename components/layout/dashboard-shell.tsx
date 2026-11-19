@@ -17,6 +17,7 @@ import { BrandLoader } from '@/components/ui/brand-loader';
 import { useSingleTab } from '@/lib/client/single-tab';
 import { AppWindow } from 'lucide-react';
 import { NoticeModal } from '@/components/ui/notice-modal';
+import { termEndInfo } from '@/lib/data/school-calendar';
 
 /**
  * Les écrans lisent d'abord la copie gardée dans le navigateur : à l'ouverture, on voyait donc
@@ -210,6 +211,20 @@ export function DashboardShell({
   const sessionOk = useSessionGuard(schoolSlug);
   const tab = useSingleTab();
   const notices = usePlatformNotices(schoolSlug, sessionOk);
+  const [termAlert, setTermAlert] = useState<ReturnType<typeof termEndInfo>>(null);
+
+  // Rappel 3 jours avant la fin du trimestre (dates saisies dans Paramètres).
+  useEffect(() => {
+    if (!sessionOk) return;
+    try {
+      const role = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || '{}').roleId;
+      if (!['fondateur', 'fondateur_adjoint', 'directeur'].includes(role)) return;
+      const info = termEndInfo(getLiveSchool(schoolSlug)?.termEnds);
+      if (!info || info.daysLeft > 3 || info.daysLeft < 0) return;
+      if (sessionStorage.getItem(`sf_term_alert_${schoolSlug}_${info.endDate}`)) return;
+      setTermAlert(info);
+    } catch (e) {}
+  }, [sessionOk, schoolSlug]);
 
   // Notes, appel, dépenses, salaires… sont enregistrés en base et partagés entre appareils.
   // La lecture des données démarre tout de suite, en même temps que la vérification de session.
@@ -288,6 +303,23 @@ export function DashboardShell({
           </main>
         </div>
 
+        {/* Fin de trimestre proche (3 jours) : rappel, une fois par jour et par appareil */}
+        {termAlert && (
+          <NoticeModal
+            title="Fin de trimestre proche"
+            message={`${termAlert.term} se termine ${termAlert.daysLeft <= 0 ? 'aujourd’hui' : `dans ${termAlert.daysLeft} jour${termAlert.daysLeft > 1 ? 's' : ''}`}.\n${
+              termAlert.next ? `Le logiciel passera automatiquement au ${termAlert.next}.` : 'C’est le dernier trimestre de l’année.'
+            }\nPour prolonger, repoussez la date de fin dans Paramètres › Année & calendrier.`}
+            showContact={false}
+            onClose={() => {
+              try {
+                sessionStorage.setItem(`sf_term_alert_${schoolSlug}_${termAlert.endDate}`, '1');
+              } catch (e) {}
+              setTermAlert(null);
+            }}
+            closeLabel="Compris"
+          />
+        )}
         {/* Suppression programmée par la plateforme : compte à rebours impossible à fermer */}
         {notices.remainingMs !== null && (
           <NoticeModal

@@ -2812,6 +2812,7 @@ export async function getPlatformOverview(): Promise<{ schools: PlatformSchoolRo
       const lastActivity = [lastKv, s.updated_at].filter(Boolean).sort().pop() || null;
       const signup = (signupRow?.data as SignupInfo) || null;
       const accessRow: AccessControl = { ...DEFAULT_ACCESS, ...((accessSys as any)?.data || {}), blocked: s.status === 'suspended' };
+      if (s.slug === 'epc-manoi') accessRow.unlimited = true; // École pilote : carte dorée à vie
 
       return {
         id: s.id,

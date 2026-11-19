@@ -41,6 +41,8 @@ export function ReadOnlyGuard({ children }: ReadOnlyGuardProps) {
           const readOnlyRole =
             READ_ONLY_ROLES.includes(role) &&
             !(role === 'educateur' && pathname.includes('/presences')) &&
+            // Secrétaire : modifie la partie pédagogique (appel, absences envoyées aux parents, classes, notes…).
+            !(role === 'secretaire' && /\/(classes|presences|notes|bulletins|distinctions|communication|bulletins-parents)(\/|$)/.test(pathname)) &&
             !pathname.includes('/pointage');
           if (parsed.isReadOnly === true || readOnlyRole) {
             setIsReadOnly(true);

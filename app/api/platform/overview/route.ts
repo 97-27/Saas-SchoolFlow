@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 function appVersion(): string {
-  return process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || 'dev';
+  return process.env.NEXT_PUBLIC_BUILD_ID || 'local';
 }
 
 async function purgeDueSchools(schools: PlatformSchoolRow[]): Promise<PlatformSchoolRow[]> {

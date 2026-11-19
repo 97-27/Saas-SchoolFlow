@@ -163,6 +163,8 @@ export interface School {
   termType?: 'trimestriel' | 'semestriel';
   openingDate?: string;
   closingDate?: string;
+  /** Dates de fin des trimestres : le trimestre actif change tout seul quand une date est dépassée. */
+  termEnds?: { t1?: string; t2?: string; t3?: string };
 
   // Cycles & Services
   hasMaternelle?: boolean;

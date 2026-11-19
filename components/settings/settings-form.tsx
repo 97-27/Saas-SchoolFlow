@@ -1145,6 +1145,34 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                 </div>
               </div>
 
+              {/* Dates de fin des trimestres : le trimestre actif change automatiquement */}
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900">Dates de fin des trimestres</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Le logiciel passe tout seul au trimestre suivant dès que la date est dépassée. Pour prolonger un trimestre, repoussez sa date de fin.
+                    Un rappel s’affiche 3 jours avant.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(['t1', 't2', 't3'] as const).map((k, i) => (
+                    <div key={k} className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700">Fin du trimestre {i + 1}</label>
+                      <FrenchDateInput
+                        value={school.termEnds?.[k] || ''}
+                        onChange={(val) => handleInputChange('termEnds', { ...(school.termEnds || {}), [k]: val })}
+                        align={i === 2 ? 'right' : 'left'}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {school.termEnds && (school.termEnds.t1 || school.termEnds.t2 || school.termEnds.t3) && (
+                  <button type="button" onClick={() => handleInputChange('termEnds', undefined)} className="text-[11px] font-bold text-slate-500 underline cursor-pointer">
+                    Revenir au choix manuel du trimestre
+                  </button>
+                )}
+              </div>
+
               {/* Notice sur le recalcul automatique */}
               <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-900">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />

@@ -1,5 +1,5 @@
 'use client';
-import { currentAcademicYear } from '@/lib/data/school-calendar';
+import { currentAcademicYear, activeTermFromDates } from '@/lib/data/school-calendar';
 
 import { Student, Invoice, School } from '@/lib/data/types';
 import { mockSchools, mockStudents, mockInvoices, schoolForSlug } from '@/lib/data/mock-data';
@@ -1634,6 +1634,9 @@ export function getLiveSchool(slug: string, defaultSchool?: School): School {
   try {
     syncClassCatalog(s);
   } catch {}
+  // Trimestre actif : calculé d'après les dates de fin saisies dans Paramètres.
+  const auto = activeTermFromDates(s.termEnds);
+  if (auto && auto !== s.currentTerm) return { ...s, currentTerm: auto };
   return s;
 }
 
