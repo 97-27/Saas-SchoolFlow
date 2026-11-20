@@ -86,7 +86,23 @@ function escapeHtml(s: string): string {
  * Envoi via Resend (https://resend.com). Variables d'environnement Vercel :
  *   RESEND_API_KEY  (obligatoire)   EMAIL_FROM  (ex. « SchoolFlow Africa <noreply@votre-domaine.com> »)
  */
-export async function sendVerificationEmail(to: string, code: string, schoolName: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendVerificationEmail(
+  to: string,
+  code: string,
+  schoolName: string,
+  kind: 'signup' | 'delete' = 'signup'
+): Promise<{ ok: boolean; error?: string }> {
+  const del = kind === 'delete';
+  const heading = del ? 'Suppression du compte' : 'Confirmation de votre e-mail';
+  const intro = del
+    ? `Une demande de <b style="color:#b91c1c">suppression définitive</b> de l’établissement <b>${escapeHtml(schoolName)}</b> a été faite depuis votre espace.`
+    : `Vous êtes sur le point de créer l’espace de l’établissement <b style="color:#047857">${escapeHtml(schoolName)}</b> sur SchoolFlow Africa.`;
+  const ask = del ? 'Pour confirmer, saisissez ce code dans la fenêtre de suppression :' : 'Saisissez ce code de confirmation dans la fenêtre d’inscription :';
+  const effect = del ? 'Sans ce code, rien n’est supprimé.' : 'Votre espace ne sera créé qu’après cette confirmation.';
+  const warning = del
+    ? 'ne communiquez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, ne le saisissez pas et changez vos codes d’accès : rien ne sera supprimé.'
+    : 'ne communiquez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement ce message : aucun compte ne sera créé.';
+  const subject = del ? `Code de suppression SchoolFlow Africa : ${code}` : `Votre code de confirmation SchoolFlow Africa : ${code}`;
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, error: 'not-configured' };
   const from = process.env.EMAIL_FROM || 'SchoolFlow Africa <onboarding@resend.dev>';
@@ -103,23 +119,23 @@ export async function sendVerificationEmail(to: string, code: string, schoolName
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e2e8f0;font-family:Arial,Helvetica,sans-serif">
    <tr><td style="background:#047857;background-image:linear-gradient(135deg,#064e3b,#059669);padding:28px 24px;text-align:center">
      <div style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">School<span style="color:#fcd34d">Flow</span> <span style="font-weight:600;color:#a7f3d0">Africa</span></div>
-     <div style="margin-top:6px;font-size:12px;color:#a7f3d0;letter-spacing:2px;text-transform:uppercase">Confirmation de votre e-mail</div>
+     <div style="margin-top:6px;font-size:12px;color:#a7f3d0;letter-spacing:2px;text-transform:uppercase">${heading}</div>
    </td></tr>
    <tr><td style="padding:30px 26px 8px;color:#334155;font-size:15px;line-height:1.6">
      <p style="margin:0 0 10px;font-size:18px;font-weight:700;color:#0f172a">Bonjour 👋</p>
-     <p style="margin:0">Vous êtes sur le point de créer l’espace de l’établissement <b style="color:#047857">${escapeHtml(schoolName)}</b> sur SchoolFlow Africa.</p>
-     <p style="margin:14px 0 0">Saisissez ce code de confirmation dans la fenêtre d’inscription :</p>
+     <p style="margin:0">${intro}</p>
+     <p style="margin:14px 0 0">${ask}</p>
    </td></tr>
    <tr><td align="center" style="padding:18px 26px 6px">
      <table role="presentation" cellpadding="0" cellspacing="0"><tr>${digitCells}</tr></table>
    </td></tr>
    <tr><td style="padding:14px 26px 26px;text-align:center;color:#64748b;font-size:13px;line-height:1.6">
      ⏱ Ce code est valable <b>15 minutes</b>.<br/>
-     Votre espace ne sera créé qu’après cette confirmation.
+     ${effect}
    </td></tr>
    <tr><td style="padding:0 26px 26px">
      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;color:#92400e;font-size:12px;line-height:1.5">
-       🔒 <b>Sécurité :</b> ne communiquez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement ce message : aucun compte ne sera créé.
+       🔒 <b>Sécurité :</b> ${warning}
      </div>
    </td></tr>
    <tr><td style="background:#f8fafc;padding:16px 24px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0">
@@ -134,7 +150,7 @@ export async function sendVerificationEmail(to: string, code: string, schoolName
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject: `Votre code de confirmation SchoolFlow Africa : ${code}`, html, text }),
+      body: JSON.stringify({ from, to: [to], subject, html, text }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');

@@ -230,7 +230,6 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
   };
 
   // Codes de sécurité par email pour la suppression définitive du compte
-  const [deleteEmailCode, setDeleteEmailCode] = useState('');
   const [enteredDeleteEmailCode, setEnteredDeleteEmailCode] = useState('');
   const [isEmailCodeSent, setIsEmailCodeSent] = useState(false);
 
@@ -402,23 +401,54 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     }, 1000);
   };
 
-  const handleInitiateDelete = () => {
-    // Génération du code d'authentification de sécurité à 6 chiffres transmis par email
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setDeleteEmailCode(code);
+  // Suppression du compte : le serveur envoie réellement un code à 6 chiffres à l'e-mail de l'école.
+  const [deleteChallenge, setDeleteChallenge] = useState('');
+  const [deleteMaskedEmail, setDeleteMaskedEmail] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleInitiateDelete = async () => {
+    setDeleteBusy(true);
+    setDeleteError('');
     setEnteredDeleteEmailCode('');
-    setIsEmailCodeSent(true);
-    setIsDeleteModalOpen(true);
+    try {
+      const res = await fetch('/api/school/delete-account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request' }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        alert(json?.error || 'Impossible d’envoyer le code pour le moment.');
+        return;
+      }
+      setDeleteChallenge(json.challenge);
+      setDeleteMaskedEmail(json.email || '');
+      setIsEmailCodeSent(true);
+      setIsDeleteModalOpen(true);
+    } catch (e) {
+      alert('Serveur injoignable. Réessayez.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    if (enteredDeleteEmailCode.trim() !== deleteEmailCode) {
-      alert(`Code de confirmation incorrect. Veuillez vérifier le code de sécurité reçu par email (${school.email || 'direction@epc-manoi.ci'}).`);
-      return;
+  const handleConfirmDelete = async () => {
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      const res = await fetch('/api/school/delete-account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', challenge: deleteChallenge, code: enteredDeleteEmailCode }) });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setDeleteError(json?.error || 'Suppression impossible.');
+        return;
+      }
+      try {
+        deleteSchoolAccount(school.slug || 'epc-manoi');
+      } catch (e) {}
+      setIsDeleteModalOpen(false);
+      window.location.href = '/login?mode=signup&deleted=true';
+    } catch (e) {
+      setDeleteError('Serveur injoignable. Réessayez.');
+    } finally {
+      setDeleteBusy(false);
     }
-    deleteSchoolAccount(school.slug || 'epc-manoi');
-    setIsDeleteModalOpen(false);
-    window.location.href = '/login?mode=signup&deleted=true';
   };
 
   const tabs = [
@@ -2279,22 +2309,18 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-950 leading-relaxed space-y-2">
-              <p className="font-bold flex items-center gap-2">
-                <Mail className="w-4 h-4 text-rose-600" />
-                <span>Code d&apos;autorisation envoyé par email à l&apos;administrateur :</span>
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-950 leading-relaxed">
+              <p className="font-bold flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-rose-600" />
+                <span>Code envoyé à {deleteMaskedEmail || 'l’adresse de l’école'}</span>
               </p>
-              <div className="p-2.5 rounded-xl bg-white border border-rose-200 font-mono font-bold text-rose-900 text-center">
-                {school.email || 'direction@epc-manoi.ci'}
-              </div>
-              <p className="text-[11px] text-rose-800">
-                Pour des raisons de sécurité, un code d&apos;autorisation à 6 chiffres a été expédié à cette adresse. Veuillez consulter votre boîte de réception pour valider la suppression définitive de l&apos;établissement <strong>{school.name}</strong>.
-              </p>
+              <p className="mt-1 text-rose-800">Valable 15 minutes. Il valide la suppression définitive de <strong>{school.name}</strong>.</p>
             </div>
 
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-slate-700 block text-center">Code de confirmation à 6 chiffres</label>
-              <OtpInput value={enteredDeleteEmailCode} onChange={setEnteredDeleteEmailCode} autoFocus />
+              <OtpInput value={enteredDeleteEmailCode} onChange={(v) => { setEnteredDeleteEmailCode(v); setDeleteError(''); }} autoFocus hasError={!!deleteError} />
+              {deleteError && <p className="text-[11px] font-bold text-rose-600 text-center">{deleteError}</p>}
             </div>
 
             <div className="flex items-center gap-3 pt-3">
@@ -2307,7 +2333,7 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
               </button>
               <button
                 type="button"
-                disabled={enteredDeleteEmailCode.length !== 6}
+                disabled={enteredDeleteEmailCode.length !== 6 || deleteBusy}
                 onClick={handleConfirmDelete}
                 className="flex-1 py-2.5 rounded-xl text-xs font-black text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-rose-600/30 transition-all cursor-pointer"
               >
