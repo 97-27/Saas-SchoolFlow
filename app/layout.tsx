@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
+import { SmsCompanion } from "@/components/ui/sms-companion";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
     <html lang="fr" data-scroll-behavior="smooth" className={`${outfit.variable} ${inter.variable} h-full`}>
       <body className="h-full bg-[#f8fafc] text-slate-900 antialiased font-sans flex flex-col">
         {children}
+        <SmsCompanion />
       </body>
     </html>
   );

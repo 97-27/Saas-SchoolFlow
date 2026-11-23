@@ -1,5 +1,6 @@
 'use client';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
+import { compareStudentsAlpha } from '@/lib/utils/alpha';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -51,6 +52,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
+import { ServiceBilan } from '@/components/services/service-bilan';
 
 interface BoardingViewProps {
   initialBoarders?: any;
@@ -414,7 +416,7 @@ export function BoardingView({
     const raw = searchQuery.trim();
     const words = norm(raw).split(/\s+/).filter(Boolean);
     const onlyDigits = /^(id-?)?\d+$/i.test(raw) ? parseInt(raw.replace(/\D/g, ''), 10) : null;
-    return boarders.filter((b) => {
+    return [...boarders].sort((a, b) => compareStudentsAlpha(a.student, b.student)).filter((b) => {
       const num = parseInt((b.student.studentNumber || '').replace(/\D/g, ''), 10);
       const hay = norm(
         `${b.student.lastName || ''} ${b.student.firstName || ''} ${b.student.fullName || ''} ${b.student.studentNumber || ''} ${b.student.matricule || ''} ${b.roomNumber || ''} ${b.student.grade || (b.student as any).className || ''}`
@@ -2144,7 +2146,7 @@ export function BoardingView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Internat & Hébergement
             </h1>
             <span className="inline-flex px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-950 border border-emerald-300 shadow-2xs">
@@ -2184,7 +2186,7 @@ export function BoardingView({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span suppressHydrationWarning className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+            <span suppressHydrationWarning className="text-2xl sm:text-2xl font-extrabold text-slate-900 font-heading">
               {totalBoarders}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -2215,7 +2217,7 @@ export function BoardingView({
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span suppressHydrationWarning className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+            <span suppressHydrationWarning className="text-2xl sm:text-2xl font-extrabold text-slate-900 font-heading">
               <Figure>{formatFCFA(totalCollected)}</Figure>
             </span>
           </div>
@@ -2286,7 +2288,7 @@ export function BoardingView({
             </div>
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-heading">
+              <span className="text-2xl sm:text-2xl font-extrabold text-slate-900 font-heading">
                 {totalBoarders} / {boardingCapacity}
               </span>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
@@ -2450,6 +2452,21 @@ export function BoardingView({
           )}
         </div>
       </div>
+
+      <ServiceBilan
+        title="Bilan financier de l’Internat"
+        accent="emerald"
+        rows={boarders.map((b) => ({
+          id: b.student.id,
+          name: b.student.fullName || `${b.student.lastName || ''} ${b.student.firstName || ''}`.trim(),
+          grade: b.student.grade,
+          paidMonthsCount: b.paidMonthsCount,
+          totalPaid: b.totalPaid,
+          totalDue: b.totalDue,
+          monthlyRate: b.monthlyRate,
+          monthsState: b.months,
+        }))}
+      />
 
       {/* ═══════════════════════════════════════════════════════════════
           SECTION 2 : LE FORMULAIRE INTERACTIF & LE REÇU OFFICIEL (2 COLS)

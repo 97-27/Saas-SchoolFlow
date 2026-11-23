@@ -980,7 +980,22 @@ function showAppUpdateBanner(): void {
     'font:700 12px/1.2 inherit;cursor:pointer;box-shadow:0 4px 12px rgba(5,150,105,.35)';
   btn.onmouseenter = () => (btn.style.background = '#047857');
   btn.onmouseleave = () => (btn.style.background = '#059669');
-  btn.onclick = () => window.location.reload();
+  btn.onclick = () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.style.cursor = 'progress';
+    btn.style.background = '#047857';
+    btn.textContent = 'Rechargement…';
+    // Animation visible : l'icône ↻ tourne pendant que la page se rafraîchit.
+    if (!document.getElementById('sf-spin-style')) {
+      const st = document.createElement('style');
+      st.id = 'sf-spin-style';
+      st.textContent = '@keyframes sf-spin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+    dot.style.animation = 'sf-spin .8s linear infinite';
+    window.setTimeout(() => window.location.reload(), 900);
+  };
 
   bar.append(left, btn);
   document.body.appendChild(bar);
@@ -1707,6 +1722,26 @@ export interface GradesPortalStatus {
   closedMessage: string;
   updatedBy: string;
   updatedAt: string;
+  /**
+   * Moyennes (visibles par les enseignants) : 'open' (par défaut), 'closed', ou 'scheduled'
+   * (ouverture automatique entre deux dates/heures). Seule la Direction règle ceci.
+   */
+  averagesMode?: 'open' | 'closed' | 'scheduled';
+  averagesStart?: string; // 'YYYY-MM-DDTHH:mm' (heure locale)
+  averagesEnd?: string;
+}
+
+/** Les moyennes sont-elles ouvertes aux enseignants à l'instant donné ? */
+export function isAveragesOpen(status: GradesPortalStatus, now: number = Date.now()): boolean {
+  const mode = status.averagesMode || 'open';
+  if (mode === 'open') return true;
+  if (mode === 'closed') return false;
+  const start = status.averagesStart ? new Date(status.averagesStart).getTime() : NaN;
+  const end = status.averagesEnd ? new Date(status.averagesEnd).getTime() : NaN;
+  if (Number.isNaN(start) && Number.isNaN(end)) return false;
+  if (!Number.isNaN(start) && now < start) return false;
+  if (!Number.isNaN(end) && now > end) return false;
+  return true;
 }
 
 export function getGradesPortalStatus(schoolSlug: string): GradesPortalStatus {

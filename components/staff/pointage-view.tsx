@@ -856,7 +856,7 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Heure de l’établissement</p>
-              <p className="text-3xl font-extrabold font-heading text-slate-900">{now}</p>
+              <p className="text-2xl font-extrabold font-heading text-slate-900">{now}</p>
             </div>
 
             {confirm.status === 'locating' && (

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import { Student, School } from '@/lib/data/types';
 import { availableClasses } from '@/lib/data/mock-data';
 import {
@@ -130,7 +131,7 @@ export function HealthView({ initialStudents, school, schoolSlug }: HealthViewPr
   // Filtrage des élèves affichés
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return students.filter((s) => {
+    return sortStudentsAlpha(students).filter((s) => {
       const matchesClass = selectedClass === 'Toutes les classes' || s.grade === selectedClass;
       const matchesSearch =
         q === '' ||
@@ -214,7 +215,7 @@ export function HealthView({ initialStudents, school, schoolSlug }: HealthViewPr
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Santé & Suivi Médical
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">

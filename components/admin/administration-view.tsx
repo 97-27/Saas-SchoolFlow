@@ -1,7 +1,7 @@
 'use client';
 
-import { customRoles, isCustomRole } from '@/lib/auth/roles';
-import { readPageOverrides } from '@/lib/data/page-access';
+import { CUSTOM_ROLE_PREFIX, customRoles, isCustomRole, isFounderRole } from '@/lib/auth/roles';
+import { readPageOverrides, savePageOverrides } from '@/lib/data/page-access';
 import React, { useState, useEffect } from 'react';
 import {
   StaffUser,
@@ -163,6 +163,28 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       setViewer({ roleId: String(parsed.roleId || ''), code: String(parsed.authCode || '').toUpperCase() });
     } catch (e) {}
   }, []);
+
+  // Création d'un poste directement depuis ce formulaire (Fondateur / DGA) : le poste est ensuite
+  // sélectionné pour le nouveau membre ; ses pages se cochent dans « Accès par poste ».
+  const [showNewPoste, setShowNewPoste] = useState(false);
+  const [newPosteName, setNewPosteName] = useState('');
+  const createPosteHere = () => {
+    if (!isFounderRole(viewer.roleId)) return;
+    const name = newPosteName.trim().replace(/\s+/g, ' ');
+    if (name.length < 3) return;
+    const slugPart = name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30);
+    const id = `${CUSTOM_ROLE_PREFIX}${slugPart || Date.now()}`;
+    const current = readPageOverrides(schoolSlug);
+    if (!current[id]) {
+      savePageOverrides(schoolSlug, { ...current, [id]: { custom: true, label: name, add: [] } });
+    }
+    setCustomPostes(customRoles(readPageOverrides(schoolSlug)));
+    setNewRole(id);
+    setNewAuthCode(generateRandomCode(id as any));
+    setNewMatricule(generateMatricule(id as any));
+    setNewPosteName('');
+    setShowNewPoste(false);
+  };
 
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
@@ -777,7 +799,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
           <div className="relative w-full sm:w-88">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
+            <input autoComplete="off" data-lpignore="true" data-form-type="other"
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1257,7 +1279,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Nom & Prénoms du Membre *</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     required
                     value={newFullName}
@@ -1278,12 +1300,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       Générer
                     </button>
                   </div>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     required
                     value={newMatricule}
                     onChange={(e) => setNewMatricule(e.target.value.toUpperCase())}
-                    autoComplete="off"
                     placeholder="Ex : CPT-002"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
                   />
@@ -1293,7 +1314,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Téléphone *</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="tel"
                     required
                     value={newPhone}
@@ -1304,7 +1325,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Adresse email *</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="email"
                     required
                     value={newEmail}
@@ -1317,7 +1338,46 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700 block">Poste / Fonction (Code Requis) *</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-700 block">Poste / Fonction (Code Requis) *</label>
+                    {isFounderRole(viewer.roleId) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPoste((v) => !v)}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        {showNewPoste ? 'Annuler' : '＋ Créer un poste'}
+                      </button>
+                    )}
+                  </div>
+                  {showNewPoste && (
+                    <div className="flex gap-1.5 p-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                      <input
+                        autoComplete="off"
+                        data-lpignore="true"
+                        data-form-type="other"
+                        type="text"
+                        value={newPosteName}
+                        onChange={(e) => setNewPosteName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            createPosteHere();
+                          }
+                        }}
+                        maxLength={40}
+                        placeholder="Nom du poste (ex : Assistante de classe)"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-300 font-semibold text-slate-900 focus:border-emerald-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={createPosteHere}
+                        className="px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                      >
+                        Créer
+                      </button>
+                    </div>
+                  )}
                   <select
                     value={newRole}
                     onChange={(e) => {
@@ -1336,7 +1396,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     value={newAddress}
                     onChange={(e) => setNewAddress(e.target.value)}
@@ -1369,7 +1429,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                   <div className="space-y-1">
                     <label className="font-bold text-slate-700 block">Diplôme & Expérience Pédagogique</label>
-                    <input
+                    <input autoComplete="off" data-lpignore="true" data-form-type="other"
                       type="text"
                       value={newDiploma}
                       onChange={(e) => setNewDiploma(e.target.value)}
@@ -1396,12 +1456,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   </button>
                 </div>
 
-                <input
+                <input autoComplete="off" data-lpignore="true" data-form-type="other"
                   type="text"
                   required
                   value={newAuthCode}
                   onChange={(e) => setNewAuthCode(e.target.value.toUpperCase())}
-                  autoComplete="off"
                   className="w-full px-3.5 py-2 rounded-xl bg-white border border-emerald-300 font-mono font-extrabold text-xs text-emerald-950 uppercase tracking-widest"
                 />
                 <p className="text-[10px] text-emerald-800">
@@ -1479,7 +1538,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   <label className="font-bold text-slate-700 block">
                     Nom et Prénoms *
                   </label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     required
                     value={editFullName}
@@ -1530,12 +1589,11 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       </button>
                     )}
                   </div>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     required
                     value={editMatricule}
                     onChange={(e) => setEditMatricule(e.target.value.toUpperCase())}
-                    autoComplete="off"
                     placeholder={editingStaff.roleId === 'fondateur' ? 'Ex : FND-001' : editingStaff.roleId === 'directeur' ? 'Ex : DIR-001' : 'Ex : CPT-002'}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono font-bold text-slate-900 uppercase focus:border-emerald-600"
                   />
@@ -1543,7 +1601,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Adresse de Résidence</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="text"
                     value={editAddress}
                     onChange={(e) => setEditAddress(e.target.value)}
@@ -1556,7 +1614,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Téléphone *</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="tel"
                     required
                     value={editPhone}
@@ -1567,7 +1625,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700 block">Adresse email *</label>
-                  <input
+                  <input autoComplete="off" data-lpignore="true" data-form-type="other"
                     type="email"
                     required
                     value={editEmail}
@@ -1600,7 +1658,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
 
                   <div className="space-y-1">
                     <label className="font-bold text-slate-700 block">Diplôme & Expérience</label>
-                    <input
+                    <input autoComplete="off" data-lpignore="true" data-form-type="other"
                       type="text"
                       value={editDiploma}
                       onChange={(e) => setEditDiploma(e.target.value)}
@@ -1655,7 +1713,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       <Lock className="w-3.5 h-3.5" /> Confidentiel
                     </div>
                   ) : (
-                    <input
+                    <input autoComplete="off" data-lpignore="true" data-form-type="other"
                       type="text"
                       required
                       pattern={editRole === 'enseignant' ? '\\d{4}' : undefined}
@@ -1717,7 +1775,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 <p className="text-xs font-semibold text-rose-800">
                   Compte de Direction : pour confirmer, retapez le nom <strong>{staffToDelete.fullName}</strong>.
                 </p>
-                <input
+                <input autoComplete="off" data-lpignore="true" data-form-type="other"
                   type="text"
                   value={deleteConfirmName}
                   onChange={(e) => {
@@ -1725,7 +1783,6 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     setDeleteError(null);
                   }}
                   placeholder="Nom complet"
-                  autoComplete="off"
                   className="w-full min-h-[44px] rounded-xl border border-rose-200 bg-white px-3 text-sm outline-none focus:border-rose-400"
                 />
               </div>

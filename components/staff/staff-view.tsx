@@ -511,7 +511,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Enseignants & Personnel Pédagogique
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
@@ -562,7 +562,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </h3>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <span className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               {teachers.length}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -585,7 +585,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </h3>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <span className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               {teachers.length > 0
                 ? `${teachers.filter((t) => t.documents.teachingAuthorization).length} / ${teachers.length}`
                 : '0 / 0'}
@@ -610,7 +610,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </h3>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <span className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               {new Set(teachers.map((t) => t.cycle).filter(Boolean)).size} {new Set(teachers.map((t) => t.cycle).filter(Boolean)).size > 1 ? 'Cycles' : 'Cycle'}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
@@ -635,7 +635,7 @@ export function StaffView({ school, schoolSlug }: StaffViewProps) {
             </h3>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <span className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               {teachers.filter((t) => isDocComplete(t)).length}
             </span>
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">

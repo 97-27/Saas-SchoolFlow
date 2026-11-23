@@ -184,6 +184,33 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
             seenTxKeys.add(txKey);
 
             foundVersements = true;
+            // Compléments ajoutés plus tard : chacun est rangé à SA date, avec SON montant.
+            const topups: { amount: number; date: string }[] = (Array.isArray(obj.topups) ? obj.topups : [])
+              .map((t: any) => ({ amount: Number(t?.amount) || 0, date: String(t?.date || '') }))
+              .filter((t: { amount: number; date: string }) => t.amount > 0 && t.date);
+            const topupSum = topups.reduce((s, t) => s + t.amount, 0);
+            if (topups.length > 0 && topupSum < amount) {
+              topups.forEach((t, ti) => {
+                list.push({
+                  id: `${inv.id}-${key}-top${ti}`,
+                  invoiceId: inv.id,
+                  invoiceNumber: displayInvoiceNumber,
+                  matriculeCode,
+                  studentName: inv.studentName,
+                  studentGrade: inv.studentGrade,
+                  studentGender: inv.studentGender,
+                  enrollmentType,
+                  prestation,
+                  motif: `${motif} (complément)`,
+                  paymentDate: t.date,
+                  amount: t.amount,
+                  paymentMethod: obj.paymentMethod || obj.method || inv.paymentMethod || 'Espèces',
+                  status: inv.status,
+                  rawInvoice: inv,
+                });
+              });
+            }
+            const baseAmount = topups.length > 0 && topupSum < amount ? amount - topupSum : amount;
             list.push({
               id: `${inv.id}-${key}`,
               invoiceId: inv.id,
@@ -199,7 +226,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
               // était toujours rangé à la date d'inscription : un élève inscrit le 15/09 qui payait
               // ses 1er et 2e versements le 20/10 n'avait qu'UN versement dans le journal du 20/10.
               paymentDate: obj.date || matchedStudent?.paymentDate || matchedStudent?.enrollmentDate || inv.issueDate,
-              amount,
+              amount: baseAmount,
               paymentMethod: obj.paymentMethod || obj.method || inv.paymentMethod || 'Espèces',
               status: inv.status,
               rawInvoice: inv,
@@ -551,7 +578,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
               <span className="text-[10px] uppercase font-bold text-emerald-300 block tracking-wider mb-0.5">
                 Recettes du Jour ({formatDateFrenchLong(selectedJournalDate)})
               </span>
-              <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
+              <span className="text-2xl sm:text-2xl font-extrabold font-heading text-white tracking-tight leading-none block">
                 <Figure>{formatFCFA(dayMetrics.totalAmount)}</Figure>
               </span>
             </div>
@@ -566,7 +593,7 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
               <span className="text-[10px] uppercase font-bold text-slate-300 block tracking-wider mb-0.5">
                 Élèves Encaissés Aujourd&apos;hui
               </span>
-              <span className="text-2xl sm:text-3xl font-extrabold font-heading text-white tracking-tight leading-none block">
+              <span className="text-2xl sm:text-2xl font-extrabold font-heading text-white tracking-tight leading-none block">
                 <Figure>{dayMetrics.totalCount}</Figure> règlements
               </span>
             </div>

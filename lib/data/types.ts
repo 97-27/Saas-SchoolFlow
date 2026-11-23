@@ -6,6 +6,11 @@ export interface InstallmentRecord {
   method?: string; // Alias de paymentMethod
   date?: string; // Date du versement JJ/MM/AAAA ou YYYY-MM-DD
   receiptNumber?: string;
+  /**
+   * Compléments encaissés plus tard sur ce même versement (ex. 10 000 F saisis le 1er, puis la case
+   * passe à 20 000 F le 5 : le journal du 5 n'affiche que les 10 000 F réellement reçus ce jour-là).
+   */
+  topups?: { amount: number; date: string }[];
 }
 
 export interface StudentInstallments {

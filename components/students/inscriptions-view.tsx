@@ -1006,12 +1006,41 @@ export function InscriptionsView({
 
     const finalPaymentDate = paymentDate || getTodayDateStr();
 
+    // Complément d'un versement déjà enregistré : si la case passe de 10 000 à 20 000 F, seuls les
+    // 10 000 F ajoutés comptent à la date d'AUJOURD'HUI (le reste garde sa date d'origine).
+    const buildTopups = (rank: 1 | 2 | 3 | 4 | 5, newAmount: number) => {
+      const prevRec: any = (currentSelectedStudent?.installments as any)?.[`versement${rank}`];
+      const prevAmount = initialVersementsSnapshot
+        ? (initialVersementsSnapshot as any)[`v${rank}`] || 0
+        : 0;
+      let topups: { amount: number; date: string }[] = Array.isArray(prevRec?.topups)
+        ? prevRec.topups.map((t: any) => ({ amount: Number(t.amount) || 0, date: String(t.date || '') }))
+        : [];
+      if (!currentSelectedStudent || prevAmount <= 0) return undefined;
+      if (newAmount > prevAmount) {
+        topups = [...topups, { amount: newAmount - prevAmount, date: getTodayDateStr() }];
+      } else if (newAmount < prevAmount) {
+        let toRemove = prevAmount - newAmount;
+        while (toRemove > 0 && topups.length > 0) {
+          const last = topups[topups.length - 1];
+          if (last.amount <= toRemove) {
+            toRemove -= last.amount;
+            topups.pop();
+          } else {
+            last.amount -= toRemove;
+            toRemove = 0;
+          }
+        }
+      }
+      return topups.length > 0 ? topups : undefined;
+    };
+
     const installments: StudentInstallments = {
-      versement1: versement1Amount > 0 ? { amount: versement1Amount, paymentMethod: versement1Method, date: versement1Date || finalPaymentDate } : undefined,
-      versement2: versement2Amount > 0 ? { amount: versement2Amount, paymentMethod: versement2Method, date: versement2Date || finalPaymentDate } : undefined,
-      versement3: versement3Amount > 0 ? { amount: versement3Amount, paymentMethod: versement3Method, date: versement3Date || finalPaymentDate } : undefined,
-      versement4: versement4Amount > 0 ? { amount: versement4Amount, paymentMethod: versement4Method, date: versement4Date || finalPaymentDate } : undefined,
-      versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date || finalPaymentDate } : undefined,
+      versement1: versement1Amount > 0 ? { amount: versement1Amount, paymentMethod: versement1Method, date: versement1Date || finalPaymentDate, topups: buildTopups(1, versement1Amount) } : undefined,
+      versement2: versement2Amount > 0 ? { amount: versement2Amount, paymentMethod: versement2Method, date: versement2Date || finalPaymentDate, topups: buildTopups(2, versement2Amount) } : undefined,
+      versement3: versement3Amount > 0 ? { amount: versement3Amount, paymentMethod: versement3Method, date: versement3Date || finalPaymentDate, topups: buildTopups(3, versement3Amount) } : undefined,
+      versement4: versement4Amount > 0 ? { amount: versement4Amount, paymentMethod: versement4Method, date: versement4Date || finalPaymentDate, topups: buildTopups(4, versement4Amount) } : undefined,
+      versement5: versement5Amount > 0 ? { amount: versement5Amount, paymentMethod: versement5Method, date: versement5Date || finalPaymentDate, topups: buildTopups(5, versement5Amount) } : undefined,
     };
 
     // Permettre la modification totale de l'élève (Nom, Prénom, Genre, Classe, Statut, Matricule, Adresse)

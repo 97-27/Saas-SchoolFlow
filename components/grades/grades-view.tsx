@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import { Student, School } from '@/lib/data/types';
 import { canNotifyParents } from '@/lib/auth/roles';
 import {
@@ -9,6 +10,7 @@ import {
   getGradesPortalStatus,
   saveGradesPortalStatus,
   GradesPortalStatus,
+  isAveragesOpen,
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
@@ -306,9 +308,30 @@ export function GradesView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, loadPortal);
   }, [schoolSlug]);
 
+  // Les moyennes s'ouvrent/se ferment (ou à heure programmée) pour les enseignants : on
+  // réévalue toutes les 20 s pour que l'ouverture automatique se fasse à l'heure dite.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNowTick(Date.now()), 20000);
+    return () => window.clearInterval(t);
+  }, []);
+  const averagesOpenNow = isAveragesOpen(portalStatus, nowTick);
+  const updateAverages = (patch: Partial<GradesPortalStatus>) => {
+    const updated: GradesPortalStatus = {
+      ...portalStatus,
+      ...patch,
+      updatedBy: currentSchool.directorName || currentSchool.founderName || 'Direction des Études',
+      updatedAt: new Date().toLocaleDateString('fr-FR'),
+    };
+    setPortalStatus(updated);
+    saveGradesPortalStatus(schoolSlug, updated);
+  };
+
   const handleTogglePortal = () => {
+    if (!canEditGradesConfig) return;
     const nextOpen = !portalStatus.isOpen;
     const updated: GradesPortalStatus = {
+      ...portalStatus,
       isOpen: nextOpen,
       closedMessage: 'Les portails de saisie des notes sont actuellement fermés par la Direction des Études. Veuillez contacter l’administrateur pour ouvrir l’accès.',
       updatedBy: currentSchool.directorName || currentSchool.founderName || 'Direction des Études',
@@ -378,7 +401,7 @@ export function GradesView({
 
   // Liste des élèves de la classe sélectionnée (pour les notes)
   const classStudents = useMemo(() => {
-    return students.filter((s) => s.grade === selectedClass);
+    return sortStudentsAlpha(students.filter((s) => s.grade === selectedClass));
   }, [students, selectedClass]);
 
   // Clé de stockage pour les notes
@@ -398,6 +421,8 @@ export function GradesView({
   const [canEditGradesConfig, setCanEditGradesConfig] = useState(false);
   // Envoi des notes aux parents : Direction seulement (Directeur, Secrétaire, Fondateurs, Informaticien…).
   const [canSendToParents, setCanSendToParents] = useState(false);
+  // La Direction voit toujours les moyennes ; les enseignants seulement quand elles sont ouvertes.
+  const averagesVisible = canEditGradesConfig || averagesOpenNow;
   useEffect(() => {
     setGradesConfig(getGradesConfig(schoolSlug));
     try {
@@ -817,7 +842,7 @@ export function GradesView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               {activeTab === 'pedagogie'
                 ? 'Espace Pédagogie & Fiches de Cours'
                 : 'Pédagogie, Saisie des Notes & Évaluations'}
@@ -932,6 +957,7 @@ export function GradesView({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {canEditGradesConfig && (
             <button
               type="button"
               onClick={handleTogglePortal}
@@ -953,7 +979,61 @@ export function GradesView({
                 </>
               )}
             </button>
+            )}
           </div>
+        </div>
+
+        {/* Moyennes : réglées par la Direction seulement (ouvert / fermé / dates programmées) */}
+        <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-extrabold text-slate-800 font-heading">Moyennes (enseignants) :</span>
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              averagesOpenNow ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${averagesOpenNow ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            {averagesOpenNow ? 'OUVERTES' : 'FERMÉES'}
+            {(portalStatus.averagesMode || 'open') === 'scheduled' ? ' · programmées' : ''}
+          </span>
+          {canEditGradesConfig && (
+            <>
+              <select
+                value={portalStatus.averagesMode || 'open'}
+                onChange={(e) => updateAverages({ averagesMode: e.target.value as 'open' | 'closed' | 'scheduled' })}
+                className="px-2 py-1 rounded-lg border border-slate-300 text-[11px] font-bold text-slate-800 cursor-pointer"
+                aria-label="Mode des moyennes"
+              >
+                <option value="open">Ouvertes</option>
+                <option value="closed">Fermées</option>
+                <option value="scheduled">Programmées (dates)</option>
+              </select>
+              {(portalStatus.averagesMode || 'open') === 'scheduled' && (
+                <>
+                  <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                    Début
+                    <input
+                      type="datetime-local"
+                      value={portalStatus.averagesStart || ''}
+                      onChange={(e) => updateAverages({ averagesStart: e.target.value })}
+                      className="px-2 py-1 rounded-lg border border-slate-300 text-[11px] font-semibold text-slate-800"
+                    />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                    Fin
+                    <input
+                      type="datetime-local"
+                      value={portalStatus.averagesEnd || ''}
+                      onChange={(e) => updateAverages({ averagesEnd: e.target.value })}
+                      className="px-2 py-1 rounded-lg border border-slate-300 text-[11px] font-semibold text-slate-800"
+                    />
+                  </label>
+                </>
+              )}
+            </>
+          )}
+          {!canEditGradesConfig && (
+            <span className="text-[10px] text-slate-500">Réglé par la Direction. Vous pouvez saisir vos notes et devoirs à tout moment.</span>
+          )}
         </div>
       </div>
 
@@ -1279,7 +1359,7 @@ export function GradesView({
 
             <div className="bg-white rounded-2xl p-4 border border-emerald-200/80 shadow-xs bg-emerald-50/20">
               <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Moyenne de Classe</span>
-              <span className="text-xl font-black text-emerald-900 font-heading">{classStats.classAvg}</span>
+              <span className="text-xl font-black text-emerald-900 font-heading">{averagesVisible ? classStats.classAvg : '🔒'}</span>
               <span className="text-[10px] text-emerald-700 block">Sur les notes saisies</span>
             </div>
 
@@ -1293,7 +1373,7 @@ export function GradesView({
 
             <div className="bg-white rounded-2xl p-4 border border-blue-200/80 shadow-xs bg-blue-50/20">
               <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">Taux de Réussite</span>
-              <span className="text-xl font-black text-blue-900 font-heading">{classStats.successRate}%</span>
+              <span className="text-xl font-black text-blue-900 font-heading">{averagesVisible ? `${classStats.successRate}%` : '🔒'}</span>
               <span className="text-[10px] text-blue-700 block">Moyenne &ge; 10 / 20</span>
             </div>
           </div>
@@ -1530,7 +1610,9 @@ export function GradesView({
                           </td>
 
                           <td className="py-2.5 px-2 text-center bg-emerald-50/50 font-mono font-black text-xs">
-                            {g.moyenne !== null ? (
+                            {!averagesVisible ? (
+                              <span className="text-slate-400 text-[10px] font-semibold" title="Moyennes fermées par la Direction">🔒</span>
+                            ) : g.moyenne !== null ? (
                               <span
                                 className={`px-2 py-0.5 rounded-md inline-block font-mono ${
                                   g.moyenne >= 14

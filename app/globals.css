@@ -471,3 +471,6 @@ div[class*="dev-tools-indicator"] {
 }
 
 
+
+@media print { .sf-sms-btn { display: none !important; } }
+

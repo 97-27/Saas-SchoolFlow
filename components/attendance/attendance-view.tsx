@@ -1,6 +1,7 @@
 'use client';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
+import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatDate } from '@/lib/utils/formatters';
@@ -169,7 +170,7 @@ export function AttendanceView({
 
   // Élèves de la classe choisie
   const classStudents = useMemo(() => {
-    return students.filter((s) => s.grade === selectedClass);
+    return sortStudentsAlpha(students.filter((s) => s.grade === selectedClass));
   }, [students, selectedClass]);
 
   // Initialisation par défaut de la feuille d'appel pour ce créneau et cette date : tout élève
@@ -356,7 +357,7 @@ export function AttendanceView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Présences & Absences (Collège & Lycée)
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">

@@ -274,7 +274,7 @@ export function CaisseView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Comptabilité & Caisse
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
@@ -312,7 +312,7 @@ export function CaisseView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
+              <span className="text-2xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
                 <Figure>{formatFCFA(totalEspeces)}</Figure>
               </span>
             </div>
@@ -338,7 +338,7 @@ export function CaisseView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
+              <span className="text-2xl sm:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
                 <Figure>{formatFCFA(totalEnLigneEtVirement)}</Figure>
               </span>
             </div>

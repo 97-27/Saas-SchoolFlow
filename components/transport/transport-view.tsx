@@ -1,5 +1,6 @@
 'use client';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
+import { compareStudentsAlpha } from '@/lib/utils/alpha';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -42,6 +43,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
+import { ServiceBilan } from '@/components/services/service-bilan';
 import { SCHOOL_MONTHS, buildServiceMonthInvoice, isPlaceholderInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import type { ServicePaymentMeta } from '@/lib/data/live-store';
 import { captureReceiptPng, copyPngToClipboard, downloadPng } from '@/lib/client/receipt-share';
@@ -381,7 +383,7 @@ export function TransportView({
 
   // Filtrage
   const filteredSubscribers = useMemo(() => {
-    return subscribers.filter((sub) => {
+    return [...subscribers].sort(compareStudentsAlpha).filter((sub) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         q === '' ||
@@ -813,7 +815,7 @@ export function TransportView({
               Logistique & Navettes
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+          <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
             Transport Scolaire
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-sans mt-0.5">
@@ -896,7 +898,7 @@ export function TransportView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
+              <span className="text-xl sm:text-2xl xl:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap">
                 {stats.totalSubscribers} élèves
               </span>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -933,7 +935,7 @@ export function TransportView({
               </h3>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
+              <span className="text-xl sm:text-2xl xl:text-2xl font-extrabold text-slate-900 tracking-tight font-heading whitespace-nowrap text-blue-900">
                 <Figure>{formatFCFA(stats.totalCollected)}</Figure>
               </span>
             </div>
@@ -970,7 +972,7 @@ export function TransportView({
               </button>
             </div>
             <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <span className="text-xl sm:text-2xl xl:text-3xl font-extrabold text-amber-900 tracking-tight font-heading whitespace-nowrap">
+              <span className="text-xl sm:text-2xl xl:text-2xl font-extrabold text-amber-900 tracking-tight font-heading whitespace-nowrap">
                 {customLines.length === 0 ? '0 Ligne configurée' : `${customLines.length} Ligne${customLines.length > 1 ? 's' : ''} Active${customLines.length > 1 ? 's' : ''}`}
               </span>
             </div>
@@ -988,6 +990,21 @@ export function TransportView({
           </div>
         </div>
       </div>
+
+      <ServiceBilan
+        title="Bilan financier du Transport"
+        accent="sky"
+        rows={subscribers.map((s) => ({
+          id: s.id,
+          name: s.fullName,
+          grade: s.grade,
+          paidMonthsCount: s.paidMonthsCount,
+          totalPaid: s.totalPaidAmount,
+          totalDue: Math.max(0, s.monthlyRate * 9 - s.discountAmount),
+          monthlyRate: s.monthlyRate,
+          monthsState: s.monthsState,
+        }))}
+      />
 
       {/* 3. Table des Inscrits Transport avec Défilement en Haut */}
       <div className="bg-white rounded-2xl border border-slate-200/70 shadow-xs overflow-hidden">

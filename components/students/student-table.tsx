@@ -1,5 +1,6 @@
 'use client';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
+import { compareStudentsAlpha } from '@/lib/utils/alpha';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
@@ -95,7 +96,7 @@ export function StudentTable({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student[] | null>(null);
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc'); // Par défaut les plus récents (ID-051, etc.) en haut
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha'>('desc'); // Par défaut les plus récents (ID-051, etc.) en haut
 
   // Edit form state
   const [editLastName, setEditLastName] = useState('');
@@ -238,6 +239,7 @@ export function StudentTable({
   // Sorted students (Par défaut 'desc' pour voir ID-051 tout en haut)
   const sortedStudents = useMemo(() => {
     return [...filteredStudents].sort((a, b) => {
+      if (sortOrder === 'alpha') return compareStudentsAlpha(a, b);
       const numA = parseInt((a?.studentNumber || '').replace(/\D/g, ''), 10) || 0;
       const numB = parseInt((b?.studentNumber || '').replace(/\D/g, ''), 10) || 0;
       return sortOrder === 'desc' ? numB - numA : numA - numB;
@@ -308,7 +310,7 @@ export function StudentTable({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Vue d&apos;ensemble des Élèves
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
@@ -325,7 +327,7 @@ export function StudentTable({
           {/* Bouton de tri asc/desc */}
           <button
             type="button"
-            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+            onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : sortOrder === 'asc' ? 'alpha' : 'desc')}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
             title="Changer l'ordre d'affichage (Plus récents / Plus anciens)"
           >
@@ -334,10 +336,15 @@ export function StudentTable({
                 <ArrowDownNarrowWide className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Plus récents d&apos;abord</span>
               </>
-            ) : (
+            ) : sortOrder === 'asc' ? (
               <>
                 <ArrowUpNarrowWide className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Par numéro ID (001...)</span>
+              </>
+            ) : (
+              <>
+                <ArrowUpNarrowWide className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Ordre alphabétique (A → Z)</span>
               </>
             )}
           </button>

@@ -469,7 +469,7 @@ export function ParentScolariteTab({
               </span>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-black font-heading tracking-tight text-white">
+            <h2 className="text-2xl sm:text-2xl font-black font-heading tracking-tight text-white">
               {activeChild.lastName} {activeChild.firstName}
             </h2>
             <p className="text-xs sm:text-sm text-emerald-200/90 mt-1">

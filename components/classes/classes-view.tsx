@@ -1,6 +1,7 @@
 'use client';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
+import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
@@ -203,7 +204,7 @@ export function ClassesView({
 
   // Élèves filtrés par recherche et genre
   const filteredStudents = useMemo(() => {
-    return scopedStudents.filter((s) => {
+    return sortStudentsAlpha(scopedStudents).filter((s) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         q === '' ||
@@ -336,7 +337,7 @@ export function ClassesView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight font-heading">
+            <h1 className="text-xl sm:text-2xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-heading">
               Classes & Niveaux Pédagogiques
             </h1>
             <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
