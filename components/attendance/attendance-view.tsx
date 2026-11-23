@@ -4,7 +4,9 @@ import { schoolPhonesText } from '@/lib/data/school-phones';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatDate } from '@/lib/utils/formatters';
-import { getLiveStudents, getLiveSchool, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getLiveStudents, getLiveSchool, getLiveInvoices, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { getBoarderStudentIds } from '@/lib/data/boarding';
+import { canNotifyParents } from '@/lib/auth/roles';
 import { GenderBadge } from '@/components/ui/badge';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
 import {
@@ -69,6 +71,19 @@ export function AttendanceView({
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all');
+  // Internes (déjà dans l'établissement) / externes (viennent de l'extérieur).
+  const [residenceFilter, setResidenceFilter] = useState<'all' | 'interne' | 'externe'>('all');
+  const [boarderIds, setBoarderIds] = useState<Set<string>>(new Set());
+  // Alertes WhatsApp aux parents : Direction seulement (pas les enseignants).
+  const [canAlertParents, setCanAlertParents] = useState(false);
+  useEffect(() => {
+    try {
+      const session = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
+      setCanAlertParents(canNotifyParents(session?.roleId));
+    } catch {
+      setCanAlertParents(false);
+    }
+  }, []);
 
   // Sécurité : Verrouillage de la session d'appel
   const lockKey = `schoolflow_attendance_locked_${schoolSlug}_${selectedDate}_${selectedSlot}_${selectedClass}`;
@@ -112,13 +127,15 @@ export function AttendanceView({
 
   // Synchronisation des élèves et de l'école
   useEffect(() => {
-    setStudents(getLiveStudents(initialStudents, schoolSlug));
-    setCurrentSchool(getLiveSchool(schoolSlug, school));
-
-    const handleUpdate = () => {
-      setStudents(getLiveStudents(initialStudents, schoolSlug));
+    const refresh = () => {
+      const live = getLiveStudents(initialStudents, schoolSlug);
+      setStudents(live);
       setCurrentSchool(getLiveSchool(schoolSlug, school));
+      setBoarderIds(getBoarderStudentIds(live, schoolSlug, getLiveInvoices([], schoolSlug)));
     };
+    refresh();
+
+    const handleUpdate = refresh;
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleUpdate);
   }, [initialStudents, schoolSlug, school]);
@@ -248,10 +265,15 @@ export function AttendanceView({
       const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
       const record = attendanceMap[key] || { status: 'present', reason: '' };
       const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+      const isBoarder = boarderIds.has(stu.id);
+      const matchesResidence =
+        residenceFilter === 'all' || (residenceFilter === 'interne' ? isBoarder : !isBoarder);
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesResidence;
     });
-  }, [classStudents, searchQuery, selectedDate, selectedSlot, attendanceMap, statusFilter]);
+  }, [classStudents, searchQuery, selectedDate, selectedSlot, attendanceMap, statusFilter, residenceFilter, boarderIds]);
+
+  const boarderCount = useMemo(() => classStudents.filter((s) => boarderIds.has(s.id)).length, [classStudents, boarderIds]);
 
   // Statistiques du créneau
   const stats = useMemo(() => {
@@ -581,6 +603,28 @@ export function AttendanceView({
               />
             </div>
 
+            <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 gap-1" role="group" aria-label="Internes ou externes">
+              {([
+                { id: 'all', label: 'Tous', count: classStudents.length },
+                { id: 'interne', label: 'Internat', count: boarderCount },
+                { id: 'externe', label: 'Externes', count: classStudents.length - boarderCount },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setResidenceFilter(opt.id)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    residenceFilter === opt.id ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  <span className={`px-1.5 rounded-md text-[10px] font-mono ${residenceFilter === opt.id ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200'}`}>
+                    {opt.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -641,6 +685,15 @@ export function AttendanceView({
                         </span>
                         <span className="font-mono text-[10.5px] text-slate-400 font-medium">
                           {stu.studentNumber} • {stu.matricule}
+                        </span>
+                        <span
+                          className={`mt-1 flex w-fit items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            boarderIds.has(stu.id)
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}
+                        >
+                          {boarderIds.has(stu.id) ? 'Internat' : 'Externe'}
                         </span>
                       </td>
 
@@ -731,7 +784,18 @@ export function AttendanceView({
 
                       {/* Bouton d'Alerte WhatsApp DISTINCT pour Retard ou Absence */}
                       <td className="py-3.5 pr-6 px-3 text-center">
-                        {isAbsent ? (
+                        {(isAbsent || isLate) && boarderIds.has(stu.id) ? (
+                          // Interne : déjà dans l'établissement, la Direction n'appelle pas ses parents.
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <Building2 className="w-3.5 h-3.5" />
+                            <span>Interne — pas d’appel au parent</span>
+                          </span>
+                        ) : (isAbsent || isLate) && !canAlertParents ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-50 text-slate-500 border border-slate-200">
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Alerte parent : Direction</span>
+                          </span>
+                        ) : isAbsent ? (
                           <a
                             href={generateParentWhatsAppUrl(stu, false, record.reason)}
                             target="_blank"

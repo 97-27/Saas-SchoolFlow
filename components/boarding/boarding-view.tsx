@@ -9,6 +9,7 @@ import { formatFCFA, formatDate, splitFullNameNomFirst } from '@/lib/utils/forma
 import { availableClasses, mockStudents } from '@/lib/data/mock-data';
 import { getLiveStudents, getLiveInvoices, getLiveSchool, DATA_UPDATED_EVENT, getDeletedStudentIds, broadcastLiveUpdate, saveLivePaymentInvoice, updateRegisteredStudent, deleteLiveStudents, saveLiveBoardingData, deleteServiceReceipts, saveBoardingCapacity, type ServicePaymentMeta } from '@/lib/data/live-store';
 import { resolveBoarders } from '@/lib/data/boarding';
+import { printOnePage } from '@/lib/client/print-one-page';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
@@ -1644,6 +1645,71 @@ export function BoardingView({
   const girlsCount = boarders.filter((b) => b.student.gender === 'female' || (b.student.gender as any) === 'F').length;
   const boysCount = boarders.filter((b) => b.student.gender === 'male' || (b.student.gender as any) === 'M').length;
 
+  // LISTE DES INTERNES À IMPRIMER (une page A4) : élève, classe, chambre, parent et ses numéros.
+  // Aucune somme d'argent : c'est une liste de contact pour la Direction et les surveillants.
+  const handlePrintBoardersList = () => {
+    if (boarders.length === 0) {
+      setToastMessage('ℹ️ Aucun interne à imprimer pour le moment.');
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+    const esc = (v: unknown) =>
+      String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+    const sorted = [...boarders].sort(
+      (a, b) =>
+        String(a.pavilion).localeCompare(String(b.pavilion), 'fr') ||
+        String(a.student.fullName || '').localeCompare(String(b.student.fullName || ''), 'fr')
+    );
+    const phonesOf = (s: Student): string[] => {
+      const all = [s.guardianPhone, s.whatsappPhone, ...(s.secondaryPhones || [])]
+        .map((p) => String(p || '').trim())
+        .filter(Boolean);
+      return Array.from(new Set(all));
+    };
+    const rows = sorted
+      .map((b, i) => {
+        const s = b.student;
+        const phones = phonesOf(s);
+        const fem = s.gender === 'female' || (s.gender as any) === 'F';
+        return `<tr>
+          <td class="c">${i + 1}</td>
+          <td><b>${esc(s.fullName || `${s.lastName || ''} ${s.firstName || ''}`)}</b><br><span class="m">${esc(s.studentNumber || '')}</span></td>
+          <td class="c">${esc(s.grade || (s as any).className || '')}</td>
+          <td class="c">${fem ? 'F' : 'M'}</td>
+          <td>${esc(String(b.pavilion).replace(/\s*\(.*\)/, ''))}<br><span class="m">${esc(b.roomNumber)}</span></td>
+          <td>${esc(s.guardianName && s.guardianName !== 'Parent / Tuteur' ? s.guardianName : '')}</td>
+          <td class="ph">${phones.length ? phones.map(esc).join('<br>') : '—'}</td>
+        </tr>`;
+      })
+      .join('');
+    const html = `<style>
+      .sfl { font-family: Arial, Helvetica, sans-serif; color: #0f172a; }
+      .sfl h1 { font-size: 16px; margin: 0; text-transform: uppercase; }
+      .sfl h2 { font-size: 13px; margin: 3px 0 2px; }
+      .sfl .sub { font-size: 10.5px; color: #475569; margin: 0 0 8px; }
+      .sfl table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+      .sfl th, .sfl td { border: 1px solid #94a3b8; padding: 4px 5px; text-align: left; vertical-align: middle; line-height: 1.25; }
+      .sfl th { background: #e2e8f0; font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; }
+      .sfl td.c, .sfl th.c { text-align: center; }
+      .sfl td.ph { font-family: 'Courier New', monospace; font-weight: 700; white-space: nowrap; }
+      .sfl .m { color: #64748b; font-size: 9px; }
+      .sfl tr { break-inside: avoid; page-break-inside: avoid; }
+    </style>
+    <div class="sfl">
+      <h1>${esc(currentSchool.name)}</h1>
+      <h2>Liste des élèves à l’internat — Année scolaire ${esc(currentSchool.academicYear || currentAcademicYear())}</h2>
+      <p class="sub">${sorted.length} interne(s) • ${boysCount} garçon(s) • ${girlsCount} fille(s) • imprimée le ${new Date().toLocaleDateString('fr-FR')}</p>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:22px">N°</th><th>Élève</th><th class="c">Classe</th><th class="c" style="width:22px">Sexe</th>
+          <th>Pavillon / Chambre</th><th>Parent / Tuteur</th><th>Téléphones du parent</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+    void printOnePage(html, { title: `Liste internat — ${currentSchool.name}`, minScale: 0.5 });
+  };
+
   return (
     <div className="space-y-6 sm:space-y-7 animate-fadeIn">
       {/* Toast Notification Centrée au Milieu de l'Écran */}
@@ -2089,6 +2155,15 @@ export function BoardingView({
             Gestion des dortoirs, chambres et génération des reçus officiels de paiement internat et pensionnat — {currentSchool.name}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handlePrintBoardersList}
+          className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer shrink-0"
+          title="Imprimer la liste de tous les internes avec les numéros de leurs parents (une page A4)"
+        >
+          <Printer className="w-4 h-4 text-emerald-600" />
+          <span>Imprimer la liste des internes</span>
+        </button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School } from '@/lib/data/types';
+import { canNotifyParents } from '@/lib/auth/roles';
 import {
   getLiveStudents,
   getLiveSchool,
@@ -395,13 +396,17 @@ export function GradesView({
   const [gradesConfig, setGradesConfig] = useState<GradesConfig>(() => getGradesConfig(schoolSlug));
   const [showGradesSettings, setShowGradesSettings] = useState(false);
   const [canEditGradesConfig, setCanEditGradesConfig] = useState(false);
+  // Envoi des notes aux parents : Direction seulement (Directeur, Secrétaire, Fondateurs, Informaticien…).
+  const [canSendToParents, setCanSendToParents] = useState(false);
   useEffect(() => {
     setGradesConfig(getGradesConfig(schoolSlug));
     try {
       const session = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
       setCanEditGradesConfig(session?.roleId === 'fondateur' || session?.roleId === 'fondateur_adjoint' || session?.roleId === 'directeur');
+      setCanSendToParents(canNotifyParents(session?.roleId));
     } catch (e) {
       setCanEditGradesConfig(false);
+      setCanSendToParents(false);
     }
     const handleCfg = (e: Event) => {
       const keys: string[] = (e as CustomEvent)?.detail?.keys || [];
@@ -438,16 +443,51 @@ export function GradesView({
     return () => window.removeEventListener(DATA_UPDATED_EVENT, handleCloud);
   }, [storageKey]);
 
+  // SAUVEGARDE AUTOMATIQUE (cause de « les notes disparaissent ») : avant, la saisie n'était
+  // écrite qu'au clic sur « Enregistrer » ; un enseignant qui oubliait ce clic, ou dont l'écran
+  // rechargeait la liste des élèves en arrière-plan, perdait tout. Désormais chaque note tapée est
+  // écrite (puis envoyée en base) moins d'une seconde plus tard, et aussi avant tout changement de
+  // classe / matière / trimestre.
+  const gradesMapRef = useRef<Record<string, GradeEntry>>({});
+  gradesMapRef.current = gradesMap;
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistEditedGrades = (key: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    if (Object.keys(editedRef.current).length === 0) return true;
+    try {
+      const raw = localStorage.getItem(key);
+      const fresh: Record<string, GradeEntry> = raw ? JSON.parse(raw) : {};
+      const merged: Record<string, GradeEntry> = { ...gradesMapRef.current, ...fresh };
+      for (const [id, fields] of Object.entries(editedRef.current)) {
+        merged[id] = { ...(merged[id] || gradesMapRef.current[id]), ...fields } as GradeEntry;
+      }
+      localStorage.setItem(key, JSON.stringify(merged));
+      editedRef.current = {};
+      setGradesMap(merged);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   // Charger les notes depuis localStorage ou laisser complètement vide
   useEffect(() => {
     if (activeTab === 'pedagogie') return;
-    editedRef.current = {};
+    const keyAtLoad = storageKey;
+    const flushBeforeReload = () => {
+      // Avant de recharger (autre classe, élèves rechargés…), on écrit ce qui était en cours de saisie.
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = null;
+      }
+      persistEditedGrades(keyAtLoad);
+    };
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           setGradesMap(JSON.parse(saved));
-          return;
+          return flushBeforeReload;
         }
       } catch (e) {
         // ignore
@@ -470,6 +510,7 @@ export function GradesView({
       };
     });
     setGradesMap(emptyMap);
+    return flushBeforeReload;
   }, [selectedClass, selectedSubject, selectedTerm, classStudents.length, storageKey, activeTab]);
 
   // Modification d'une note
@@ -505,6 +546,15 @@ export function GradesView({
         [field]: val,
       },
     }));
+    // Sauvegarde automatique (voir persistEditedGrades) : 0,8 s après la dernière frappe.
+    if (portalStatus.isOpen) {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      const keyAtTyping = storageKey;
+      autosaveTimer.current = setTimeout(() => {
+        autosaveTimer.current = null;
+        persistEditedGrades(keyAtTyping);
+      }, 800);
+    }
   };
 
   // Vider toutes les notes de la classe
@@ -1322,7 +1372,8 @@ export function GradesView({
               </div>
             )}
 
-            {/* Choix des notes envoyées aux parents (bouton WhatsApp de chaque élève) */}
+            {/* Choix des notes envoyées aux parents (bouton WhatsApp de chaque élève) : Direction seulement */}
+            {canSendToParents && (
             <div className="flex flex-wrap items-center gap-2 px-1 pb-2 text-xs">
               <label className="font-bold text-slate-700" htmlFor="send-what">Notes à envoyer aux parents :</label>
               <select
@@ -1341,6 +1392,7 @@ export function GradesView({
                 <option value="comp">Composition seulement</option>
               </select>
             </div>
+            )}
 
             {/* Tableau */}
             <div className="overflow-x-auto scrollbar-top">
@@ -1410,7 +1462,7 @@ export function GradesView({
                             <span className="font-mono text-[10px] text-slate-400 font-medium">
                               {g.matricule}
                             </span>
-                            {(() => {
+                            {canSendToParents && (() => {
                               const url = whatsappNotesUrl(g.studentId, g.grades, g.fullName, g.grade);
                               return url ? (
                                 <a

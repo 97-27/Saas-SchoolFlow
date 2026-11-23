@@ -86,6 +86,36 @@ const isBoardingInvoice = (inv: Invoice) =>
   (inv.invoiceNumber || '').startsWith('QUI-INT-') ||
   (inv.id || '').startsWith('inv-boarding-');
 
+const BOARDING_SUBSCRIPTIONS_KEY = 'schoolflow_boarding_subscriptions_v3';
+const BOARDING_PAYMENTS_KEY = 'schoolflow_boarding_monthly_payments_v3';
+
+/**
+ * Identifiants des élèves actuellement à l'internat, lus dans les mêmes données que la page
+ * Internat (clés historiques pour l'école pilote, suffixées pour les autres). Sert à distinguer
+ * internes et externes sur les autres pages (appel, etc.). Retourne un ensemble d'`id` d'élèves.
+ */
+export function getBoarderStudentIds(students: Student[], schoolSlug: string, invoices: Invoice[] = []): Set<string> {
+  const ids = new Set<string>();
+  if (typeof window === 'undefined') return ids;
+  const isPilot = !schoolSlug || schoolSlug === 'epc-manoi';
+  const subKey = isPilot ? BOARDING_SUBSCRIPTIONS_KEY : `${BOARDING_SUBSCRIPTIONS_KEY}_${schoolSlug}`;
+  const payKey = isPilot ? BOARDING_PAYMENTS_KEY : `${BOARDING_PAYMENTS_KEY}_${schoolSlug}`;
+  let subs: BoardingSubscriptionLike[] = [];
+  let pays: BoardingPaymentsMap = {};
+  try {
+    const s = JSON.parse(localStorage.getItem(subKey) || '[]');
+    if (Array.isArray(s)) subs = s;
+  } catch {}
+  try {
+    const p = JSON.parse(localStorage.getItem(payKey) || '{}');
+    if (p && typeof p === 'object') pays = p;
+  } catch {}
+  for (const b of resolveBoarders(students, subs, pays, invoices)) {
+    if (b.student?.id) ids.add(b.student.id);
+  }
+  return ids;
+}
+
 /** Liste unique des pensionnaires et de leurs montants (une entrée par élève). */
 export function resolveBoarders(
   students: Student[],

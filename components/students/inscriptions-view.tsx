@@ -1,6 +1,7 @@
 'use client';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
+import { printOnePage } from '@/lib/client/print-one-page';
 import { registrationFeeForGrade, tuitionForGrade } from '@/lib/data/school-structure';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Student, School, Invoice, StudentInstallments } from '@/lib/data/types';
@@ -1186,8 +1187,15 @@ export function InscriptionsView({
   };
 
   // Print official receipt
+  // Le reçu est imprimé SEUL, dans un cadre isolé, sur une seule page A4 (plus de page blanche ni
+  // de reçu coupé sur plusieurs pages).
   const handlePrintReceipt = () => {
-    window.print();
+    const node = document.getElementById('official-receipt-print');
+    if (!node) {
+      window.print();
+      return;
+    }
+    void printOnePage(node.innerHTML, { title: `Reçu ${receiptNumber || ''}`.trim() });
   };
 
   // Helper pour copier l'image du reçu dans le presse-papier

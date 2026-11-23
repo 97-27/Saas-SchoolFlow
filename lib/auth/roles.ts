@@ -161,6 +161,19 @@ export const SERVICES_WRITE_ROLES = ['fondateur', 'fondateur_adjoint', 'comptabl
 /** Consultation seule (aucune écriture ; l'Éducateur garde l'appel de présence). */
 export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur', 'informaticien'];
 
+// ─── Messages aux parents ─────────────────────────────────────────────────────────────
+/**
+ * DÉCISION UTILISATEUR (2026-11-23) : seule la Direction envoie les notes et les alertes d'absence /
+ * de retard aux parents (boutons WhatsApp) : Fondateur, DGA, Directeur, Secrétaire, Assistant(e) de
+ * Direction et Informaticien. Les Enseignants (et Éducateurs) saisissent seulement.
+ */
+export const PARENT_NOTIFY_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur', 'secretaire', 'assistant_direction', 'informaticien'];
+
+export function canNotifyParents(roleId: string | undefined | null, extraRoles: string[] = []): boolean {
+  const r = String(roleId || '');
+  return PARENT_NOTIFY_ROLES.includes(r) || extraRoles.includes(r);
+}
+
 // ─── Pointage du personnel ─────────────────────────────────────────────────────────────
 /** Règlent les horaires / la position de l'école et justifient les absences. */
 export const POINTAGE_MANAGER_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur'];
