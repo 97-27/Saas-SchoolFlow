@@ -2894,7 +2894,7 @@ export interface StaffUser {
   id: string;
   fullName: string;
   role: string;
-  roleId: 'directeur' | 'assistant_direction' | 'fondateur' | 'fondateur_adjoint' | 'informaticien' | 'educateur' | 'comptable' | 'secretaire' | 'enseignant' | 'parent';
+  roleId: 'directeur' | 'assistant_direction' | 'fondateur' | 'fondateur_adjoint' | 'informaticien' | 'educateur' | 'comptable' | 'secretaire' | 'enseignant' | 'parent' | (string & {}); // + postes créés par la Direction (« poste_… »)
   matricule?: string;
   subjectOrGrade?: string;
   assignedClasses?: string;

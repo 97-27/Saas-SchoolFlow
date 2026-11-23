@@ -26,7 +26,7 @@ import { Student } from '@/lib/data/types';
 
 export const dynamic = 'force-dynamic';
 
-import { ROLE_LABELS } from '@/lib/auth/roles';
+import { ROLE_LABELS, isCustomRole, isStaffRole } from '@/lib/auth/roles';
 import { kvGet, kvPut, kvSchoolId } from '@/lib/supabase/kv';
 import { TEACHER_TEACHING_PREFIX } from '@/lib/data/pointage';
 import { getYearEpoch } from '@/lib/server/year-epoch';
@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
   const phone = String(body?.phone || '').trim();
 
   if (!slug || !roleId) return jsonError('Établissement ou profil manquant.', 400);
-  if (roleId !== 'parent' && roleId !== 'eleve' && !STAFF_ROLES.includes(roleId)) return jsonError('Profil inconnu.', 400);
+  // « autre » = poste créé par la Direction : le vrai poste est retrouvé par le code personnel.
+  if (roleId !== 'parent' && roleId !== 'eleve' && roleId !== 'autre' && !isStaffRole(roleId)) return jsonError('Profil inconnu.', 400);
 
   // Échecs comptés par personne (adresse + école + poste + nom), jamais les connexions réussies.
   // Enseignant : compté par numéro de téléphone (pas de nom saisi) — un code à 4 chiffres ne doit
@@ -312,7 +313,9 @@ async function handleLogin(
   // le code seul (sinon le Fondateur lui-même ne pourrait plus entrer pour saisir les matricules).
   const matriculeIn = String(body?.matricule || '').trim().toUpperCase();
   const byCode = staff.filter(
-    (s) => s.roleId === roleId && String(s.authCode || '').trim().toUpperCase() === inputCode
+    (s) =>
+      (roleId === 'autre' ? isCustomRole(s.roleId) : s.roleId === roleId) &&
+      String(s.authCode || '').trim().toUpperCase() === inputCode
   );
   const record =
     byCode.find((s) => s.matricule && s.matricule.toUpperCase() === matriculeIn) ||
@@ -332,7 +335,8 @@ async function handleLogin(
   }
 
   return issueSession(
-    { slug, roleId, code: inputCode, staffId: record.id, subscriptionEndDate },
+    // Session au vrai poste de la fiche (important pour « autre »).
+    { slug, roleId: record.roleId || roleId, code: inputCode, staffId: record.id, subscriptionEndDate },
     { staffUser: (await getStaffUserById(slug, record.id)) || record }
   );
 }

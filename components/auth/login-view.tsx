@@ -65,6 +65,7 @@ import { TEACHER_SUBJECTS } from '@/lib/data/teaching';
 import { startCrossDeviceSync } from '@/lib/data/live-store';
 
 export type UserRole =
+  | 'autre'
   | 'directeur'
   | 'assistant_direction'
   | 'fondateur'
@@ -121,6 +122,16 @@ export const ROLE_CONFIGS: Record<UserRole, RoleConfig> = {
     description: 'Adjoint du Fondateur : mêmes accès que le Fondateur, crée les postes et les codes du personnel.',
     allowedModules: 'Toutes les pages, Administration & Codes, Paramètres',
     isAdmin: true,
+  },
+  autre: {
+    id: 'autre',
+    title: 'Poste créé par la Direction',
+    badge: '🧩 Poste de l’école',
+    department: 'Personnel',
+    defaultAuthCode: '',
+    defaultUserName: '',
+    description: 'Poste créé par la Direction de l’école : consultation seule, pages choisies par la Direction.',
+    allowedModules: 'Pages choisies par la Direction (consultation)',
   },
   informaticien: {
     id: 'informaticien',
@@ -854,7 +865,8 @@ export function LoginView({
         civility: civility,
         pureName: verifiedStaffUser?.fullName || trimmedName,
         role: roleTitle,
-        roleId: selectedRole,
+        // « Autre poste » : le serveur a retrouvé le vrai poste (poste_…) de la personne.
+        roleId: selectedRole === 'autre' ? String(verifiedStaffUser?.roleId || selectedRole) : selectedRole,
         roleBadge: roleBadge,
         department: ROLE_CONFIGS[selectedRole].department,
         email: finalEmail,
@@ -914,7 +926,8 @@ export function LoginView({
       // Le bouton reste en « ouverture… » jusqu'à l'arrivée sur la page (pas de double clic).
 
       // Page d'arrivée du poste (lib/auth/roles.ts) : le Directeur n'a plus le Tableau de bord.
-      const destinationUrl = `/${activeSlug}/admin/${homePage(selectedRole)}`;
+      // Poste créé par la Direction : « pointage » ; le serveur redirige vers la 1re page autorisée.
+      const destinationUrl = `/${activeSlug}/admin/${selectedRole === 'autre' ? 'pointage' : homePage(selectedRole)}`;
 
       // Gagner du temps : la session vient d'être validée par le serveur (pas de 2e vérification)
       // et la lecture des données démarre MAINTENANT, pendant le chargement de la page suivante.
@@ -1397,6 +1410,7 @@ export function LoginView({
                       <option value="comptable">💼 Comptable / Gestionnaire Financier</option>
                       <option value="secretaire">📝 Secrétaire de Direction</option>
                       <option value="informaticien">💻 Informaticien</option>
+                      <option value="autre">🧩 Autre poste (créé par la Direction)</option>
                       <option value="enseignant">👨‍🏫 Enseignant / Professeur</option>
                       <option value="parent">👨‍👩‍👧 Parent d'Élève (Espace Famille)</option>
                       <option value="eleve">🎒 Élève</option>

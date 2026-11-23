@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession, jsonError } from '@/lib/server/auth';
 import { actorLabel, setRequestActor } from '@/lib/server/actor';
-import { kvFamilyForKey } from '@/lib/data/cloud-kv-keys';
+import { kvFamilyForKey, kvCanRead } from '@/lib/data/cloud-kv-keys';
 import { kvSchoolId, kvList, kvGet, kvPut, mergeKvValue, kvIds, MAX_VALUE_LENGTH } from '@/lib/supabase/kv';
 
 /**
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   const entries = rows.filter((r) => {
     const fam = kvFamilyForKey(r.key, slug);
-    return !!fam && fam.read.includes(session.roleId);
+    return !!fam && kvCanRead(fam, session.roleId);
   });
   return NextResponse.json({ success: true, serverTime: new Date().toISOString(), entries }, { headers: NO_STORE });
 }

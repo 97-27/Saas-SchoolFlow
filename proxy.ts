@@ -63,7 +63,9 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));
     }
     if (!allowedPaths.includes(subPath)) {
-      return NextResponse.redirect(new URL(`/${ecole}/admin/${homePage(roleId)}`, request.url));
+      // Page d'arrivée du poste, ou à défaut sa première page autorisée (postes créés par la Direction).
+      const home = homePage(roleId);
+      return NextResponse.redirect(new URL(`/${ecole}/admin/${allowedPaths.includes(home) ? home : allowedPaths[0]}`, request.url));
     }
   } catch (e) {
     return NextResponse.redirect(new URL(`/${ecole}/admin/login`, request.url));

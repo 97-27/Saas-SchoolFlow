@@ -3,7 +3,7 @@ import { jsonError, requireSession } from '@/lib/server/auth';
 import { getStaffAuthRecords } from '@/lib/supabase/services';
 import { kvGet, kvListPrefix, kvPut, kvSchoolId } from '@/lib/supabase/kv';
 import {
-  ALL_STAFF_ROLES,
+  isStaffRole,
   POINTAGE_EXEMPT_ROLES,
   POINTAGE_MANAGER_ROLES,
   POINTAGE_VIEW_ALL_ROLES,
@@ -157,7 +157,7 @@ async function readRecord(schoolId: string, date: string, staffId: string): Prom
 
 async function staffRoster(slug: string) {
   return (await getStaffAuthRecords(slug))
-    .filter((s) => ALL_STAFF_ROLES.includes(s.roleId) && !POINTAGE_EXEMPT_ROLES.includes(s.roleId) && s.status !== 'Verrouillé')
+    .filter((s) => isStaffRole(s.roleId) && !POINTAGE_EXEMPT_ROLES.includes(s.roleId) && s.status !== 'Verrouillé')
     .map((s) => ({ id: s.id, fullName: s.fullName, roleId: s.roleId, roleLabel: ROLE_LABELS[s.roleId] || s.role || '' }));
 }
 
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireSession(request);
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
-  if (!ALL_STAFF_ROLES.includes(session.roleId)) return jsonError('Réservé au personnel.', 403);
+  if (!isStaffRole(session.roleId)) return jsonError('Réservé au personnel.', 403);
 
   const schoolId = await kvSchoolId(slug);
   if (!schoolId) return jsonError('Lecture impossible pour le moment. Réessayez.', 503);
@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireSession(request);
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
-  if (!ALL_STAFF_ROLES.includes(session.roleId)) return jsonError('Réservé au personnel.', 403);
+  if (!isStaffRole(session.roleId)) return jsonError('Réservé au personnel.', 403);
 
   let body: any;
   try {

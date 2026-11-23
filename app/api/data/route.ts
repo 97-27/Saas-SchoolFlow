@@ -37,7 +37,7 @@ import {
 } from '@/lib/server/auth';
 import { isLegacyDemoStudent, isLegacyDemoInvoice } from '@/lib/data/legacy-ids';
 import { setRequestActor, actorLabel } from '@/lib/server/actor';
-import { isFounderRole } from '@/lib/auth/roles';
+import { isFounderRole, isStaffRole } from '@/lib/auth/roles';
 import { notifyPaymentIfIncreased, paidAmountBefore } from '@/lib/server/push-events';
 
 export const dynamic = 'force-dynamic';
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
       // et Fondateur adjoint. Le compte du Fondateur (coordonnées, code) n'est modifiable que par
       // le Fondateur lui-même. Les autres membres ne modifient que leurs propres coordonnées.
       if (isAdmin(session)) {
-        if (!STAFF_ROLES.includes(staff.roleId)) return jsonError('Rôle inconnu.', 400);
+        if (!isStaffRole(staff.roleId)) return jsonError('Rôle inconnu.', 400);
         if (/^MASQUE-/i.test(rawCode)) return deny();
         if (!isFounder(session)) {
           const current = (await getStaffUsersFromSupabase(slug)).find(

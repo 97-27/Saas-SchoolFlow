@@ -5,6 +5,7 @@ import { getBlockState } from './access-control';
 import {
   FOUNDER_ROLES,
   ALL_STAFF_ROLES,
+  isStaffRole,
   STUDENT_WRITE_ROLES,
   READ_ONLY_ROLES,
   DELETE_ROLES,
@@ -33,7 +34,7 @@ export function isAdmin(session: SessionPayload): boolean {
 }
 
 export function isStaff(session: SessionPayload): boolean {
-  return STAFF_ROLES.includes(session.roleId);
+  return isStaffRole(session.roleId);
 }
 
 export function hasRole(session: SessionPayload, roles: string[]): boolean {

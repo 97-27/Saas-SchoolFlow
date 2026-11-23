@@ -50,6 +50,12 @@ export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_broadcast_records_v1', label: 'Annonces envoyées', read: [...DIRECTION, 'informaticien', 'secretaire', 'assistant_direction'], write: DIRECTION },
 ];
 
+/** Un poste créé par la Direction lit les données communes à tout le personnel (pas les finances,
+ *  réservées nommément) et n'écrit jamais. */
+export function kvCanRead(fam: KvFamily, roleId: string): boolean {
+  return fam.read.includes(roleId) || (roleId.startsWith('poste_') && fam.read.includes('enseignant'));
+}
+
 /** Identifiants des éléments d'une valeur enregistrée : clés d'un objet, ou « id » des éléments
  *  d'une liste. null si la valeur n'a pas cette forme (texte, liste sans identifiants). */
 export function kvIdsOf(raw: string | null | undefined): string[] | null {

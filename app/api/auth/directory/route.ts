@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { canonicalSlug, clientIp, isRateLimited, jsonError, STAFF_ROLES } from '@/lib/server/auth';
+import { canonicalSlug, clientIp, isRateLimited, jsonError } from '@/lib/server/auth';
+import { isStaffRole } from '@/lib/auth/roles';
 import { getSchoolLoginInfo as getSchoolFromSupabase, getStaffAuthRecords as getStaffUsersFromSupabase } from '@/lib/supabase/services';
 
 /**
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   const staff = (await getStaffUsersFromSupabase(slug))
     // Toute vraie fiche de la base est affichée (même si son code est encore un ancien code de
     // démonstration : c'est ce qui masquait le nom du Directeur).
-    .filter((s: any) => s && STAFF_ROLES.includes(s.roleId) && s.fullName)
+    .filter((s: any) => s && isStaffRole(s.roleId) && s.fullName)
     .map((s: any) => ({ id: String(s.id), fullName: String(s.fullName), roleId: String(s.roleId) }));
 
   return NextResponse.json(

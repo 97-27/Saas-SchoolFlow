@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jsonError, requireSession } from '@/lib/server/auth';
 import { kvSchoolId } from '@/lib/supabase/kv';
-import { ALL_STAFF_ROLES } from '@/lib/auth/roles';
+import { isStaffRole } from '@/lib/auth/roles';
 import { deletePushSubscription, pushConfigured, pushPublicKey, savePushSubscription } from '@/lib/server/push';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireSession(request);
   if ('error' in auth) return auth.error;
   const { session, slug } = auth;
-  if (!ALL_STAFF_ROLES.includes(session.roleId)) return jsonError('Réservé au personnel.', 403);
+  if (!isStaffRole(session.roleId)) return jsonError('Réservé au personnel.', 403);
   if (!pushConfigured()) return jsonError('Notifications en arrière-plan non configurées sur le serveur.', 503);
   let body: any;
   try {

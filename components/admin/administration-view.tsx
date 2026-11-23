@@ -1,5 +1,7 @@
 'use client';
 
+import { customRoles, isCustomRole } from '@/lib/auth/roles';
+import { readPageOverrides } from '@/lib/data/page-access';
 import React, { useState, useEffect } from 'react';
 import {
   StaffUser,
@@ -123,7 +125,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'ajout — Postes nécessitant un code d'authentification uniquement
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
-  const [newRole, setNewRole] = useState<'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur' | 'fondateur_adjoint' | 'informaticien'>('enseignant');
+  const [newRole, setNewRole] = useState<string>('enseignant');
   const [newMatricule, setNewMatricule] = useState('');
   // Enseignant : matières et classes COCHÉES par la Direction (plus de « toutes » par défaut) ;
   // à la connexion, l'enseignant doit cocher les mêmes (vérifié par le serveur).
@@ -144,6 +146,15 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeletingStaff, setIsDeletingStaff] = useState(false);
 
+  // Postes créés par la Direction (page « Accès par poste »).
+  const [customPostes, setCustomPostes] = useState<{ id: string; label: string }[]>([]);
+  useEffect(() => {
+    const load = () => setCustomPostes(customRoles(readPageOverrides(schoolSlug)));
+    load();
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [schoolSlug]);
+
   // Profil connecté (pour savoir qui il peut supprimer)
   const [viewer, setViewer] = useState<{ roleId: string; code: string }>({ roleId: '', code: '' });
   useEffect(() => {
@@ -156,7 +167,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   // Modale d'édition Complète du Membre
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
-  const [editRole, setEditRole] = useState<'fondateur' | 'fondateur_adjoint' | 'directeur' | 'informaticien' | 'enseignant' | 'secretaire' | 'comptable' | 'assistant_direction' | 'educateur'>('enseignant');
+  const [editRole, setEditRole] = useState<string>('enseignant');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -265,7 +276,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const validRoles: string[] = [
       'fondateur', 'fondateur_adjoint', 'directeur', 'informaticien', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
     ];
-    setEditRole(validRoles.includes(staff.roleId as any) ? (staff.roleId as any) : 'enseignant');
+    setEditRole(validRoles.includes(staff.roleId as any) || isCustomRole(staff.roleId) ? (staff.roleId as any) : 'enseignant');
     // Le vrai matricule enregistré (vide s'il n'a jamais été saisi : à compléter).
     setEditMatricule(/^EMP-[0-9A-F]{6}$/i.test(staff.matricule || '') ? '' : staff.matricule || '');
     setEditSubject(
@@ -414,7 +425,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const updatedUser: StaffUser = {
       ...editingStaff,
       fullName: editFullName.trim(),
-      role: roleTitleMap[editRole] || editingStaff.role || 'Membre du Personnel',
+      role: roleTitleMap[editRole] || customPostes.find((c) => c.id === editRole)?.label || editingStaff.role || 'Membre du Personnel',
       roleId: editRole,
       matricule: editMatricule.trim().toUpperCase(),
       subjectOrGrade:
@@ -538,7 +549,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const newStaffMember: StaffUser = {
       id: `staff-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       fullName: newFullName.trim(),
-      role: roleTitleMap[newRole] || 'Membre du Personnel',
+      role: roleTitleMap[newRole] || customPostes.find((c) => c.id === newRole)?.label || 'Membre du Personnel',
       roleId: newRole,
       matricule,
       subjectOrGrade: newRole === 'enseignant' ? newSubject.trim() : 'Administration',
@@ -1317,7 +1328,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold text-slate-900 focus:border-emerald-600 cursor-pointer"
                   >
-                    {ROLE_OPTIONS.map((o) => (
+                    {[...ROLE_OPTIONS, ...customPostes.map((c) => ({ value: c.id, label: '🧩 ' + c.label }))].map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
@@ -1496,7 +1507,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       onChange={(e) => setEditRole(e.target.value as any)}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
                     >
-                      {ROLE_OPTIONS.map((o) => (
+                      {[...ROLE_OPTIONS, ...customPostes.map((c) => ({ value: c.id, label: '🧩 ' + c.label }))].map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>

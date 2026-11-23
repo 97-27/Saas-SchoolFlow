@@ -81,13 +81,40 @@ export const FOUNDER_ONLY_PAGES = ['administration', 'parametres', 'corbeille', 
 /** Postes dont le Fondateur peut régler les pages (jamais les Fondateurs, les parents ni les élèves). */
 export const ASSIGNABLE_ROLES = ['directeur', 'informaticien', 'assistant_direction', 'secretaire', 'comptable', 'educateur', 'enseignant'];
 
-/** Réglages de l'école : pages ajoutées / retirées par poste, par rapport aux droits par défaut. */
-export type PageOverrides = Record<string, { add?: string[]; remove?: string[] }>;
+/**
+ * Réglages de l'école : pages ajoutées / retirées par poste, par rapport aux droits par défaut.
+ * Un POSTE CRÉÉ PAR LA DIRECTION (identifiant « poste_… ») est une entrée `custom: true` avec son
+ * libellé et ses pages (`add`) ; il est toujours en CONSULTATION SEULE (aucune écriture).
+ */
+export type PageOverrides = Record<string, { add?: string[]; remove?: string[]; custom?: boolean; label?: string }>;
 export const PAGE_ACCESS_KEY = 'schoolflow_page_access_v1';
+
+export const CUSTOM_ROLE_PREFIX = 'poste_';
+export function isCustomRole(roleId: string | undefined | null): boolean {
+  return String(roleId || '').startsWith(CUSTOM_ROLE_PREFIX);
+}
+/** Poste du personnel (poste prévu par le logiciel OU créé par la Direction). */
+export function isStaffRole(roleId: string | undefined | null): boolean {
+  return ALL_STAFF_ROLES.includes(String(roleId || '')) || isCustomRole(roleId);
+}
+/** Pages qu'un poste créé peut recevoir (jamais les pages réservées ni les Archives). */
+export const CUSTOM_ROLE_PAGES = ALL_PAGES.filter((p) => !['administration', 'parametres', 'corbeille', 'acces', 'archives'].includes(p));
+
+/** Postes créés par la Direction : [{ id, label }]. */
+export function customRoles(overrides?: PageOverrides | null): { id: string; label: string }[] {
+  return Object.entries(overrides || {})
+    .filter(([id, o]) => isCustomRole(id) && o?.custom)
+    .map(([id, o]) => ({ id, label: String(o.label || id.slice(CUSTOM_ROLE_PREFIX.length)) }));
+}
 
 /** Pages d'un poste = droits par défaut + réglages de l'école (clair : Fondateurs inchangés). */
 export function effectivePages(roleId: string | undefined | null, overrides?: PageOverrides | null): string[] {
   const role = String(roleId || '');
+  if (isCustomRole(role)) {
+    const o = overrides?.[role];
+    if (!o?.custom) return [];
+    return Array.from(new Set((o.add || []).filter((p) => CUSTOM_ROLE_PAGES.includes(p))));
+  }
   const base = allowedPages(role);
   if (!overrides || !ASSIGNABLE_ROLES.includes(role)) return base;
   const o = overrides[role];
