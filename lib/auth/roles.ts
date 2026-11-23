@@ -167,7 +167,8 @@ export const READ_ONLY_ROLES = ['secretaire', 'assistant_direction', 'educateur'
  * de retard aux parents (boutons WhatsApp) : Fondateur, DGA, Directeur, Secrétaire, Assistant(e) de
  * Direction et Informaticien. Les Enseignants (et Éducateurs) saisissent seulement.
  */
-export const PARENT_NOTIFY_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur', 'secretaire', 'assistant_direction', 'informaticien'];
+// L'Éducateur y figure (décision du 2026-11-23) : il utilise le téléphone de la Direction.
+export const PARENT_NOTIFY_ROLES = ['fondateur', 'fondateur_adjoint', 'directeur', 'secretaire', 'assistant_direction', 'informaticien', 'educateur'];
 
 export function canNotifyParents(roleId: string | undefined | null, extraRoles: string[] = []): boolean {
   const r = String(roleId || '');
