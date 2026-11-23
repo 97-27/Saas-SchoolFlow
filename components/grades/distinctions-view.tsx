@@ -15,6 +15,7 @@ import {
 } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils/formatters';
+import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import {
   Award,
   Sparkles,
@@ -59,7 +60,8 @@ export function DistinctionsView({
   // Cycles Scolaires : Maternelle (P.S. à G.S.), Primaire (CP1 à CM2), Collège (6ème à 3ème), Lycée (2nde à Terminale)
   const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('college');
   const [selectedClass, setSelectedClass] = useState('6ème');
-  const [selectedPeriod, setSelectedPeriod] = useState('1er Trimestre');
+  // Mêmes libellés que la page Bulletins (« Trimestre 1 »…) : sinon les lauréats validés ne se retrouvent pas.
+  const [selectedPeriod, setSelectedPeriod] = useState(() => school?.currentTerm || 'Trimestre 1');
   const [selectedStudentForDiploma, setSelectedStudentForDiploma] = useState<any | null>(null);
   const [isDiplomaModalOpen, setIsDiplomaModalOpen] = useState(false);
   const [isBatchPrintModalOpen, setIsBatchPrintModalOpen] = useState(false);
@@ -91,6 +93,8 @@ export function DistinctionsView({
         return ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'];
       case 'college':
         return ['6ème', '5ème', '4ème', '3ème'];
+      case 'lycee':
+        return ['2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'];
       case 'all':
       default:
         return [
@@ -107,14 +111,21 @@ export function DistinctionsView({
           '5ème',
           '4ème',
           '3ème',
+          '2nde A',
+          '2nde C',
+          '1ère A',
+          '1ère D',
+          'Tle A',
+          'Tle D',
         ];
     }
   }, [selectedCycle]);
 
-  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college') => {
+  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee') => {
     setSelectedCycle(cycle);
     if (cycle === 'maternelle') setSelectedClass('Maternelle (G.S.)');
     else if (cycle === 'primaire') setSelectedClass('CM2');
+    else if (cycle === 'lycee') setSelectedClass('2nde A');
     else if (cycle === 'college') setSelectedClass('6ème');
     else setSelectedClass('6ème');
   };
@@ -136,11 +147,72 @@ export function DistinctionsView({
     const activeNames = new Set(
       students.map((s) => (s.fullName || '').toLowerCase().trim()).filter(Boolean)
     );
-    return validatedRankings.filter((l) => {
-      if (l.matricule && l.matricule.trim()) return activeMatricules.has(l.matricule.trim());
-      return activeNames.has((l.fullName || '').toLowerCase().trim());
-    });
+    return validatedRankings
+      .filter((l) => {
+        if (l.matricule && l.matricule.trim()) return activeMatricules.has(l.matricule.trim());
+        return activeNames.has((l.fullName || '').toLowerCase().trim());
+      })
+      .map((l, i) => {
+        // Complète chaque lauréat (identifiant, numéro, genre, couleur, type de distinction) : les
+        // bulletins n'enregistrent que le nom, la moyenne et le rang.
+        const stu = students.find(
+          (s) => (l.matricule && s.matricule === l.matricule) || (s.fullName || '').toLowerCase().trim() === (l.fullName || '').toLowerCase().trim()
+        );
+        const rank = Number(l.rank) || 0;
+        return {
+          ...l,
+          id: l.id || stu?.id || `laureate-${i}-${l.matricule || l.fullName}`,
+          studentNumber: l.studentNumber || stu?.studentNumber || '',
+          gender: l.gender || stu?.gender,
+          colorClass: l.colorClass || (rank === 1 ? 'from-amber-400 to-amber-600' : rank === 2 ? 'from-slate-300 to-slate-500' : 'from-emerald-400 to-emerald-600'),
+          distinctionType:
+            l.distinctionType || (rank === 1 ? 'felicitations' : rank === 2 ? 'encouragement' : 'honneur'),
+        };
+      })
+      .sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99) || String(a.fullName).localeCompare(String(b.fullName), 'fr'));
   }, [validatedRankings, students]);
+
+  // Maternelle & Primaire : pas de bulletin. La Direction choisit elle-même la place de chaque élève
+  // (1ère, 2ème, 3ème) dans le tableau de la classe, puis valide : les diplômes se tirent ensuite.
+  const isEarlyCycle = ['Maternelle', 'CP', 'CE', 'CM'].some((p) => selectedClass.startsWith(p));
+  const [manualPlaces, setManualPlaces] = useState<Record<string, { place: string; average: string }>>({});
+  const classRoster = useMemo(
+    () => sortStudentsAlpha(students.filter((s) => s.grade === selectedClass)),
+    [students, selectedClass]
+  );
+  useEffect(() => {
+    setManualPlaces({});
+  }, [selectedClass, selectedPeriod]);
+  const handleValidateManual = () => {
+    const picked = classRoster
+      .map((s) => ({ s, p: manualPlaces[s.id] }))
+      .filter((x) => x.p && x.p.place);
+    if (picked.length === 0) {
+      setToastMessage('Choisissez au moins une place (1ère, 2ème ou 3ème) avant de valider.');
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+    const list = picked
+      .map(({ s, p }) => {
+        const rank = Number(p.place);
+        const avg = parseFloat(String(p.average).replace(',', '.'));
+        return {
+          fullName: s.fullName,
+          grade: s.grade,
+          matricule: s.matricule,
+          average: Number.isFinite(avg) ? avg.toFixed(2) : '—',
+          rank,
+          rankSuffix: rank === 1 ? 'er' : 'ème',
+          title: rank === 1 ? '1er de la Classe' : rank === 2 ? '2ème de la Classe' : '3ème de la Classe',
+          isBlank: false,
+        };
+      })
+      .sort((a, b) => a.rank - b.rank);
+    saveValidatedClassRankings(selectedClass, selectedPeriod, list, schoolSlug);
+    setValidatedRankings(list);
+    setToastMessage(`✓ Tableau d'honneur de ${selectedClass} enregistré — ${list.length} lauréat(s).`);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
 
   const handleClearClassBulletins = () => {
     clearValidatedClassRankings(selectedClass, selectedPeriod, schoolSlug);
@@ -518,6 +590,7 @@ export function DistinctionsView({
             { id: 'maternelle' as const, label: 'Maternelle (P.S. à G.S.)', icon: Baby },
             { id: 'primaire' as const, label: 'Primaire (CP1 à CM2)', icon: BookOpen },
             { id: 'college' as const, label: 'Collège (6ème à 3ème)', icon: Building2 },
+            { id: 'lycee' as const, label: 'Lycée (2nde à Terminale)', icon: GraduationCap },
           ].map((c) => {
             const Icon = c.icon;
             const isActive = selectedCycle === c.id;
@@ -575,9 +648,9 @@ export function DistinctionsView({
                 onChange={(e) => setSelectedPeriod(e.target.value)}
                 className="px-3.5 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 font-extrabold text-slate-800 cursor-pointer"
               >
-                <option value="1er Trimestre">1er Trimestre</option>
-                <option value="2ème Trimestre">2ème Trimestre</option>
-                <option value="3ème Trimestre">3ème Trimestre</option>
+                <option value="Trimestre 1">1er Trimestre</option>
+                <option value="Trimestre 2">2ème Trimestre</option>
+                <option value="Trimestre 3">3ème Trimestre</option>
               </select>
             </div>
 
@@ -613,6 +686,75 @@ export function DistinctionsView({
               )}
             </div>
           </div>
+
+          {/* Maternelle & Primaire : pas de bulletin, la Direction attribue elle-même les places */}
+          {isEarlyCycle && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3 print:hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 font-heading">Tableau d’honneur — {selectedClass} ({selectedPeriod.replace('Trimestre ', 'Trimestre ')})</h3>
+                  <p className="text-[11px] text-slate-500">Maternelle et primaire n’ont pas de bulletin : choisissez la place de chaque élève (1ère, 2ème, 3ème), puis validez pour tirer les diplômes.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleValidateManual}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
+                >
+                  Valider le tableau d’honneur
+                </button>
+              </div>
+              {classRoster.length === 0 ? (
+                <p className="text-xs text-slate-500">Aucun élève dans cette classe.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-left text-sm min-w-[520px]">
+                    <thead>
+                      <tr className="bg-slate-100/90 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <th className="py-2.5 px-3 w-10">N°</th>
+                        <th className="py-2.5 px-3">Élève</th>
+                        <th className="py-2.5 px-3 w-44">Place</th>
+                        <th className="py-2.5 px-3 w-32">Moyenne /10 ou /20</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {classRoster.map((s, i) => {
+                        const cur = manualPlaces[s.id] || { place: '', average: '' };
+                        return (
+                          <tr key={s.id} className={cur.place ? 'bg-emerald-50/50' : ''}>
+                            <td className="py-2 px-3 text-slate-400 font-mono text-xs">{i + 1}</td>
+                            <td className="py-2 px-3 font-bold text-slate-900">{s.fullName}</td>
+                            <td className="py-2 px-3">
+                              <select
+                                value={cur.place}
+                                onChange={(e) => setManualPlaces((prev) => ({ ...prev, [s.id]: { ...cur, place: e.target.value } }))}
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 cursor-pointer"
+                              >
+                                <option value="">—</option>
+                                <option value="1">🥇 1ère place</option>
+                                <option value="2">🥈 2ème place</option>
+                                <option value="3">🥉 3ème place</option>
+                              </select>
+                            </td>
+                            <td className="py-2 px-3">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                autoComplete="off"
+                                value={cur.average}
+                                onChange={(e) => setManualPlaces((prev) => ({ ...prev, [s.id]: { ...cur, average: e.target.value } }))}
+                                placeholder="ex : 8,75"
+                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-900"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* État 1 : BULLETINS NON ENCORE VALIDÉS -> ÉTAT D'ATTENTE AVEC EXPLICATION CLAIRE */}
           {laureates.length === 0 ? (

@@ -2,6 +2,7 @@
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
 import { sortStudentsAlpha } from '@/lib/utils/alpha';
+import { getSubjectsForClass } from '@/components/grades/grades-view';
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatDate } from '@/lib/utils/formatters';
@@ -40,7 +41,16 @@ type AttendanceStatus = 'present' | 'absent' | 'late';
  * l'appel, donc dans Supabase (cloud-kv) et dans les Archives des années : l'école peut prouver,
  * même des années plus tard, qu'elle a prévenu la famille.
  */
-type AttendanceRec = { status: AttendanceStatus; reason: string; notifiedAt?: string; notifiedBy?: string };
+type AttendanceRec = {
+  status: AttendanceStatus;
+  reason: string;
+  notifiedAt?: string;
+  notifiedBy?: string;
+  /** Secondaire : matière du cours et enseignant qui a fait l'appel (visibles par la Direction). */
+  subject?: string;
+  teacher?: string;
+  recordedAt?: string;
+};
 
 // Toutes les classes font l'appel avant le cours : Maternelle, Primaire et Collège.
 // (Mêmes intitulés que les fiches élèves.)
@@ -48,6 +58,7 @@ const CYCLES = [
   { id: 'maternelle', label: 'Maternelle', classes: ['Maternelle (P.S.)', 'Maternelle (M.S.)', 'Maternelle (G.S.)'] },
   { id: 'primaire', label: 'Primaire (CP1 à CM2)', classes: ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'] },
   { id: 'college', label: 'Collège (6ème à 3ème)', classes: ['6ème', '5ème', '4ème', '3ème'] },
+  { id: 'lycee', label: 'Lycée (2nde à Terminale)', classes: ['2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'] },
 ] as const;
 type CycleId = (typeof CYCLES)[number]['id'];
 
@@ -183,10 +194,37 @@ export function AttendanceView({
     setAttendanceMap(readFreshAttendanceMap());
   }, [classStudents, selectedDate, selectedSlot]);
 
+  // Secondaire (collège / lycée) : plusieurs professeurs, donc l'enseignant choisit d'abord sa matière.
+  const isSecondary = selectedCycleTab === 'college' || selectedCycleTab === 'lycee';
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const subjectChoices = useMemo(() => (isSecondary ? getSubjectsForClass(selectedClass).map((s) => s.name) : []), [isSecondary, selectedClass]);
+  useEffect(() => {
+    if (!isSecondary) setSelectedSubject('');
+    else if (selectedSubject && !subjectChoices.includes(selectedSubject)) setSelectedSubject('');
+  }, [isSecondary, subjectChoices, selectedSubject]);
+  const needSubject = isSecondary && !selectedSubject;
+  const sessionActor = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
+      return String(s?.pureName || s?.fullName || s?.role || '').trim();
+    } catch {
+      return '';
+    }
+  })();
+  const metaForRecord = () => ({
+    ...(isSecondary && selectedSubject ? { subject: selectedSubject } : {}),
+    teacher: sessionActor,
+    recordedAt: new Date().toISOString(),
+  });
+
   // Changer le statut d'un élève (si non verrouillé)
   const setStudentStatus = (studentId: string, status: AttendanceStatus) => {
     if (isSessionLocked) {
       alert("Cette session d'appel est verrouillée pour des raisons de sécurité. Veuillez demander un déverrouillage pour modifier.");
+      return;
+    }
+    if (needSubject) {
+      alert("Choisissez d'abord la matière du cours (ex. Physique-Chimie) avant de faire l'appel.");
       return;
     }
     const key = `${selectedDate}_${selectedSlot}_${studentId}`;
@@ -194,8 +232,10 @@ export function AttendanceView({
     const next = {
       ...fresh,
       [key]: {
+        ...fresh[key],
         status,
         reason: status === 'present' ? '' : fresh[key]?.reason || (status === 'absent' ? 'Non justifié' : ''),
+        ...metaForRecord(),
       },
     };
     setAttendanceMap(next);
@@ -205,11 +245,15 @@ export function AttendanceView({
   // Marquer toute la classe comme présente
   const markAllPresent = () => {
     if (isSessionLocked) return;
+    if (needSubject) {
+      alert("Choisissez d'abord la matière du cours avant de faire l'appel.");
+      return;
+    }
     const fresh = readFreshAttendanceMap();
     const next = { ...fresh };
     classStudents.forEach((stu) => {
       const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
-      next[key] = { status: 'present', reason: '' };
+      next[key] = { ...fresh[key], status: 'present', reason: '', ...metaForRecord() };
     });
     setAttendanceMap(next);
     persistAttendanceMap(next);
@@ -217,6 +261,20 @@ export function AttendanceView({
 
   // Enregistrer et verrouiller la session
   const handleSaveAndLock = () => {
+    if (needSubject) {
+      alert("Choisissez d'abord la matière du cours avant de valider l'appel.");
+      return;
+    }
+    // L'appel validé est écrit en entier (présents compris), avec la matière et l'enseignant :
+    // la Direction voit ainsi exactement ce qui a été fait, sans avoir à interroger l'enseignant.
+    const fresh = readFreshAttendanceMap();
+    const full = { ...fresh };
+    classStudents.forEach((stu) => {
+      const key = `${selectedDate}_${selectedSlot}_${stu.id}`;
+      full[key] = { ...(fresh[key] || { status: 'present' as AttendanceStatus, reason: '' }), ...metaForRecord() };
+    });
+    setAttendanceMap(full);
+    persistAttendanceMap(full);
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(lockKey, 'true');
@@ -325,11 +383,17 @@ export function AttendanceView({
 
     let text = '';
 
+    // Secondaire : le message nomme la matière et l'enseignant qui a fait l'appel.
+    const rec = attendanceMap[`${selectedDate}_${selectedSlot}_${stu.id}`];
+    const courseText = rec?.subject
+      ? `cours de *${rec.subject}*${rec.teacher ? ` (enseignant : *${rec.teacher}*)` : ''}, ${currentSlotObj.time}`
+      : `cours de *${currentSlotObj.label}* (*${currentSlotObj.time}*)`;
+
     if (isLate) {
       text =
         `*⚠️ ${currentSchool.name.toUpperCase()} — NOTIFICATION DE RETARD SCOLAIRE*\n\n` +
         `Bonjour Cher Parent (${stu.guardianName}),\n\n` +
-        `Nous vous informons par la présente que votre enfant *${stu.fullName}* (Classe de *${stu.grade}*) est arrivé(e) en *RETARD* le *${dateFormatted}* lors du cours de *${currentSlotObj.label}* (*${currentSlotObj.time}*)${
+        `Nous vous informons par la présente que votre enfant *${stu.fullName}* (Classe de *${stu.grade}*) est arrivé(e) en *RETARD* le *${dateFormatted}* lors du ${courseText}${
           customReason ? ` — Détail / Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de sensibiliser votre enfant sur l'importance du respect des horaires et de la ponctualité aux cours.\n` +
@@ -339,7 +403,7 @@ export function AttendanceView({
       text =
         `*⚠️ ${currentSchool.name.toUpperCase()} — NOTIFICATION D'ABSENCE SCOLAIRE*\n\n` +
         `Bonjour Cher Parent (${stu.guardianName}),\n\n` +
-        `Nous vous informons par la présente que votre enfant *${stu.fullName}* (Classe de *${stu.grade}*) a été marqué(e) *ABSENT(E)* le *${dateFormatted}* lors du cours de *${currentSlotObj.label}* (*${currentSlotObj.time}*)${
+        `Nous vous informons par la présente que votre enfant *${stu.fullName}* (Classe de *${stu.grade}*) a été marqué(e) *ABSENT(E)* le *${dateFormatted}* lors du ${courseText}${
           customReason ? ` — Motif : ${customReason}` : ''
         }.\n\n` +
         `📞 Merci de contacter immédiatement la Vie Scolaire au ${
@@ -478,6 +542,100 @@ export function AttendanceView({
           })}
         </div>
       </div>
+
+      {/* Matière du cours (secondaire) : l'enseignant la choisit avant l'appel ; elle figure dans le message aux parents */}
+      {isSecondary && (
+        <div className={`rounded-2xl border p-3.5 flex flex-col sm:flex-row sm:items-center gap-2.5 ${needSubject ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-200'}`}>
+          <label htmlFor="att-subject" className="text-xs font-extrabold text-slate-800 font-heading shrink-0">
+            Matière du cours *
+          </label>
+          <select
+            id="att-subject"
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="flex-1 px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900 cursor-pointer"
+          >
+            <option value="">— Choisir la matière (Français, Mathématiques, Physique-Chimie…) —</option>
+            {subjectChoices.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          {needSubject && <span className="text-[11px] font-semibold text-amber-800">Choisissez la matière avant de faire l’appel.</span>}
+        </div>
+      )}
+
+      {/* Appels du jour, tels que les enseignants les ont faits (Direction, Secrétaire…) */}
+      {(() => {
+        const prefix = `${selectedDate}_`;
+        const byId = new Map(students.map((s) => [s.id, s]));
+        const slotLabel = (id: string) => timeSlots.find((t) => t.id === id)?.time || id;
+        type Row = { stu: Student; status: AttendanceStatus; slot: string; subject?: string; teacher?: string; reason: string };
+        const rows: Row[] = [];
+        const roll = new Map<string, { teacher?: string; subject?: string; recordedAt?: string; present: number; absent: number; late: number; cls: string; slot: string }>();
+        Object.entries(attendanceMap).forEach(([k, rec]) => {
+          if (!k.startsWith(prefix)) return;
+          const parts = k.slice(prefix.length).split('_');
+          const slot = parts[0];
+          const stu = byId.get(parts.slice(1).join('_'));
+          if (!stu || !rec) return;
+          const rk = `${slot}|${stu.grade}|${rec.subject || ''}|${rec.teacher || ''}`;
+          const cur = roll.get(rk) || { teacher: rec.teacher, subject: rec.subject, recordedAt: rec.recordedAt, present: 0, absent: 0, late: 0, cls: stu.grade, slot };
+          cur[rec.status] += 1;
+          roll.set(rk, cur);
+          if (rec.status !== 'present') rows.push({ stu, status: rec.status, slot, subject: rec.subject, teacher: rec.teacher, reason: rec.reason });
+        });
+        if (roll.size === 0) return null;
+        const sortedRows = rows.sort((a, b) => a.stu.grade.localeCompare(b.stu.grade, 'fr') || a.stu.fullName.localeCompare(b.stu.fullName, 'fr'));
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3 print:hidden">
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-900 font-heading">Appels du {formatDate(selectedDate)} — vue Direction</h2>
+              <p className="text-[11px] text-slate-500">Ce que chaque enseignant a enregistré : classe, matière, créneau, absents et retards.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(roll.values()).map((r, i) => (
+                <span key={i} className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-700">
+                  <b className="text-slate-900">{r.cls}</b>
+                  {r.subject ? ` · ${r.subject}` : ''} · {slotLabel(r.slot)}
+                  {r.teacher ? ` · ${r.teacher}` : ''} — ✓ {r.present} · ✗ {r.absent} · ⏱ {r.late}
+                </span>
+              ))}
+            </div>
+            {sortedRows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[560px]">
+                  <thead>
+                    <tr className="bg-slate-100/90 text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-2 px-3">Élève</th>
+                      <th className="py-2 px-3">Classe</th>
+                      <th className="py-2 px-3">Statut</th>
+                      <th className="py-2 px-3">Matière / Enseignant</th>
+                      <th className="py-2 px-3">Créneau</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedRows.map((r, i) => (
+                      <tr key={i}>
+                        <td className="py-2 px-3 font-bold text-slate-900">{r.stu.fullName}</td>
+                        <td className="py-2 px-3 text-slate-600">{r.stu.grade}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${r.status === 'absent' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                            {r.status === 'absent' ? 'Absent' : 'En retard'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-slate-600">{[r.subject, r.teacher].filter(Boolean).join(' — ') || '—'}</td>
+                        <td className="py-2 px-3 text-slate-600">{slotLabel(r.slot)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-xs font-semibold text-emerald-700">Aucun absent ni retard enregistré pour le moment.</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 3. Sélection du Cycle & de la Classe */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-4">

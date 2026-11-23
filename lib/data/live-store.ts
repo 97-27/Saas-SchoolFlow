@@ -1729,19 +1729,39 @@ export interface GradesPortalStatus {
   averagesMode?: 'open' | 'closed' | 'scheduled';
   averagesStart?: string; // 'YYYY-MM-DDTHH:mm' (heure locale)
   averagesEnd?: string;
+  /** Validation des bulletins par les enseignants : fermée par défaut, pilotée par la Direction. */
+  validationMode?: 'open' | 'closed' | 'scheduled';
+  validationStart?: string;
+  validationEnd?: string;
 }
 
-/** Les moyennes sont-elles ouvertes aux enseignants à l'instant donné ? */
-export function isAveragesOpen(status: GradesPortalStatus, now: number = Date.now()): boolean {
-  const mode = status.averagesMode || 'open';
-  if (mode === 'open') return true;
-  if (mode === 'closed') return false;
-  const start = status.averagesStart ? new Date(status.averagesStart).getTime() : NaN;
-  const end = status.averagesEnd ? new Date(status.averagesEnd).getTime() : NaN;
+/** Fenêtre ouverte / fermée / programmée entre deux dates-heures (heure locale de l'appareil). */
+export function isWindowOpen(
+  mode: 'open' | 'closed' | 'scheduled' | undefined,
+  startRaw: string | undefined,
+  endRaw: string | undefined,
+  fallback: 'open' | 'closed',
+  now: number = Date.now()
+): boolean {
+  const m = mode || fallback;
+  if (m === 'open') return true;
+  if (m === 'closed') return false;
+  const start = startRaw ? new Date(startRaw).getTime() : NaN;
+  const end = endRaw ? new Date(endRaw).getTime() : NaN;
   if (Number.isNaN(start) && Number.isNaN(end)) return false;
   if (!Number.isNaN(start) && now < start) return false;
   if (!Number.isNaN(end) && now > end) return false;
   return true;
+}
+
+/** Les moyennes sont-elles ouvertes aux enseignants à l'instant donné ? */
+export function isAveragesOpen(status: GradesPortalStatus, now: number = Date.now()): boolean {
+  return isWindowOpen(status.averagesMode, status.averagesStart, status.averagesEnd, 'open', now);
+}
+
+/** La validation des bulletins est-elle ouverte aux enseignants ? (fermée par défaut) */
+export function isBulletinValidationOpen(status: GradesPortalStatus, now: number = Date.now()): boolean {
+  return isWindowOpen(status.validationMode, status.validationStart, status.validationEnd, 'closed', now);
 }
 
 export function getGradesPortalStatus(schoolSlug: string): GradesPortalStatus {

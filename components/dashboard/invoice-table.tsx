@@ -233,6 +233,30 @@ export function InvoiceTable({ initialInvoices, schoolSlug, serviceMonthPaymentL
             });
           }
         });
+
+        // « Soldé » : seulement quand la scolarité est RÉELLEMENT payée en entier, et sur le
+        // versement qui l'a soldée (ex. « 4ème Versement — Soldé » si le parent a fini au 4ème).
+        const netTotal =
+          Number(matchedStudent?.netAmount ?? inv.netAmount ?? Math.max(0, (inv.amount || 0) - (inv.discountAmount || 0))) || 0;
+        const balance = matchedStudent?.balanceRemaining ?? inv.balanceRemaining;
+        if (netTotal > 0 && balance === 0) {
+          let cum = 0;
+          let settledKey = '';
+          for (const k of ['v1', 'v2', 'v3', 'v4', 'v5']) {
+            const a = Number(realInst[`versement${k.slice(1)}`]?.amount) || 0;
+            cum += a;
+            if (a > 0 && cum >= netTotal) {
+              settledKey = k;
+              break;
+            }
+          }
+          if (settledKey) {
+            // Le dernier complément (s'il y en a) est le paiement qui a soldé ; sinon le versement lui-même.
+            const tops = list.filter((x) => x.invoiceId === inv.id && x.id.startsWith(`${inv.id}-${settledKey}-top`));
+            const target = tops.length > 0 ? tops[tops.length - 1] : list.find((x) => x.id === `${inv.id}-${settledKey}`);
+            if (target) target.motif = `${target.motif} — Soldé`;
+          }
+        }
       }
 
       // 2. Vérification des Droits d'Inscription distincts

@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { formatFCFA, formatDate } from '@/lib/utils/formatters';
+import { printOnePage } from '@/lib/client/print-one-page';
 import {
   Wallet,
   CheckCircle2,
@@ -161,9 +162,10 @@ export function ParentScolariteTab({
       { key: 'versement2', label: '2ème Versement', rec: installments.versement2 },
       { key: 'versement3', label: '3ème Versement', rec: installments.versement3 },
       { key: 'versement4', label: '4ème Versement', rec: installments.versement4 },
-      { key: 'versement5', label: '5ème Versement (Solde)', rec: installments.versement5 },
+      { key: 'versement5', label: '5ème Versement', rec: installments.versement5 },
     ].map((inst) => {
       const isPaid = Boolean(inst.rec && inst.rec.amount && inst.rec.amount > 0) || (inst.key === 'versement1' && fallbackToV1);
+      // (le statut « Soldé » est posé plus bas, sur le seul versement qui solde la scolarité)
       return {
         key: inst.key,
         label: inst.label,
@@ -178,6 +180,20 @@ export function ParentScolariteTab({
       };
     });
 
+    // « Soldé » : uniquement sur le versement qui a fini de payer la scolarité (et seulement si elle est soldée).
+    let cum = 0;
+    let settledKey = '';
+    if (isFullyPaid && netTuition > 0) {
+      for (const it of instList) {
+        cum += it.amount;
+        if (it.isPaid && cum >= netTuition) {
+          settledKey = it.key;
+          break;
+        }
+      }
+    }
+    const instListWithSettled = instList.map((it) => ({ ...it, isSettled: it.key === settledKey }));
+
     return {
       initialTuition,
       discount,
@@ -187,7 +203,7 @@ export function ParentScolariteTab({
       progressPercent,
       isFullyPaid,
       registrationFee,
-      installmentsList: instList,
+      installmentsList: instListWithSettled,
     };
   }, [activeChild]);
 
@@ -386,8 +402,14 @@ export function ParentScolariteTab({
     };
   }, [tuitionStats, canteenData, transportData, boardingData]);
 
+  // Relevé imprimé sur UNE seule page A4 (mis à l'échelle automatiquement si besoin).
   const handlePrintFinancialStatement = () => {
-    window.print();
+    const node = typeof document !== 'undefined' ? document.getElementById('parent-scolarite-print') : null;
+    if (!node) {
+      window.print();
+      return;
+    }
+    printOnePage(node.innerHTML, { title: `Relevé de scolarité — ${activeChild?.fullName || ''}`, minScale: 0.4 });
   };
 
   if (!activeChild) {
@@ -403,7 +425,7 @@ export function ParentScolariteTab({
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div id="parent-scolarite-print" className="space-y-6 animate-in fade-in duration-200">
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* 1. SÉLECTEUR MULTI-ENFANTS (POUR LES FAMILLES AYANT PLUSIEURS ENFANTS) */}
       {/* ═══════════════════════════════════════════════════════════════ */}
@@ -469,7 +491,7 @@ export function ParentScolariteTab({
               </span>
             </div>
 
-            <h2 className="text-2xl sm:text-2xl font-black font-heading tracking-tight text-white">
+            <h2 className="text-lg sm:text-xl font-black font-heading tracking-tight text-white">
               {activeChild.lastName} {activeChild.firstName}
             </h2>
             <p className="text-xs sm:text-sm text-emerald-200/90 mt-1">
@@ -498,7 +520,7 @@ export function ParentScolariteTab({
             <span className="text-[11px] font-bold text-emerald-300/80 uppercase tracking-wide block">
               1. Frais Annuels de Scolarité
             </span>
-            <span className="text-xl sm:text-2xl font-black font-mono text-white mt-1 block">
+            <span className="text-base sm:text-lg font-black font-mono text-white mt-1 block">
               {formatFCFA(tuitionStats.netTuition)}
             </span>
             <span className="text-[11px] text-slate-300 mt-1 block">
@@ -516,7 +538,7 @@ export function ParentScolariteTab({
                 {tuitionStats.progressPercent}% réglé
               </span>
             </div>
-            <span className="text-xl sm:text-2xl font-black font-mono text-emerald-300 mt-1 block">
+            <span className="text-base sm:text-lg font-black font-mono text-emerald-300 mt-1 block">
               {formatFCFA(tuitionStats.paid)}
             </span>
             <span className="text-[11px] text-emerald-200/80 mt-1 block">
@@ -549,7 +571,7 @@ export function ParentScolariteTab({
               )}
             </div>
             <span
-              className={`text-xl sm:text-2xl font-black font-mono mt-1 block ${
+              className={`text-base sm:text-lg font-black font-mono mt-1 block ${
                 tuitionStats.isFullyPaid ? 'text-emerald-300' : 'text-amber-300'
               }`}
             >
@@ -622,7 +644,7 @@ export function ParentScolariteTab({
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">
               Frais Annuels Nets
             </span>
-            <span className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-1 block">
+            <span className="text-sm sm:text-base font-black font-mono text-slate-900 mt-1 block">
               {formatFCFA(tuitionStats.netTuition)}
             </span>
             {tuitionStats.discount > 0 && (
@@ -636,7 +658,7 @@ export function ParentScolariteTab({
             <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wide block">
               Somme Déjà Versée
             </span>
-            <span className="text-lg sm:text-xl font-black font-mono text-emerald-900 mt-1 block">
+            <span className="text-sm sm:text-base font-black font-mono text-emerald-900 mt-1 block">
               {formatFCFA(tuitionStats.paid)}
             </span>
             <span className="text-[10px] text-emerald-700 font-bold mt-1 block">
@@ -654,7 +676,7 @@ export function ParentScolariteTab({
             <span className="text-[11px] font-bold uppercase tracking-wide block text-slate-600">
               Reste à Payer
             </span>
-            <span className="text-lg sm:text-xl font-black font-mono mt-1 block">
+            <span className="text-sm sm:text-base font-black font-mono mt-1 block">
               {formatFCFA(tuitionStats.remaining)}
             </span>
             <span className="text-[10px] font-bold mt-1 block">
@@ -666,7 +688,7 @@ export function ParentScolariteTab({
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">
               Droits d'Inscription
             </span>
-            <span className="text-lg sm:text-xl font-black font-mono text-slate-900 mt-1 block">
+            <span className="text-sm sm:text-base font-black font-mono text-slate-900 mt-1 block">
               {tuitionStats.registrationFee > 0 ? formatFCFA(tuitionStats.registrationFee) : 'Inclus'}
             </span>
             <span className="text-[10px] text-emerald-600 font-bold mt-1 block flex items-center gap-1">
@@ -725,7 +747,7 @@ export function ParentScolariteTab({
                       {item.isPaid ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          Encaissé
+                          {item.isSettled ? 'Soldé' : 'Encaissé'}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">

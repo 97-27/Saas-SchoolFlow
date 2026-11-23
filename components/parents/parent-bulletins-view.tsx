@@ -6,7 +6,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Student, School } from '@/lib/data/types';
 import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool, mockStudents } from '@/lib/data/mock-data';
-import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, broadcastLiveUpdate } from '@/lib/data/live-store';
+import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, broadcastLiveUpdate, getValidatedClassRankings } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate, formatFCFA } from '@/lib/utils/formatters';
 import {
@@ -382,7 +382,11 @@ export function ParentBulletinsView({
   }, [activeChild?.grade]);
 
   const stats = useMemo(() => {
-    if (!activeChild || subjectsList.length === 0) {
+    // Les familles ne voient les notes d'un trimestre qu'une fois les bulletins de la classe VALIDÉS
+    // par l'établissement ; avant, rien n'est consultable (le carnet reste la référence).
+    const notYetValidated =
+      isParentRole && !!activeChild && !getValidatedClassRankings(activeChild.grade, selectedTerm, schoolSlug);
+    if (!activeChild || subjectsList.length === 0 || notYetValidated) {
       return {
         computedSubjects: [] as SubjectEvaluation[],
         totalCoef: 0,
@@ -614,9 +618,9 @@ export function ParentBulletinsView({
       absenceHours: 'Non renseigné',
       hasGrades,
     };
-  }, [activeChild, subjectsList, schoolSlug, selectedTerm, allStudents]);
+  }, [activeChild, subjectsList, schoolSlug, selectedTerm, allStudents, isParentRole]);
 
-  // Impression STRICTEMENT en Format Paysage A4 (1 Seule Page Pleine Hauteur)
+  // Impression STRICTEMENT en Format Portrait A4 (1 Seule Page Pleine Hauteur)
   const handlePrintLandscape = () => {
     const el = document.getElementById('official-bulletin-print');
     if (!el) {
@@ -624,7 +628,7 @@ export function ParentBulletinsView({
       return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=1150,height=800');
+    const printWindow = window.open('', '_blank', 'width=900,height=1100');
     if (!printWindow) {
       window.print();
       return;
@@ -644,7 +648,7 @@ export function ParentBulletinsView({
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
           @page {
-            size: A4 landscape;
+            size: A4 portrait;
             margin: 3mm 5mm !important;
           }
           * {
@@ -666,8 +670,8 @@ export function ParentBulletinsView({
           .bulletin-landscape-wrapper {
             width: 100%;
             max-width: 100%;
-            min-height: 198mm;
-            max-height: 202mm;
+            min-height: 268mm;
+            max-height: 284mm;
             margin: 0 auto;
             border: 2px solid #0f172a;
             border-radius: 12px;
@@ -747,7 +751,7 @@ export function ParentBulletinsView({
       <style jsx global>{`
         @media print {
           @page {
-            size: A4 landscape;
+            size: A4 portrait;
             margin: 4mm 6mm !important;
           }
           body {
@@ -804,7 +808,7 @@ export function ParentBulletinsView({
             {activeViewTab === 'scolarite'
               ? 'Consultez la somme restante de votre enfant, les montants déjà versés, ainsi que la cantine, le transport scolaire et l’internat.'
               : isParentRole
-              ? 'Consultez les moyennes trimestrielles certifiées et imprimez le bulletin officiel au format Paysage A4 (1 page nette).'
+              ? 'Consultez les moyennes trimestrielles certifiées et imprimez le bulletin officiel au format Portrait A4 (1 page nette).'
               : 'Visualisez les bulletins des élèves du Collège (6ème à 3ème), certifiés avec le cachet officiel de l’établissement.'}
           </p>
         </div>
@@ -816,7 +820,7 @@ export function ParentBulletinsView({
             <button
               type="button"
               onClick={() => setIsMessageModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md transition-all cursor-pointer hover:scale-[1.02]"
             >
               <MessageSquare className="w-4 h-4" />
               <span>✍️ Écrire à la Direction</span>
@@ -827,7 +831,7 @@ export function ParentBulletinsView({
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4 text-slate-950" />
               <span>🖨️ Imprimer le Relevé de Scolarité</span>
@@ -836,10 +840,10 @@ export function ParentBulletinsView({
             <button
               type="button"
               onClick={handlePrintLandscape}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs sm:text-sm font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 shadow-lg shadow-amber-500/30 hover:scale-[1.02] transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4 text-slate-950" />
-              <span>🖨️ Imprimer le Bulletin (Format Paysage A4)</span>
+              <span>🖨️ Imprimer le Bulletin (Format Portrait A4)</span>
             </button>
           )}
         </div>

@@ -12,6 +12,23 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  // En-têtes de sécurité (audit) : pas d'inclusion dans le site d'un autre (clickjacking), pas de
+  // devinette du type de fichier, HTTPS imposé, peu d'infos transmises aux autres sites.
+  // (Pas de Content-Security-Policy ici : elle demande un essai en conditions réelles.)
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          { key: 'Permissions-Policy', value: 'camera=(self), geolocation=(self), microphone=()' },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       {

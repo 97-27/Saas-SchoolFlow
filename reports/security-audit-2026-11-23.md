@@ -1,0 +1,44 @@
+# Audit de sécurité SchoolFlow — 2026-11-23
+
+Critiques : **0** · Hautes : **9** · Moyennes : **10** · Faibles : **0**
+
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/archives/new-year/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/archives/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/auth/logout/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/kv/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/platform/logout/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/platform/overview/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/school/delete-account/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/sync/route.ts
+- 🟠 HAUTE — Route API sans contrôle d’accès apparent
+  - app/api/upload/route.ts
+- 🟡 MOYENNE — Route API sans contrôle d’accès apparent
+  - app/api/auth/session/route.ts
+- 🟡 MOYENNE — dangerouslySetInnerHTML (risque XSS si le contenu vient d’un utilisateur)
+  - components/cards/student-cards-view.tsx:331
+- 🟡 MOYENNE — dangerouslySetInnerHTML (risque XSS si le contenu vient d’un utilisateur)
+  - components/grades/distinctions-view.tsx:1009
+- 🟡 MOYENNE — dangerouslySetInnerHTML (risque XSS si le contenu vient d’un utilisateur)
+  - components/grades/distinctions-view.tsx:1106
+- 🟡 MOYENNE — dangerouslySetInnerHTML (risque XSS si le contenu vient d’un utilisateur)
+  - scripts/security-audit.mjs:109
+- 🟡 MOYENNE — En-tête de sécurité absent : X-Content-Type-Options
+  - À ajouter dans next.config (headers()).
+- 🟡 MOYENNE — En-tête de sécurité absent : HSTS
+  - À ajouter dans next.config (headers()).
+- 🟡 MOYENNE — En-tête de sécurité absent : protection contre l’intégration en iframe (clickjacking)
+  - À ajouter dans next.config (headers()).
+- 🟡 MOYENNE — En-tête de sécurité absent : Content-Security-Policy
+  - À ajouter dans next.config (headers()).
+- 🟡 MOYENNE — En-tête de sécurité absent : Referrer-Policy
+  - À ajouter dans next.config (headers()).
+- ℹ️ INFO — Code analysé : 191 fichiers, 21 routes API
+- ✅ OK — Dépendances : aucune faille connue (npm audit)

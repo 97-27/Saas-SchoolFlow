@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { sortStudentsAlpha } from '@/lib/utils/alpha';
 import { Student, School } from '@/lib/data/types';
 import { canNotifyParents } from '@/lib/auth/roles';
+import { useActiveTerm, TermChangeNotice } from '@/components/grades/use-active-term';
 import {
   getLiveStudents,
   getLiveSchool,
@@ -294,6 +295,13 @@ export function GradesView({
   const [searchQuery, setSearchQuery] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  // Le trimestre suit les dates de fin saisies dans Paramètres : passage automatique + message.
+  const { notice: termNotice, dismiss: dismissTermNotice } = useActiveTerm(schoolSlug, currentSchool.currentTerm);
+  useEffect(() => {
+    const t = currentSchool.currentTerm;
+    if (t === 'Trimestre 1' || t === 'Trimestre 2' || t === 'Trimestre 3') setSelectedTerm(t);
+  }, [currentSchool.currentTerm]);
+
   // État d'ouverture / fermeture des portails de saisie des notes (Contrôle Administrateur)
   const [portalStatus, setPortalStatus] = useState<GradesPortalStatus>(() => {
     return getGradesPortalStatus(schoolSlug);
@@ -433,12 +441,20 @@ export function GradesView({
       setCanEditGradesConfig(false);
       setCanSendToParents(false);
     }
-    const handleCfg = (e: Event) => {
-      const keys: string[] = (e as CustomEvent)?.detail?.keys || [];
-      if (keys.includes(gradesConfigKey(schoolSlug))) setGradesConfig(getGradesConfig(schoolSlug));
+    // Le nombre d'interrogations / devoirs est fixé par la Direction pour TOUS les enseignants.
+    // On relit la valeur à chaque synchronisation (et toutes les 20 s), sans dépendre de la liste
+    // des clés de l'événement : un enseignant qui ouvrait la page avant l'arrivée des paramètres
+    // gardait sinon les valeurs par défaut (5 interrogations, 2 devoirs).
+    const handleCfg = () => {
+      const next = getGradesConfig(schoolSlug);
+      setGradesConfig((prev) => (prev.interros === next.interros && prev.devoirs === next.devoirs ? prev : next));
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleCfg);
-    return () => window.removeEventListener(DATA_UPDATED_EVENT, handleCfg);
+    const cfgTimer = window.setInterval(handleCfg, 20000);
+    return () => {
+      window.removeEventListener(DATA_UPDATED_EVENT, handleCfg);
+      window.clearInterval(cfgTimer);
+    };
   }, [schoolSlug]);
 
   const updateGradesConfig = (patch: Partial<GradesConfig>) => {
@@ -615,34 +631,37 @@ export function GradesView({
   const devoirCols = Math.max(gradesConfig.devoirs, highestFilledIndex(Object.values(gradesMap), 'dev'));
   const interroFields = Array.from({ length: interroCols }, (_, i) => `int${i + 1}`);
   const devoirFields = Array.from({ length: devoirCols }, (_, i) => `dev${i + 1}`);
-  const [sendWhat, setSendWhat] = useState<string>('all');
-  // Message WhatsApp aux parents : notes de la matière affichée + demande de signature de la feuille.
-  const whatsappNotesUrl = (studentId: string, grades: GradeEntry, fullName: string, grade: string): string | null => {
+  // Envoi aux parents : un choix PAR élève (interrogation 1, 2…, devoir 1, 2…, composition ou
+  // moyenne), puis WhatsApp ou SMS. Le message est déjà rédigé avec la note choisie.
+  const [sendChoice, setSendChoice] = useState<Record<string, string>>({});
+  const notesMessage = (
+    studentId: string,
+    grades: GradeEntry,
+    fullName: string,
+    grade: string,
+    sendWhat: string,
+    moyenne: number | null
+  ): { phone: string; text: string } | null => {
+    if (!sendWhat) return null;
     const stu = classStudents.find((s) => s.id === studentId);
     const digits = String(stu?.whatsappPhone || stu?.guardianPhone || '').replace(/\D/g, '');
     if (digits.length < 8) return null;
     const phone = digits.startsWith('225') ? digits : `225${digits}`;
-    const fmt = (xs: number[]) => (xs.length ? xs.map((n) => String(n).replace('.', ',')).join(' • ') : '—');
-    const comp = grades.comp && !isNaN(parseFloat(grades.comp)) ? String(parseFloat(grades.comp)).replace('.', ',') : '—';
-    // Choix de l'envoi : tout, une interrogation précise, un devoir précis ou la composition.
-    const one = (f: string) => {
-      const v = parseFloat(String(grades[f] ?? ''));
-      return isNaN(v) ? null : String(v).replace('.', ',');
-    };
+    const num = (v: number) => String(v).replace('.', ',');
     let body: string;
-    if (sendWhat === 'all') {
-      body =
-        `📝 Interrogations : ${fmt(noteValues(grades, 'int'))}\n` +
-        `📚 Devoirs : ${fmt(noteValues(grades, 'dev'))}\n` +
-        `🎯 Composition : ${comp}`;
+    if (sendWhat === 'moy') {
+      if (moyenne === null) return null;
+      body = `📊 Moyenne : *${num(moyenne)}/20*`;
     } else if (sendWhat === 'comp') {
-      body = `🎯 Composition : ${comp}`;
+      const v = parseFloat(String(grades.comp ?? ''));
+      if (isNaN(v)) return null;
+      body = `🎯 Composition : *${num(v)}/20*`;
     } else {
       const isInt = sendWhat.startsWith('int');
       const n = sendWhat.replace(/\D/g, '');
-      const val = one(sendWhat);
-      if (val === null) return null; // pas de note pour cet élève : rien à envoyer
-      body = `${isInt ? '📝' : '📚'} ${isInt ? `Interrogation ${n}` : `Devoir ${n}`} : *${val}/20*`;
+      const v = parseFloat(String((grades as any)[sendWhat] ?? ''));
+      if (isNaN(v)) return null; // pas de note pour cet élève : rien à envoyer
+      body = `${isInt ? '📝' : '📚'} ${isInt ? `Interrogation ${n}` : `Devoir ${n}`} : *${num(v)}/20*`;
     }
     const text =
       `*${String(currentSchool.name || '').toUpperCase()}*\n\n` +
@@ -651,7 +670,7 @@ export function GradesView({
       `${body}\n\n` +
       `Merci de regarder la feuille d’interrogation, de la *signer* et de la faire revenir à l’école avec votre enfant.\n\n` +
       `_Direction des Études — ${currentSchool.shortName || currentSchool.name}_`;
-    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    return { phone, text };
   };
 
   // Affichage : 5 interrogations d'emblée, le reste sur demande (les notes comptent toutes).
@@ -913,6 +932,8 @@ export function GradesView({
           </div>
         )}
       </div>
+
+      <TermChangeNotice term={termNotice} onClose={dismissTermNotice} />
 
       {/* BANDEAU DE GESTION DU PORTAIL DE SAISIE DES NOTES (CONTRÔLE ADMINISTRATEUR) */}
       <div className="bg-white rounded-xl border border-slate-200/90 px-3 py-2 shadow-xs">
@@ -1452,27 +1473,6 @@ export function GradesView({
               </div>
             )}
 
-            {/* Choix des notes envoyées aux parents (bouton WhatsApp de chaque élève) : Direction seulement */}
-            {canSendToParents && (
-            <div className="flex flex-wrap items-center gap-2 px-1 pb-2 text-xs">
-              <label className="font-bold text-slate-700" htmlFor="send-what">Notes à envoyer aux parents :</label>
-              <select
-                id="send-what"
-                value={sendWhat}
-                onChange={(e) => setSendWhat(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 cursor-pointer"
-              >
-                <option value="all">Toutes les notes de la matière</option>
-                {interroFields.map((f, i) => (
-                  <option key={f} value={f}>Interrogation {i + 1} seulement</option>
-                ))}
-                {devoirFields.map((f, i) => (
-                  <option key={f} value={f}>Devoir {i + 1} seulement</option>
-                ))}
-                <option value="comp">Composition seulement</option>
-              </select>
-            </div>
-            )}
 
             {/* Tableau */}
             <div className="overflow-x-auto scrollbar-top">
@@ -1501,7 +1501,8 @@ export function GradesView({
                     ))}
                     <th className="py-3 px-1.5 text-center bg-emerald-50/60 text-emerald-950 w-20">Composition</th>
                     <th className="py-3 px-2 text-center bg-emerald-100/80 text-emerald-950 font-black w-24">Moyenne Finale</th>
-                    <th className="py-3 pr-4 px-3 min-w-[220px]">Appréciation du Professeur</th>
+                    <th className="py-3 px-3 min-w-[220px]">Appréciation du Professeur</th>
+                    {canSendToParents && <th className="py-3 pr-4 px-3 min-w-[250px] bg-emerald-50/60 text-emerald-900">Envoi aux parents</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
@@ -1542,20 +1543,6 @@ export function GradesView({
                             <span className="font-mono text-[10px] text-slate-400 font-medium">
                               {g.matricule}
                             </span>
-                            {canSendToParents && (() => {
-                              const url = whatsappNotesUrl(g.studentId, g.grades, g.fullName, g.grade);
-                              return url ? (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100"
-                                  title="Envoyer ces notes aux parents par WhatsApp"
-                                >
-                                  WhatsApp parents
-                                </a>
-                              ) : null;
-                            })()}
                           </td>
 
                           <td className="py-2.5 px-2 text-center">
@@ -1629,7 +1616,7 @@ export function GradesView({
                             )}
                           </td>
 
-                          <td className="py-2 pr-4 px-3">
+                          <td className="py-2 px-3">
                             <input
                               type="text"
                               value={entry.customAppreciation || g.appreciation}
@@ -1639,6 +1626,48 @@ export function GradesView({
                               className="w-full px-2.5 py-1 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                             />
                           </td>
+
+                          {canSendToParents && (() => {
+                            const choice = sendChoice[g.studentId] || '';
+                            const msg = notesMessage(g.studentId, g.grades, g.fullName, g.grade, choice, averagesVisible ? g.moyenne : null);
+                            const smsUrl = msg ? `sms:+${msg.phone}?&body=${encodeURIComponent(msg.text)}` : '';
+                            const waUrl = msg ? `https://wa.me/${msg.phone}?text=${encodeURIComponent(msg.text)}` : '';
+                            const btn = 'inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-[11px] font-bold text-white';
+                            return (
+                              <td className="py-2 pr-4 px-3 bg-emerald-50/30" data-no-sms>
+                                <div className="flex items-center gap-1.5">
+                                  <select
+                                    value={choice}
+                                    onChange={(e) => setSendChoice((prev) => ({ ...prev, [g.studentId]: e.target.value }))}
+                                    className="flex-1 min-w-0 px-2 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-800 cursor-pointer"
+                                    aria-label={`Que envoyer aux parents de ${g.fullName}`}
+                                  >
+                                    <option value="">Que envoyer ?</option>
+                                    {interroFields.map((f, i) => (
+                                      <option key={f} value={f}>Interrogation {i + 1}</option>
+                                    ))}
+                                    {devoirFields.map((f, i) => (
+                                      <option key={f} value={f}>Devoir {i + 1}</option>
+                                    ))}
+                                    <option value="comp">Composition</option>
+                                    {averagesVisible && <option value="moy">Moyenne</option>}
+                                  </select>
+                                  {msg ? (
+                                    <>
+                                      <a href={waUrl} target="_blank" rel="noopener noreferrer" data-no-sms className={`${btn} bg-emerald-600 hover:bg-emerald-700`} title="Envoyer par WhatsApp">
+                                        WhatsApp
+                                      </a>
+                                      <a href={smsUrl} data-no-sms className={`${btn} bg-sky-500 hover:bg-sky-600`} title="Envoyer par SMS">
+                                        SMS
+                                      </a>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 whitespace-nowrap">{choice ? 'Pas de note / numéro' : 'Choisir d’abord'}</span>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })()}
                         </tr>
                       );
                     })

@@ -6,7 +6,9 @@ import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
 import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool } from '@/lib/data/mock-data';
-import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings } from '@/lib/data/live-store';
+import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings, getGradesPortalStatus, saveGradesPortalStatus, isAveragesOpen, isBulletinValidationOpen, type GradesPortalStatus } from '@/lib/data/live-store';
+import { WindowControl } from '@/components/grades/window-control';
+import { useActiveTerm, TermChangeNotice } from '@/components/grades/use-active-term';
 import { GenderBadge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils/formatters';
 import {
@@ -159,7 +161,7 @@ function CountryOfficialEmblem({ emblemUrl, className = "w-18 h-18" }: { emblemU
 }
 
 // ═══════════════════════════════════════════════════════════════
-// COMPOSANT BULLETIN OFFICIEL PAYSAGE (COUVERTURE TOTALE 1 SEULE PAGE A4)
+// COMPOSANT BULLETIN OFFICIEL PORTRAIT (COUVERTURE TOTALE 1 SEULE PAGE A4)
 // Ordre : 1. En-tête -> 2. Données Élève -> 3. Tableau -> 4. Bilan sous tableau -> 5. Signatures
 // ═══════════════════════════════════════════════════════════════
 function OfficialLandscapeBulletin({
@@ -176,7 +178,7 @@ function OfficialLandscapeBulletin({
   subjectsList: any[];
 }) {
   return (
-    <div className="bulletin-page bg-white text-slate-900 border-2 border-slate-900 p-4 sm:p-5 rounded-2xl space-y-3.5 w-full max-w-5xl mx-auto shadow-sm flex flex-col justify-between">
+    <div className="bulletin-page bg-white text-slate-900 border-2 border-slate-900 p-4 sm:p-5 rounded-2xl space-y-3.5 w-full max-w-[794px] mx-auto shadow-sm flex flex-col justify-between">
       {/* 1. EN-TÊTE OFFICIEL HIÉRARCHISÉ (LIGNES BIEN SÉPARÉES) */}
       <div className="grid grid-cols-[90px_1fr_90px] items-center gap-3 border-b-2 border-slate-900 pb-2.5">
         {/* GAUCHE : Logo de l'École (Sans texte sous le logo) */}
@@ -377,7 +379,39 @@ export function BulletinsView({
   // Uniquement Collège et Lycée (Secondaire Général)
   const [selectedCycle, setSelectedCycle] = useState<'college' | 'lycee'>('college');
   const [selectedClass, setSelectedClass] = useState('6ème');
-  const [selectedPeriod, setSelectedPeriod] = useState('Trimestre 1');
+  const [selectedPeriod, setSelectedPeriod] = useState(() => school?.currentTerm || 'Trimestre 1');
+
+  // Le trimestre suit les dates de fin saisies dans Paramètres (passage automatique + message).
+  const { notice: termNotice, dismiss: dismissTermNotice } = useActiveTerm(schoolSlug, currentSchool.currentTerm);
+  useEffect(() => {
+    if (currentSchool.currentTerm) setSelectedPeriod(currentSchool.currentTerm);
+  }, [currentSchool.currentTerm]);
+
+  // Ouverture / fermeture réglées par la Direction (moyennes, validation des bulletins).
+  const [portal, setPortal] = useState<GradesPortalStatus>(() => getGradesPortalStatus(schoolSlug));
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  const [canDirect, setCanDirect] = useState(false);
+  useEffect(() => {
+    const load = () => setPortal(getGradesPortalStatus(schoolSlug));
+    load();
+    try {
+      const r = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null')?.roleId;
+      setCanDirect(r === 'fondateur' || r === 'fondateur_adjoint' || r === 'directeur');
+    } catch {}
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    const t = window.setInterval(() => setNowTick(Date.now()), 20000);
+    return () => {
+      window.removeEventListener(DATA_UPDATED_EVENT, load);
+      window.clearInterval(t);
+    };
+  }, [schoolSlug]);
+  const averagesOpen = isAveragesOpen(portal, nowTick);
+  const validationOpen = isBulletinValidationOpen(portal, nowTick);
+  const updatePortal = (patch: Partial<GradesPortalStatus>) => {
+    const next = { ...portal, ...patch, updatedBy: currentSchool.directorName || currentSchool.founderName || 'Direction des Études', updatedAt: new Date().toLocaleDateString('fr-FR') };
+    setPortal(next);
+    saveGradesPortalStatus(schoolSlug, next);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentForBulletin, setSelectedStudentForBulletin] = useState<any | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -394,7 +428,7 @@ export function BulletinsView({
   const imgElementRef = useRef<HTMLImageElement>(null);
 
   const availableClassesForCycle = useMemo(() => {
-    return ['6ème', '5ème', '4ème', '3ème'];
+    return ['6ème', '5ème', '4ème', '3ème', '2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'];
   }, []);
 
   // Synchroniser la classe sélectionnée
@@ -606,12 +640,50 @@ export function BulletinsView({
   // Tableau d'Honneur. Sans cet appel, saveValidatedClassRankings() n'était jamais invoqué nulle
   // part dans le code — la page Distinctions restait bloquée sur "En attente des bulletins" quel
   // que soit le nombre de notes réellement saisies.
+  // Matières sans aucune note pour cette classe et ce trimestre.
+  const subjectsWithoutNotes = useMemo(
+    () => subjectsList.filter((sub, i) => !studentsWithGrades.some((s) => s.subjectRows?.[i]?.average !== null && s.subjectRows?.[i]?.average !== undefined)).map((s) => s.name),
+    [subjectsList, studentsWithGrades]
+  );
+
+  // Les moyennes ne paraissent sur le bulletin qu'une fois les bulletins VALIDÉS, et seulement
+  // si la Direction a ouvert les moyennes (elle-même les voit toujours dans le récapitulatif).
+  const listVisible = canDirect || averagesOpen;
+  const bulletinVisible = !!validatedRankingsForClass && listVisible;
+  const maskStudent = (stu: any) =>
+    !stu
+      ? stu
+      : {
+          ...stu,
+          average: null,
+          rank: null,
+          rankSuffix: '',
+          mention: 'En attente de validation',
+          distinction: '—',
+          subjectRows: (stu.subjectRows || []).map((r: any) => ({ ...r, average: null, totalPoints: '—', appreciation: '—' })),
+        };
+  const bulletinFor = (stu: any) => (bulletinVisible ? stu : maskStudent(stu));
+
   const handleValidateBulletins = () => {
+    if (!canDirect && !validationOpen) {
+      setToastMessage('La validation des bulletins est fermée : elle est ouverte par la Direction.');
+      setTimeout(() => setToastMessage(null), 4500);
+      return;
+    }
     const graded = studentsWithGrades.filter((s) => s.average !== null);
     if (graded.length === 0) {
       setToastMessage('Aucune note saisie pour cette classe : rien à valider.');
       setTimeout(() => setToastMessage(null), 4000);
       return;
+    }
+    if (subjectsWithoutNotes.length > 0) {
+      const list = subjectsWithoutNotes.join(', ');
+      if (!canDirect) {
+        setToastMessage(`Validation impossible : pas encore de notes en ${list}. Chaque matière doit avoir ses notes avant la validation.`);
+        setTimeout(() => setToastMessage(null), 7000);
+        return;
+      }
+      if (!confirm(`Pas encore de notes en : ${list}.\nValider quand même les bulletins de ${selectedClass} ?`)) return;
     }
 
     const laureates = graded
@@ -790,7 +862,7 @@ export function BulletinsView({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-sans">
-            Édition certifiée des bulletins scolaires du Secondaire (Collège & Lycée) — Format Paysage 1 Page Strict
+            Édition certifiée des bulletins scolaires du Secondaire (Collège & Lycée) — Format Portrait 1 Page Strict
           </p>
         </div>
 
@@ -810,7 +882,7 @@ export function BulletinsView({
       {/* 2. Sélecteur de Cycles (Collège : 6ème à 3ème) */}
       <div className="grid grid-cols-1 gap-3 print:hidden">
         {[
-          { id: 'college' as const, label: 'Cycle Secondaire / Collège (6ème à 3ème)', icon: Building2 },
+          { id: 'college' as const, label: 'Cycle Secondaire / Collège (6ème à Terminale)', icon: Building2 },
         ].map((c) => {
           const Icon = c.icon;
           const isActive = true;
@@ -825,12 +897,50 @@ export function BulletinsView({
               <div>
                 <h3 className="text-xs sm:text-sm font-bold font-heading">{c.label}</h3>
                 <p className="text-[11px] text-slate-300">
-                  Génération & impression des bulletins officiels sur 1 page paysage (6ème, 5ème, 4ème, 3ème)
+                  Génération & impression des bulletins officiels sur 1 page portrait (6ème à Terminale)
                 </p>
               </div>
             </div>
           );
         })}
+      </div>
+
+      <TermChangeNotice term={termNotice} onClose={dismissTermNotice} />
+
+      {/* Réglages de la Direction : moyennes et validation des bulletins (secondaire, 6ème à Terminale) */}
+      <div className="bg-white rounded-xl border border-slate-200/90 px-3 py-2.5 shadow-xs space-y-2 print:hidden">
+        <WindowControl
+          label="Moyennes (enseignants)"
+          mode={portal.averagesMode || 'open'}
+          start={portal.averagesStart}
+          end={portal.averagesEnd}
+          isOpen={averagesOpen}
+          canEdit={canDirect}
+          openLabel="OUVERTES"
+          closedLabel="FERMÉES"
+          onChange={(p) => updatePortal({ ...(p.mode ? { averagesMode: p.mode } : {}), ...(p.start !== undefined ? { averagesStart: p.start } : {}), ...(p.end !== undefined ? { averagesEnd: p.end } : {}) })}
+        />
+        <WindowControl
+          label="Validation des bulletins"
+          mode={portal.validationMode || 'closed'}
+          start={portal.validationStart}
+          end={portal.validationEnd}
+          isOpen={validationOpen}
+          canEdit={canDirect}
+          openLabel="OUVERTE"
+          closedLabel="FERMÉE"
+          onChange={(p) => updatePortal({ ...(p.mode ? { validationMode: p.mode } : {}), ...(p.start !== undefined ? { validationStart: p.start } : {}), ...(p.end !== undefined ? { validationEnd: p.end } : {}) })}
+        />
+        {subjectsWithoutNotes.length > 0 && (
+          <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+            Pas encore de notes en : {subjectsWithoutNotes.join(', ')}.
+          </p>
+        )}
+        {!validatedRankingsForClass && (
+          <p className="text-[11px] text-slate-500">
+            Les moyennes n’apparaissent sur le bulletin qu’une fois les bulletins de cette classe validés pour {selectedPeriod}.
+          </p>
+        )}
       </div>
 
       {/* 3. Filtre de Classe & Période */}
@@ -898,7 +1008,7 @@ export function BulletinsView({
             Moyenne de Classe
           </span>
           <span className="text-xl sm:text-2xl font-black text-emerald-900 font-heading">
-            {classStats.classAverage}
+            {listVisible ? classStats.classAverage : '🔒'}
           </span>
           <span className="text-[10px] text-emerald-700 block">Sur l&apos;ensemble des matières</span>
         </div>
@@ -908,7 +1018,7 @@ export function BulletinsView({
             Moyenne Max / Min
           </span>
           <span className="text-xl sm:text-2xl font-black text-slate-900 font-heading">
-            {classStats.maxAverage} / {classStats.minAverage}
+            {listVisible ? `${classStats.maxAverage} / ${classStats.minAverage}` : '🔒'}
           </span>
           <span className="text-[10px] text-slate-500 block">Extrêmes de la classe</span>
         </div>
@@ -918,7 +1028,7 @@ export function BulletinsView({
             Taux de Réussite
           </span>
           <span className="text-xl sm:text-2xl font-black text-blue-900 font-heading">
-            {classStats.successRate}
+            {listVisible ? classStats.successRate : '🔒'}
           </span>
           <span className="text-[10px] text-blue-700 block">Moyenne &ge; 10 / 20</span>
         </div>
@@ -933,7 +1043,7 @@ export function BulletinsView({
               Récapitulatif des Bulletins — Classe de {selectedClass} ({selectedPeriod})
             </h2>
             <p className="text-xs text-slate-500">
-              {studentsWithGrades.length} élève(s) inscrit(s) • Format 1 Page Paysage Certifié
+              {studentsWithGrades.length} élève(s) inscrit(s) • Format 1 Page Portrait Certifié
             </p>
           </div>
 
@@ -951,9 +1061,9 @@ export function BulletinsView({
             <button
               type="button"
               onClick={handleValidateBulletins}
-              disabled={classStats.gradedCount === 0}
+              disabled={classStats.gradedCount === 0 || (!canDirect && !validationOpen)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-              title="Envoie les lauréats de cette classe au Tableau d'Honneur (page Distinctions)"
+              title={!canDirect && !validationOpen ? 'Validation fermée par la Direction' : "Envoie les lauréats de cette classe au Tableau d'Honneur (page Distinctions)"}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               {validatedRankingsForClass ? 'Bulletins validés ✓' : 'Valider les bulletins'}
@@ -985,7 +1095,7 @@ export function BulletinsView({
                   </td>
                 </tr>
               ) : (
-                studentsWithGrades.map((stu) => (
+                (listVisible ? studentsWithGrades : studentsWithGrades.map(maskStudent)).map((stu) => (
                   <tr key={stu.id} className="hover:bg-slate-50/80 transition-colors">
                     {/* Rang */}
                     <td className="py-3.5 pl-5 pr-2 text-center whitespace-nowrap">
@@ -1128,7 +1238,7 @@ export function BulletinsView({
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 font-heading flex items-center gap-1.5">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Bulletin Scolaire (1 Page Paysage) — {selectedStudentForBulletin.fullName}</span>
+                  <span>Bulletin Scolaire (1 Page Portrait) — {selectedStudentForBulletin.fullName}</span>
                 </h3>
                 <p className="text-[11px] text-slate-500">
                   Classe de {selectedClass} • {selectedPeriod}
@@ -1151,10 +1261,10 @@ export function BulletinsView({
                   type="button"
                   onClick={() => window.print()}
                   className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 transition-all shadow-xs cursor-pointer"
-                  title="Lancer l'impression A4 Paysage sur 1 page"
+                  title="Lancer l'impression A4 Portrait sur 1 page"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimer A4 Paysage (1 Page)</span>
+                  <span>Imprimer A4 Portrait (1 Page)</span>
                 </button>
 
                 <button
@@ -1170,7 +1280,7 @@ export function BulletinsView({
             {/* ZONE D'AFFICHAGE DU BULLETIN (1 SEULE PAGE GARANTIE) */}
             <div className="overflow-y-auto overflow-x-hidden flex-1 p-1 print:overflow-visible print:p-0">
               <OfficialLandscapeBulletin
-                student={selectedStudentForBulletin}
+                student={bulletinFor(selectedStudentForBulletin)}
                 school={currentSchool}
                 selectedPeriod={selectedPeriod}
                 classStats={classStats}
@@ -1258,7 +1368,7 @@ export function BulletinsView({
               {/* Le Bulletin Réel rendu dans la modale pour capture nette et fidèle */}
               <div ref={modalBulletinRef} className="bg-white p-3 sm:p-4 rounded-xl shadow-md border border-slate-200">
                 <OfficialLandscapeBulletin
-                  student={selectedStudentForBulletin}
+                  student={bulletinFor(selectedStudentForBulletin)}
                   school={currentSchool}
                   selectedPeriod={selectedPeriod}
                   classStats={classStats}
@@ -1293,10 +1403,10 @@ export function BulletinsView({
             <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 print:hidden">
               <div>
                 <h3 className="font-black text-base text-slate-900 font-heading">
-                  Impression Groupée (1 Page Paysage par Élève) — Classe de {selectedClass} ({studentsWithGrades.length} Bulletins)
+                  Impression Groupée (1 Page Portrait par Élève) — Classe de {selectedClass} ({studentsWithGrades.length} Bulletins)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Chaque bulletin sortira automatiquement sur 1 seule page A4 Paysage sans aucune coupure
+                  Chaque bulletin sortira automatiquement sur 1 seule page A4 Portrait sans aucune coupure
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -1306,7 +1416,7 @@ export function BulletinsView({
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Lancer l&apos;Impression ({studentsWithGrades.length} pages Paysage)</span>
+                  <span>Lancer l&apos;Impression ({studentsWithGrades.length} pages Portrait)</span>
                 </button>
                 <button
                   type="button"
@@ -1323,7 +1433,7 @@ export function BulletinsView({
               {studentsWithGrades.map((stu) => (
                 <div key={stu.id} className="page-break-after-always">
                   <OfficialLandscapeBulletin
-                    student={stu}
+                    student={bulletinFor(stu)}
                     school={currentSchool}
                     selectedPeriod={selectedPeriod}
                     classStats={classStats}
@@ -1336,11 +1446,11 @@ export function BulletinsView({
         </div>
       )}
 
-      {/* STYLES D'IMPRESSION STRICTS : FORMAT A4 PAYSAGE (LANDSCAPE), 1 SEULE PAGE PAR ÉLÈVE SANS DÉBORDEMENT */}
+      {/* STYLES D'IMPRESSION STRICTS : FORMAT A4 PORTRAIT, 1 SEULE PAGE PAR ÉLÈVE SANS DÉBORDEMENT */}
       <style jsx global>{`
         @media print {
           @page {
-            size: A4 landscape;
+            size: A4 portrait;
             margin: 4mm 6mm 4mm 6mm;
           }
           *, *::before, *::after {
@@ -1393,8 +1503,8 @@ export function BulletinsView({
             break-inside: avoid !important;
             padding: 10px 14px !important;
             margin: 0 auto !important;
-            min-height: 185mm !important;
-            max-height: 198mm !important;
+            min-height: 268mm !important;
+            max-height: 283mm !important;
           }
         }
       `}</style>

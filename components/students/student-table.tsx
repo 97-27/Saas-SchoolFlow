@@ -96,7 +96,7 @@ export function StudentTable({
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student[] | null>(null);
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha'>('desc'); // Par défaut les plus récents (ID-051, etc.) en haut
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'alpha'>('alpha'); // Par défaut ordre alphabétique (A → Z), modifiable par le bouton de tri
 
   // Edit form state
   const [editLastName, setEditLastName] = useState('');
