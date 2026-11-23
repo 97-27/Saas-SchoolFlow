@@ -585,7 +585,20 @@ export function AttendanceView({
           if (rec.status !== 'present') rows.push({ stu, status: rec.status, slot, subject: rec.subject, teacher: rec.teacher, reason: rec.reason });
         });
         if (roll.size === 0) return null;
-        const sortedRows = rows.sort((a, b) => a.stu.grade.localeCompare(b.stu.grade, 'fr') || a.stu.fullName.localeCompare(b.stu.fullName, 'fr'));
+        // Un élève = UNE ligne pour la journée (jamais compté deux fois selon les heures de cours).
+        const perStudent = new Map<string, { stu: Student; absent: boolean; details: Row[] }>();
+        rows.forEach((r) => {
+          const cur = perStudent.get(r.stu.id) || { stu: r.stu, absent: false, details: [] as Row[] };
+          if (r.status === 'absent') cur.absent = true;
+          cur.details.push(r);
+          perStudent.set(r.stu.id, cur);
+        });
+        const aggregated = Array.from(perStudent.values()).sort(
+          (a, b) => a.stu.grade.localeCompare(b.stu.grade, 'fr') || a.stu.fullName.localeCompare(b.stu.fullName, 'fr')
+        );
+        const absentStudents = aggregated.filter((a) => a.absent).length;
+        const lateOnlyStudents = aggregated.length - absentStudents;
+        const sortedRows = aggregated;
         return (
           <div className="bg-white rounded-3xl border border-slate-200/80 p-4 sm:p-5 shadow-xs space-y-3 print:hidden">
             <div>
@@ -619,15 +632,33 @@ export function AttendanceView({
                         <td className="py-2 px-3 font-bold text-slate-900">{r.stu.fullName}</td>
                         <td className="py-2 px-3 text-slate-600">{r.stu.grade}</td>
                         <td className="py-2 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${r.status === 'absent' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-                            {r.status === 'absent' ? 'Absent' : 'En retard'}
+                          <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${r.absent ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                            {r.absent ? 'Absent' : 'En retard'}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-slate-600">{[r.subject, r.teacher].filter(Boolean).join(' — ') || '—'}</td>
-                        <td className="py-2 px-3 text-slate-600">{slotLabel(r.slot)}</td>
+                        <td className="py-2 px-3 text-slate-600">
+                          {r.details.map((d, k) => (
+                            <span key={k} className="block">
+                              {d.status === 'late' ? '⏱ ' : ''}{[d.subject, d.teacher].filter(Boolean).join(' — ') || '—'}
+                            </span>
+                          ))}
+                        </td>
+                        <td className="py-2 px-3 text-slate-600">
+                          {r.details.map((d, k) => (
+                            <span key={k} className="block">{slotLabel(d.slot)}</span>
+                          ))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-900 text-white text-xs font-extrabold">
+                      <td className="py-2.5 px-3" colSpan={5}>
+                        Total du jour : {absentStudents} élève(s) absent(s)
+                        {lateOnlyStudents > 0 ? ` · ${lateOnlyStudents} seulement en retard` : ''} — chaque élève n’est compté qu’une fois, quel que soit le nombre d’heures manquées.
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             ) : (

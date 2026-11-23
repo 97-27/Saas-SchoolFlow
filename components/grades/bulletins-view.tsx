@@ -6,7 +6,7 @@ import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
 import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool } from '@/lib/data/mock-data';
-import { getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings, getGradesPortalStatus, saveGradesPortalStatus, isAveragesOpen, isBulletinValidationOpen, type GradesPortalStatus } from '@/lib/data/live-store';
+import { getLiveStaffUsers, type StaffUser, getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings, getGradesPortalStatus, saveGradesPortalStatus, isAveragesOpen, isBulletinValidationOpen, type GradesPortalStatus } from '@/lib/data/live-store';
 import { WindowControl } from '@/components/grades/window-control';
 import { useActiveTerm, TermChangeNotice } from '@/components/grades/use-active-term';
 import { GenderBadge } from '@/components/ui/badge';
@@ -178,7 +178,7 @@ function OfficialLandscapeBulletin({
   subjectsList: any[];
 }) {
   return (
-    <div className="bulletin-page bg-white text-slate-900 border-2 border-slate-900 p-4 sm:p-5 rounded-2xl space-y-3.5 w-full max-w-[794px] mx-auto shadow-sm flex flex-col justify-between">
+    <div className="bulletin-page bg-white text-slate-900 border-2 border-slate-900 p-4 sm:p-5 rounded-2xl space-y-3.5 w-full max-w-[794px] mx-auto shadow-sm flex flex-col justify-between text-[11px]">
       {/* 1. EN-TÊTE OFFICIEL HIÉRARCHISÉ (LIGNES BIEN SÉPARÉES) */}
       <div className="grid grid-cols-[90px_1fr_90px] items-center gap-3 border-b-2 border-slate-900 pb-2.5">
         {/* GAUCHE : Logo de l'École (Sans texte sous le logo) */}
@@ -273,19 +273,22 @@ function OfficialLandscapeBulletin({
           <tbody className="divide-y divide-slate-100 text-xs">
             {student.subjectRows.map((sub: any) => (
               <tr key={sub.name} className="hover:bg-slate-50/80">
-                <td className="py-1.5 px-3 font-bold border-r border-slate-100 text-slate-900">
+                <td className="py-[3px] px-2.5 font-bold border-r border-slate-100 text-slate-900 leading-tight">
                   {sub.name}
+                  {sub.prof && sub.prof !== '—' && (
+                    <span className="block text-[9px] font-semibold text-slate-500 not-italic">Prof. {sub.prof}</span>
+                  )}
                 </td>
-                <td className="py-1.5 px-2 text-center font-bold border-r border-slate-100 text-slate-800">
+                <td className="py-[3px] px-2 text-center font-bold border-r border-slate-100 text-slate-800">
                   {sub.coef}
                 </td>
-                <td className="py-1.5 px-3 text-center font-black border-r border-slate-100 font-mono text-xs text-slate-950">
+                <td className="py-[3px] px-2.5 text-center font-black border-r border-slate-100 font-mono text-xs text-slate-950">
                   {sub.average !== null ? sub.average.toFixed(2) : '—'}
                 </td>
-                <td className="py-1.5 px-3 text-center font-mono font-bold border-r border-slate-100 text-xs text-slate-800">
+                <td className="py-[3px] px-2.5 text-center font-mono font-bold border-r border-slate-100 text-xs text-slate-800">
                   {sub.totalPoints}
                 </td>
-                <td className="py-1.5 px-3 text-[11px] text-slate-600 italic truncate max-w-[280px]">
+                <td className="py-[3px] px-2.5 text-[10px] text-slate-600 italic leading-tight">
                   {sub.appreciation}
                 </td>
               </tr>
@@ -328,21 +331,34 @@ function OfficialLandscapeBulletin({
         </div>
       </div>
 
-      {/* 5. SIGNATURES OFFICIELLES (HAUTEUR CONFORTABLE ET ÉQUILIBRÉE) */}
-      <div className="grid grid-cols-2 gap-12 pt-3 border-t-2 border-slate-900 text-center text-xs">
+      {/* 5. SIGNATURES & CACHETS : Professeur principal · Directeur · Fondateur (cachets réglés dans Paramètres) */}
+      <div className="grid grid-cols-3 gap-6 pt-2 border-t-2 border-slate-900 text-center text-xs">
         <div className="flex flex-col justify-between">
-          <p className="font-bold text-slate-800 uppercase text-[10px]">Le Professeur Principal</p>
-          <div className="h-10 flex items-center justify-center italic text-slate-400 text-[10px]">
-            Vu & Approuvé
+          <p className="font-bold text-slate-800 uppercase text-[9.5px]">Le Professeur Principal</p>
+          <div className="h-14 flex items-center justify-center italic text-slate-400 text-[10px]">Vu & Approuvé</div>
+        </div>
+
+        <div className="flex flex-col justify-between items-center">
+          <p className="font-bold text-slate-900 uppercase text-[9.5px]">Le Directeur</p>
+          <div className="h-14 w-full flex items-center justify-center">
+            {school.directorStampUrl || school.stampUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={school.directorStampUrl || school.stampUrl} alt="Cachet du Directeur" className="max-h-14 max-w-full object-contain" />
+            ) : (
+              <span className="text-[9px] text-slate-300">Cachet & signature</span>
+            )}
           </div>
         </div>
 
         <div className="flex flex-col justify-between items-center">
-          <p className="font-bold text-slate-900 uppercase text-[10px]">La Direction des Études (Cachet & Signature)</p>
-          <div className="h-10 flex flex-col items-center justify-center">
-            <span className="text-[10px] font-black text-emerald-800 border border-emerald-600 rounded-full px-4 py-1 bg-emerald-50 shadow-2xs">
-              ★ SCEAU OFFICIEL MANOI ★
-            </span>
+          <p className="font-bold text-slate-900 uppercase text-[9.5px]">Le Fondateur</p>
+          <div className="h-14 w-full flex items-center justify-center">
+            {school.founderStampUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={school.founderStampUrl} alt="Cachet du Fondateur" className="max-h-14 max-w-full object-contain" />
+            ) : (
+              <span className="text-[9px] text-slate-300">Cachet & signature</span>
+            )}
           </div>
         </div>
       </div>
@@ -437,9 +453,33 @@ export function BulletinsView({
     setSelectedClass('6ème');
   };
 
+  // Enseignants créés par la Direction (Administration & Codes) : leur nom et leurs matières
+  // s'impriment sur le bulletin, en face de chaque matière.
+  const [teachers, setTeachers] = useState<StaffUser[]>([]);
+  useEffect(() => {
+    const load = () => setTeachers(getLiveStaffUsers(schoolSlug).filter((s) => s.roleId === 'enseignant'));
+    load();
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [schoolSlug]);
+
   const subjectsList = useMemo(() => {
-    return getBulletinSubjectsForClass(selectedClass);
-  }, [selectedClass]);
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const splitList = (s?: string) => String(s || '').split(/[,;/\n]+/).map((x) => norm(x)).filter((x) => x.length >= 3);
+    const gradeNorm = norm(selectedClass);
+    return getBulletinSubjectsForClass(selectedClass).map((sub) => {
+      const subN = norm(sub.name);
+      const names = teachers
+        .filter((t) => {
+          const subjOk = splitList(t.subjectOrGrade).some((x) => subN.includes(x) || x.includes(subN.split(' ')[0]));
+          const cls = norm(t.assignedClasses || '');
+          const classOk = !cls || cls.includes('toutes') || cls.includes('tous') || cls.includes(gradeNorm) || splitList(t.assignedClasses).some((c) => gradeNorm.startsWith(c));
+          return subjOk && classOk;
+        })
+        .map((t) => t.fullName);
+      return { ...sub, prof: names.length ? names.join(' / ') : '—' };
+    });
+  }, [selectedClass, teachers]);
 
   // Calcul des moyennes réelles à partir des notes saisies dans le module Pédagogie
   const studentsWithGrades = useMemo(() => {
@@ -664,6 +704,7 @@ export function BulletinsView({
         };
   const bulletinFor = (stu: any) => (bulletinVisible ? stu : maskStudent(stu));
 
+  const [confirmMissing, setConfirmMissing] = useState(false);
   const handleValidateBulletins = () => {
     if (!canDirect && !validationOpen) {
       setToastMessage('La validation des bulletins est fermée : elle est ouverte par la Direction.');
@@ -683,9 +724,17 @@ export function BulletinsView({
         setTimeout(() => setToastMessage(null), 7000);
         return;
       }
-      if (!confirm(`Pas encore de notes en : ${list}.\nValider quand même les bulletins de ${selectedClass} ?`)) return;
+      // Fenêtre propre à l'application (pas la boîte grise du navigateur).
+      setConfirmMissing(true);
+      return;
     }
+    doValidate();
+  };
 
+  const doValidate = () => {
+    setConfirmMissing(false);
+    const graded = studentsWithGrades.filter((s) => s.average !== null);
+    if (graded.length === 0) return;
     const laureates = graded
       .filter((s) => (s.rank !== null && s.rank <= 3) || (s.average as number) >= 14)
       .map((s) => {
@@ -904,6 +953,30 @@ export function BulletinsView({
           );
         })}
       </div>
+
+      {confirmMissing && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/55 p-4 print:hidden" role="dialog" aria-modal="true" onClick={() => setConfirmMissing(false)}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 sm:p-6 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 text-lg">⚠️</div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 font-heading">Des matières n’ont pas encore de notes</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Classe de {selectedClass} — {selectedPeriod}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+              {subjectsWithoutNotes.map((s) => (
+                <span key={s} className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900">{s}</span>
+              ))}
+            </div>
+            <p className="text-xs text-slate-600">Valider quand même ? La moyenne générale sera calculée avec les matières déjà notées seulement.</p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setConfirmMissing(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer">Annuler</button>
+              <button type="button" onClick={doValidate} className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer">Valider quand même</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TermChangeNotice term={termNotice} onClose={dismissTermNotice} />
 

@@ -30,6 +30,7 @@ import {
   Search,
 } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
+import { SalaryPlan, computeSalaryPlan } from '@/components/salaries/salary-plan';
 
 export interface SalaryPayment {
   id: string;
@@ -118,8 +119,51 @@ export function SalariesView({
   // numérotés SAL-2026-001, 002… : à chaque ouverture de la page, les salaires enregistrés
   // disparaissaient, et la suppression partait même en base. On ne filtre plus que les entrées
   // vides : AUCUNE donnée réelle n'est jamais retirée automatiquement.
-  const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] =>
-    (Array.isArray(list) ? list : []).filter((s) => s && typeof s === 'object' && s.id);
+  // Un même reçu ne s'affiche qu'une fois : doublons par identifiant ET par contenu identique
+  // (même numéro de reçu, même bénéficiaire, même mois, même montant, même date), ce qui arrivait
+  // quand deux appareils ou un double clic enregistraient le même paiement.
+  const sanitizeSalaries = (list: SalaryPayment[]): SalaryPayment[] => {
+    const seenIds = new Set<string>();
+    const seenSig = new Set<string>();
+    const out: SalaryPayment[] = [];
+    for (const s of Array.isArray(list) ? list : []) {
+      if (!s || typeof s !== 'object' || !s.id) continue;
+      if (seenIds.has(s.id)) continue;
+      const sig = [s.receiptNumber, s.staffName, s.payPeriod, s.netSalary, s.paymentDate].join('|').toLowerCase();
+      if (seenSig.has(sig)) continue;
+      seenIds.add(s.id);
+      seenSig.add(sig);
+      out.push(s);
+    }
+    return out;
+  };
+
+  // Plan salarial : salaire mensuel de chaque membre (donné par la comptabilité), synchronisé en base.
+  const scopedPlanKey = isPilotSchool ? 'schoolflow_staff_salary_plan_v1' : `schoolflow_staff_salary_plan_v1_${schoolSlug}`;
+  const [salaryPlan, setSalaryPlan] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const load = () => {
+      try {
+        const raw = localStorage.getItem(scopedPlanKey);
+        setSalaryPlan(raw ? JSON.parse(raw) : {});
+      } catch {}
+    };
+    load();
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [scopedPlanKey]);
+  const updatePlan = (staffId: string, monthly: number) => {
+    let fresh: Record<string, number> = {};
+    try {
+      fresh = JSON.parse(localStorage.getItem(scopedPlanKey) || '{}') || {};
+    } catch {}
+    const next = { ...fresh, [staffId]: monthly };
+    setSalaryPlan(next);
+    try {
+      localStorage.setItem(scopedPlanKey, JSON.stringify(next));
+      window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+    } catch {}
+  };
 
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
@@ -157,9 +201,9 @@ export function SalariesView({
       setStaffUsers(getLiveStaffUsers(schoolSlug));
       try {
         const stored = localStorage.getItem(scopedSalariesKey);
-        const list = stored ? JSON.parse(stored) : [];
+        const list = sanitizeSalaries(stored ? JSON.parse(stored) : []);
         setSalaries(list);
-        setSelectedSalary(list[0] || EMPTY_SALARY);
+        setSelectedSalary((cur) => list.find((x) => x.id === cur.id) || list[0] || EMPTY_SALARY);
       } catch (e) {}
     };
     window.addEventListener(DATA_UPDATED_EVENT, handleUpdate);
@@ -249,6 +293,7 @@ export function SalariesView({
   // Calcul du net à payer
   const calculatedNet = Math.max(0, Number(baseSalary || 0) + Number(bonuses || 0) - Number(deductions || 0));
 
+  const lastSubmitRef = useRef(0);
   // Soumission du paiement de salaire
   const handleCreateSalary = (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,7 +303,23 @@ export function SalariesView({
       return;
     }
 
+    // Anti-doublon : double clic ou envoi répété du même paiement.
+    const nowMs = Date.now();
+    if (nowMs - lastSubmitRef.current < 1500) return;
+    lastSubmitRef.current = nowMs;
+
     const freshSalaries = readFreshSalaries();
+    const sameAlready = freshSalaries.some(
+      (s) =>
+        s.staffName.trim().toLowerCase() === staffName.trim().toLowerCase() &&
+        s.payPeriod === payPeriod &&
+        s.netSalary === calculatedNet &&
+        s.paymentDate === (paymentDate || todayFr())
+    );
+    if (sameAlready) {
+      showToast('⚠️ Ce paiement existe déjà (même personne, même mois, même montant, même date).');
+      return;
+    }
     const nextIndex = freshSalaries.reduce((max, s) => {
       const m = s.receiptNumber?.match(/(\d+)$/);
       return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -334,9 +395,15 @@ export function SalariesView({
     return salaries.reduce((sum, s) => sum + s.bonuses, 0);
   }, [salaries]);
 
-  const totalDeductions = useMemo(() => {
-    return salaries.reduce((sum, s) => sum + s.deductions, 0);
-  }, [salaries]);
+  const planStaff = useMemo(
+    () =>
+      staffUsers
+        .filter((s) => s.roleId !== 'parent')
+        .map((s) => ({ id: s.id, fullName: s.fullName, matricule: s.matricule, role: s.role }))
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr', { sensitivity: 'base' })),
+    [staffUsers]
+  );
+  const planTotals = useMemo(() => computeSalaryPlan(planStaff, salaryPlan, salaries, PAY_PERIODS), [planStaff, salaryPlan, salaries, PAY_PERIODS]);
 
   const [whatsAppPreviewData, setWhatsAppPreviewData] = useState<{
     imageUrl: string;
@@ -964,15 +1031,15 @@ export function SalariesView({
             </div>
             <div>
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider font-heading">
-                Bulletins & Reçus Émis
+                Reste à verser (année)
               </h3>
-              <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
-                {salaries.length}
+              <div className="text-lg sm:text-xl font-extrabold text-rose-700 font-heading tracking-tight mt-0.5">
+                <Figure>{formatFCFA(planTotals.totalRemaining)}</Figure>
               </div>
             </div>
           </div>
           <span className="text-[11px] text-blue-700 font-semibold bg-blue-50 px-2.5 py-0.5 rounded-md self-start border border-blue-200">
-            Personnel & Enseignants
+            {salaries.length} reçu(s) déjà émis
           </span>
         </div>
 
@@ -1002,18 +1069,27 @@ export function SalariesView({
             </div>
             <div>
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider font-heading">
-                Retenues & Avances
+                Total dû sur l’année
               </h3>
-              <div className="text-xl sm:text-2xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
-                <Figure>{formatFCFA(totalDeductions)}</Figure>
+              <div className="text-lg sm:text-xl font-extrabold text-slate-900 font-heading tracking-tight mt-0.5">
+                <Figure>{formatFCFA(planTotals.totalDue)}</Figure>
               </div>
             </div>
           </div>
           <span className="text-[11px] text-rose-700 font-semibold bg-rose-50 px-2.5 py-0.5 rounded-md self-start border border-rose-200">
-            Avances sur salaire déduites
+            Versé : <Figure>{formatFCFA(planTotals.totalPaid)}</Figure>
           </span>
         </div>
       </div>
+
+      <SalaryPlan
+        staff={planStaff}
+        plan={salaryPlan}
+        onPlanChange={updatePlan}
+        receipts={salaries}
+        periods={PAY_PERIODS}
+        canEdit
+      />
 
       {/* ═══════════════ GRILLE PRINCIPALE (FORMULAIRE À GAUCHE + REÇU AUTOMATIQUE À DROITE) ═══════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start print:hidden">

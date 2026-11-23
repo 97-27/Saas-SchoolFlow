@@ -955,6 +955,19 @@ function showAppUpdateBanner(): void {
     'box-shadow:0 14px 40px rgba(15,23,42,.45);font-family:inherit;' +
     'border:1px solid rgba(16,185,129,.35)';
 
+  // Téléphone : la fenêtre s'affiche AU MILIEU de l'écran (impossible à rater), sur un voile sombre.
+  const isPhone = typeof window !== 'undefined' && window.innerWidth <= 768;
+  if (isPhone) {
+    const veil = document.createElement('div');
+    veil.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.6)';
+    veil.id = 'sf-update-veil';
+    document.body.appendChild(veil);
+    bar.style.cssText =
+      'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:calc(100% - 40px);max-width:380px;z-index:2147483647;' +
+      'background:#0f172a;color:#fff;border-radius:20px;padding:18px 16px;display:flex;flex-direction:column;gap:14px;align-items:stretch;' +
+      'box-shadow:0 20px 60px rgba(0,0,0,.55);font-family:inherit;border:1px solid rgba(16,185,129,.45);text-align:left';
+  }
+
   const left = document.createElement('div');
   left.style.cssText = 'display:flex;gap:10px;align-items:flex-start;min-width:0';
   const dot = document.createElement('span');
@@ -1016,6 +1029,24 @@ function checkAppVersion(): void {
       showAppUpdateBanner();
     })
     .catch(() => {});
+}
+
+let versionWatchStarted = false;
+/**
+ * Surveille les nouvelles versions MÊME sans être connecté (page de connexion comprise) : le message
+ * de mise à jour s'affiche partout, et reste affiché jusqu'au rechargement.
+ */
+export function startVersionWatch(): void {
+  if (typeof window === 'undefined' || versionWatchStarted) return;
+  versionWatchStarted = true;
+  checkAppVersion();
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') checkAppVersion();
+  }, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkAppVersion();
+  });
+  window.addEventListener('focus', () => checkAppVersion());
 }
 
 /**

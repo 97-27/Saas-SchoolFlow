@@ -318,6 +318,34 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
     }
   };
 
+  // Cachets du Directeur et du Fondateur (apparaissent sur les bulletins, à côté de leur signature).
+  const handleExtraStamp = async (field: 'directorStampUrl' | 'founderStampUrl', label: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImageFile(file, 512, 0.85);
+      if (!compressed) return;
+      setSchool((prev) => {
+        const updated = { ...prev, [field]: compressed };
+        saveLiveSchool(updated);
+        return updated;
+      });
+      setActionFeedback(`✓ ${label} enregistré.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err) {
+      console.warn('Erreur chargement cachet:', err);
+    }
+  };
+  const eraseExtraStamp = (field: 'directorStampUrl' | 'founderStampUrl', label: string) => {
+    setSchool((prev) => {
+      const updated = { ...prev, [field]: '' };
+      saveLiveSchool(updated);
+      return updated;
+    });
+    setActionFeedback(`✓ ${label} retiré.`);
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
+
   const handleStampErase = () => {
     setStampPreview('');
     setSchool((prev) => {
@@ -1579,6 +1607,42 @@ export function SettingsForm({ initialSchool }: SettingsFormProps) {
                     </div>
                   </div>
                 </div>
+
+                {/* Cachets du Directeur et du Fondateur pour les bulletins */}
+                {([
+                  { field: 'directorStampUrl' as const, label: 'Cachet du Directeur', id: 'stamp-director' },
+                  { field: 'founderStampUrl' as const, label: 'Cachet du Fondateur', id: 'stamp-founder' },
+                ]).map((s) => {
+                  const url = (school as any)[s.field] as string | undefined;
+                  return (
+                    <div key={s.id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/60 flex items-center gap-3">
+                      <div className="w-16 h-16 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center p-1.5">
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={url} alt={s.label} className="max-h-full max-w-full object-contain" />
+                        ) : (
+                          <FileCheck className="w-6 h-6 text-slate-300" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900">{s.label}</h4>
+                        <p className="text-[11px] text-slate-500">Imprimé sur les bulletins, sous la signature correspondante.</p>
+                        <div className="flex items-center gap-2 pt-1.5">
+                          <label htmlFor={s.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                            <Upload className="w-3 h-3 text-slate-500" />
+                            <span>{url ? 'Changer' : 'Importer'}</span>
+                          </label>
+                          <input id={s.id} type="file" accept="image/*" className="hidden" onChange={(e) => handleExtraStamp(s.field, s.label, e)} />
+                          {url && (
+                            <button type="button" onClick={() => eraseExtraStamp(s.field, s.label)} className="text-[11px] font-medium text-slate-500 hover:text-rose-600 cursor-pointer">
+                              Effacer
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {/* Receipt Legal Notice */}
                 <div className="space-y-1.5 sm:col-span-2">

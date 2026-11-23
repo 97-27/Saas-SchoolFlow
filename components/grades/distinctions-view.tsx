@@ -58,7 +58,7 @@ export function DistinctionsView({
   });
 
   // Cycles Scolaires : Maternelle (P.S. à G.S.), Primaire (CP1 à CM2), Collège (6ème à 3ème), Lycée (2nde à Terminale)
-  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee'>('college');
+  const [selectedCycle, setSelectedCycle] = useState<'all' | 'maternelle' | 'primaire' | 'college' | 'lycee' | 'secondaire'>('secondaire');
   const [selectedClass, setSelectedClass] = useState('6ème');
   // Mêmes libellés que la page Bulletins (« Trimestre 1 »…) : sinon les lauréats validés ne se retrouvent pas.
   const [selectedPeriod, setSelectedPeriod] = useState(() => school?.currentTerm || 'Trimestre 1');
@@ -95,6 +95,8 @@ export function DistinctionsView({
         return ['6ème', '5ème', '4ème', '3ème'];
       case 'lycee':
         return ['2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'];
+      case 'secondaire':
+        return ['6ème', '5ème', '4ème', '3ème', '2nde A', '2nde C', '1ère A', '1ère D', 'Tle A', 'Tle D'];
       case 'all':
       default:
         return [
@@ -121,11 +123,12 @@ export function DistinctionsView({
     }
   }, [selectedCycle]);
 
-  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee') => {
+  const handleCycleChange = (cycle: 'all' | 'maternelle' | 'primaire' | 'college' | 'lycee' | 'secondaire') => {
     setSelectedCycle(cycle);
     if (cycle === 'maternelle') setSelectedClass('Maternelle (G.S.)');
     else if (cycle === 'primaire') setSelectedClass('CM2');
     else if (cycle === 'lycee') setSelectedClass('2nde A');
+    else if (cycle === 'secondaire') setSelectedClass('6ème');
     else if (cycle === 'college') setSelectedClass('6ème');
     else setSelectedClass('6ème');
   };
@@ -589,8 +592,7 @@ export function DistinctionsView({
             { id: 'all' as const, label: 'Tous les Cycles', icon: Layers },
             { id: 'maternelle' as const, label: 'Maternelle (P.S. à G.S.)', icon: Baby },
             { id: 'primaire' as const, label: 'Primaire (CP1 à CM2)', icon: BookOpen },
-            { id: 'college' as const, label: 'Collège (6ème à 3ème)', icon: Building2 },
-            { id: 'lycee' as const, label: 'Lycée (2nde à Terminale)', icon: GraduationCap },
+            { id: 'secondaire' as const, label: 'Secondaire (6ème à Terminale)', icon: GraduationCap },
           ].map((c) => {
             const Icon = c.icon;
             const isActive = selectedCycle === c.id;

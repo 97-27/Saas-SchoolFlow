@@ -195,6 +195,9 @@ export interface School {
   directorName?: string;
   studiesDirectorName?: string;
   stampUrl?: string;
+  /** Cachets propres aux bulletins : un pour le Directeur, un pour le Fondateur (+ le cachet de l'école ci-dessus). */
+  directorStampUrl?: string;
+  founderStampUrl?: string;
   receiptFooterNote?: string;
 
   // Orientation de l'école & Formule de Salutation WhatsApp

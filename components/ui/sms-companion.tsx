@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { startVersionWatch } from '@/lib/data/live-store';
 
 /**
  * Envoi par SMS en plus de WhatsApp, PARTOUT où l'application propose WhatsApp.
@@ -60,6 +61,8 @@ export function SmsCompanion() {
   const [choice, setChoice] = useState<{ url: string; parsed: Parsed } | null>(null);
 
   useEffect(() => {
+    // Message « Nouvelle version » : actif sur toutes les pages, connexion comprise.
+    startVersionWatch();
     let scheduled = false;
     const run = () => {
       scheduled = false;

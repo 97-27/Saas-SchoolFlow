@@ -114,17 +114,36 @@ export function StudentTable({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
+  // On ne recopie la position que si elle diffère (sinon les deux barres se renvoyaient la balle
+  // et le défilement « se bloquait »). La largeur de la barre du haut suit la VRAIE largeur du tableau.
   const handleTopScroll = () => {
-    if (topScrollRef.current && tableContainerRef.current) {
-      tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-    }
+    const a = topScrollRef.current;
+    const b = tableContainerRef.current;
+    if (a && b && b.scrollLeft !== a.scrollLeft) b.scrollLeft = a.scrollLeft;
   };
 
   const handleTableScroll = () => {
-    if (topScrollRef.current && tableContainerRef.current) {
-      topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
-    }
+    const a = topScrollRef.current;
+    const b = tableContainerRef.current;
+    if (a && b && a.scrollLeft !== b.scrollLeft) a.scrollLeft = b.scrollLeft;
   };
+
+  const [tableScrollWidth, setTableScrollWidth] = useState(1200);
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const measure = () => setTableScrollWidth(Math.max(el.scrollWidth, el.clientWidth));
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    const table = el.querySelector('table');
+    if (table) ro?.observe(table);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  });
 
   const normalizeDateToIso = (dStr?: string): string => {
     if (!dStr) return '2026-09-07';
@@ -478,7 +497,7 @@ export function StudentTable({
           className="overflow-x-auto bg-slate-100 border-b border-slate-200 scrollbar-thin"
           style={{ overflowX: 'scroll' }}
         >
-          <div style={{ width: '1200px', height: '14px' }} className="flex items-center px-3 text-[10px] font-semibold text-slate-500">
+          <div style={{ width: `${tableScrollWidth}px`, height: '14px' }} className="flex items-center px-3 text-[10px] font-semibold text-slate-500">
             <span className="shrink-0 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Barre de défilement supérieure (glissez ici vers la gauche ou la droite pour voir toutes les colonnes) →
@@ -493,7 +512,7 @@ export function StudentTable({
         <div
           ref={tableContainerRef}
           onScroll={handleTableScroll}
-          className="max-h-[680px] overflow-y-auto overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="max-h-[680px] overflow-y-auto overflow-x-auto scrollbar-thin"
           style={{ overflowX: 'auto' }}
         >
           <table className="w-full text-left border-collapse min-w-[880px]">
