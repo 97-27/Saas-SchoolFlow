@@ -16,6 +16,7 @@ import {
   DATA_UPDATED_EVENT,
 } from '@/lib/data/live-store';
 import { GenderBadge } from '@/components/ui/badge';
+import { getGradesSubmission, setGradesSubmission, type GradesSubmission } from '@/lib/data/grades-submissions';
 import {
   getGradesConfig,
   saveGradesConfig,
@@ -458,6 +459,52 @@ export function GradesView({
     };
   }, [schoolSlug]);
 
+  // Circuit de validation : l'enseignant clôture sa matière ; clôturée, elle est verrouillée pour
+  // lui (la Direction peut toujours corriger ou rouvrir).
+  const [submission, setSubmission] = useState<GradesSubmission | null>(null);
+  useEffect(() => {
+    const load = () => setSubmission(getGradesSubmission(schoolSlug, selectedClass, selectedSubject, selectedTerm));
+    load();
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [schoolSlug, selectedClass, selectedSubject, selectedTerm]);
+  const submittedLocked = !!submission && !canEditGradesConfig;
+  const inputsLocked = !portalStatus.isOpen || submittedLocked;
+  const actorName = () => {
+    try {
+      const s = JSON.parse(localStorage.getItem('schoolflow_active_session_v2') || 'null');
+      return s?.name || s?.fullName || s?.username || 'Enseignant';
+    } catch {
+      return 'Enseignant';
+    }
+  };
+  const handleSubmitSubject = async () => {
+    if (!portalStatus.isOpen) return;
+    const filled = Object.values(gradesMap).some(
+      (e) => noteValues(e as any, 'int').length > 0 || noteValues(e as any, 'dev').length > 0 || String((e as any)?.comp ?? '').trim() !== ''
+    );
+    if (!filled) {
+      alert('Aucune note saisie : saisissez au moins une note avant de clôturer cette matière.');
+      return;
+    }
+    if (
+      !(await askConfirm(
+        `Clôturer les notes de ${selectedSubject} (${selectedClass}, ${selectedTerm}) ? Vous ne pourrez plus les modifier ; seule la Direction pourra les rouvrir.`,
+        { confirmLabel: 'Clôturer' }
+      ))
+    )
+      return;
+    persistEditedGrades(storageKey);
+    setGradesSubmission(schoolSlug, selectedClass, selectedSubject, selectedTerm, actorName());
+    setSubmission(getGradesSubmission(schoolSlug, selectedClass, selectedSubject, selectedTerm));
+  };
+  const handleReopenSubject = async () => {
+    if (!canEditGradesConfig) return;
+    if (!(await askConfirm(`Rouvrir les notes de ${selectedSubject} (${selectedClass}, ${selectedTerm}) pour correction ?`, { confirmLabel: 'Rouvrir' }))) return;
+    setGradesSubmission(schoolSlug, selectedClass, selectedSubject, selectedTerm, null);
+    setSubmission(null);
+  };
+
   const updateGradesConfig = (patch: Partial<GradesConfig>) => {
     setGradesConfig((prev) => saveGradesConfig(schoolSlug, { ...prev, ...patch }));
   };
@@ -560,6 +607,7 @@ export function GradesView({
     // Notes (pas l'appréciation) : virgule acceptée (« 12,5 » → 12.5), chiffres seulement, de 0
     // à 20. Avant, un téléphone au clavier français pouvait refuser « 12,5 » dans un champ
     // numérique et la note disparaissait sans message.
+    if (inputsLocked) return;
     let val = rawVal;
     if (field !== 'customAppreciation') {
       val = rawVal.replace(',', '.').replace(/[^0-9.]/g, '');
@@ -884,7 +932,7 @@ export function GradesView({
             <button
               type="button"
               onClick={handleResetAllGrades}
-              disabled={!portalStatus.isOpen}
+              disabled={inputsLocked}
               className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs ${
                 portalStatus.isOpen
                   ? 'text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 cursor-pointer'
@@ -899,7 +947,7 @@ export function GradesView({
             <button
               type="button"
               onClick={handleSaveGrades}
-              disabled={!portalStatus.isOpen}
+              disabled={inputsLocked}
               className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all transform shadow-sm ${
                 portalStatus.isOpen
                   ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 shadow-emerald-600/30 hover:-translate-y-0.5 cursor-pointer'
@@ -1058,6 +1106,46 @@ export function GradesView({
           )}
         </div>
       </div>
+
+      {/* Circuit de validation : clôture des notes de la matière par l'enseignant */}
+      {activeTab !== 'pedagogie' && (
+        <div
+          className={`rounded-xl border px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 ${
+            submission ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
+          }`}
+        >
+          <div className="min-w-0">
+            <p className={`text-[12px] font-extrabold font-heading ${submission ? 'text-emerald-900' : 'text-amber-900'}`}>
+              {submission ? '✓ Notes clôturées' : 'Notes en cours de saisie'} — {selectedSubject}, {selectedClass}, {selectedTerm}
+            </p>
+            <p className={`text-[11px] mt-0.5 ${submission ? 'text-emerald-800' : 'text-amber-800'}`}>
+              {submission
+                ? `Clôturées par ${submission.by} le ${new Date(submission.at).toLocaleDateString('fr-FR')} à ${new Date(submission.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}. ${
+                    canEditGradesConfig ? 'Vous pouvez les corriger ou les rouvrir.' : 'Elles sont verrouillées ; seule la Direction peut les rouvrir.'
+                  }`
+                : "Quand toutes vos notes sont saisies, clôturez la matière : la validation des bulletins n'est possible qu'une fois toutes les matières clôturées."}
+            </p>
+          </div>
+          {!submission && portalStatus.isOpen && (
+            <button
+              type="button"
+              onClick={handleSubmitSubject}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 cursor-pointer"
+            >
+              <Lock className="w-3.5 h-3.5" /> Clôturer mes notes
+            </button>
+          )}
+          {submission && canEditGradesConfig && (
+            <button
+              type="button"
+              onClick={handleReopenSubject}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-emerald-900 bg-white border border-emerald-300 hover:bg-emerald-100 cursor-pointer"
+            >
+              <Unlock className="w-3.5 h-3.5" /> Rouvrir pour correction
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Alerte si le portail est fermé */}
       {!portalStatus.isOpen && activeTab !== 'pedagogie' && (
@@ -1560,7 +1648,7 @@ export function GradesView({
                                 maxLength={5}
                                 value={entry[f] ?? ''}
                                 placeholder="—"
-                                disabled={!portalStatus.isOpen}
+                                disabled={inputsLocked}
                                 onChange={(e) => handleNoteChange(g.studentId, f, e.target.value)}
                                 className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border rounded-lg disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                               />
@@ -1576,7 +1664,7 @@ export function GradesView({
                                 maxLength={5}
                                 value={entry[f] ?? ''}
                                 placeholder="—"
-                                disabled={!portalStatus.isOpen}
+                                disabled={inputsLocked}
                                 onChange={(e) => handleNoteChange(g.studentId, f, e.target.value)}
                                 className="w-14 px-1.5 py-1 text-xs text-center font-mono font-bold text-slate-900 bg-white border rounded-lg disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed border-amber-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                               />
@@ -1591,7 +1679,7 @@ export function GradesView({
                               maxLength={5}
                               value={entry.comp}
                               placeholder="—"
-                              disabled={!portalStatus.isOpen}
+                              disabled={inputsLocked}
                               onChange={(e) => handleNoteChange(g.studentId, 'comp', e.target.value)}
                               className="w-16 px-1.5 py-1 text-xs text-center font-mono font-black text-emerald-950 bg-white border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                             />
@@ -1622,7 +1710,7 @@ export function GradesView({
                               type="text"
                               value={entry.customAppreciation || g.appreciation}
                               placeholder="Appréciation du professeur..."
-                              disabled={!portalStatus.isOpen}
+                              disabled={inputsLocked}
                               onChange={(e) => handleNoteChange(g.studentId, 'customAppreciation', e.target.value)}
                               className="w-full px-2.5 py-1 text-xs text-slate-800 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                             />

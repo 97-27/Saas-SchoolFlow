@@ -6,6 +6,7 @@ import html2canvas from 'html2canvas';
 import { Student, School } from '@/lib/data/types';
 import { noteValues } from '@/lib/data/grades-config';
 import { defaultSchool } from '@/lib/data/mock-data';
+import { getGradesSubmission } from '@/lib/data/grades-submissions';
 import { getLiveStaffUsers, type StaffUser, getLiveSchool, getLiveStudents, DATA_UPDATED_EVENT, saveValidatedClassRankings, getValidatedClassRankings, getGradesPortalStatus, saveGradesPortalStatus, isAveragesOpen, isBulletinValidationOpen, type GradesPortalStatus } from '@/lib/data/live-store';
 import { WindowControl } from '@/components/grades/window-control';
 import { useActiveTerm, TermChangeNotice } from '@/components/grades/use-active-term';
@@ -704,6 +705,24 @@ export function BulletinsView({
         };
   const bulletinFor = (stu: any) => (bulletinVisible ? stu : maskStudent(stu));
 
+  // Circuit de validation : matières dont l'enseignant n'a pas encore clôturé les notes.
+  const [closureTick, setClosureTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setClosureTick((n) => n + 1);
+    window.addEventListener(DATA_UPDATED_EVENT, bump);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, bump);
+  }, []);
+  const unclosedSubjects = useMemo(
+    () => subjectsList.filter((sub) => !getGradesSubmission(schoolSlug, selectedClass, sub.name, selectedPeriod)).map((s) => s.name),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subjectsList, schoolSlug, selectedClass, selectedPeriod, closureTick]
+  );
+  // Matières à signaler avant validation : sans notes, ou notes non clôturées.
+  const notReadySubjects = useMemo(
+    () => Array.from(new Set([...subjectsWithoutNotes, ...unclosedSubjects])),
+    [subjectsWithoutNotes, unclosedSubjects]
+  );
+
   const [confirmMissing, setConfirmMissing] = useState(false);
   const handleValidateBulletins = () => {
     if (!canDirect && !validationOpen) {
@@ -717,10 +736,10 @@ export function BulletinsView({
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
-    if (subjectsWithoutNotes.length > 0) {
-      const list = subjectsWithoutNotes.join(', ');
+    if (notReadySubjects.length > 0) {
+      const list = notReadySubjects.join(', ');
       if (!canDirect) {
-        setToastMessage(`Validation impossible : pas encore de notes en ${list}. Chaque matière doit avoir ses notes avant la validation.`);
+        setToastMessage(`Validation impossible : notes non clôturées en ${list}. Chaque enseignant doit clôturer ses notes (page Saisie des notes) avant la validation.`);
         setTimeout(() => setToastMessage(null), 7000);
         return;
       }
@@ -960,12 +979,12 @@ export function BulletinsView({
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 text-lg">⚠️</div>
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 font-heading">Des matières n’ont pas encore de notes</h3>
+                <h3 className="text-base font-extrabold text-slate-900 font-heading">Des matières ne sont pas prêtes (notes absentes ou non clôturées)</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Classe de {selectedClass} — {selectedPeriod}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-              {subjectsWithoutNotes.map((s) => (
+              {notReadySubjects.map((s) => (
                 <span key={s} className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900">{s}</span>
               ))}
             </div>
@@ -1004,11 +1023,15 @@ export function BulletinsView({
           closedLabel="FERMÉE"
           onChange={(p) => updatePortal({ ...(p.mode ? { validationMode: p.mode } : {}), ...(p.start !== undefined ? { validationStart: p.start } : {}), ...(p.end !== undefined ? { validationEnd: p.end } : {}) })}
         />
-        {subjectsWithoutNotes.length > 0 && (
-          <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-            Pas encore de notes en : {subjectsWithoutNotes.join(', ')}.
-          </p>
-        )}
+        <p
+          className={`text-[11px] font-semibold rounded-lg px-2.5 py-1.5 border ${
+            unclosedSubjects.length === 0 ? 'text-emerald-800 bg-emerald-50 border-emerald-200' : 'text-amber-800 bg-amber-50 border-amber-200'
+          }`}
+        >
+          Matières clôturées : {subjectsList.length - unclosedSubjects.length} / {subjectsList.length}
+          {unclosedSubjects.length > 0 && ` — en attente : ${unclosedSubjects.join(', ')}`}
+          {subjectsWithoutNotes.length > 0 && ` · sans aucune note : ${subjectsWithoutNotes.join(', ')}`}.
+        </p>
         {!validatedRankingsForClass && (
           <p className="text-[11px] text-slate-500">
             Les moyennes n’apparaissent sur le bulletin qu’une fois les bulletins de cette classe validés pour {selectedPeriod}.
