@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import { schoolPhonesText } from '@/lib/data/school-phones';
@@ -78,14 +79,14 @@ const EMPTY_SALARY: SalaryPayment = {
 
 const MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
-/** Mois de paie de l'année scolaire (Septembre → Août), déduits de l'année de l'école. */
+/** Mois de paie de l'année scolaire (Septembre → Mai : 9 mois), déduits de l'année de l'école. */
 function payPeriodsFor(academicYear: string | undefined): string[] {
   const m = String(academicYear || '').match(/^(\d{4})-(\d{4})$/);
   const y1 = m ? Number(m[1]) : new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
   const y2 = y1 + 1;
   return [
     ...['Septembre', 'Octobre', 'Novembre', 'Décembre'].map((mo) => `${mo} ${y1}`),
-    ...['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août'].map((mo) => `${mo} ${y2}`),
+    ...['Janvier', 'Février', 'Mars', 'Avril', 'Mai'].map((mo) => `${mo} ${y2}`),
   ];
 }
 
@@ -165,6 +166,48 @@ export function SalariesView({
     } catch {}
   };
 
+  // Membres ajoutés à la main par la Direction/Comptabilité (en plus du personnel créé dans Administration).
+  const extrasKey = `schoolflow_staff_salary_plan_v1_${schoolSlug || 'epc-manoi'}_extras`;
+  const [extraStaff, setExtraStaff] = useState<{ id: string; fullName: string; role: string; phone?: string }[]>([]);
+  useEffect(() => {
+    const load = () => {
+      try {
+        const raw = localStorage.getItem(extrasKey);
+        const arr = raw ? JSON.parse(raw) : [];
+        setExtraStaff(Array.isArray(arr) ? arr.filter((x) => x && x.id && x.fullName) : []);
+      } catch {}
+    };
+    load();
+    window.addEventListener(DATA_UPDATED_EVENT, load);
+    return () => window.removeEventListener(DATA_UPDATED_EVENT, load);
+  }, [extrasKey]);
+  const saveExtras = (list: { id: string; fullName: string; role: string; phone?: string }[]) => {
+    setExtraStaff(list);
+    try {
+      localStorage.setItem(extrasKey, JSON.stringify(list));
+      window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+    } catch {}
+  };
+  const addExtraMember = (fullName: string, role: string, monthly: number) => {
+    const name = fullName.trim();
+    if (!name) return;
+    const id = `extra_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    let fresh: { id: string; fullName: string; role: string; phone?: string }[] = [];
+    try {
+      fresh = JSON.parse(localStorage.getItem(extrasKey) || '[]') || [];
+    } catch {}
+    saveExtras([...fresh, { id, fullName: name, role: role.trim() || 'Enseignant' }]);
+    if (monthly > 0) updatePlan(id, monthly);
+  };
+  const editExtraMember = (id: string, fullName: string, role: string) => {
+    saveExtras(extraStaff.map((x) => (x.id === id ? { ...x, fullName: fullName.trim() || x.fullName, role: role.trim() || x.role } : x)));
+  };
+  const removeExtraMember = async (id: string) => {
+    const m = extraStaff.find((x) => x.id === id);
+    if (!(await askConfirm(`Retirer « ${m?.fullName || 'ce membre'} » du plan salarial ? Ses reçus déjà émis ne sont pas supprimés.`))) return;
+    saveExtras(extraStaff.filter((x) => x.id !== id));
+  };
+
   const [salaries, setSalaries] = useState<SalaryPayment[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -178,6 +221,10 @@ export function SalariesView({
     return [];
   });
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const allStaff = useMemo(
+    () => [...staffUsers.filter((s) => s.roleId !== 'parent'), ...(extraStaff as unknown as StaffUser[])],
+    [staffUsers, extraStaff]
+  );
 
   // État du reçu actuellement sélectionné pour l'aperçu et l'impression
   const [selectedSalary, setSelectedSalary] = useState<SalaryPayment>(() => salaries[0] || EMPTY_SALARY);
@@ -274,8 +321,9 @@ export function SalariesView({
   const handleStaffSelect = (staffId: string) => {
     setSelectedStaffId(staffId);
     if (!staffId) return;
-    const found = staffUsers.find((s) => s.id === staffId);
+    const found = allStaff.find((s) => s.id === staffId);
     if (found) {
+      if (Number(salaryPlan[staffId]) > 0) setBaseSalary(Number(salaryPlan[staffId]));
       const parts = found.fullName.split(' ');
       if (parts[0] === 'Mr' || parts[0] === 'M.' || parts[0] === 'Mme' || parts[0] === 'Mlle') {
         setCivility(parts[0] === 'M.' ? 'Mr' : (parts[0] as any));
@@ -358,8 +406,8 @@ export function SalariesView({
     setNotes('');
   };
 
-  const handleDeleteSalary = (id: string, recNum: string) => {
-    if (confirm(`Confirmez-vous la suppression du reçu de salaire ${recNum} ?`)) {
+  const handleDeleteSalary = async (id: string, recNum: string) => {
+    if (await askConfirm(`Confirmez-vous la suppression du reçu de salaire ${recNum} ?`)) {
       const filtered = readFreshSalaries().filter((s) => s.id !== id);
       saveSalaries(filtered);
       if (selectedSalary.id === id && filtered.length > 0) {
@@ -397,11 +445,10 @@ export function SalariesView({
 
   const planStaff = useMemo(
     () =>
-      staffUsers
-        .filter((s) => s.roleId !== 'parent')
+      allStaff
         .map((s) => ({ id: s.id, fullName: s.fullName, matricule: s.matricule, role: s.role }))
         .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr', { sensitivity: 'base' })),
-    [staffUsers]
+    [allStaff]
   );
   const planTotals = useMemo(() => computeSalaryPlan(planStaff, salaryPlan, salaries, PAY_PERIODS), [planStaff, salaryPlan, salaries, PAY_PERIODS]);
 
@@ -1086,6 +1133,10 @@ export function SalariesView({
         staff={planStaff}
         plan={salaryPlan}
         onPlanChange={updatePlan}
+        extraIds={extraStaff.map((x) => x.id)}
+        onAddMember={addExtraMember}
+        onEditMember={editExtraMember}
+        onRemoveMember={removeExtraMember}
         receipts={salaries}
         periods={PAY_PERIODS}
         canEdit
@@ -1113,7 +1164,7 @@ export function SalariesView({
 
           <form onSubmit={handleCreateSalary} className="space-y-4">
             {/* Sélection d'un membre existant */}
-            {staffUsers.length > 0 && (
+            {allStaff.length > 0 && (
               <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
                 <label className="text-[11px] font-bold text-emerald-950 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -1126,7 +1177,7 @@ export function SalariesView({
                     className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-slate-900 cursor-pointer shadow-2xs appearance-none"
                   >
                     <option value="">Sélectionner un enseignant / membre du personnel...</option>
-                    {staffUsers.map((s) => (
+                    {allStaff.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.fullName} — {s.role || s.subjectOrGrade || 'Personnel'} ({s.phone || 'Sans tél'})
                       </option>

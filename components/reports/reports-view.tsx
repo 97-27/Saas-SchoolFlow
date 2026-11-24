@@ -117,10 +117,16 @@ export function ReportsView({
   // Secondaire = collège + lycée réunis (de la 6ème à la Terminale)
   const isSecondaire = (grade: string) => isCollege(grade) || isLycee(grade);
 
-  // Montants alignés sur la caisse : exigible = inscription + scolarité nette ; encaissé = inscription
-  // + versements ; reste = exigible − encaissé (jamais négatif) ; taux = encaissé / exigible (max 100 %).
-  const exigibleOf = (s: Student) => (s.registrationFee || 0) + (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount || 0);
-  const collectedOf = (s: Student) => (s.registrationFee || 0) + (s.paidAmount || 0);
+  // Exigible = scolarité nette ; reste = exigible − encaissé (jamais négatif) ; taux = encaissé / exigible (max 100 %).
+  // SCOLARITÉ UNIQUEMENT (jamais les droits d'inscription, frais annexes, tenue, cantine…) : l'encaissé
+  // d'un élève est la somme de ses versements 1 à 5 — exactement ce qu'additionnent les blocs des
+  // échéances —, ou son total payé quand le détail par versement n'a jamais été saisi.
+  const exigibleOf = (s: Student) => (s.netAmount !== undefined ? s.netAmount : s.tuitionAmount || 0);
+  const collectedOf = (s: Student) => {
+    const inst: any = s.installments;
+    const fromInst = inst ? [1, 2, 3, 4, 5].reduce((sum, i) => sum + (Number(inst[`versement${i}`]?.amount) || 0), 0) : 0;
+    return fromInst > 0 ? fromInst : Number(s.paidAmount) || 0;
+  };
   const rateOf = (collected: number, exigible: number) => (exigible > 0 ? Math.min(100, (collected / exigible) * 100).toFixed(1) : '100');
 
   // Filtrage des données
@@ -169,7 +175,7 @@ export function ReportsView({
     const periodLabel = `Bilan Financier Annuel (${school.academicYear || currentAcademicYear()})`;
     const periodSub = 'Recouvrement cumulé de toutes les échéances sur toute l’année scolaire (Septembre à Juin)';
 
-    // Montant exigible/encaissé = droits d'inscription + scolarité UNIQUEMENT (jamais les
+    // Montant exigible/encaissé = scolarité UNIQUEMENT (jamais les droits d'inscription, les
     // frais annexes ou la tenue, qui ne sont pas des montants chiffrés sur la fiche élève).
     // Le montant exigible omettait jusqu'ici les droits d'inscription (toujours réglés dès
     // l'inscription, cf. registrationFee), ne comptant que la scolarité — ce qui sous-évaluait

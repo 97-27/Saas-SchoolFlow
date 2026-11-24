@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { sortStudentsAlpha } from '@/lib/utils/alpha';
@@ -193,8 +194,8 @@ export function HealthView({ initialStudents, school, schoolSlug }: HealthViewPr
     showToast(`✓ Incident enregistré pour ${stu.fullName}.`);
   };
 
-  const handleDeleteIncident = (id: string) => {
-    if (!confirm('Supprimer définitivement cet incident du journal ?')) return;
+  const handleDeleteIncident = async (id: string) => {
+    if (!(await askConfirm('Supprimer définitivement cet incident du journal ?'))) return;
     deleteHealthIncident(id, schoolSlug);
     setIncidents((prev) => prev.filter((i) => i.id !== id));
   };

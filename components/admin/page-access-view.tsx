@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 
 import React, { useEffect, useState } from 'react';
 import { KeyRound, Lock, RotateCcw } from 'lucide-react';
@@ -87,9 +88,9 @@ export function PageAccessView({ schoolSlug }: { schoolSlug: string }) {
     setSaved(`Poste « ${name} » créé. Cochez ses pages, puis créez ses membres dans Administration & Codes.`);
     window.setTimeout(() => setSaved(''), 5000);
   };
-  const deletePoste = (id: string) => {
+  const deletePoste = async (id: string) => {
     if (!canEdit) return;
-    if (!confirm(`Supprimer le poste « ${labelOf(id)} » ? Ses membres ne pourront plus se connecter.`)) return;
+    if (!(await askConfirm(`Supprimer le poste « ${labelOf(id)} » ? Ses membres ne pourront plus se connecter.`))) return;
     const next = { ...overrides };
     delete next[id];
     setOverrides(next);

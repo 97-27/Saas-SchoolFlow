@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -815,8 +816,8 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
       <div className="grid grid-cols-3 gap-1.5">
         <button
           disabled={busy}
-          onClick={() => {
-            if (!a.blocked && !window.confirm(`Suspendre l’accès de « ${school.name} » ? Les utilisateurs connectés seront coupés en moins d’une minute.`)) return;
+          onClick={async () => {
+            if (!a.blocked && !(await askConfirm(`Suspendre l’accès de « ${school.name} » ? Les utilisateurs connectés seront coupés en moins d’une minute.`))) return;
             send({ blocked: !a.blocked, blockMessage: message }, a.blocked ? 'Accès rétabli.' : 'Accès suspendu.');
           }}
           className={`py-2 rounded-lg font-extrabold text-white text-[11px] cursor-pointer ${a.blocked ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'}`}
@@ -825,12 +826,12 @@ function AccessPanel({ school, onChanged, onError }: { school: PlatformSchoolRow
         </button>
         <button
           disabled={busy}
-          onClick={() => {
+          onClick={async () => {
             if (a.deleteAt) {
               void fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete-cancel', slug: school.slug }) }).then(() => onChanged('Suppression annulée.'));
               return;
             }
-            if (!window.confirm(`BANNIR « ${school.name} » ?\n\nL’école verra un compte à rebours de 60 secondes puis TOUTES ses données seront supprimées définitivement.`)) return;
+            if (!(await askConfirm(`BANNIR « ${school.name} » ?\n\nL’école verra un compte à rebours de 60 secondes puis TOUTES ses données seront supprimées définitivement.`))) return;
             setBusy(true);
             fetch('/api/platform/overview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', slug: school.slug }) })
               .then((r) => r.json().catch(() => null))

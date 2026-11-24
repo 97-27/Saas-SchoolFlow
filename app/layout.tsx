@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import { SmsCompanion } from "@/components/ui/sms-companion";
+import { ConfirmHost } from "@/components/ui/confirm-dialog";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -44,6 +45,7 @@ export default function RootLayout({
       <body className="h-full bg-[#f8fafc] text-slate-900 antialiased font-sans flex flex-col">
         {children}
         <SmsCompanion />
+        <ConfirmHost />
       </body>
     </html>
   );

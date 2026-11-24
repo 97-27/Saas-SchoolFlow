@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { sortStudentsAlpha } from '@/lib/utils/alpha';
@@ -599,8 +600,8 @@ export function GradesView({
   };
 
   // Vider toutes les notes de la classe
-  const handleResetAllGrades = () => {
-    if (confirm(`Voulez-vous réinitialiser et effacer toutes les notes de la classe de ${selectedClass} en ${selectedSubject} (${selectedTerm}) ?`)) {
+  const handleResetAllGrades = async () => {
+    if (await askConfirm(`Voulez-vous réinitialiser et effacer toutes les notes de la classe de ${selectedClass} en ${selectedSubject} (${selectedTerm}) ?`)) {
       const emptyMap: Record<string, GradeEntry> = {};
       classStudents.forEach((stu) => {
         emptyMap[stu.id] = {

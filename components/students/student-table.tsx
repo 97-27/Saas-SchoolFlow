@@ -1308,6 +1308,15 @@ export function StudentTable({
               const notes = viewingStudent.notes || '';
               const fraisAnnexesPaid = notes.includes('Frais Annexes (Payé)');
               const tenuePaid = notes.includes('Tenue tout cousu (Payé)');
+              // Détail saisi à l'inscription : « FA=total|versé|date ; TC=total|versé|date »
+              const detail = (tag: string) => {
+                const m = notes.match(new RegExp(`${tag}=(\\d+)\\|(\\d+)\\|`));
+                return m ? { total: Number(m[1]), paid: Number(m[2]) } : null;
+              };
+              const fa = detail('FA');
+              const tc = detail('TC');
+              const faRest = fa && fa.total > fa.paid ? fa.total - fa.paid : 0;
+              const tcRest = tc && tc.total > tc.paid ? tc.total - tc.paid : 0;
               return (
                 <div className="grid grid-cols-2 gap-2.5">
                   <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
@@ -1319,7 +1328,7 @@ export function StudentTable({
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                         : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}>
-                      {fraisAnnexesPaid ? 'Payé ✓' : 'Non payé'}
+                      {fraisAnnexesPaid ? 'Payé ✓' : faRest > 0 ? `Reste ${faRest.toLocaleString('fr-FR')} F` : 'Non payé'}
                     </span>
                   </div>
                   <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2 ${
@@ -1331,7 +1340,7 @@ export function StudentTable({
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                         : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}>
-                      {tenuePaid ? 'Payé ✓' : 'Non payé'}
+                      {tenuePaid ? 'Payé ✓' : tcRest > 0 ? `Reste ${tcRest.toLocaleString('fr-FR')} F` : 'Non payé'}
                     </span>
                   </div>
                 </div>

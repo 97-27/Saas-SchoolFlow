@@ -19,6 +19,7 @@ import {
 } from '@/lib/data/versement-reminders';
 import { Printer, Download, Search, Wallet, MessageCircle, RefreshCw } from 'lucide-react';
 import { Figure } from '@/components/ui/masked-figure';
+import { ServiceMonthsTracker } from '@/components/finance/service-months-tracker';
 
 interface VersementsViewProps {
   school: School;
@@ -99,6 +100,7 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
   /** Somme « pour toute la liste », par versement. */
   const [bulk, setBulk] = useState<Record<number, string>>({});
   const [toast, setToast] = useState<string | null>(null);
+  const [tab, setTab] = useState<'scolarite' | 'internat' | 'cantine' | 'transport'>('scolarite');
   const [selected, setSelected] = useState<number[]>([1]);
   const [grade, setGrade] = useState('all');
   const [search, setSearch] = useState('');
@@ -236,8 +238,40 @@ export function VersementsView({ school, schoolSlug }: VersementsViewProps) {
     a.remove();
   };
 
+  const tabBar = (
+    <div className="no-print flex flex-wrap gap-2 bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs">
+      {(
+        [
+          ['scolarite', '🎓 Scolarité'],
+          ['internat', '🛏️ Internat'],
+          ['cantine', '🍽️ Cantine'],
+          ['transport', '🚌 Transport'],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setTab(id)}
+          className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-colors ${tab === id ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (tab !== 'scolarite') {
+    return (
+      <div className="space-y-5">
+        {tabBar}
+        <ServiceMonthsTracker key={tab} service={tab} schoolSlug={schoolSlug} schoolName={schoolState.name} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
+      {tabBar}
       <style>{`
         .print-only { display: none; }
         @media print {

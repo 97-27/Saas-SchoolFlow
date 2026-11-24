@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -388,8 +389,8 @@ export function ExpensesView({ school, schoolSlug }: ExpensesViewProps) {
   };
 
   // Supprimer une dépense
-  const handleDeleteExpense = (id: string, ref: string) => {
-    if (confirm(`Confirmez-vous la suppression de la dépense ${ref} ?`)) {
+  const handleDeleteExpense = async (id: string, ref: string) => {
+    if (await askConfirm(`Confirmez-vous la suppression de la dépense ${ref} ?`)) {
       const newList = expenses.filter((e) => e.id !== id);
       saveExpensesToStorage(newList);
       if (selectedExpenseForReceipt?.id === id) {

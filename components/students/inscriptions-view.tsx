@@ -68,6 +68,111 @@ function dossierNumber(s: { studentNumber?: string; id?: string } | null | undef
   return !isNaN(n) && n > 0 && n < 100000 ? n : 0;
 }
 
+/** Frais annexes / tenue : montant total, somme versée et date du versement. */
+type OtherFee = { total: number; paid: number; date: string };
+type OtherFees = { fa: OtherFee; tc: OtherFee };
+const EMPTY_FEE: OtherFee = { total: 0, paid: 0, date: '' };
+const feeSettled = (f: OtherFee) => f.paid > 0 && f.paid >= f.total;
+const feeRemaining = (f: OtherFee) => Math.max(0, f.total - f.paid);
+const hasFeeDetail = (f: OtherFee) => f.total > 0 || f.paid > 0;
+const isoToFr = (iso: string) => {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || '';
+};
+/** « Versé 5 000 F sur 10 000 F — reste 5 000 F (le 12/11/2026) » */
+function feeLine(f: OtherFee, legacyPaid: boolean): string {
+  if (!hasFeeDetail(f)) return legacyPaid ? 'Payé' : 'Non payé';
+  const date = f.date ? ` (le ${isoToFr(f.date)})` : '';
+  if (feeSettled(f)) return `Soldé : ${formatFCFA(f.paid)}${date}`;
+  return `Versé ${formatFCFA(f.paid)} sur ${formatFCFA(f.total)} — reste ${formatFCFA(feeRemaining(f))}${date}`;
+}
+const FEE_DETAIL_PREFIX = 'Détail autres frais :';
+function serializeOtherFees(o: OtherFees): string {
+  const part = (f: OtherFee) => `${f.total}|${f.paid}|${f.date}`;
+  return `${FEE_DETAIL_PREFIX} FA=${part(o.fa)} ; TC=${part(o.tc)}`;
+}
+function parseOtherFees(notes: string | undefined): OtherFees {
+  const line = String(notes || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.startsWith(FEE_DETAIL_PREFIX));
+  const out: OtherFees = { fa: { ...EMPTY_FEE }, tc: { ...EMPTY_FEE } };
+  if (!line) return out;
+  const grab = (tag: string): OtherFee => {
+    const m = line.match(new RegExp(`${tag}=(\\d+)\\|(\\d+)\\|([0-9-]*)`));
+    return m ? { total: Number(m[1]), paid: Number(m[2]), date: m[3] } : { ...EMPTY_FEE };
+  };
+  return { fa: grab('FA'), tc: grab('TC') };
+}
+
+/** Ligne détaillée d'un frais annexe sur le reçu : total, versé, reste, date. */
+function FeeReceiptLine({ fee }: { fee: OtherFee }) {
+  const settled = feeSettled(fee);
+  return (
+    <div className="text-[10px] leading-snug space-y-0.5">
+      <div className="font-bold text-slate-700">Total : {formatFCFA(fee.total)}</div>
+      <div className="font-bold text-emerald-800">Versé : {formatFCFA(fee.paid)}{fee.date ? ` le ${isoToFr(fee.date)}` : ''}</div>
+      <div className={`font-black ${settled ? 'text-emerald-900' : 'text-rose-700'}`}>{settled ? '✓ Soldé' : `Reste : ${formatFCFA(feeRemaining(fee))}`}</div>
+    </div>
+  );
+}
+
+/** Saisie d'un frais annexe : total, somme versée, date — le reste se calcule seul. */
+function FeeEditor({ title, fee, legacyPaid, today, onChange }: { title: string; fee: OtherFee; legacyPaid: boolean; today: string; onChange: (p: Partial<OtherFee>) => void }) {
+  const detail = hasFeeDetail(fee);
+  const settled = detail ? feeSettled(fee) : legacyPaid;
+  const num = (v: string) => Math.max(0, parseInt(v.replace(/\D/g, ''), 10) || 0);
+  return (
+    <div className={`p-2.5 rounded-xl bg-white border space-y-2 ${settled ? 'border-emerald-300' : 'border-slate-200'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-slate-800">{title}</span>
+        <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${settled ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>
+          {settled ? '✓ Soldé' : detail ? `Reste ${formatFCFA(feeRemaining(fee))}` : '✕ Non payé'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="space-y-0.5">
+          <span className="text-[10px] font-bold text-slate-500">Montant total</span>
+          <input
+            inputMode="numeric"
+            autoComplete="off"
+            value={fee.total ? String(fee.total) : ''}
+            placeholder="0"
+            onChange={(e) => onChange({ total: num(e.target.value) })}
+            className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold"
+          />
+        </label>
+        <label className="space-y-0.5">
+          <span className="text-[10px] font-bold text-slate-500">Somme versée</span>
+          <input
+            inputMode="numeric"
+            autoComplete="off"
+            value={fee.paid ? String(fee.paid) : ''}
+            placeholder="0"
+            onChange={(e) => {
+              const paid = num(e.target.value);
+              onChange({ paid, date: paid > 0 && !fee.date ? today : fee.date });
+            }}
+            className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-mono font-bold text-emerald-800"
+          />
+        </label>
+      </div>
+      <div className="flex items-end gap-2">
+        <label className="flex-1 space-y-0.5">
+          <span className="text-[10px] font-bold text-slate-500">Date du versement</span>
+          <input type="date" value={fee.date} onChange={(e) => onChange({ date: e.target.value })} className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs" />
+        </label>
+        {fee.total > 0 && !feeSettled(fee) && (
+          <button type="button" onClick={() => onChange({ paid: fee.total, date: fee.date || today })} className="px-2 py-1.5 rounded-lg bg-emerald-600 text-white text-[10.5px] font-extrabold">
+            Tout payé
+          </button>
+        )}
+      </div>
+      {detail && !settled && <p className="text-[10.5px] font-bold text-rose-700">Reste à payer : {formatFCFA(feeRemaining(fee))}</p>}
+    </div>
+  );
+}
+
 export function InscriptionsView({
   initialStudents,
   school,
@@ -220,6 +325,13 @@ export function InscriptionsView({
   const [isTransport, setIsTransport] = useState<boolean>(false);
   const [fraisAnnexesPaid, setFraisAnnexesPaid] = useState<boolean>(false);
   const [tenueCousuePaid, setTenueCousuePaid] = useState<boolean>(false);
+  const [otherFees, setOtherFees] = useState<OtherFees>({ fa: { ...EMPTY_FEE }, tc: { ...EMPTY_FEE } });
+  const setFee = (key: 'fa' | 'tc', patch: Partial<OtherFee>) => {
+    const f = { ...otherFees[key], ...patch };
+    setOtherFees({ ...otherFees, [key]: f });
+    if (key === 'fa') setFraisAnnexesPaid(feeSettled(f));
+    else setTenueCousuePaid(feeSettled(f));
+  };
 
   // État de suppression définitive d'un reçu existant
   const [showDeleteReceiptModal, setShowDeleteReceiptModal] = useState<boolean>(false);
@@ -565,6 +677,7 @@ export function InscriptionsView({
         if (draft.isTransport !== undefined) setIsTransport(draft.isTransport);
         if (draft.fraisAnnexesPaid !== undefined) setFraisAnnexesPaid(draft.fraisAnnexesPaid);
         if (draft.tenueCousuePaid !== undefined) setTenueCousuePaid(draft.tenueCousuePaid);
+        if (draft.otherFees && draft.otherFees.fa && draft.otherFees.tc) setOtherFees(draft.otherFees);
         if (draft.registrationFee !== undefined) setRegistrationFee(draft.registrationFee);
         if (draft.tuitionAmount !== undefined) setTuitionAmount(draft.tuitionAmount);
         if (draft.discountAmount !== undefined) setDiscountAmount(draft.discountAmount);
@@ -629,6 +742,7 @@ export function InscriptionsView({
       isTransport,
       fraisAnnexesPaid,
       tenueCousuePaid,
+      otherFees,
       registrationFee,
       tuitionAmount,
       discountAmount,
@@ -676,6 +790,7 @@ export function InscriptionsView({
     isTransport,
     fraisAnnexesPaid,
     tenueCousuePaid,
+    otherFees,
     registrationFee,
     tuitionAmount,
     discountAmount,
@@ -777,6 +892,7 @@ export function InscriptionsView({
       // réapparaître la case décochée en rouvrant un dossier déjà marqué payé.
       setFraisAnnexesPaid(stu.notes?.includes('Frais Annexes (Payé)') || false);
       setTenueCousuePaid(stu.notes?.includes('Tenue tout cousu (Payé)') || false);
+      setOtherFees(parseOtherFees(stu.notes));
 
       // Mémoriser l'état initial des versements pour verrouiller l'enregistrement tant qu'aucun nouveau versement n'est saisi
       const initTotal = (Number(v1?.amount) || 0) + (Number(v2?.amount) || 0) + (Number(v3?.amount) || 0) + (Number(v4?.amount) || 0) + (Number(v5?.amount) || 0);
@@ -861,6 +977,7 @@ export function InscriptionsView({
     setPaymentMethod('especes');
     setFraisAnnexesPaid(false);
     setTenueCousuePaid(false);
+    setOtherFees({ fa: { ...EMPTY_FEE }, tc: { ...EMPTY_FEE } });
     setIsIdPickerOpen(false);
   };
 
@@ -1092,8 +1209,9 @@ export function InscriptionsView({
         ...String(currentSelectedStudent?.notes || '')
           .split('\n')
           .map((l) => l.trim())
-          .filter((l) => l && !/^Autres frais\s*:/i.test(l)),
+          .filter((l) => l && !/^Autres frais\s*:/i.test(l) && !l.startsWith(FEE_DETAIL_PREFIX)),
         `Autres frais : Frais Annexes (${fraisAnnexesPaid ? 'Payé' : 'Non payé'}), Tenue tout cousu (${tenueCousuePaid ? 'Payé' : 'Non payé'})`,
+        ...(hasFeeDetail(otherFees.fa) || hasFeeDetail(otherFees.tc) ? [serializeOtherFees(otherFees)] : []),
       ].join('\n'),
       updatedAt: new Date().toISOString(),
     };
@@ -1529,9 +1647,9 @@ export function InscriptionsView({
     const servicesList = [
       {
         title: '🎒 Frais Annexes',
-        active: fraisAnnexesPaid,
-        activeLabel: 'Payé',
-        inactiveLabel: 'Non payé',
+        active: hasFeeDetail(otherFees.fa) ? feeSettled(otherFees.fa) : fraisAnnexesPaid,
+        activeLabel: hasFeeDetail(otherFees.fa) ? feeLine(otherFees.fa, true) : 'Payé',
+        inactiveLabel: hasFeeDetail(otherFees.fa) ? feeLine(otherFees.fa, false) : 'Non payé',
         activeBg: '#d1fae5',
         activeText: '#065f46',
         inactiveBg: '#ffe4e6',
@@ -1539,9 +1657,9 @@ export function InscriptionsView({
       },
       {
         title: '👕 Tenue tout cousu',
-        active: tenueCousuePaid,
-        activeLabel: 'Payé',
-        inactiveLabel: 'Non payé',
+        active: hasFeeDetail(otherFees.tc) ? feeSettled(otherFees.tc) : tenueCousuePaid,
+        activeLabel: hasFeeDetail(otherFees.tc) ? feeLine(otherFees.tc, true) : 'Payé',
+        inactiveLabel: hasFeeDetail(otherFees.tc) ? feeLine(otherFees.tc, false) : 'Non payé',
         activeBg: '#d1fae5',
         activeText: '#065f46',
         inactiveBg: '#ffe4e6',
@@ -1572,7 +1690,7 @@ export function InscriptionsView({
       ctx.fillText(srv.title, bx + cardW / 2, cardY + 20);
 
       // Badge Statut
-      const badgeW = 200;
+      const badgeW = 490;
       const badgeH = 22;
       const badgeX = bx + (cardW - badgeW) / 2;
       const badgeY = cardY + 28;
@@ -2135,7 +2253,9 @@ export function InscriptionsView({
               {/* 1. Frais Annexes */}
               <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
                 <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">🎒 Frais Annexes</span>
-                {fraisAnnexesPaid ? (
+                {hasFeeDetail(otherFees.fa) ? (
+                  <FeeReceiptLine fee={otherFees.fa} />
+                ) : fraisAnnexesPaid ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
                     <Check className="w-3 h-3 text-emerald-700" />
                     Payé
@@ -2151,7 +2271,9 @@ export function InscriptionsView({
               {/* 2. Tenue tout cousu */}
               <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white border border-slate-200 text-center shadow-2xs">
                 <span className="text-[10px] uppercase font-bold text-slate-600 mb-1">👕 Tenue tout cousu</span>
-                {tenueCousuePaid ? (
+                {hasFeeDetail(otherFees.tc) ? (
+                  <FeeReceiptLine fee={otherFees.tc} />
+                ) : tenueCousuePaid ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
                     <Check className="w-3 h-3 text-emerald-700" />
                     Payé
@@ -2926,40 +3048,10 @@ export function InscriptionsView({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* 1. Frais Annexes */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
-                  <span className="text-xs font-bold text-slate-800">
-                    Frais Annexes
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setFraisAnnexesPaid(!fraisAnnexesPaid)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      fraisAnnexesPaid
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}
-                  >
-                    {fraisAnnexesPaid ? '✓ Payé' : '✕ Non payé'}
-                  </button>
-                </div>
+                <FeeEditor title="🎒 Frais Annexes" fee={otherFees.fa} legacyPaid={fraisAnnexesPaid} today={getTodayDateStr()} onChange={(p) => setFee('fa', p)} />
 
                 {/* 2. Tenue tout cousu */}
-                <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-200">
-                  <span className="text-xs font-bold text-slate-800">
-                    Tenue tout cousu
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setTenueCousuePaid(!tenueCousuePaid)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      tenueCousuePaid
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}
-                  >
-                    {tenueCousuePaid ? '✓ Payé' : '✕ Non payé'}
-                  </button>
-                </div>
+                <FeeEditor title="👕 Tenue tout cousu" fee={otherFees.tc} legacyPaid={tenueCousuePaid} today={getTodayDateStr()} onChange={(p) => setFee('tc', p)} />
               </div>
             </div>
 
@@ -3535,7 +3627,7 @@ export function InscriptionsView({
               <div className="flex items-center justify-between pb-2 border-b border-slate-200/70">
                 <span className="text-slate-500">Autres frais :</span>
                 <span className="font-semibold text-slate-800 text-right">
-                  Frais Annexes ({fraisAnnexesPaid ? 'Payé ✓' : 'Non payé ✕'}) • Tenue tout cousu ({tenueCousuePaid ? 'Payé ✓' : 'Non payé ✕'})
+                  Frais Annexes ({feeLine(otherFees.fa, fraisAnnexesPaid)}) • Tenue tout cousu ({feeLine(otherFees.tc, tenueCousuePaid)})
                 </span>
               </div>
 

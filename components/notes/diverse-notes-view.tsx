@@ -1,4 +1,5 @@
 'use client';
+import { askConfirm } from '@/components/ui/confirm-dialog';
 import { currentAcademicYear } from '@/lib/data/school-calendar';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -472,8 +473,8 @@ export function DiverseNotesView({ school, schoolSlug }: DiverseNotesViewProps) 
   };
 
   // Supprimer une note
-  const handleDeleteNote = (id: string, noteNumber: string) => {
-    if (confirm(`Confirmez-vous la suppression définitive de la note ${noteNumber} ?`)) {
+  const handleDeleteNote = async (id: string, noteNumber: string) => {
+    if (await askConfirm(`Confirmez-vous la suppression définitive de la note ${noteNumber} ?`)) {
       const newList = notes.filter((n) => n.id !== id);
       saveNotesToStorage(newList);
       if (selectedNoteForView?.id === id) {
