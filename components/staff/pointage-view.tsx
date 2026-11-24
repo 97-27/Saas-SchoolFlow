@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock,
   LogIn,
@@ -208,10 +208,37 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, date, schoolSlug]);
 
+  // Horloge de l'écran : vérifiée chaque seconde (et aussitôt que le téléphone se réveille, que
+  // l'onglet redevient visible ou que le réseau revient — les minuteurs d'un onglet en veille sont
+  // gelés par le navigateur, d'où les boutons qui restaient fermés après l'heure). L'écran n'est
+  // redessiné que lorsque la minute change.
+  const lastMinuteRef = useRef('');
+  const offsetRef = useRef(0);
+  offsetRef.current = offset;
   useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 5000);
-    return () => clearInterval(t);
-  }, []);
+    const check = (forceRefresh = false) => {
+      const minute = String(Math.floor((Date.now() + offsetRef.current) / 60000));
+      if (minute !== lastMinuteRef.current) {
+        lastMinuteRef.current = minute;
+        setTick((n) => n + 1);
+      }
+      if (forceRefresh && document.visibilityState === 'visible') load(date || undefined);
+    };
+    const t = setInterval(() => check(), 1000);
+    const wake = () => check(true);
+    window.addEventListener('focus', wake);
+    window.addEventListener('pageshow', wake);
+    window.addEventListener('online', wake);
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', wake);
+      window.removeEventListener('pageshow', wake);
+      window.removeEventListener('online', wake);
+      document.removeEventListener('visibilitychange', wake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, date]);
 
   useEffect(() => {
     if (!message) return;

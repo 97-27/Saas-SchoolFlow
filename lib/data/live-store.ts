@@ -536,6 +536,10 @@ const SERVICE_DATA_KEYS: Record<ServiceName, { subs: string; pay: string }> = {
   transport: { subs: 'transportSubscriptions', pay: 'transportPayments' },
 };
 const SERVICE_BASELINE_PREFIX = 'schoolflow_service_baseline_v1_';
+// Envois Internat / Cantine / Transport en cours : tant qu'il y en a, la synchronisation
+// n'écrase pas les écrans avec une réponse de la base qui n'en tient pas compte.
+let serviceWritesInFlight = 0;
+let lastServiceWriteAt = 0;
 
 function readServiceBaseline(slug: string): Record<string, any> | null {
   try {
@@ -660,6 +664,8 @@ function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, next
 
   rememberServiceBaseline(slug, { [keys.subs]: nextSubs, [keys.pay]: nextPay });
   if (changes.length === 0) return;
+  serviceWritesInFlight++;
+  lastServiceWriteAt = Date.now();
   applyServiceChanges(changes, slug)
     .then((res) => {
       if (res.legacy) return;
@@ -671,7 +677,13 @@ function saveServiceDiff(slug: string, service: ServiceName, nextSubs: any, next
       if (!res.ok) notifySaveFailure(label);
       if (res.skipped.length > 0) console.warn(`${label} : élève(s) introuvable(s) dans la base`, res.skipped);
     })
-    .catch(() => notifySaveFailure(label));
+    .catch(() => notifySaveFailure(label))
+    .finally(() => {
+      serviceWritesInFlight = Math.max(0, serviceWritesInFlight - 1);
+      lastServiceWriteAt = Date.now();
+      // Relecture de la base une fois l'envoi terminé : l'écran montre ce qui est vraiment enregistré.
+      if (serviceWritesInFlight === 0) setTimeout(() => syncSchoolDataWithServer(slug, true), 1500);
+    });
 }
 
 const SERVICE_LOCAL_PATTERNS: Record<'internat' | 'cantine' | 'transport', { word: string; prefixes: string[] }> = {
@@ -1139,7 +1151,7 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
       // Une erreur au milieu (mémoire du téléphone pleine…) ne doit plus bloquer la mise à jour de
       // l'écran sans bruit : elle est signalée, et les saisies en attente sont renvoyées quand même.
       try {
-        applyServerData(slug, result);
+        applyServerData(slug, result, now);
       } catch (e) {
         reportClientError(e, 'Synchronisation');
       }
@@ -1152,7 +1164,7 @@ export function syncSchoolDataWithServer(slug: string, force: boolean = false): 
     });
 }
 
-function applyServerData(slug: string, result: any): void {
+function applyServerData(slug: string, result: any, startedAt: number = Infinity): void {
       if (result && result.success && result.data) {
         const data = result.data;
         let hasChanges = false;
@@ -1606,6 +1618,12 @@ function applyServerData(slug: string, result: any): void {
           }
         }
 
+        // Une saisie Internat / Cantine / Transport est en cours d'enregistrement (ou vient de
+        // l'être pendant que cette réponse voyageait) : la réponse de la base est alors PÉRIMÉE.
+        // L'appliquer remettait à zéro, sous les yeux de l'utilisateur, les mois qu'il venait de
+        // cocher. On saute donc ces sections ; une nouvelle synchronisation suit la fin de l'envoi.
+        const serviceBusy = serviceWritesInFlight > 0 || lastServiceWriteAt >= startedAt;
+        if (!serviceBusy) {
         // 6. Synchroniser Transport
         if (data.transportSubscriptions) {
           localStorage.setItem(isPilot ? 'schoolflow_transport_subscriptions_v2' : `schoolflow_transport_subscriptions_v2_${slug}`, JSON.stringify(data.transportSubscriptions));
@@ -1652,6 +1670,7 @@ function applyServerData(slug: string, result: any): void {
         }
         // Ce que la base vient de renvoyer devient l'état de référence des services.
         rememberServiceBaseline(slug, data);
+        }
 
         if (hasChanges) {
           broadcastLiveUpdate({ action: 'server_hydrated', slug });

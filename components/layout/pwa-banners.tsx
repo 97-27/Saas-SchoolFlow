@@ -28,12 +28,13 @@ export function PwaBanners() {
     setIsIos(ios);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
     setStandalone(isStandalone);
-    // Fermé : revient à la prochaine connexion tant que l'application n'est pas installée.
+    // Fermé : le bandeau revient à CHAQUE ouverture / connexion tant que l'application n'est pas
+    // installée (la fermeture ne vaut que pour la page en cours, rien n'est mémorisé).
+    setDismissed(false);
     try {
-      setDismissed(sessionStorage.getItem(INSTALL_DISMISS_KEY) === '1');
-    } catch {
-      setDismissed(false);
-    }
+      sessionStorage.removeItem(INSTALL_DISMISS_KEY);
+      localStorage.removeItem(INSTALL_DISMISS_KEY);
+    } catch {}
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setInstallEvent(e);
@@ -60,9 +61,6 @@ export function PwaBanners() {
 
   const dismiss = () => {
     setDismissed(true);
-    try {
-      sessionStorage.setItem(INSTALL_DISMISS_KEY, '1');
-    } catch {}
   };
 
   const install = async () => {
@@ -75,10 +73,12 @@ export function PwaBanners() {
       setInstallEvent(null);
       return;
     }
-    if (isIos) setShowIosHelp(true);
+    // iPhone, ou navigateur qui n'a pas (encore) proposé l'installation : marche à suivre.
+    setShowIosHelp(true);
   };
 
-  const canOffer = !standalone && !dismissed && (installEvent || isIos);
+  // Affiché partout où l'application n'est pas installée (même sans bouton d'installation natif).
+  const canOffer = !standalone && !dismissed;
 
   return (
     <>
@@ -120,18 +120,32 @@ export function PwaBanners() {
       {showIosHelp && (
         <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowIosHelp(false)}>
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-extrabold text-slate-900 font-heading">Installer sur iPhone / iPad</p>
-            <ol className="text-xs text-slate-700 space-y-2 list-decimal pl-4">
-              <li>
-                Touchez le bouton <span className="inline-flex items-center gap-1 font-bold text-slate-900"><Share className="w-3.5 h-3.5" /> Partager</span> en bas de Safari.
-              </li>
-              <li>
-                Choisissez <span className="font-bold text-slate-900">« Sur l’écran d’accueil »</span>.
-              </li>
-              <li>
-                Touchez <span className="font-bold text-slate-900">Ajouter</span>. School Flow Africa apparaît comme une application.
-              </li>
-            </ol>
+            <p className="text-sm font-extrabold text-slate-900 font-heading">{isIos ? 'Installer sur iPhone / iPad' : "Installer l'application"}</p>
+            {isIos ? (
+              <ol className="text-xs text-slate-700 space-y-2 list-decimal pl-4">
+                <li>
+                  Touchez le bouton <span className="inline-flex items-center gap-1 font-bold text-slate-900"><Share className="w-3.5 h-3.5" /> Partager</span> en bas de Safari.
+                </li>
+                <li>
+                  Choisissez <span className="font-bold text-slate-900">« Sur l’écran d’accueil »</span>.
+                </li>
+                <li>
+                  Touchez <span className="font-bold text-slate-900">Ajouter</span>. School Flow Africa apparaît comme une application.
+                </li>
+              </ol>
+            ) : (
+              <ol className="text-xs text-slate-700 space-y-2 list-decimal pl-4">
+                <li>
+                  Ouvrez le menu du navigateur (<span className="font-bold text-slate-900">⋮</span> en haut à droite de Chrome / Edge).
+                </li>
+                <li>
+                  Choisissez <span className="font-bold text-slate-900">« Installer l’application »</span> ou <span className="font-bold text-slate-900">« Ajouter à l’écran d’accueil »</span>.
+                </li>
+                <li>
+                  Confirmez. School Flow Africa apparaît comme une application.
+                </li>
+              </ol>
+            )}
             <button
               type="button"
               onClick={() => {

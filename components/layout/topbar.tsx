@@ -215,8 +215,13 @@ export function Topbar({
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+  // Changement du code d'accès personnel (depuis « Modifier mes coordonnées »).
+  const [editAuthCode, setEditAuthCode] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   const startEditingProfile = () => {
+    setEditAuthCode(String((activeSession as any).authCode || '').toUpperCase());
+    setCodeError('');
     setEditFullName(activeSession.fullName || '');
     setEditEmail(activeSession.email || '');
     setEditPhone(activeSession.phone || '');
@@ -230,11 +235,34 @@ export function Topbar({
     const cleanEmail = editEmail.trim();
     const cleanPhone = editPhone.trim();
 
+    // Nouveau code d'accès : au moins 6 caractères, jamais déjà utilisé par un autre membre.
+    const currentCode = String((activeSession as any).authCode || '').trim().toUpperCase();
+    const newCode = editAuthCode.trim().toUpperCase();
+    const wantsCodeChange = activeSession.roleId !== 'parent' && !!currentCode && !!newCode && newCode !== currentCode;
+    if (wantsCodeChange) {
+      if (newCode.length < 6 || /\s/.test(newCode)) {
+        setCodeError('Le code doit contenir au moins 6 caractères, sans espace.');
+        return;
+      }
+      const staffNow = getLiveStaffUsers(schoolSlug);
+      if (!staffNow.some((s) => s.authCode?.trim().toUpperCase() === currentCode)) {
+        setCodeError("Votre compte n'est pas dans la liste du personnel : demandez le changement à la Direction (page Administration & Codes).");
+        return;
+      }
+      const clash = staffNow.some((s) => s.authCode?.trim().toUpperCase() === newCode);
+      if (clash) {
+        setCodeError('Ce code est déjà utilisé par un autre membre. Choisissez-en un autre.');
+        return;
+      }
+    }
+    setCodeError('');
+
     const updated = {
       ...activeSession,
       fullName: cleanName || activeSession.fullName,
       email: cleanEmail,
       phone: cleanPhone,
+      ...(wantsCodeChange ? { authCode: newCode } : {}),
     };
     setActiveSession(updated);
 
@@ -247,6 +275,7 @@ export function Topbar({
         pureName: cleanName || parsed.pureName,
         email: cleanEmail,
         phone: cleanPhone,
+        ...(wantsCodeChange ? { authCode: newCode } : {}),
       };
       localStorage.setItem('schoolflow_active_session_v2', JSON.stringify(newSession));
     } catch (e) {}
@@ -265,15 +294,20 @@ export function Topbar({
               fullName: cleanName || s.fullName,
               email: cleanEmail,
               phone: cleanPhone,
+              ...(wantsCodeChange ? { authCode: newCode } : {}),
             };
           }
           return s;
         });
-        saveLiveStaffUsers(
-          nextStaff,
-          schoolSlug,
-          nextStaff.filter((s) => s.authCode?.toUpperCase() === sessionAuthCode)
-        );
+        const mineAfter = (s: { authCode?: string }) => s.authCode?.toUpperCase() === (wantsCodeChange ? newCode : sessionAuthCode);
+        saveLiveStaffUsers(nextStaff, schoolSlug, nextStaff.filter(mineAfter), wantsCodeChange);
+        if (wantsCodeChange) {
+          // L'avatar est classé par code d'accès : il suit le nouveau code.
+          try {
+            const av = localStorage.getItem(`schoolflow_user_avatar_${sessionAuthCode}`);
+            if (av) localStorage.setItem(`schoolflow_user_avatar_${newCode}`, av);
+          } catch {}
+        }
       }
     } catch (e) {}
 
@@ -292,7 +326,11 @@ export function Topbar({
       phone: cleanPhone,
     });
 
-    setProfileSuccessMsg('Vos coordonnées ont été enregistrées avec succès !');
+    setProfileSuccessMsg(
+      wantsCodeChange
+        ? `Enregistré. Votre nouveau code d'accès est ${newCode} : utilisez-le à votre prochaine connexion.`
+        : 'Vos coordonnées ont été enregistrées avec succès !'
+    );
     setIsEditingContact(false);
     setTimeout(() => {
       setProfileSuccessMsg(null);
@@ -1026,6 +1064,30 @@ export function Topbar({
                           className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 focus:border-emerald-600 focus:outline-none"
                         />
                       </div>
+
+                      {activeSession.roleId !== 'parent' && (activeSession as any).authCode && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold text-slate-700 block">
+                            Code d’accès personnel
+                          </label>
+                          <input
+                            type="text"
+                            value={editAuthCode}
+                            onChange={(e) => {
+                              setEditAuthCode(e.target.value.toUpperCase());
+                              setCodeError('');
+                            }}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="Au moins 6 caractères"
+                            className="w-full px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-xs font-mono font-bold text-slate-900 uppercase focus:border-emerald-600 focus:outline-none"
+                          />
+                          <p className="text-[10px] text-slate-500 leading-snug">
+                            Gardez-le secret. Modifiez-le ici pour en choisir un nouveau ; il servira à votre prochaine connexion.
+                          </p>
+                          {codeError && <p className="text-[11px] font-bold text-rose-700">{codeError}</p>}
+                        </div>
+                      )}
 
                       <div className="flex items-center gap-2 pt-1">
                         <button

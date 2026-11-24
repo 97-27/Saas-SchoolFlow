@@ -232,13 +232,8 @@ export function RealtimeNotifier({ schoolSlug = 'epc-manoi' }: RealtimeNotifierP
     setQueue(rest);
   }, [toast, queue]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => {
-      setToast(null);
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [toast]);
+  // Les alertes (versement reçu, pointage, nouvelle inscription…) RESTENT affichées jusqu'à ce que
+  // la personne les ferme : avant, elles disparaissaient au bout de 4 s et pouvaient être manquées.
 
   const showNotifPrompt = (canHearPayments || canHearPointage) && notifPermission === 'default' && !notifPromptDismissed;
   const dismissPrompt = () => {
