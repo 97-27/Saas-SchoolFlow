@@ -76,6 +76,11 @@ export function saveStudentToSupabase(
   return callData<boolean | 'conflict'>('saveStudent', [student, schoolSlug, identityOnly, expectedVersements], false);
 }
 
+/** Enregistre seulement la photo (adresse https) d'un élève ; true = bien écrite en base. */
+export function saveStudentPhotoToSupabase(studentId: string, photoUrl: string, schoolSlug: string): Promise<boolean> {
+  return callData<boolean>('saveStudentPhoto', [studentId, photoUrl, schoolSlug], false);
+}
+
 export function deleteStudentFromSupabase(identifier: string, schoolSlug: string): Promise<boolean> {
   return callData('deleteStudent', [identifier, schoolSlug], false);
 }

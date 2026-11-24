@@ -667,7 +667,8 @@ export async function saveStudentToSupabase(
       guardian_name: student.guardianName,
       guardian_phone: student.guardianPhone,
       whatsapp_phone: student.whatsappPhone,
-      avatar_url: student.avatar,
+      // Jamais d'effacement de la photo par une fiche ancienne sans photo.
+      ...(student.avatar ? { avatar_url: student.avatar } : {}),
       enrollment_type: student.enrollmentType || 'nouveau',
       registration_fee: student.registrationFee || 0,
       tuition_amount: student.tuitionAmount || 0,
@@ -845,7 +846,8 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
         guardian_name: student.guardianName || 'Parent',
         guardian_phone: student.guardianPhone || '+225 00 00 00 00',
         whatsapp_phone: student.whatsappPhone || null,
-        avatar_url: student.avatar || null,
+        // Jamais d'effacement de la photo par une fiche ancienne sans photo.
+        ...(student.avatar ? { avatar_url: student.avatar } : {}),
         enrollment_type: student.enrollmentType || 'nouveau',
         registration_fee: student.registrationFee || 0,
         tuition_amount: student.tuitionAmount || 0,
@@ -880,6 +882,33 @@ export async function batchUpsertStudents(students: Student[], schoolSlug: strin
     return ok;
   } catch (err) {
     console.error('Erreur batchUpsertStudents catch:', err);
+    return false;
+  }
+}
+
+/**
+ * Enregistre UNIQUEMENT la photo d'un élève (colonne avatar_url) : aucune autre donnée de la fiche
+ * n'est lue ni écrite, donc une copie ancienne de la fiche ne peut ni effacer cette photo ni
+ * écraser un versement. Renvoie true seulement si une ligne a bien été modifiée.
+ */
+export async function saveStudentPhotoToSupabase(schoolSlug: string, studentId: string, photoUrl: string): Promise<boolean> {
+  if (!isSupabaseConfigured || !schoolSlug || !studentId || !photoUrl) return false;
+  try {
+    const schoolId = await getSchoolId(schoolSlug);
+    if (!schoolId) return false;
+    const { data, error } = await supabase
+      .from('students')
+      .update({ avatar_url: photoUrl, updated_at: new Date().toISOString() })
+      .eq('id', studentId)
+      .eq('school_id', schoolId)
+      .select('id');
+    if (error) {
+      console.error('Erreur saveStudentPhotoToSupabase:', error.message);
+      return false;
+    }
+    return Array.isArray(data) && data.length > 0;
+  } catch (err) {
+    console.error('Erreur saveStudentPhotoToSupabase catch:', err);
     return false;
   }
 }

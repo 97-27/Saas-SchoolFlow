@@ -6,6 +6,7 @@ import {
   getSchoolSubscriptionInfo,
   getStudentsFromSupabase,
   saveStudentToSupabase,
+  saveStudentPhotoToSupabase,
   deleteStudentFromSupabase,
   getInvoicesFromSupabase,
   saveInvoiceToSupabase,
@@ -149,6 +150,14 @@ export async function POST(request: NextRequest) {
           expectedVersements: Array.isArray(args[3]) ? args[3].slice(0, 5).map((v: any) => Number(v) || 0) : null,
         })
       );
+
+    case 'saveStudentPhoto': {
+      // args : [identifiant de l'élève, adresse https de la photo, slug]
+      if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();
+      const photoUrl = String(args[1] || '');
+      if (!/^https:\/\//i.test(photoUrl) || photoUrl.length > 2000) return ok(false);
+      return ok(await saveStudentPhotoToSupabase(slug, String(args[0] || ''), photoUrl));
+    }
 
     case 'saveInvoice': {
       if (!hasRole(session, STUDENT_WRITE_ROLES)) return deny();

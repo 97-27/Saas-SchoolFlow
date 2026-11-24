@@ -9,6 +9,7 @@ export const PROTECTED_STUDENT_NUMBERS = new Set<string>();
 import {
   saveSchoolToSupabase,
   saveStudentToSupabase,
+  saveStudentPhotoToSupabase,
   saveInvoiceToSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
@@ -1390,6 +1391,28 @@ function applyServerData(slug: string, result: any, startedAt: number = Infinity
               }
             }
           });
+
+          // Photos enregistrées sur cet appareil et pas encore revues dans la réponse de la base :
+          // elles restent affichées (une réponse partie avant l'enregistrement ne doit pas les
+          // faire disparaître), puis la file est vidée dès que la base les renvoie.
+          {
+            const pendingPhotos = readPendingPhotos(slug);
+            let photosChanged = false;
+            Object.keys(pendingPhotos).forEach((id) => {
+              const entry = pendingPhotos[id];
+              const st = studentMap.get(id);
+              if (!st || Date.now() - entry.at > PHOTO_PENDING_MAX_AGE_MS || st.avatar === entry.url) {
+                delete pendingPhotos[id];
+                photosChanged = true;
+                return;
+              }
+              studentMap.set(id, { ...st, avatar: entry.url });
+            });
+            if (photosChanged) writePendingPhotos(slug, pendingPhotos);
+            if (Object.values(pendingPhotos).some((e) => !e.sent)) {
+              setTimeout(() => void flushPendingPhotos(slug), 500);
+            }
+          }
 
           if (recoveredSaves.length > 0) {
             const map = readPendingSaves(slug);
@@ -2989,6 +3012,118 @@ export function updateRegisteredStudent(
   } catch (error) {
     console.error('Erreur mise à jour live-store student:', error);
   }
+}
+
+/* ==========================================================================
+   PHOTOS DES ÉLÈVES
+   La photo est téléversée dans le stockage (adresse https légère) puis enregistrée seule sur la
+   fiche, avec vérification. Tant que la base ne l'a pas renvoyée, elle reste dans une file locale :
+   elle ne disparaît plus à la synchronisation et est renvoyée automatiquement si l'envoi a échoué.
+   ========================================================================== */
+
+type PendingPhoto = { url: string; sent: boolean; at: number };
+const PHOTO_PENDING_PREFIX = 'schoolflow_photo_pending_v1_';
+const PHOTO_PENDING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+let photoFlushRunning = false;
+
+function readPendingPhotos(slug: string): Record<string, PendingPhoto> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(`${PHOTO_PENDING_PREFIX}${slug}`) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writePendingPhotos(slug: string, map: Record<string, PendingPhoto>): void {
+  try {
+    if (Object.keys(map).length === 0) localStorage.removeItem(`${PHOTO_PENDING_PREFIX}${slug}`);
+    else localStorage.setItem(`${PHOTO_PENDING_PREFIX}${slug}`, JSON.stringify(map));
+  } catch (e) {}
+}
+
+/** Identifiants des élèves dont la photo n'est pas encore confirmée par la base. */
+export function getUnsentPhotoIds(slug: string): string[] {
+  if (typeof window === 'undefined') return [];
+  const map = readPendingPhotos(slug);
+  return Object.keys(map).filter((id) => !map[id].sent);
+}
+
+/** Renvoie les photos pas encore enregistrées en base. true = plus rien en attente d'envoi. */
+export async function flushPendingPhotos(slug: string): Promise<boolean> {
+  if (typeof window === 'undefined' || photoFlushRunning) return false;
+  photoFlushRunning = true;
+  let allSent = true;
+  try {
+    const todo = Object.entries(readPendingPhotos(slug)).filter(([, e]) => !e.sent);
+    for (const [id, entry] of todo) {
+      let ok = false;
+      try {
+        ok = await saveStudentPhotoToSupabase(id, entry.url, slug);
+      } catch (e) {}
+      if (ok) {
+        const fresh = readPendingPhotos(slug);
+        if (fresh[id] && fresh[id].url === entry.url) {
+          fresh[id] = { ...fresh[id], sent: true };
+          writePendingPhotos(slug, fresh);
+        }
+      } else {
+        allSent = false;
+      }
+    }
+  } finally {
+    photoFlushRunning = false;
+  }
+  return allSent;
+}
+
+/**
+ * Enregistre la photo (adresse https déjà téléversée) d'un élève : affichée tout de suite sur cet
+ * appareil, puis écrite seule en base. Renvoie true seulement si la base l'a bien enregistrée.
+ */
+export async function saveStudentPhoto(student: Student, avatarUrl: string, schoolSlug: string = 'epc-manoi'): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  const slug = schoolSlug || 'epc-manoi';
+  const now = new Date().toISOString();
+
+  // Fiche provisoire (pas encore enregistrée en base) : chemin habituel de la fiche élève.
+  if (!UUID_PATTERN.test(student.id)) {
+    updateRegisteredStudent({ ...student, avatar: avatarUrl, updatedAt: now }, slug);
+    return true;
+  }
+
+  try {
+    const keys = [`${STUDENTS_STORAGE_KEY}_${slug}`];
+    if (slug === 'epc-manoi') keys.push(STUDENTS_STORAGE_KEY);
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const list: Student[] = JSON.parse(raw);
+      let touched = false;
+      const next = list.map((s) => {
+        if (s && s.id === student.id) {
+          touched = true;
+          return { ...s, avatar: avatarUrl };
+        }
+        return s;
+      });
+      if (touched) localStorage.setItem(key, JSON.stringify(next));
+    }
+  } catch (e) {}
+
+  const pending = readPendingPhotos(slug);
+  pending[student.id] = { url: avatarUrl, sent: false, at: Date.now() };
+  writePendingPhotos(slug, pending);
+
+  broadcastLiveUpdate({ action: 'student_updated', student: { ...student, avatar: avatarUrl }, invoice: null, schoolSlug: slug });
+
+  // Un seul nouvel essai automatique si la première écriture échoue.
+  let ok = await flushPendingPhotos(slug);
+  if (!ok) {
+    await new Promise((r) => setTimeout(r, 1200));
+    ok = await flushPendingPhotos(slug);
+  }
+  return ok;
 }
 
 /* ==========================================================================

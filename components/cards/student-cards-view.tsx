@@ -3,7 +3,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CreditCard, Printer, ScanLine, Search, Camera, CameraOff, MessageCircle, CheckCircle2, AlertTriangle, Users, X } from 'lucide-react';
 import type { School, Student } from '@/lib/data/types';
-import { DATA_UPDATED_EVENT, getLiveSchool, getLiveStudents, updateRegisteredStudent } from '@/lib/data/live-store';
+import {
+  DATA_UPDATED_EVENT,
+  flushPendingPhotos,
+  getLiveSchool,
+  getLiveStudents,
+  getUnsentPhotoIds,
+  saveStudentPhoto,
+  updateRegisteredStudent,
+} from '@/lib/data/live-store';
+import { uploadAvatarToSupabase } from '@/lib/supabase/remote';
 import { STUDENT_WRITE_ROLES } from '@/lib/auth/roles';
 import {
   CARD_CSS,
@@ -341,34 +350,74 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
 
 /* ═════════════════════════ ONGLET PHOTOS ═════════════════════════ */
 
-/** Réduit la photo choisie (appareil local) à 360 px de large max, en JPEG : légère pour la base et la carte. */
-function resizePhoto(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Lecture impossible'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Image illisible'));
-      img.onload = () => {
-        const max = 360;
-        const ratio = Math.min(1, max / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
+/**
+ * Réduit la photo (fichier de l'appareil ou photo déjà enregistrée) à 480 px max, en JPEG : légère
+ * pour le stockage et la carte. L'orientation de l'appareil photo est respectée quand le
+ * navigateur le permet (photos de téléphone), et un fond blanc remplace la transparence des PNG.
+ */
+async function resizePhoto(source: Blob): Promise<Blob> {
+  const max = 480;
+  let width = 0;
+  let height = 0;
+  let draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void = () => {};
+  let release = () => {};
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(source, { imageOrientation: 'from-image' } as any);
+      width = bmp.width;
+      height = bmp.height;
+      draw = (ctx, w, h) => ctx.drawImage(bmp, 0, 0, w, h);
+      release = () => bmp.close?.();
+    } catch {
+      width = 0;
+    }
+  }
+  if (!width) {
+    const url = URL.createObjectURL(source);
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Image illisible'));
+      el.src = url;
+    }).finally(() => URL.revokeObjectURL(url));
+    width = img.naturalWidth || img.width;
+    height = img.naturalHeight || img.height;
+    draw = (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h);
+  }
+  if (!width || !height) throw new Error('Image illisible');
+  const ratio = Math.min(1, max / Math.max(width, height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width * ratio));
+  canvas.height = Math.max(1, Math.round(height * ratio));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Image illisible');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  draw(ctx, canvas.width, canvas.height);
+  release();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+  if (!blob) throw new Error('Image illisible');
+  return blob;
+}
+
+/** Téléverse la photo (3 essais) et renvoie son adresse https, ou null si le serveur refuse. */
+async function uploadPhoto(blob: Blob, studentId: string): Promise<string | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const url = await uploadAvatarToSupabase(blob, `${studentId}.jpg`);
+    if (url && /^https:\/\//i.test(url)) return url;
+    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+  }
+  return null;
 }
 
 function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: string; canEdit: boolean }) {
   const [grade, setGrade] = useState('Toutes les classes');
   const [query, setQuery] = useState('');
   const [onlyMissing, setOnlyMissing] = useState(false);
-  const [busyId, setBusyId] = useState('');
+  const [busyIds, setBusyIds] = useState<string[]>([]);
+  const [failedIds, setFailedIds] = useState<string[]>([]);
+  const [unsentIds, setUnsentIds] = useState<string[]>([]);
+  const [optimizing, setOptimizing] = useState<{ done: number; total: number } | null>(null);
   const [msg, setMsg] = useState('');
   const grades = useMemo(() => ['Toutes les classes', ...Array.from(new Set(students.map((s) => s.grade).filter(Boolean)))], [students]);
   const list = useMemo(() => {
@@ -382,22 +431,83 @@ function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: str
   }, [students, grade, query, onlyMissing]);
   const withPhoto = students.filter((s) => s.avatar).length;
 
+  // Photos encore en attente d'envoi sur cet appareil (réseau coupé, refus du serveur…).
+  useEffect(() => {
+    const refresh = () => setUnsentIds(getUnsentPhotoIds(slug));
+    refresh();
+    window.addEventListener(DATA_UPDATED_EVENT, refresh);
+    const timer = window.setInterval(() => {
+      if (getUnsentPhotoIds(slug).length > 0) void flushPendingPhotos(slug).then(refresh);
+    }, 15000);
+    return () => {
+      window.removeEventListener(DATA_UPDATED_EVENT, refresh);
+      window.clearInterval(timer);
+    };
+  }, [slug]);
+
+  const setBusy = (id: string, on: boolean) =>
+    setBusyIds((prev) => (on ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id)));
+  const setFailed = (id: string, on: boolean) =>
+    setFailedIds((prev) => (on ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id)));
+
+  /** Prépare, téléverse puis enregistre la photo ; false si une étape échoue (rien n'est perdu). */
+  const storePhoto = async (s: Student, source: Blob): Promise<boolean> => {
+    const small = await resizePhoto(source);
+    const url = await uploadPhoto(small, s.id);
+    if (!url) return false;
+    return saveStudentPhoto(s, url, slug);
+  };
+
   const pick = async (s: Student, file?: File | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setMsg('Choisissez un fichier image (JPG ou PNG).');
+      setMsg('Choisissez un fichier image (JPG, PNG ou WEBP).');
       return;
     }
-    setBusyId(s.id);
+    setBusy(s.id, true);
+    setFailed(s.id, false);
     try {
-      const avatar = await resizePhoto(file);
-      updateRegisteredStudent({ ...s, avatar, updatedAt: new Date().toISOString() }, slug);
-      setMsg(`Photo enregistrée pour ${s.fullName}. Elle apparaît sur sa carte.`);
+      const ok = await storePhoto(s, file);
+      if (ok) {
+        setMsg(`Photo de ${s.fullName} enregistrée sur le serveur : elle apparaît sur tous les appareils.`);
+      } else {
+        setFailed(s.id, true);
+        setMsg(`La photo de ${s.fullName} n’a pas pu être envoyée au serveur. Vérifiez la connexion puis touchez « Réessayer ».`);
+      }
     } catch {
+      setFailed(s.id, true);
       setMsg('Impossible de lire cette photo. Essayez un autre fichier.');
     } finally {
-      setBusyId('');
+      setBusy(s.id, false);
+      setUnsentIds(getUnsentPhotoIds(slug));
     }
+  };
+
+  const retryUnsent = async () => {
+    setMsg('Nouvel envoi des photos en attente…');
+    const ok = await flushPendingPhotos(slug);
+    setUnsentIds(getUnsentPhotoIds(slug));
+    setMsg(ok ? 'Toutes les photos sont enregistrées sur le serveur.' : 'Certaines photos n’ont toujours pas pu être envoyées. Vérifiez la connexion.');
+  };
+
+  // Anciennes photos stockées en texte lourd dans la fiche : converties en images légères sur le serveur.
+  const heavyPhotos = useMemo(() => students.filter((s) => s.avatar && s.avatar.startsWith('data:') && /^[0-9a-f-]{36}$/i.test(s.id)), [students]);
+  const optimizeAll = async () => {
+    const todo = heavyPhotos;
+    setOptimizing({ done: 0, total: todo.length });
+    let failed = 0;
+    for (let i = 0; i < todo.length; i++) {
+      try {
+        const blob = await (await fetch(todo[i].avatar!)).blob();
+        if (!(await storePhoto(todo[i], blob))) failed++;
+      } catch {
+        failed++;
+      }
+      setOptimizing({ done: i + 1, total: todo.length });
+    }
+    setOptimizing(null);
+    setUnsentIds(getUnsentPhotoIds(slug));
+    setMsg(failed === 0 ? `${todo.length} photo(s) optimisées.` : `${todo.length - failed} photo(s) optimisées, ${failed} à reprendre (bouton « Optimiser » de nouveau).`);
   };
 
   return (
@@ -424,6 +534,29 @@ function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: str
       </div>
       {!canEdit && <p className="text-xs text-slate-500">Seuls le Fondateur, le DGA, le Directeur et le Comptable peuvent ajouter des photos.</p>}
       {msg && <p className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">{msg}</p>}
+      {canEdit && unsentIds.length > 0 && (
+        <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-900 flex flex-wrap items-center gap-2">
+          <span>{unsentIds.length} photo(s) sont gardées sur cet appareil mais pas encore enregistrées sur le serveur.</span>
+          <button type="button" onClick={() => void retryUnsent()} className="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-bold cursor-pointer hover:bg-amber-700">
+            Renvoyer maintenant
+          </button>
+        </div>
+      )}
+      {canEdit && heavyPhotos.length > 0 && (
+        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex flex-wrap items-center gap-2">
+          <span>
+            {heavyPhotos.length} ancienne(s) photo(s) sont en format lourd (lent à charger, parfois absentes sur les autres appareils).
+          </span>
+          <button
+            type="button"
+            disabled={!!optimizing}
+            onClick={() => void optimizeAll()}
+            className="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-bold cursor-pointer hover:bg-slate-900 disabled:opacity-50"
+          >
+            {optimizing ? `Optimisation ${optimizing.done} / ${optimizing.total}…` : 'Optimiser'}
+          </button>
+        </div>
+      )}
       {list.length === 0 ? (
         <p className="text-xs text-slate-500 py-6 text-center">Aucun élève ne correspond.</p>
       ) : (
@@ -431,14 +564,30 @@ function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: str
           {list.map((s) => (
             <div key={s.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-2.5 flex flex-col items-center gap-2 text-center">
               <div className="w-full aspect-[3/4] rounded-xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center text-slate-300 text-2xl font-extrabold">
-                {s.avatar ? <img src={s.avatar} alt={s.fullName} className="w-full h-full object-cover" /> : (s.firstName || '?')[0]}
+                {s.avatar ? (
+                  <img
+                    src={s.avatar}
+                    alt={s.fullName}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Photo illisible : on cache l'image cassée, les initiales restent visibles derrière.
+                      (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+                    }}
+                  />
+                ) : (
+                  (s.firstName || '?')[0]
+                )}
               </div>
               <p className="text-[11px] font-bold text-slate-900 leading-tight break-words">{s.fullName}</p>
               <p className="text-[10px] text-slate-500">{s.grade}</p>
+              {s.avatar && unsentIds.includes(s.id) && <p className="text-[10px] font-bold text-amber-700">Pas encore sur le serveur</p>}
+              {failedIds.includes(s.id) && !s.avatar && <p className="text-[10px] font-bold text-red-600">Envoi échoué</p>}
               {canEdit && (
-                <label className={`w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white cursor-pointer ${s.avatar ? 'bg-slate-700 hover:bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-700'} ${busyId === s.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label className={`w-full inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white cursor-pointer ${failedIds.includes(s.id) ? 'bg-red-600 hover:bg-red-700' : s.avatar ? 'bg-slate-700 hover:bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-700'} ${busyIds.includes(s.id) ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Camera className="w-3.5 h-3.5" />
-                  {busyId === s.id ? 'Envoi…' : s.avatar ? 'Changer la photo' : 'Ajouter la photo'}
+                  {busyIds.includes(s.id) ? 'Envoi…' : failedIds.includes(s.id) ? 'Réessayer' : s.avatar ? 'Changer la photo' : 'Ajouter la photo'}
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => { void pick(s, e.target.files?.[0]); e.target.value = ''; }} />
                 </label>
               )}

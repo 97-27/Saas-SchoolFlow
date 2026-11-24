@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { KeyRound, Lock, RotateCcw } from 'lucide-react';
 import { ALL_PAGES, ASSIGNABLE_ROLES, CUSTOM_ROLE_PAGES, CUSTOM_ROLE_PREFIX, FOUNDER_ONLY_PAGES, ROLE_LABELS, allowedPages, customRoles, effectivePages, isCustomRole, isFounderRole, type PageOverrides } from '@/lib/auth/roles';
 import { readPageOverrides, savePageOverrides } from '@/lib/data/page-access';
-import { DATA_UPDATED_EVENT } from '@/lib/data/live-store';
+import { DATA_UPDATED_EVENT, getLiveStaffUsers, updateFullStaffUser } from '@/lib/data/live-store';
 
 const PAGE_LABELS: Record<string, string> = {
   dashboard: 'Tableau de bord',
@@ -87,6 +87,37 @@ export function PageAccessView({ schoolSlug }: { schoolSlug: string }) {
     setNewPosteName('');
     setSaved(`Poste « ${name} » créé. Cochez ses pages, puis créez ses membres dans Administration & Codes.`);
     window.setTimeout(() => setSaved(''), 5000);
+  };
+  // Renommer un poste créé : l'identifiant (donc les pages cochées et les membres) ne change pas,
+  // seul le nom affiché change — y compris sur la fiche de chaque membre de ce poste.
+  const [renamingId, setRenamingId] = useState('');
+  const [renameValue, setRenameValue] = useState('');
+  const renamePoste = () => {
+    const id = renamingId;
+    const name = renameValue.trim().replace(/\s+/g, ' ');
+    const cur = overrides[id];
+    if (!canEdit || !id || !cur?.custom) return;
+    if (name.length < 3) {
+      setSaved('Le nom du poste doit avoir 3 lettres au moins.');
+      window.setTimeout(() => setSaved(''), 3500);
+      return;
+    }
+    if (customs.some((c) => c.id !== id && c.label.toLowerCase() === name.toLowerCase())) {
+      setSaved('Un autre poste porte déjà ce nom.');
+      window.setTimeout(() => setSaved(''), 3500);
+      return;
+    }
+    const next: PageOverrides = { ...overrides, [id]: { ...cur, label: name } };
+    setOverrides(next);
+    savePageOverrides(slug, next);
+    try {
+      getLiveStaffUsers(slug)
+        .filter((u) => u.roleId === id)
+        .forEach((u) => updateFullStaffUser({ ...u, role: name }, slug, false));
+    } catch {}
+    setRenamingId('');
+    setSaved(`Poste renommé « ${name} ».`);
+    window.setTimeout(() => setSaved(''), 3500);
   };
   const deletePoste = async (id: string) => {
     if (!canEdit) return;
@@ -193,11 +224,44 @@ export function PageAccessView({ schoolSlug }: { schoolSlug: string }) {
               <th className="text-left py-3 px-4 font-extrabold text-slate-700 sticky left-0 bg-slate-50 z-10">Page</th>
               {columns.map((r) => (
                 <th key={r} className="py-3 px-2 text-center font-bold text-slate-700 align-bottom">
-                  <span className="block leading-tight">{labelOf(r).replace(/ \(.*\)/, '')}</span>
+                  {renamingId === r ? (
+                    <span className="block space-y-1">
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        maxLength={40}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') renamePoste();
+                          if (e.key === 'Escape') setRenamingId('');
+                        }}
+                        className="w-28 px-2 py-1 rounded-lg border border-slate-300 text-[11px] font-semibold text-slate-900 focus:border-emerald-600"
+                      />
+                      <span className="flex justify-center gap-2">
+                        <button type="button" onClick={renamePoste} className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer">OK</button>
+                        <button type="button" onClick={() => setRenamingId('')} className="text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer">Annuler</button>
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="block leading-tight">{labelOf(r).replace(/ \(.*\)/, '')}</span>
+                  )}
                   {isCustomRole(r) ? (
-                    <button type="button" disabled={!canEdit} onClick={() => deletePoste(r)} className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 hover:text-rose-800 cursor-pointer">
-                      Supprimer
-                    </button>
+                    <span className="mt-1 flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!canEdit}
+                        onClick={() => {
+                          setRenamingId(r);
+                          setRenameValue(labelOf(r));
+                        }}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                      >
+                        Renommer
+                      </button>
+                      <button type="button" disabled={!canEdit} onClick={() => deletePoste(r)} className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 hover:text-rose-800 cursor-pointer">
+                        Supprimer
+                      </button>
+                    </span>
                   ) : overrides[r] && (
                     <button type="button" disabled={!canEdit} onClick={() => reset(r)} className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer">
                       <RotateCcw className="w-3 h-3" /> par défaut

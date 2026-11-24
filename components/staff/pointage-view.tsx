@@ -373,10 +373,22 @@ export function PointageView({ schoolSlug }: { schoolSlug: string }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px] font-bold">
-          <span className="px-2.5 py-1.5 rounded-xl bg-slate-900 text-white">
+          {/* Le créneau EN COURS passe en noir (arrivée entre son début et sa fin, puis départ) ;
+              hors de son horaire, il reste gris. */}
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-colors ${
+              arrivalOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-700 border-slate-200'
+            }`}
+          >
+            {arrivalOpen && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
             Arrivée {cfg!.arrivalStart} – {cfg!.arrivalEnd}
           </span>
-          <span className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border transition-colors ${
+              departureOpen ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-100 text-slate-700 border-slate-200'
+            }`}
+          >
+            {departureOpen && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
             Départ {cfg!.departureStart} – {cfg!.departureEnd}
           </span>
         </div>

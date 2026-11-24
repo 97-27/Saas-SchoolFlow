@@ -190,6 +190,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [editingStaff, setEditingStaff] = useState<StaffUser | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<string>('enseignant');
+  // Intitulé du poste affiché (libre : ex. « Assistant de classe » pour un ancien enseignant).
+  const [editRoleTitle, setEditRoleTitle] = useState('');
   const [editMatricule, setEditMatricule] = useState('');
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
@@ -299,6 +301,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       'fondateur', 'fondateur_adjoint', 'directeur', 'informaticien', 'enseignant', 'secretaire', 'comptable', 'assistant_direction', 'educateur'
     ];
     setEditRole(validRoles.includes(staff.roleId as any) || isCustomRole(staff.roleId) ? (staff.roleId as any) : 'enseignant');
+    setEditRoleTitle(staff.role || '');
     // Le vrai matricule enregistré (vide s'il n'a jamais été saisi : à compléter).
     setEditMatricule(/^EMP-[0-9A-F]{6}$/i.test(staff.matricule || '') ? '' : staff.matricule || '');
     setEditSubject(
@@ -447,7 +450,12 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
     const updatedUser: StaffUser = {
       ...editingStaff,
       fullName: editFullName.trim(),
-      role: roleTitleMap[editRole] || customPostes.find((c) => c.id === editRole)?.label || editingStaff.role || 'Membre du Personnel',
+      role:
+        editRoleTitle.trim() ||
+        roleTitleMap[editRole] ||
+        customPostes.find((c) => c.id === editRole)?.label ||
+        editingStaff.role ||
+        'Membre du Personnel',
       roleId: editRole,
       matricule: editMatricule.trim().toUpperCase(),
       subjectOrGrade:
@@ -1563,13 +1571,33 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                   ) : (
                     <select
                       value={editRole}
-                      onChange={(e) => setEditRole(e.target.value as any)}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setEditRole(v as any);
+                        // L'intitulé suit le nouveau poste (modifiable juste en dessous).
+                        const opt = [...ROLE_OPTIONS, ...customPostes.map((c) => ({ value: c.id, label: c.label }))].find((o) => o.value === v);
+                        if (opt) setEditRoleTitle(opt.label.replace(/^\S+\s/u, '').trim());
+                      }}
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600 cursor-pointer"
                     >
                       {[...ROLE_OPTIONS, ...customPostes.map((c) => ({ value: c.id, label: '🧩 ' + c.label }))].map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                  )}
+                  {editingStaff.roleId !== 'fondateur' && editingStaff.roleId !== 'directeur' && (
+                    <div className="pt-1.5 space-y-1">
+                      <label className="font-bold text-slate-700 block">Intitulé du poste affiché</label>
+                      <input
+                        autoComplete="off"
+                        type="text"
+                        maxLength={60}
+                        value={editRoleTitle}
+                        onChange={(e) => setEditRoleTitle(e.target.value)}
+                        placeholder="Ex : Assistant(e) de classe"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 font-semibold text-slate-800 focus:border-emerald-600"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
