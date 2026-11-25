@@ -12,7 +12,6 @@ import {
   saveStudentPhoto,
   updateRegisteredStudent,
 } from '@/lib/data/live-store';
-import { uploadAvatarToSupabase } from '@/lib/supabase/remote';
 import { STUDENT_WRITE_ROLES } from '@/lib/auth/roles';
 import {
   CARD_CSS,
@@ -421,15 +420,6 @@ const PHOTO_TARGET_BYTES = 20 * 1024;
 const PHOTO_SIDES = [320, 280, 240, 200];
 const PHOTO_QUALITIES = [0.78, 0.64, 0.5];
 
-/** Téléverse la photo (3 essais) et renvoie son adresse https, ou null si le serveur refuse. */
-async function uploadPhoto(blob: Blob, studentId: string): Promise<string | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const url = await uploadAvatarToSupabase(blob, `${studentId}.jpg`);
-    if (url && /^https:\/\//i.test(url)) return url;
-    await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-  }
-  return null;
-}
 
 function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: string; canEdit: boolean }) {
   const [grade, setGrade] = useState('Toutes les classes');
@@ -474,9 +464,15 @@ function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: str
   /** Prépare, téléverse puis enregistre la photo ; false si une étape échoue (rien n'est perdu). */
   const storePhoto = async (s: Student, source: Blob): Promise<boolean> => {
     const small = await resizePhoto(source);
-    const url = await uploadPhoto(small, s.id);
-    if (!url) return false;
-    return saveStudentPhoto(s, url, slug);
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Lecture impossible'));
+      reader.readAsDataURL(small);
+    });
+    // La photo s'affiche IMMÉDIATEMENT (avant l'envoi) ; le téléversement, l'enregistrement et les
+    // nouveaux essais se font ensuite en arrière-plan (voir saveStudentPhoto).
+    return saveStudentPhoto(s, dataUrl, slug);
   };
 
   const pick = async (s: Student, file?: File | null) => {
@@ -487,14 +483,14 @@ function PhotosTab({ students, slug, canEdit }: { students: Student[]; slug: str
     }
     setBusy(s.id, true);
     setFailed(s.id, false);
+    setMsg(`Photo de ${s.fullName} affichée — envoi au serveur en cours…`);
     try {
       const ok = await storePhoto(s, file);
-      if (ok) {
-        setMsg(`Photo de ${s.fullName} enregistrée sur le serveur : elle apparaît sur tous les appareils.`);
-      } else {
-        setFailed(s.id, true);
-        setMsg(`La photo de ${s.fullName} n’a pas pu être envoyée au serveur. Vérifiez la connexion puis touchez « Réessayer ».`);
-      }
+      setMsg(
+        ok
+          ? `Photo de ${s.fullName} enregistrée sur le serveur : elle apparaît sur tous les appareils.`
+          : `La photo de ${s.fullName} est gardée sur cet appareil et sera renvoyée automatiquement dès que la connexion le permet.`
+      );
     } catch {
       setFailed(s.id, true);
       setMsg('Impossible de lire cette photo. Essayez un autre fichier.');

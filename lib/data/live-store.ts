@@ -10,6 +10,7 @@ import {
   saveSchoolToSupabase,
   saveStudentToSupabase,
   saveStudentPhotoToSupabase,
+  uploadAvatarToSupabase,
   saveInvoiceToSupabase,
   saveStaffUserToSupabase,
   deleteStaffUserFromSupabase,
@@ -3024,7 +3025,6 @@ export function updateRegisteredStudent(
 type PendingPhoto = { url: string; sent: boolean; at: number };
 const PHOTO_PENDING_PREFIX = 'schoolflow_photo_pending_v1_';
 const PHOTO_PENDING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
-let photoFlushRunning = false;
 
 function readPendingPhotos(slug: string): Record<string, PendingPhoto> {
   try {
@@ -3049,32 +3049,78 @@ export function getUnsentPhotoIds(slug: string): string[] {
   return Object.keys(map).filter((id) => !map[id].sent);
 }
 
-/** Renvoie les photos pas encore enregistrées en base. true = plus rien en attente d'envoi. */
-export async function flushPendingPhotos(slug: string): Promise<boolean> {
-  if (typeof window === 'undefined' || photoFlushRunning) return false;
-  photoFlushRunning = true;
-  let allSent = true;
+/** Remplace l'adresse de la photo d'un élève dans les listes locales (affichage immédiat). */
+function patchLocalStudentPhoto(slug: string, studentId: string, avatar: string): void {
   try {
-    const todo = Object.entries(readPendingPhotos(slug)).filter(([, e]) => !e.sent);
-    for (const [id, entry] of todo) {
-      let ok = false;
-      try {
-        ok = await saveStudentPhotoToSupabase(id, entry.url, slug);
-      } catch (e) {}
-      if (ok) {
+    const keys = [`${STUDENTS_STORAGE_KEY}_${slug}`];
+    if (slug === 'epc-manoi') keys.push(STUDENTS_STORAGE_KEY);
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const list: Student[] = JSON.parse(raw);
+      let touched = false;
+      const next = list.map((s) => {
+        if (s && s.id === studentId && s.avatar !== avatar) {
+          touched = true;
+          return { ...s, avatar };
+        }
+        return s;
+      });
+      if (touched) localStorage.setItem(key, JSON.stringify(next));
+    }
+  } catch (e) {}
+}
+
+// Les envois de photos passent un par un (file d'attente) : plusieurs photos choisies à la suite
+// ne se marchent plus dessus, et chacune attend son tour au lieu d'être ignorée.
+let photoFlushChain: Promise<boolean> = Promise.resolve(true);
+
+async function flushPendingPhotosNow(slug: string): Promise<boolean> {
+  const tried = new Set<string>();
+  for (;;) {
+    const todo = Object.entries(readPendingPhotos(slug)).filter(([id, e]) => !e.sent && !tried.has(id));
+    if (todo.length === 0) break;
+    const [id, entry] = todo[0];
+    tried.add(id);
+    let url = entry.url;
+    try {
+      // 1. Photo encore sur l'appareil (image intégrée) : téléversée vers le stockage, 3 essais.
+      if (url.startsWith('data:')) {
+        const blob = await (await fetch(url)).blob();
+        let uploaded: string | null = null;
+        for (let attempt = 0; attempt < 3 && !uploaded; attempt++) {
+          uploaded = await uploadAvatarToSupabase(blob, `${id}.${blob.type.includes('webp') ? 'webp' : 'jpg'}`);
+          if (!uploaded) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+        }
+        if (!uploaded) continue;
+        url = uploaded;
         const fresh = readPendingPhotos(slug);
         if (fresh[id] && fresh[id].url === entry.url) {
+          fresh[id] = { ...fresh[id], url };
+          writePendingPhotos(slug, fresh);
+        }
+        patchLocalStudentPhoto(slug, id, url);
+        window.dispatchEvent(new Event(DATA_UPDATED_EVENT));
+      }
+      // 2. Adresse enregistrée sur la fiche, en base, avec vérification.
+      const ok = await saveStudentPhotoToSupabase(id, url, slug);
+      if (ok) {
+        const fresh = readPendingPhotos(slug);
+        if (fresh[id] && fresh[id].url === url) {
           fresh[id] = { ...fresh[id], sent: true };
           writePendingPhotos(slug, fresh);
         }
-      } else {
-        allSent = false;
       }
-    }
-  } finally {
-    photoFlushRunning = false;
+    } catch (e) {}
   }
-  return allSent;
+  return Object.values(readPendingPhotos(slug)).every((e) => e.sent);
+}
+
+/** Envoie (ou renvoie) les photos pas encore enregistrées en base. true = plus rien en attente. */
+export function flushPendingPhotos(slug: string): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  photoFlushChain = photoFlushChain.catch(() => true).then(() => flushPendingPhotosNow(slug));
+  return photoFlushChain;
 }
 
 /**
@@ -3092,24 +3138,8 @@ export async function saveStudentPhoto(student: Student, avatarUrl: string, scho
     return true;
   }
 
-  try {
-    const keys = [`${STUDENTS_STORAGE_KEY}_${slug}`];
-    if (slug === 'epc-manoi') keys.push(STUDENTS_STORAGE_KEY);
-    for (const key of keys) {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const list: Student[] = JSON.parse(raw);
-      let touched = false;
-      const next = list.map((s) => {
-        if (s && s.id === student.id) {
-          touched = true;
-          return { ...s, avatar: avatarUrl };
-        }
-        return s;
-      });
-      if (touched) localStorage.setItem(key, JSON.stringify(next));
-    }
-  } catch (e) {}
+  // Affichage immédiat sur cet appareil (la photo est visible avant même la fin de l'envoi).
+  patchLocalStudentPhoto(slug, student.id, avatarUrl);
 
   const pending = readPendingPhotos(slug);
   pending[student.id] = { url: avatarUrl, sent: false, at: Date.now() };
