@@ -6,6 +6,7 @@ import { formatFCFA } from '@/lib/utils/formatters';
 import { availableClasses } from '@/lib/data/mock-data';
 import { getLiveStudents, DATA_UPDATED_EVENT } from '@/lib/data/live-store';
 import { loadServiceSubscribers, SERVICE_MONTHS, type ServiceId, type ServiceSubscriber } from '@/lib/data/service-subscribers';
+import { serviceStartId, setServiceStarts } from '@/lib/data/service-start';
 import { Figure } from '@/components/ui/masked-figure';
 
 /**
@@ -67,14 +68,24 @@ export function ServiceMonthsTracker({ service, schoolSlug, schoolName }: { serv
     [subs, grade, q]
   );
 
+  // Un mois dû = mois choisi, pas payé, et PAS avant le début du service pour cet élève.
+  const isDue = (r: ServiceSubscriber, m: string) =>
+    !r.months[m] && SERVICE_MONTHS.indexOf(m) >= SERVICE_MONTHS.indexOf(r.startMonth);
+
   const counts = useMemo(() => {
     const base = subs.filter((r) => grade === 'all' || r.grade === grade);
-    return Object.fromEntries(SERVICE_MONTHS.map((m) => [m, base.filter((r) => !r.months[m]).length])) as Record<string, number>;
+    return Object.fromEntries(SERVICE_MONTHS.map((m) => [m, base.filter((r) => isDue(r, m)).length])) as Record<string, number>;
   }, [subs, grade]);
+
+  /** L'école décide de compter aussi les mois écoulés avant l'abonnement : début ramené à Septembre. */
+  const countFromSeptember = (r: ServiceSubscriber) => {
+    setServiceStarts(schoolSlug, { [serviceStartId(service, r.id)]: SERVICE_MONTHS[0] });
+    setSubs(loadServiceSubscribers(service, getLiveStudents([], schoolSlug), schoolSlug));
+  };
 
   const list = useMemo(() => {
     const out = visible
-      .map((r) => ({ ...r, missing: SERVICE_MONTHS.filter((m) => selected.includes(m) && !r.months[m]) }))
+      .map((r) => ({ ...r, missing: SERVICE_MONTHS.filter((m) => selected.includes(m) && isDue(r, m)) }))
       .filter((r) => r.missing.length > 0);
     return out.sort((a, b) => grades.indexOf(a.grade) - grades.indexOf(b.grade) || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   }, [visible, selected, grades]);
@@ -208,6 +219,14 @@ export function ServiceMonthsTracker({ service, schoolSlug, schoolName }: { serv
                             <span key={m} className="inline-block rounded-md bg-rose-50 px-1.5 py-0.5 text-xs font-bold text-rose-700">{m}</span>
                           ))}
                         </div>
+                        {SERVICE_MONTHS.indexOf(r.startMonth) > 0 && (
+                          <div className="no-print mt-1 text-[10.5px] text-slate-400">
+                            Service commencé en {r.startMonth} : les mois d’avant ne comptent pas.{' '}
+                            <button type="button" onClick={() => countFromSeptember(r)} className="font-bold text-slate-500 underline hover:text-slate-800">
+                              Compter depuis Septembre
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap font-bold text-rose-600"><Figure>{formatFCFA(amount)}</Figure></td>
                       <td className="no-print px-3 py-2 text-right">
@@ -227,6 +246,29 @@ export function ServiceMonthsTracker({ service, schoolSlug, schoolName }: { serv
           </div>
         )}
       </div>
+
+      {subs.some((r) => SERVICE_MONTHS.indexOf(r.startMonth) > 0) && (
+        <details className="no-print bg-white rounded-3xl border border-slate-200/80 shadow-xs p-4 sm:p-5">
+          <summary className="cursor-pointer text-xs font-bold text-slate-600">
+            Abonnés arrivés après septembre ({subs.filter((r) => SERVICE_MONTHS.indexOf(r.startMonth) > 0).length}) — les mois d’avant ne leur sont pas dus
+          </summary>
+          <ul className="mt-3 divide-y divide-slate-100 text-sm">
+            {subs
+              .filter((r) => SERVICE_MONTHS.indexOf(r.startMonth) > 0)
+              .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+              .map((r) => (
+                <li key={r.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-800">
+                    {r.name} <span className="text-xs font-normal text-slate-400">{r.grade} • début : {r.startMonth}</span>
+                  </span>
+                  <button type="button" onClick={() => countFromSeptember(r)} className="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200">
+                    Compter depuis Septembre
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

@@ -47,19 +47,49 @@ function TeachingChips({
   value,
   onChange,
   columns = false,
+  allowCustom = false,
+  customPlaceholder = 'Ajouter un élément…',
 }: {
   options: string[];
   value: string;
   onChange: (v: string) => void;
   columns?: boolean;
+  /** Permet d'ajouter librement d'autres éléments (ex. « Cantine », « Surveillance »). */
+  allowCustom?: boolean;
+  customPlaceholder?: string;
 }) {
+  const [draft, setDraft] = useState('');
   const selected = splitTeachingList(value);
+  const customs = selected.filter((s) => !options.includes(s));
+  const emit = (next: string[]) =>
+    onChange([...options.filter((o) => next.includes(o)), ...next.filter((x) => !options.includes(x))].join(', '));
   const toggle = (opt: string) => {
     const next = selected.includes(opt) ? selected.filter((s) => s !== opt) : [...selected, opt];
-    onChange(options.filter((o) => next.includes(o)).join(', '));
+    emit(next);
+  };
+  const addCustom = () => {
+    const item = draft.trim().replace(/\s+/g, ' ').replace(/,/g, ' ');
+    if (!item) return;
+    if (!selected.some((s) => s.toLowerCase() === item.toLowerCase())) emit([...selected, item]);
+    setDraft('');
   };
   return (
+    <div className="space-y-2">
     <div className={`${columns ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5' : 'flex flex-wrap gap-1.5'} p-2.5 rounded-xl bg-white border border-slate-300`}>
+      {allowCustom &&
+        customs.map((opt) => (
+          <button
+            key={`custom-${opt}`}
+            type="button"
+            onClick={() => emit(selected.filter((s) => s !== opt))}
+            title="Retirer"
+            className="px-2 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer inline-flex items-center gap-1 bg-emerald-600 text-white border-emerald-700"
+          >
+            <Check className="w-3 h-3 shrink-0" />
+            <span className="truncate">{opt}</span>
+            <X className="w-3 h-3 shrink-0 opacity-80" />
+          </button>
+        ))}
       {options.map((opt) => {
         const on = selected.includes(opt);
         return (
@@ -76,6 +106,36 @@ function TeachingChips({
           </button>
         );
       })}
+      {allowCustom && options.length === 0 && customs.length === 0 && (
+        <span className="text-[11px] text-slate-400">Aucun élément ajouté pour le moment.</span>
+      )}
+    </div>
+    {allowCustom && (
+      <div className="flex gap-2">
+        <input
+          type="text"
+          autoComplete="off"
+          maxLength={40}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder={customPlaceholder}
+          className="flex-1 px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-900 focus:border-emerald-600 bg-white"
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 cursor-pointer inline-flex items-center gap-1"
+        >
+          <Plus className="w-3.5 h-3.5" /> Ajouter
+        </button>
+      </div>
+    )}
     </div>
   );
 }
@@ -132,6 +192,8 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [newSubject, setNewSubject] = useState('');
   const [newClasses, setNewClasses] = useState('');
   const [newDiploma, setNewDiploma] = useState('');
+  // Poste hors corps enseignant : attributions libres (ex. « Cantine », « Surveillance »).
+  const [newAttributions, setNewAttributions] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -196,6 +258,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
   const [editSubject, setEditSubject] = useState('');
   const [editClasses, setEditClasses] = useState('');
   const [editDiploma, setEditDiploma] = useState('');
+  const [editAttributions, setEditAttributions] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -313,6 +376,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
         : 'Toutes les matières (Enseignant Titulaire / Polyvalent)')
     );
     setEditClasses(staff.assignedClasses || 'Toutes les classes');
+    // Attributions libres d'un poste hors enseignement : on retire les textes par défaut.
+    setEditAttributions(
+      ['Administration', 'Administration Générale', 'Direction Générale des Études', 'Présidence & Conseil d’Administration'].includes(staff.subjectOrGrade || '') ||
+        /^Toutes les matières/i.test(staff.subjectOrGrade || '')
+        ? ''
+        : staff.subjectOrGrade || ''
+    );
     setEditDiploma(staff.diplomaOrExperience || '');
     setEditAddress(staff.address || '');
     
@@ -461,13 +531,13 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       subjectOrGrade:
         editRole === 'enseignant'
           ? editSubject.trim()
-          : editSubject.trim() ||
+          : editAttributions.trim() ||
             (editRole === 'fondateur'
               ? 'Présidence & Conseil d’Administration'
               : editRole === 'directeur'
               ? 'Direction Générale des Études'
               : 'Administration Générale'),
-      assignedClasses: editRole === 'enseignant' ? editClasses.trim() : editClasses.trim() || 'Toutes',
+      assignedClasses: editRole === 'enseignant' ? editClasses.trim() : 'Toutes',
       diplomaOrExperience: editDiploma.trim() || undefined,
       address: editAddress.trim() || undefined,
       email: editEmail.trim(), // Permet d'enregistrer l'adresse email réelle
@@ -582,7 +652,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
       role: roleTitleMap[newRole] || customPostes.find((c) => c.id === newRole)?.label || 'Membre du Personnel',
       roleId: newRole,
       matricule,
-      subjectOrGrade: newRole === 'enseignant' ? newSubject.trim() : 'Administration',
+      subjectOrGrade: newRole === 'enseignant' ? newSubject.trim() : newAttributions.trim() || 'Administration',
       assignedClasses: newRole === 'enseignant' ? newClasses.trim() : 'Toutes',
       diplomaOrExperience: newDiploma.trim() || 'Diplôme d’État & Expérience reconnue',
       address: newAddress.trim() || 'Abidjan, Côte d’Ivoire',
@@ -945,7 +1015,9 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                             {member.role}
                           </span>
                           <span className="text-[10.5px] text-slate-500 block truncate max-w-[190px]">
-                            Ligne : {member.phone || 'Non renseignée'}
+                            {member.subjectOrGrade && !/^(Administration( Générale)?|Direction Générale des Études|Présidence.*|Toutes les matières.*)$/i.test(member.subjectOrGrade)
+                              ? member.subjectOrGrade
+                              : `Ligne : ${member.phone || 'Non renseignée'}`}
                           </span>
                         </>
                       )}
@@ -1448,6 +1520,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                 </div>
               )}
 
+              {/* Postes hors enseignement : attributions libres (ex. « Cantine ») */}
+              {newRole !== 'enseignant' && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 animate-in fade-in">
+                  <label className="font-bold text-slate-900 text-xs block">
+                    Attributions du poste <span className="font-medium text-slate-500">(ex. Cantine, Surveillance, Accueil — facultatif)</span>
+                  </label>
+                  <TeachingChips options={[]} value={newAttributions} onChange={setNewAttributions} allowCustom customPlaceholder="Ex : Cantine" />
+                </div>
+              )}
+
               {/* Code d'authentification généré */}
               <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -1574,6 +1656,7 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       onChange={(e) => {
                         const v = e.target.value;
                         setEditRole(v as any);
+                        if (v !== 'enseignant' && editingStaff.roleId === 'enseignant') setEditAttributions('');
                         // L'intitulé suit le nouveau poste (modifiable juste en dessous).
                         const opt = [...ROLE_OPTIONS, ...customPostes.map((c) => ({ value: c.id, label: c.label }))].find((o) => o.value === v);
                         if (opt) setEditRoleTitle(opt.label.replace(/^\S+\s/u, '').trim());
@@ -1694,6 +1777,16 @@ export function AdministrationView({ schoolSlug }: AdministrationViewProps) {
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 font-medium text-slate-900 focus:border-emerald-600 bg-white"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Postes hors enseignement : attributions libres (ex. « Cantine ») */}
+              {editRole !== 'enseignant' && editingStaff.roleId !== 'fondateur' && editingStaff.roleId !== 'directeur' && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 animate-in fade-in">
+                  <label className="font-bold text-slate-900 text-xs block">
+                    Attributions du poste <span className="font-medium text-slate-500">(ex. Cantine, Surveillance, Accueil)</span>
+                  </label>
+                  <TeachingChips options={[]} value={editAttributions} onChange={setEditAttributions} allowCustom customPlaceholder="Ex : Cantine" />
                 </div>
               )}
 

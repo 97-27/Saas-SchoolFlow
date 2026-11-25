@@ -351,12 +351,11 @@ function CardsTab({ students, school, slug, canEdit }: { students: Student[]; sc
 /* ═════════════════════════ ONGLET PHOTOS ═════════════════════════ */
 
 /**
- * Réduit la photo (fichier de l'appareil ou photo déjà enregistrée) à 480 px max, en JPEG : légère
- * pour le stockage et la carte. L'orientation de l'appareil photo est respectée quand le
+ * Réduit la photo (fichier de l'appareil ou photo déjà enregistrée) à 320 px max et ≈ 20 Ko : légère
+ * pour le stockage, la synchronisation et la carte. L'orientation de l'appareil photo est respectée quand le
  * navigateur le permet (photos de téléphone), et un fond blanc remplace la transparence des PNG.
  */
 async function resizePhoto(source: Blob): Promise<Blob> {
-  const max = 480;
   let width = 0;
   let height = 0;
   let draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void = () => {};
@@ -385,20 +384,42 @@ async function resizePhoto(source: Blob): Promise<Blob> {
     draw = (ctx, w, h) => ctx.drawImage(img, 0, 0, w, h);
   }
   if (!width || !height) throw new Error('Image illisible');
-  const ratio = Math.min(1, max / Math.max(width, height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(width * ratio));
-  canvas.height = Math.max(1, Math.round(height * ratio));
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Image illisible');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  draw(ctx, canvas.width, canvas.height);
-  release();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
-  if (!blob) throw new Error('Image illisible');
-  return blob;
+  if (!width || !height) throw new Error('Image illisible');
+  // Compression progressive : on essaie des dimensions et des qualités de plus en plus basses
+  // jusqu'à passer sous PHOTO_TARGET_BYTES (≈ 20 Ko, soit 10 à 20 fois moins qu'une photo brute).
+  // WebP quand le navigateur le sait (20 à 30 % plus léger), sinon JPEG.
+  let best: Blob | null = null;
+  try {
+    for (const side of PHOTO_SIDES) {
+      const ratio = Math.min(1, side / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * ratio));
+      canvas.height = Math.max(1, Math.round(height * ratio));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Image illisible');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      draw(ctx, canvas.width, canvas.height);
+      for (const quality of PHOTO_QUALITIES) {
+        let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+        if (!blob || blob.type !== 'image/webp') blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!blob) continue;
+        if (!best || blob.size < best.size) best = blob;
+        if (blob.size <= PHOTO_TARGET_BYTES) return blob;
+      }
+    }
+  } finally {
+    release();
+  }
+  if (!best) throw new Error('Image illisible');
+  return best;
 }
+
+/** Cible de poids d'une photo d'élève et paliers de réduction (voir resizePhoto). */
+const PHOTO_TARGET_BYTES = 20 * 1024;
+const PHOTO_SIDES = [320, 280, 240, 200];
+const PHOTO_QUALITIES = [0.78, 0.64, 0.5];
 
 /** Téléverse la photo (3 essais) et renvoie son adresse https, ou null si le serveur refuse. */
 async function uploadPhoto(blob: Blob, studentId: string): Promise<string | null> {

@@ -68,6 +68,8 @@ const MONTHS_LIST = [
 ];
 
 const TRANSPORT_PAYMENTS_KEY = 'schoolflow_transport_monthly_payments_v2';
+import { currentServiceMonth, markServiceStart } from '@/lib/data/service-start';
+
 const TRANSPORT_SUBSCRIPTIONS_KEY = 'schoolflow_transport_subscriptions_v2';
 
 export function TransportView({
@@ -296,12 +298,12 @@ export function TransportView({
 
   // Filtrage des élèves pour la modale de transport
   const filteredStudentsForNewSub = useMemo(() => {
+    // Recherche sans accents ni majuscules, mots dans n'importe quel ordre (« kone lassina »).
+    const norm = (v: string) => (v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const words = norm(newSubSearchQuery).split(/\s+/).filter(Boolean);
     return students.filter((s) => {
-      const matchSearch =
-        !newSubSearchQuery ||
-        s.fullName?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.studentNumber?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.matricule?.toLowerCase().includes(newSubSearchQuery.toLowerCase());
+      const hay = norm(`${s.fullName || ''} ${s.lastName || ''} ${s.firstName || ''} ${s.studentNumber || ''} ${s.matricule || ''}`);
+      const matchSearch = words.every((w) => hay.includes(w));
       const matchGrade =
         newSubGradeFilter === 'Toutes les classes' || s.grade === newSubGradeFilter;
       return matchSearch && matchGrade;
@@ -580,10 +582,14 @@ export function TransportView({
     };
     setCustomTransportMap(nextCustom);
 
+    // Le service commence CE mois-ci : le premier règlement est celui du mois en cours, et les mois
+    // déjà écoulés ne sont pas dus (ils n'apparaîtront pas dans le Suivi des versements).
+    const startMonth = currentServiceMonth();
+    markServiceStart(schoolSlug, 'transport', newSubStudentId, startMonth);
     const nextPayments = {
       ...readFreshTransportPayMap(),
       [newSubStudentId]: {
-        Septembre: true,
+        Septembre: false,
         Octobre: false,
         Novembre: false,
         Décembre: false,
@@ -592,6 +598,7 @@ export function TransportView({
         Mars: false,
         Avril: false,
         Mai: false,
+        [startMonth]: true,
       },
     };
     setMonthlyPayments(nextPayments);
@@ -629,7 +636,7 @@ export function TransportView({
           guardianName: targetStu.guardianName,
           guardianPhone: targetStu.whatsappPhone || targetStu.guardianPhone,
           enrollmentType: targetStu.enrollmentType,
-          month: 'Septembre',
+          month: startMonth,
           amount: rate,
           paymentMethod: 'Espèces',
           paymentDate: todayStr,
@@ -640,7 +647,7 @@ export function TransportView({
 
     saveLiveTransportData(nextCustom, nextPayments, schoolSlug, {
       [newSubStudentId]: {
-        Septembre: { date: new Date().toISOString().split('T')[0], amount: rate, method: 'Espèces' },
+        [startMonth]: { date: new Date().toISOString().split('T')[0], amount: rate, method: 'Espèces' },
       },
     });
     setIsNewSubModalOpen(false);
@@ -1975,6 +1982,17 @@ export function TransportView({
             <form onSubmit={handleCreateNewSubscription} className="space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block">Sélectionner l&apos;Élève *</label>
+                <input
+                  type="search"
+                  autoComplete="off"
+                  value={newSubSearchQuery}
+                  onChange={(e) => setNewSubSearchQuery(e.target.value)}
+                  placeholder="Rechercher par nom, numéro ou matricule…"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                <p className="text-[11px] text-slate-500">
+                  {filteredStudentsForNewSub.length} élève(s) trouvé(s) parmi les élèves déjà inscrits.
+                </p>
                 <select
                   required
                   value={newSubStudentId}

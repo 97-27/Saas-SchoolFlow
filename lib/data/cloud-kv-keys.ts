@@ -41,6 +41,7 @@ export const KV_FAMILIES: KvFamily[] = [
   { base: 'schoolflow_staff_salaries_v1', label: 'Salaires', read: [...FINANCE, 'informaticien'], write: FINANCE },
   { base: 'schoolflow_staff_salary_plan_v1', label: 'Plan salarial', read: [...FINANCE, 'informaticien'], write: FINANCE },
   { base: 'schoolflow_special_discounts_v1', label: 'Réductions', read: [...FINANCE, 'informaticien'], write: FINANCE },
+  { base: 'schoolflow_service_start_v1', label: 'Mois de début des abonnements (internat, cantine, transport)', read: [...FINANCE, 'informaticien'], write: FINANCE },
   { base: 'schoolflow_versement_reminders_v1', label: 'Sommes des rappels de versement', read: [...FINANCE, 'informaticien'], write: FINANCE },
   { base: 'schoolflow_documents_status_v5', label: 'Documents', read: ALL_STAFF, write: GESTION },
   { base: 'schoolflow_health_records_v1', label: 'Santé', read: ALL_STAFF, write: GESTION },

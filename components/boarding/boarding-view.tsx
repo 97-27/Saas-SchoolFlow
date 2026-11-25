@@ -14,6 +14,7 @@ import { printOnePage } from '@/lib/client/print-one-page';
 import { findStudentByRef, UUID_RE } from '@/lib/data/student-match';
 import { saveStudentToSupabase, saveInvoiceToSupabase } from '@/lib/supabase/remote';
 import { FrenchDateInput } from '@/components/ui/french-date-input';
+import { currentServiceMonth, getServiceStarts, markServiceStart, resolveStartMonth, serviceStartId } from '@/lib/data/service-start';
 import { buildServiceMonthInvoice, isPlaceholderInvoice, serviceMonthDetails, toIsoPayDate, type ServiceMonthDetail } from '@/lib/data/service-payments';
 import {
   BedDouble,
@@ -854,6 +855,13 @@ export function BoardingView({
       updatedSubs[existingIndex] = subRecord;
     } else {
       updatedSubs.unshift(subRecord);
+      // Nouvel abonnement : le service commence ce mois-ci (ou plus tôt si des mois antérieurs sont
+      // cochés). Les mois d'avant ne sont pas dus et n'apparaîtront pas dans le Suivi des versements.
+      const nowMonth = currentServiceMonth();
+      const firstTicked = MONTHS_LIST.find((m) => activeMonthsChecked[m]);
+      const startAt =
+        firstTicked && MONTHS_LIST.indexOf(firstTicked) < MONTHS_LIST.indexOf(nowMonth) ? firstTicked : nowMonth;
+      markServiceStart(schoolSlug, 'internat', targetStudentId, startAt);
     }
 
     // Sauvegarde atomique globale (aucune perte ni écrasement)
@@ -2873,14 +2881,26 @@ export function BoardingView({
                 {MONTHS_LIST.map((month, idx) => {
                   const isChecked = !!activeMonthsChecked[month];
                   const isNewlyChecked = isChecked && !previouslyPaidMonths[month];
+                  // Mois écoulés avant le début de l'abonnement : en gris, non comptés (cochez-les
+                  // seulement si l'école décide de les appliquer).
+                  const startIdx = (() => {
+                    if (isCreatingNew) return MONTHS_LIST.indexOf(currentServiceMonth());
+                    const id = activeBoarder?.student?.id;
+                    const stored = id ? getServiceStarts(schoolSlug)[serviceStartId('internat', id)] : undefined;
+                    return MONTHS_LIST.indexOf(resolveStartMonth({ stored, paid: previouslyPaidMonths }));
+                  })();
+                  const beforeStart = !isChecked && idx < startIdx;
                   return (
                     <div key={month} className="flex flex-col gap-1">
                       <button
                         type="button"
+                        title={beforeStart ? 'Mois avant l’abonnement : non compté (cochez-le seulement si l’école l’applique)' : undefined}
                         onClick={() => handleToggleMonth(month)}
                         className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                           isChecked
                             ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-2xs'
+                            : beforeStart
+                            ? 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200'
                             : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                         }`}
                       >

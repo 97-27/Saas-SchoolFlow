@@ -1,6 +1,8 @@
 import type { Student } from '@/lib/data/types';
 import { resolveBoarders, type BoardingPaymentsMap } from '@/lib/data/boarding';
 import { getLiveInvoices } from '@/lib/data/live-store';
+import { serviceMonthDetails } from '@/lib/data/service-payments';
+import { getServiceStarts, resolveStartMonth, serviceStartId } from '@/lib/data/service-start';
 
 /**
  * Abonnés d'un service (Internat, Cantine, Transport) avec leurs mois payés — lus dans les mêmes
@@ -19,8 +21,28 @@ export interface ServiceSubscriber {
   guardian: string;
   phone: string;
   monthlyRate: number;
+  /** Mois payés : cases cochées OU reçu / journal de la base (le plus complet des deux). */
   months: Record<string, boolean>;
   paidMonthsCount: number;
+  /** Premier mois du service pour cet élève : les mois d'avant ne lui sont pas dus. */
+  startMonth: string;
+}
+
+/** Mois payés = cases cochées + mois pour lesquels un reçu (ou le journal de la base) existe. */
+function mergePaidMonths(
+  service: ServiceId,
+  keys: Array<string | undefined>,
+  checked: Record<string, boolean>,
+  invoices: any[]
+): Record<string, boolean> {
+  const out: Record<string, boolean> = { ...checked };
+  try {
+    const details = serviceMonthDetails(service, keys, invoices);
+    Object.keys(details).forEach((m) => {
+      if (SERVICE_MONTHS.includes(m)) out[m] = true;
+    });
+  } catch {}
+  return out;
 }
 
 const KEYS: Record<ServiceId, { sub: string; pay: string; defaultRate: number }> = {
@@ -50,6 +72,7 @@ export function loadServiceSubscribers(service: ServiceId, students: Student[], 
   const subKey = pilot ? k.sub : `${k.sub}_${schoolSlug}`;
   const payKey = pilot ? k.pay : `${k.pay}_${schoolSlug}`;
   const invoices = getLiveInvoices([], schoolSlug);
+  const starts = getServiceStarts(schoolSlug);
   const out: ServiceSubscriber[] = [];
 
   if (service === 'internat') {
@@ -58,6 +81,7 @@ export function loadServiceSubscribers(service: ServiceId, students: Student[], 
     for (const b of resolveBoarders(students, Array.isArray(subs) ? subs : [], pays, invoices)) {
       const s = b.student;
       if (!s || (s.status && s.status !== 'active')) continue;
+      const months = mergePaidMonths(service, [s.id, s.studentNumber, s.matricule, b.sub?.studentId], b.months, invoices);
       out.push({
         id: s.id,
         number: s.studentNumber || '',
@@ -65,8 +89,13 @@ export function loadServiceSubscribers(service: ServiceId, students: Student[], 
         grade: s.grade || '',
         ...contact(s),
         monthlyRate: b.monthlyRate,
-        months: b.months,
-        paidMonthsCount: b.paidMonthsCount,
+        months,
+        paidMonthsCount: SERVICE_MONTHS.filter((m) => months[m]).length,
+        startMonth: resolveStartMonth({
+          stored: starts[serviceStartId(service, s.id)],
+          subscriptionDate: typeof b.sub?.paymentDate === 'string' ? (b.sub.paymentDate as string) : null,
+          paid: months,
+        }),
       });
     }
     return out;
@@ -82,7 +111,7 @@ export function loadServiceSubscribers(service: ServiceId, students: Student[], 
   );
   for (const s of students) {
     if (s.status && s.status !== 'active') continue;
-    const months = payMap[s.id] || {};
+    const months = mergePaidMonths(service, [s.id, s.studentNumber, s.matricule], payMap[s.id] || {}, invoices);
     const custom = subMap[s.id];
     const hasPaid = Object.values(months).some(Boolean);
     if (!custom && !hasPaid && !invoiceIds.has(s.id) && !invoiceIds.has(s.studentNumber)) continue;
@@ -95,6 +124,7 @@ export function loadServiceSubscribers(service: ServiceId, students: Student[], 
       monthlyRate: Number(custom?.rate) > 0 ? Number(custom!.rate) : k.defaultRate,
       months,
       paidMonthsCount: SERVICE_MONTHS.filter((m) => months[m]).length,
+      startMonth: resolveStartMonth({ stored: starts[serviceStartId(service, s.id)], paid: months }),
     });
   }
   return out;

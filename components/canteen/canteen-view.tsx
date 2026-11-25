@@ -69,6 +69,8 @@ const MONTHS_LIST = [
 ];
 
 const CANTEEN_PAYMENTS_KEY = 'schoolflow_canteen_monthly_payments_v3';
+import { currentServiceMonth, markServiceStart } from '@/lib/data/service-start';
+
 const CANTEEN_SUBSCRIPTIONS_KEY = 'schoolflow_canteen_subscriptions_v3';
 const CANTEEN_MENU_KEY = 'schoolflow_canteen_weekly_menu_v2';
 
@@ -300,12 +302,12 @@ export function CanteenView({
 
   // Filtrage des élèves pour la modale de souscription
   const filteredStudentsForNewSub = useMemo(() => {
+    // Recherche sans accents ni majuscules, mots dans n'importe quel ordre (« kone lassina »).
+    const norm = (v: string) => (v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const words = norm(newSubSearchQuery).split(/\s+/).filter(Boolean);
     return students.filter((s) => {
-      const matchSearch =
-        !newSubSearchQuery ||
-        s.fullName?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.studentNumber?.toLowerCase().includes(newSubSearchQuery.toLowerCase()) ||
-        s.matricule?.toLowerCase().includes(newSubSearchQuery.toLowerCase());
+      const hay = norm(`${s.fullName || ''} ${s.lastName || ''} ${s.firstName || ''} ${s.studentNumber || ''} ${s.matricule || ''}`);
+      const matchSearch = words.every((w) => hay.includes(w));
       const matchGrade =
         newSubGradeFilter === 'Toutes les classes' || s.grade === newSubGradeFilter;
       return matchSearch && matchGrade;
@@ -589,10 +591,14 @@ export function CanteenView({
     };
     setCustomDietMap(nextCustom);
 
+    // Le service commence CE mois-ci : le premier règlement est celui du mois en cours, et les mois
+    // déjà écoulés ne sont pas dus (ils n'apparaîtront pas dans le Suivi des versements).
+    const startMonth = currentServiceMonth();
+    markServiceStart(schoolSlug, 'cantine', newSubStudentId, startMonth);
     const nextPayments = {
       ...readFreshCanteenPayMap(),
       [newSubStudentId]: {
-        Septembre: true,
+        Septembre: false,
         Octobre: false,
         Novembre: false,
         Décembre: false,
@@ -601,6 +607,7 @@ export function CanteenView({
         Mars: false,
         Avril: false,
         Mai: false,
+        [startMonth]: true,
       },
     };
     setMonthlyPayments(nextPayments);
@@ -639,7 +646,7 @@ export function CanteenView({
           guardianName: targetStu.guardianName,
           guardianPhone: targetStu.whatsappPhone || targetStu.guardianPhone,
           enrollmentType: targetStu.enrollmentType,
-          month: 'Septembre',
+          month: startMonth,
           amount: rate,
           paymentMethod: 'Espèces',
           paymentDate: todayStr,
@@ -650,7 +657,7 @@ export function CanteenView({
 
     saveLiveCanteenData(nextCustom, nextPayments, undefined, schoolSlug, {
       [newSubStudentId]: {
-        Septembre: { date: new Date().toISOString().split('T')[0], amount: rate, method: 'Espèces' },
+        [startMonth]: { date: new Date().toISOString().split('T')[0], amount: rate, method: 'Espèces' },
       },
     });
     setIsNewSubModalOpen(false);
@@ -2009,6 +2016,17 @@ export function CanteenView({
             <form onSubmit={handleCreateNewSubscription} className="space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="font-bold text-slate-700 block">Sélectionner l&apos;Élève *</label>
+                <input
+                  type="search"
+                  autoComplete="off"
+                  value={newSubSearchQuery}
+                  onChange={(e) => setNewSubSearchQuery(e.target.value)}
+                  placeholder="Rechercher par nom, numéro ou matricule…"
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-emerald-300 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                <p className="text-[11px] text-slate-500">
+                  {filteredStudentsForNewSub.length} élève(s) trouvé(s) parmi les élèves déjà inscrits.
+                </p>
                 <select
                   required
                   value={newSubStudentId}
